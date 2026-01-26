@@ -74,6 +74,11 @@ def sample_piecewise_spec(
     n_branches = axes.n_branches
     lo_thresh, hi_thresh = axes.threshold_range
 
+    if lo_thresh > hi_thresh:
+        raise ValueError(
+            f"threshold_range: low ({lo_thresh}) must be <= high ({hi_thresh})"
+        )
+
     thresholds = sorted(
         rng.sample(
             range(lo_thresh, hi_thresh + 1), min(n_branches, hi_thresh - lo_thresh + 1)
