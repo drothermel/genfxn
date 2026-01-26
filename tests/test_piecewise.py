@@ -1,9 +1,6 @@
 import random
 
-import pytest
-
 from genfxn.core.predicates import PredicateLe, PredicateLt
-from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.piecewise.eval import eval_expression, eval_piecewise
 from genfxn.piecewise.models import (
     Branch,
@@ -18,6 +15,7 @@ from genfxn.piecewise.models import (
 from genfxn.piecewise.queries import generate_piecewise_queries
 from genfxn.piecewise.render import render_expression, render_piecewise
 from genfxn.piecewise.sampler import sample_piecewise_spec
+from genfxn.piecewise.task import generate_piecewise_task
 
 
 class TestExpressionEval:
@@ -51,7 +49,9 @@ class TestExpressionEval:
 class TestBranchSelection:
     def test_single_branch_lt(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateLt(value=5), expr=ExprAffine(a=1, b=0))],
+            branches=[
+                Branch(condition=PredicateLt(value=5), expr=ExprAffine(a=1, b=0))
+            ],
             default_expr=ExprAffine(a=0, b=10),
         )
         assert eval_piecewise(spec, 4) == 4
@@ -60,7 +60,9 @@ class TestBranchSelection:
 
     def test_single_branch_le(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateLe(value=5), expr=ExprAffine(a=1, b=0))],
+            branches=[
+                Branch(condition=PredicateLe(value=5), expr=ExprAffine(a=1, b=0))
+            ],
             default_expr=ExprAffine(a=0, b=10),
         )
         assert eval_piecewise(spec, 4) == 4
@@ -84,7 +86,9 @@ class TestBranchSelection:
 class TestQueryGeneration:
     def test_generates_queries(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))],
+            branches=[
+                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))
+            ],
             default_expr=ExprAffine(a=2, b=0),
         )
         queries = generate_piecewise_queries(spec, (-10, 10), random.Random(42))
@@ -92,7 +96,9 @@ class TestQueryGeneration:
 
     def test_all_queries_valid(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))],
+            branches=[
+                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))
+            ],
             default_expr=ExprAffine(a=2, b=0),
         )
         queries = generate_piecewise_queries(spec, (-10, 10), random.Random(42))
@@ -110,19 +116,23 @@ class TestRender:
 
     def test_render_quadratic(self) -> None:
         assert render_expression(ExprQuadratic(a=1, b=0, c=0)) == "x * x"
-        assert render_expression(ExprQuadratic(a=2, b=3, c=4)) == "2 * x * x + 3 * x + 4"
+        assert (
+            render_expression(ExprQuadratic(a=2, b=3, c=4)) == "2 * x * x + 3 * x + 4"
+        )
 
     def test_render_roundtrip(self) -> None:
         spec = PiecewiseSpec(
             branches=[
                 Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=2, b=1)),
-                Branch(condition=PredicateLt(value=10), expr=ExprQuadratic(a=1, b=0, c=0)),
+                Branch(
+                    condition=PredicateLt(value=10), expr=ExprQuadratic(a=1, b=0, c=0)
+                ),
             ],
             default_expr=ExprAffine(a=0, b=50),
         )
         code = render_piecewise(spec, func_name="f")
         namespace: dict = {}
-        exec(code, namespace)
+        exec(code, namespace)  # noqa: S102
         f = namespace["f"]
         for x in range(-20, 30):
             assert f(x) == eval_piecewise(spec, x), f"Mismatch at x={x}"
@@ -144,14 +154,16 @@ class TestSampler:
 
 class TestTaskGeneration:
     def test_full_pipeline(self) -> None:
-        axes = PiecewiseAxes(n_branches=2, expr_types=[ExprType.AFFINE, ExprType.QUADRATIC])
+        axes = PiecewiseAxes(
+            n_branches=2, expr_types=[ExprType.AFFINE, ExprType.QUADRATIC]
+        )
         task = generate_piecewise_task(axes, random.Random(42))
         assert task.family == "piecewise"
         assert task.task_id.startswith("piecewise_")
         assert len(task.queries) > 0
 
         namespace: dict = {}
-        exec(task.code, namespace)
+        exec(task.code, namespace)  # noqa: S102
         f = namespace["f"]
         for q in task.queries:
             assert f(q.input) == q.output

@@ -1,11 +1,10 @@
 from genfxn.core.predicates import eval_predicate
 from genfxn.piecewise.models import (
-    Branch,
     ExprAbs,
     ExprAffine,
+    Expression,
     ExprMod,
     ExprQuadratic,
-    Expression,
     PiecewiseSpec,
 )
 

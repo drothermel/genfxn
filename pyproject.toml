@@ -23,7 +23,7 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
-[tool.ty]
+[tool.ty.environment]
 python-version = "3.12"
 
 [dependency-groups]

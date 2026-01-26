@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -43,7 +43,7 @@ class ExprMod(BaseModel):
 
 
 Expression = Annotated[
-    Union[ExprAffine, ExprQuadratic, ExprAbs, ExprMod],
+    ExprAffine | ExprQuadratic | ExprAbs | ExprMod,
     Field(discriminator="kind"),
 ]
 

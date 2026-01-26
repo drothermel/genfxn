@@ -1,4 +1,4 @@
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -51,16 +51,14 @@ class PredicateInSet(BaseModel):
 
 
 Predicate = Annotated[
-    Union[
-        PredicateEven,
-        PredicateOdd,
-        PredicateLt,
-        PredicateLe,
-        PredicateGt,
-        PredicateGe,
-        PredicateModEq,
-        PredicateInSet,
-    ],
+    PredicateEven
+    | PredicateOdd
+    | PredicateLt
+    | PredicateLe
+    | PredicateGt
+    | PredicateGe
+    | PredicateModEq
+    | PredicateInSet,
     Field(discriminator="kind"),
 ]
 

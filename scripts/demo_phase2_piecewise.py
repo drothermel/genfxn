@@ -15,8 +15,8 @@ import random
 
 import srsly
 
-from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
+from genfxn.piecewise.task import generate_piecewise_task
 
 
 def main() -> None:
@@ -54,7 +54,7 @@ Below we configure axes for 2-branch functions with affine/quadratic expressions
         threshold_range=(-20, 20),
     )
 
-    print(f"Configuration:")
+    print("Configuration:")
     print(f"  n_branches: {axes.n_branches}")
     print(f"  expr_types: {[e.value for e in axes.expr_types]}")
     print(f"  value_range: {axes.value_range}")
@@ -124,7 +124,7 @@ Format: [tag] f(input) = output
 --- Spec (JSON) ---
 
 The spec is the source of truth. It contains:
-  - branches: List of {comparator, threshold, expr} for each branch
+  - branches: List of {condition (predicate), expr} for each branch
   - default_expr: Expression used when no branch matches
 
 This is what gets hashed for the task_id and can recreate the function.

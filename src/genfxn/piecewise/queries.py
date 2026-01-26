@@ -11,7 +11,9 @@ def _get_threshold(branch: Branch) -> int:
         case PredicateLt(value=v) | PredicateLe(value=v):
             return v
         case _:
-            raise ValueError(f"Unsupported predicate for threshold extraction: {branch.condition}")
+            raise ValueError(
+                f"Unsupported predicate for threshold extraction: {branch.condition}"
+            )
 
 
 def generate_piecewise_queries(
@@ -28,7 +30,9 @@ def generate_piecewise_queries(
     # Coverage queries: one per region
     coverage_points = _get_coverage_points(spec, lo, hi)
     for x in coverage_points:
-        queries.append(Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.COVERAGE))
+        queries.append(
+            Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.COVERAGE)
+        )
 
     # Boundary queries: at and around thresholds
     for branch in spec.branches:
@@ -36,19 +40,27 @@ def generate_piecewise_queries(
         for offset in [-1, 0, 1]:
             x = t + offset
             if lo <= x <= hi:
-                queries.append(Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.BOUNDARY))
+                queries.append(
+                    Query(
+                        input=x, output=eval_piecewise(spec, x), tag=QueryTag.BOUNDARY
+                    )
+                )
 
     # Typical queries: random points in range
     n_typical = max(3, len(spec.branches) + 1)
     for _ in range(n_typical):
         x = rng.randint(lo, hi)
-        queries.append(Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.TYPICAL))
+        queries.append(
+            Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.TYPICAL)
+        )
 
     # Adversarial queries: extremes and special values
     adversarial_points = [lo, hi, 0, -1, 1]
     for x in adversarial_points:
         if lo <= x <= hi:
-            queries.append(Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.ADVERSARIAL))
+            queries.append(
+                Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.ADVERSARIAL)
+            )
 
     return _dedupe_queries(queries)
 
