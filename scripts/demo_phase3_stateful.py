@@ -123,7 +123,8 @@ StatefulAxes controls the generation space:
 
     # Generate with restricted axes
     print("Generating with restricted axes (even/odd predicates only):")
-    from genfxn.stateful.models import PredicateType, TransformType
+    from genfxn.core.predicates import PredicateType
+    from genfxn.core.transforms import TransformType
 
     axes = StatefulAxes(
         templates=[TemplateType.CONDITIONAL_LINEAR_SUM],

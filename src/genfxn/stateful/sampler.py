@@ -9,6 +9,7 @@ from genfxn.core.predicates import (
     PredicateLt,
     PredicateModEq,
     PredicateOdd,
+    PredicateType,
 )
 from genfxn.core.transforms import (
     Transform,
@@ -17,16 +18,15 @@ from genfxn.core.transforms import (
     TransformNegate,
     TransformScale,
     TransformShift,
+    TransformType,
 )
 from genfxn.stateful.models import (
     ConditionalLinearSumSpec,
     LongestRunSpec,
-    PredicateType,
     ResettingBestPrefixSumSpec,
     StatefulAxes,
     StatefulSpec,
     TemplateType,
-    TransformType,
 )
 
 

@@ -7,6 +7,7 @@ from genfxn.core.predicates import (
     PredicateGt,
     PredicateLt,
     PredicateOdd,
+    PredicateType,
 )
 from genfxn.core.transforms import (
     TransformAbs,
@@ -14,6 +15,7 @@ from genfxn.core.transforms import (
     TransformNegate,
     TransformScale,
     TransformShift,
+    TransformType,
 )
 from genfxn.stateful.eval import (
     eval_conditional_linear_sum,
@@ -24,11 +26,9 @@ from genfxn.stateful.eval import (
 from genfxn.stateful.models import (
     ConditionalLinearSumSpec,
     LongestRunSpec,
-    PredicateType,
     ResettingBestPrefixSumSpec,
     StatefulAxes,
     TemplateType,
-    TransformType,
 )
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stateful.render import render_stateful

@@ -3,32 +3,14 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from genfxn.core.predicates import Predicate
-from genfxn.core.transforms import Transform
+from genfxn.core.predicates import Predicate, PredicateType
+from genfxn.core.transforms import Transform, TransformType
 
 
 class TemplateType(str, Enum):
     CONDITIONAL_LINEAR_SUM = "conditional_linear_sum"
     RESETTING_BEST_PREFIX_SUM = "resetting_best_prefix_sum"
     LONGEST_RUN = "longest_run"
-
-
-class PredicateType(str, Enum):
-    EVEN = "even"
-    ODD = "odd"
-    LT = "lt"
-    LE = "le"
-    GT = "gt"
-    GE = "ge"
-    MOD_EQ = "mod_eq"
-
-
-class TransformType(str, Enum):
-    IDENTITY = "identity"
-    ABS = "abs"
-    SHIFT = "shift"
-    NEGATE = "negate"
-    SCALE = "scale"
 
 
 # --- Template Specs ---
@@ -67,10 +49,26 @@ class StatefulAxes(BaseModel):
         default_factory=lambda: list(TemplateType)
     )
     predicate_types: list[PredicateType] = Field(
-        default_factory=lambda: list(PredicateType)
+        default_factory=lambda: [
+            PredicateType.EVEN,
+            PredicateType.ODD,
+            PredicateType.LT,
+            PredicateType.LE,
+            PredicateType.GT,
+            PredicateType.GE,
+            PredicateType.MOD_EQ,
+            # IN_SET excluded - not useful for element-wise predicates
+        ]
     )
     transform_types: list[TransformType] = Field(
-        default_factory=lambda: list(TransformType)
+        default_factory=lambda: [
+            TransformType.IDENTITY,
+            TransformType.ABS,
+            TransformType.SHIFT,
+            TransformType.NEGATE,
+            TransformType.SCALE,
+            # CLIP excluded - not useful for accumulator transforms
+        ]
     )
     value_range: tuple[int, int] = Field(default=(-100, 100))
     list_length_range: tuple[int, int] = Field(default=(5, 20))
