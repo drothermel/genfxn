@@ -1,6 +1,6 @@
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PredicateEven(BaseModel):
@@ -35,6 +35,13 @@ class PredicateModEq(BaseModel):
     kind: Literal["mod_eq"] = "mod_eq"
     divisor: int
     remainder: int
+
+    @field_validator("divisor")
+    @classmethod
+    def divisor_nonzero(cls, v: int) -> int:
+        if v == 0:
+            raise ValueError("divisor must be non-zero")
+        return v
 
 
 class PredicateInSet(BaseModel):
