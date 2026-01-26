@@ -9,15 +9,14 @@ from genfxn.core.predicates import (
     PredicateLt,
     PredicateModEq,
     PredicateOdd,
-    eval_predicate,
 )
 from genfxn.stateful.eval import eval_stateful
 from genfxn.stateful.models import (
     ConditionalLinearSumSpec,
     LongestRunSpec,
     ResettingBestPrefixSumSpec,
-    StatefulSpec,
     StatefulAxes,
+    StatefulSpec,
 )
 
 
@@ -159,9 +158,7 @@ def generate_stateful_queries(
 
     # Adversarial: all-true, all-false, extremes
     # All matching
-    all_match = [
-        _make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)
-    ]
+    all_match = [_make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)]
     queries.append(
         Query(
             input=all_match,
@@ -185,7 +182,9 @@ def generate_stateful_queries(
     extremes = [x for x in extremes if lo <= x <= hi]
     queries.append(
         Query(
-            input=extremes, output=eval_stateful(spec, extremes), tag=QueryTag.ADVERSARIAL
+            input=extremes,
+            output=eval_stateful(spec, extremes),
+            tag=QueryTag.ADVERSARIAL,
         )
     )
 

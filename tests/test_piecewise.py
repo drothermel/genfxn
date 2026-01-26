@@ -186,7 +186,9 @@ class TestAxesValidation:
             PiecewiseAxes(divisor_range=(10, 2))
 
     def test_n_branches_exceeds_threshold_range(self) -> None:
-        with pytest.raises(ValueError, match="n_branches.*exceeds available thresholds"):
+        with pytest.raises(
+            ValueError, match="n_branches.*exceeds available thresholds"
+        ):
             PiecewiseAxes(n_branches=3, threshold_range=(0, 1))
 
     def test_empty_expr_types(self) -> None:
