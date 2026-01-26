@@ -1,5 +1,7 @@
 import pytest
 
+from genfxn.core.codegen import render_tests, task_id_from_spec
+from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
     PredicateEven,
     PredicateGe,
@@ -22,8 +24,6 @@ from genfxn.core.transforms import (
     eval_transform,
     render_transform,
 )
-from genfxn.core.codegen import render_tests, task_id_from_spec
-from genfxn.core.models import Query, QueryTag
 
 
 class TestPredicates:

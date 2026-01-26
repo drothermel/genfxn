@@ -1,4 +1,4 @@
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -38,14 +38,12 @@ class TransformScale(BaseModel):
 
 
 Transform = Annotated[
-    Union[
-        TransformIdentity,
-        TransformAbs,
-        TransformShift,
-        TransformClip,
-        TransformNegate,
-        TransformScale,
-    ],
+    TransformIdentity
+    | TransformAbs
+    | TransformShift
+    | TransformClip
+    | TransformNegate
+    | TransformScale,
     Field(discriminator="kind"),
 ]
 
