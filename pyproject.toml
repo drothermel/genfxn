@@ -13,6 +13,9 @@ dependencies = [
     "srsly>=2.4",
 ]
 
+[project.scripts]
+genfxn = "genfxn.cli:app"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
