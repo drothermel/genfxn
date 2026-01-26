@@ -100,4 +100,8 @@ class StatefulAxes(BaseModel):
         if lo < 0:
             raise ValueError(f"list_length_range: low ({lo}) must be >= 0")
 
+        lo, hi = self.divisor_range
+        if lo < 1:
+            raise ValueError(f"divisor_range: low ({lo}) must be >= 1")
+
         return self

@@ -282,6 +282,14 @@ class TestAxesValidation:
         with pytest.raises(ValueError, match="transform_types must not be empty"):
             StatefulAxes(transform_types=[])
 
+    def test_zero_divisor(self) -> None:
+        with pytest.raises(ValueError, match="divisor_range.*>= 1"):
+            StatefulAxes(divisor_range=(0, 5))
+
+    def test_negative_divisor(self) -> None:
+        with pytest.raises(ValueError, match="divisor_range.*>= 1"):
+            StatefulAxes(divisor_range=(-1, 5))
+
 
 class TestTaskGeneration:
     def test_full_pipeline(self) -> None:
