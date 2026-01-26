@@ -1,0 +1,56 @@
+from genfxn.core.predicates import eval_predicate
+from genfxn.core.transforms import eval_transform
+from genfxn.stateful.models import (
+    ConditionalLinearSumSpec,
+    LongestRunSpec,
+    ResettingBestPrefixSumSpec,
+    StatefulSpec,
+)
+
+
+def eval_conditional_linear_sum(spec: ConditionalLinearSumSpec, xs: list[int]) -> int:
+    acc = spec.init_value
+    for x in xs:
+        if eval_predicate(spec.predicate, x):
+            acc += eval_transform(spec.true_transform, x)
+        else:
+            acc += eval_transform(spec.false_transform, x)
+    return acc
+
+
+def eval_resetting_best_prefix_sum(
+    spec: ResettingBestPrefixSumSpec, xs: list[int]
+) -> int:
+    current_sum = spec.init_value
+    best_sum = spec.init_value
+    for x in xs:
+        if eval_predicate(spec.reset_predicate, x):
+            current_sum = spec.init_value
+        else:
+            current_sum += x
+            best_sum = max(best_sum, current_sum)
+    return best_sum
+
+
+def eval_longest_run(spec: LongestRunSpec, xs: list[int]) -> int:
+    current_run = 0
+    longest_run = 0
+    for x in xs:
+        if eval_predicate(spec.match_predicate, x):
+            current_run += 1
+            longest_run = max(longest_run, current_run)
+        else:
+            current_run = 0
+    return longest_run
+
+
+def eval_stateful(spec: StatefulSpec, xs: list[int]) -> int:
+    match spec:
+        case ConditionalLinearSumSpec():
+            return eval_conditional_linear_sum(spec, xs)
+        case ResettingBestPrefixSumSpec():
+            return eval_resetting_best_prefix_sum(spec, xs)
+        case LongestRunSpec():
+            return eval_longest_run(spec, xs)
+        case _:
+            raise ValueError(f"Unknown stateful spec: {spec}")

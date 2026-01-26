@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -48,6 +49,17 @@ class PredicateInSet(BaseModel):
     model_config = {"frozen": True}
     kind: Literal["in_set"] = "in_set"
     values: frozenset[int]
+
+
+class PredicateType(str, Enum):
+    EVEN = PredicateEven.model_fields["kind"].default
+    ODD = PredicateOdd.model_fields["kind"].default
+    LT = PredicateLt.model_fields["kind"].default
+    LE = PredicateLe.model_fields["kind"].default
+    GT = PredicateGt.model_fields["kind"].default
+    GE = PredicateGe.model_fields["kind"].default
+    MOD_EQ = PredicateModEq.model_fields["kind"].default
+    IN_SET = PredicateInSet.model_fields["kind"].default
 
 
 Predicate = Annotated[

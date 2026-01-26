@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -35,6 +36,15 @@ class TransformNegate(BaseModel):
 class TransformScale(BaseModel):
     kind: Literal["scale"] = "scale"
     factor: int
+
+
+class TransformType(str, Enum):
+    IDENTITY = TransformIdentity.model_fields["kind"].default
+    ABS = TransformAbs.model_fields["kind"].default
+    SHIFT = TransformShift.model_fields["kind"].default
+    CLIP = TransformClip.model_fields["kind"].default
+    NEGATE = TransformNegate.model_fields["kind"].default
+    SCALE = TransformScale.model_fields["kind"].default
 
 
 Transform = Annotated[

@@ -155,7 +155,7 @@ all queries produce the expected outputs. This catches rendering bugs.
 """)
 
     namespace: dict = {}
-    exec(task.code, namespace) # noqa: S102
+    exec(task.code, namespace)  # noqa: S102
     f = namespace["f"]
 
     errors = []

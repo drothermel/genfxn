@@ -27,9 +27,13 @@ def sample_expression(
     if expr_type == ExprType.MOD:
         div_lo, div_hi = divisor_range
         if div_lo > div_hi:
-            raise ValueError(f"divisor_range: low ({div_lo}) must be <= high ({div_hi})")
+            raise ValueError(
+                f"divisor_range: low ({div_lo}) must be <= high ({div_hi})"
+            )
         if div_lo < 1:
-            raise ValueError(f"divisor_range: bounds must be >= 1, got ({div_lo}, {div_hi})")
+            raise ValueError(
+                f"divisor_range: bounds must be >= 1, got ({div_lo}, {div_hi})"
+            )
 
     match expr_type:
         case ExprType.AFFINE:
