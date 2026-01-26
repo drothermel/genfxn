@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from genfxn.piecewise import generate_piecewise_task
+from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.piecewise.eval import eval_expression, eval_piecewise
 from genfxn.piecewise.models import (
     Branch,

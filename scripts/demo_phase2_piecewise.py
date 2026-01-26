@@ -15,7 +15,7 @@ import random
 
 import srsly
 
-from genfxn.piecewise import generate_piecewise_task
+from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 
 
