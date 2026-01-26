@@ -80,3 +80,38 @@ Task = {
 1. **Controlled generalization studies**: Hold out specific axes (e.g., "never train on high-overlap string rules") for clean analysis of *why* models fail
 2. **Difficulty curve analysis**: Axis labels enable systematic difficulty comparisons
 3. **Dual evaluation**: Same tasks support output prediction and code reconstruction
+
+---
+
+## Current Scope: MVP
+
+### Families to Implement First
+
+**Family 1 (Piecewise Numeric)** + **Family 3 (Stateful Iteration)**
+
+Rationale:
+- Different input types: `int -> int` vs `list[int] -> int` (scalar vs sequence)
+- Different logic patterns: branching vs accumulation/state tracking
+- Family 3's predicate/transform DSL is shared infrastructure that Family 4 will reuse
+- Families 2 and 4 can be added later without architectural changes
+
+### Axis Types to Exercise
+
+One representative of each "flavor" to validate the split builder:
+
+1. **Categorical**: `template` - holdout by category
+2. **Discrete numeric**: `n_branches` - holdout by value or bin
+3. **Nested/compound**: `expr_types` (list of allowed types) - complex axis structures
+4. **Range-based**: `value_range` - holdout by range characteristics
+
+### MVP Deliverables
+
+1. Generator infrastructure supporting both families
+2. Spec → eval → queries → render pipeline for each
+3. Axis-heldout split builder
+4. JSONL output with task schema
+
+### Deferred (Families 2 & 4)
+
+- **String Rules Transducer**: Different I/O type (str), scanning semantics
+- **Simple Algorithms**: Reuses Family 3's predicate DSL, adds edge-case-heavy templates
