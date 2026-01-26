@@ -8,19 +8,21 @@ Run with: uv run python scripts/demo_phase1_dsl.py
 """
 
 from genfxn.core.codegen import render_tests, task_id_from_spec
-from genfxn.core.dsl import (
+from genfxn.core.models import Query, QueryTag
+from genfxn.core.predicates import (
     PredicateEven,
     PredicateGt,
     PredicateModEq,
+    eval_predicate,
+    render_predicate,
+)
+from genfxn.core.transforms import (
     TransformAbs,
     TransformClip,
     TransformShift,
-    eval_predicate,
     eval_transform,
-    render_predicate,
     render_transform,
 )
-from genfxn.core.models import Query, QueryTag
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
 import pytest
 
-from genfxn.core.dsl import (
+from genfxn.core.predicates import (
     PredicateEven,
     PredicateGe,
     PredicateGt,
@@ -9,15 +9,17 @@ from genfxn.core.dsl import (
     PredicateLt,
     PredicateModEq,
     PredicateOdd,
+    eval_predicate,
+    render_predicate,
+)
+from genfxn.core.transforms import (
     TransformAbs,
     TransformClip,
     TransformIdentity,
     TransformNegate,
     TransformScale,
     TransformShift,
-    eval_predicate,
     eval_transform,
-    render_predicate,
     render_transform,
 )
 from genfxn.core.codegen import task_id_from_spec
