@@ -1,6 +1,6 @@
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TransformIdentity(BaseModel):
@@ -20,6 +20,12 @@ class TransformClip(BaseModel):
     kind: Literal["clip"] = "clip"
     low: int
     high: int
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "TransformClip":
+        if self.low > self.high:
+            raise ValueError(f"low ({self.low}) must be <= high ({self.high})")
+        return self
 
 
 class TransformNegate(BaseModel):

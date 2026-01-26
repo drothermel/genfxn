@@ -132,6 +132,10 @@ class TestTransforms:
         assert eval_transform(t, 10) == 10
         assert render_transform(t) == "max(0, min(10, x))"
 
+    def test_clip_rejects_invalid_bounds(self) -> None:
+        with pytest.raises(ValueError, match="low .* must be <= high"):
+            TransformClip(low=10, high=0)
+
     def test_negate(self) -> None:
         t = TransformNegate()
         assert eval_transform(t, 5) == -5
