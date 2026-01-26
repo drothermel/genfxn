@@ -31,6 +31,8 @@ def generate_piecewise_queries(
 
     queries: list[Query] = []
     lo, hi = value_range
+    if lo > hi:
+        raise ValueError(f"value_range: low ({lo}) must be <= high ({hi})")
 
     # Coverage queries: one per region
     coverage_points = _get_coverage_points(spec, lo, hi)
