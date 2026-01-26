@@ -78,4 +78,12 @@ class PiecewiseAxes(BaseModel):
             lo, hi = getattr(self, name)
             if lo > hi:
                 raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+
+        lo, hi = self.threshold_range
+        available = hi - lo + 1
+        if self.n_branches > available:
+            raise ValueError(
+                f"n_branches ({self.n_branches}) exceeds available thresholds "
+                f"in threshold_range ({available})"
+            )
         return self
