@@ -1,6 +1,6 @@
+from genfxn.core.predicates import eval_predicate
 from genfxn.piecewise.models import (
     Branch,
-    Comparator,
     ExprAbs,
     ExprAffine,
     ExprMod,
@@ -24,20 +24,8 @@ def eval_expression(expr: Expression, x: int) -> int:
             raise ValueError(f"Unknown expression: {expr}")
 
 
-def eval_branch_condition(branch: Branch, x: int) -> bool:
-    match branch.comparator:
-        case Comparator.LT:
-            return x < branch.threshold
-        case Comparator.LE:
-            return x <= branch.threshold
-        case Comparator.GT:
-            return x > branch.threshold
-        case Comparator.GE:
-            return x >= branch.threshold
-
-
 def eval_piecewise(spec: PiecewiseSpec, x: int) -> int:
     for branch in spec.branches:
-        if eval_branch_condition(branch, x):
+        if eval_predicate(branch.condition, x):
             return eval_expression(branch.expr, x)
     return eval_expression(spec.default_expr, x)

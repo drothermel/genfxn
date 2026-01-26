@@ -1,8 +1,17 @@
 import random
 
 from genfxn.core.models import Query, QueryTag
+from genfxn.core.predicates import PredicateLe, PredicateLt
 from genfxn.piecewise.eval import eval_piecewise
-from genfxn.piecewise.models import Comparator, PiecewiseSpec
+from genfxn.piecewise.models import Branch, PiecewiseSpec
+
+
+def _get_threshold(branch: Branch) -> int:
+    match branch.condition:
+        case PredicateLt(value=v) | PredicateLe(value=v):
+            return v
+        case _:
+            raise ValueError(f"Unsupported predicate for threshold extraction: {branch.condition}")
 
 
 def generate_piecewise_queries(
@@ -16,8 +25,6 @@ def generate_piecewise_queries(
     queries: list[Query] = []
     lo, hi = value_range
 
-    thresholds = [b.threshold for b in spec.branches]
-
     # Coverage queries: one per region
     coverage_points = _get_coverage_points(spec, lo, hi)
     for x in coverage_points:
@@ -25,7 +32,7 @@ def generate_piecewise_queries(
 
     # Boundary queries: at and around thresholds
     for branch in spec.branches:
-        t = branch.threshold
+        t = _get_threshold(branch)
         for offset in [-1, 0, 1]:
             x = t + offset
             if lo <= x <= hi:
@@ -50,19 +57,19 @@ def _get_coverage_points(spec: PiecewiseSpec, lo: int, hi: int) -> list[int]:
     if not spec.branches:
         return [(lo + hi) // 2]
 
-    sorted_branches = sorted(spec.branches, key=lambda b: b.threshold)
+    sorted_branches = sorted(spec.branches, key=_get_threshold)
     points = []
 
-    first_thresh = sorted_branches[0].threshold
+    first_thresh = _get_threshold(sorted_branches[0])
     if lo < first_thresh:
         points.append((lo + first_thresh) // 2)
 
     for i in range(len(sorted_branches) - 1):
-        t1 = sorted_branches[i].threshold
-        t2 = sorted_branches[i + 1].threshold
+        t1 = _get_threshold(sorted_branches[i])
+        t2 = _get_threshold(sorted_branches[i + 1])
         points.append((t1 + t2) // 2)
 
-    last_thresh = sorted_branches[-1].threshold
+    last_thresh = _get_threshold(sorted_branches[-1])
     if last_thresh < hi:
         points.append((last_thresh + hi) // 2)
 

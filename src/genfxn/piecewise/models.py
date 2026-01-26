@@ -3,19 +3,14 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field
 
+from genfxn.core.predicates import Predicate
+
 
 class ExprType(str, Enum):
     AFFINE = "affine"
     QUADRATIC = "quadratic"
     ABS = "abs"
     MOD = "mod"
-
-
-class Comparator(str, Enum):
-    LT = "<"
-    LE = "<="
-    GT = ">"
-    GE = ">="
 
 
 # --- Expression Types ---
@@ -57,8 +52,7 @@ Expression = Annotated[
 
 
 class Branch(BaseModel):
-    comparator: Comparator
-    threshold: int
+    condition: Predicate
     expr: Expression
 
 

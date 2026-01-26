@@ -1,6 +1,6 @@
+from genfxn.core.predicates import render_predicate
 from genfxn.piecewise.models import (
     Branch,
-    Comparator,
     ExprAbs,
     ExprAffine,
     ExprMod,
@@ -81,16 +81,12 @@ def _render_quadratic(a: int, b: int, c: int, var: str) -> str:
     return "".join(parts)
 
 
-def render_condition(branch: Branch, var: str = "x") -> str:
-    return f"{var} {branch.comparator.value} {branch.threshold}"
-
-
 def render_piecewise(spec: PiecewiseSpec, func_name: str = "f", var: str = "x") -> str:
     lines = [f"def {func_name}({var}: int) -> int:"]
 
     for i, branch in enumerate(spec.branches):
         keyword = "if" if i == 0 else "elif"
-        cond = render_condition(branch, var)
+        cond = render_predicate(branch.condition, var)
         expr = render_expression(branch.expr, var)
         lines.append(f"    {keyword} {cond}:")
         lines.append(f"        return {expr}")

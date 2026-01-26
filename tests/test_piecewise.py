@@ -2,11 +2,11 @@ import random
 
 import pytest
 
+from genfxn.core.predicates import PredicateLe, PredicateLt
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.piecewise.eval import eval_expression, eval_piecewise
 from genfxn.piecewise.models import (
     Branch,
-    Comparator,
     ExprAbs,
     ExprAffine,
     ExprMod,
@@ -51,7 +51,7 @@ class TestExpressionEval:
 class TestBranchSelection:
     def test_single_branch_lt(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(comparator=Comparator.LT, threshold=5, expr=ExprAffine(a=1, b=0))],
+            branches=[Branch(condition=PredicateLt(value=5), expr=ExprAffine(a=1, b=0))],
             default_expr=ExprAffine(a=0, b=10),
         )
         assert eval_piecewise(spec, 4) == 4
@@ -60,7 +60,7 @@ class TestBranchSelection:
 
     def test_single_branch_le(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(comparator=Comparator.LE, threshold=5, expr=ExprAffine(a=1, b=0))],
+            branches=[Branch(condition=PredicateLe(value=5), expr=ExprAffine(a=1, b=0))],
             default_expr=ExprAffine(a=0, b=10),
         )
         assert eval_piecewise(spec, 4) == 4
@@ -70,8 +70,8 @@ class TestBranchSelection:
     def test_multiple_branches(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(comparator=Comparator.LT, threshold=0, expr=ExprAffine(a=0, b=-1)),
-                Branch(comparator=Comparator.LT, threshold=10, expr=ExprAffine(a=1, b=0)),
+                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=0, b=-1)),
+                Branch(condition=PredicateLt(value=10), expr=ExprAffine(a=1, b=0)),
             ],
             default_expr=ExprAffine(a=0, b=100),
         )
@@ -84,7 +84,7 @@ class TestBranchSelection:
 class TestQueryGeneration:
     def test_generates_queries(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(comparator=Comparator.LT, threshold=0, expr=ExprAffine(a=1, b=0))],
+            branches=[Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))],
             default_expr=ExprAffine(a=2, b=0),
         )
         queries = generate_piecewise_queries(spec, (-10, 10), random.Random(42))
@@ -92,7 +92,7 @@ class TestQueryGeneration:
 
     def test_all_queries_valid(self) -> None:
         spec = PiecewiseSpec(
-            branches=[Branch(comparator=Comparator.LT, threshold=0, expr=ExprAffine(a=1, b=0))],
+            branches=[Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))],
             default_expr=ExprAffine(a=2, b=0),
         )
         queries = generate_piecewise_queries(spec, (-10, 10), random.Random(42))
@@ -115,8 +115,8 @@ class TestRender:
     def test_render_roundtrip(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(comparator=Comparator.LT, threshold=0, expr=ExprAffine(a=2, b=1)),
-                Branch(comparator=Comparator.LT, threshold=10, expr=ExprQuadratic(a=1, b=0, c=0)),
+                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=2, b=1)),
+                Branch(condition=PredicateLt(value=10), expr=ExprQuadratic(a=1, b=0, c=0)),
             ],
             default_expr=ExprAffine(a=0, b=50),
         )
