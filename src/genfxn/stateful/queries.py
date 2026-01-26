@@ -2,6 +2,7 @@ import random
 
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
+    Predicate,
     PredicateEven,
     PredicateGe,
     PredicateGt,
@@ -20,7 +21,7 @@ from genfxn.stateful.models import (
 )
 
 
-def _get_predicate_info(spec: StatefulSpec) -> tuple:
+def _get_predicate_info(spec: StatefulSpec) -> Predicate:
     match spec:
         case ConditionalLinearSumSpec(predicate=p):
             return p

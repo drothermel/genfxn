@@ -267,7 +267,7 @@ class TestAxesValidation:
             StatefulAxes(list_length_range=(20, 5))
 
     def test_negative_list_length(self) -> None:
-        with pytest.raises(ValueError, match="list_length_range.*>= 0"):
+        with pytest.raises(ValueError, match=r"list_length_range.*>= 0"):
             StatefulAxes(list_length_range=(-1, 10))
 
     def test_empty_templates(self) -> None:
@@ -283,11 +283,11 @@ class TestAxesValidation:
             StatefulAxes(transform_types=[])
 
     def test_zero_divisor(self) -> None:
-        with pytest.raises(ValueError, match="divisor_range.*>= 1"):
+        with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(0, 5))
 
     def test_negative_divisor(self) -> None:
-        with pytest.raises(ValueError, match="divisor_range.*>= 1"):
+        with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(-1, 5))
 
 
