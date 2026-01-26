@@ -189,6 +189,10 @@ class TestAxesValidation:
         with pytest.raises(ValueError, match="n_branches.*exceeds available thresholds"):
             PiecewiseAxes(n_branches=3, threshold_range=(0, 1))
 
+    def test_empty_expr_types(self) -> None:
+        with pytest.raises(ValueError, match="expr_types must not be empty"):
+            PiecewiseAxes(expr_types=[])
+
 
 class TestTaskGeneration:
     def test_full_pipeline(self) -> None:

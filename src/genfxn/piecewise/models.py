@@ -73,7 +73,10 @@ class PiecewiseAxes(BaseModel):
     divisor_range: tuple[int, int] = Field(default=(2, 10))
 
     @model_validator(mode="after")
-    def validate_ranges(self) -> "PiecewiseAxes":
+    def validate_axes(self) -> "PiecewiseAxes":
+        if not self.expr_types:
+            raise ValueError("expr_types must not be empty")
+
         for name in ("value_range", "coeff_range", "threshold_range", "divisor_range"):
             lo, hi = getattr(self, name)
             if lo > hi:
