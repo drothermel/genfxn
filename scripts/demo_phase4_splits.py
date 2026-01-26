@@ -27,7 +27,7 @@ def main() -> None:
         ),
     ]
     result = split_tasks(tasks, holdouts)
-    print(f"\nHoldout: template == 'longest_run'")
+    print("\nHoldout: template == 'longest_run'")
     print(f"  Train: {len(result.train)}, Test: {len(result.test)}")
 
     # Example 2: Hold out a predicate type (stateful)
@@ -39,7 +39,7 @@ def main() -> None:
         ),
     ]
     result = split_tasks(tasks, holdouts)
-    print(f"\nHoldout: predicate.kind == 'mod_eq'")
+    print("\nHoldout: predicate.kind == 'mod_eq'")
     print(f"  Train: {len(result.train)}, Test: {len(result.test)}")
 
     # Example 3: Hold out piecewise condition types
@@ -51,7 +51,7 @@ def main() -> None:
         ),
     ]
     result = split_tasks(tasks, holdouts)
-    print(f"\nHoldout: branches.0.condition.kind == 'lt'")
+    print("\nHoldout: branches.0.condition.kind == 'lt'")
     print(f"  Train: {len(result.train)}, Test: {len(result.test)}")
 
     # Example 4: Multiple holdouts (OR logic)
@@ -68,7 +68,7 @@ def main() -> None:
         ),
     ]
     result = split_tasks(tasks, holdouts)
-    print(f"\nHoldout: template == 'resetting_best_prefix_sum' OR default_expr.kind == 'quadratic'")
+    print("\nHoldout: template == 'resetting_best_prefix_sum' OR default_expr.kind == 'quadratic'")
     print(f"  Train: {len(result.train)}, Test: {len(result.test)}")
 
     # Show sample specs from test set
