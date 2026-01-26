@@ -97,6 +97,6 @@ def render_predicate(pred: Predicate, var: str = "x") -> str:
         case PredicateModEq(divisor=d, remainder=r):
             return f"{var} % {d} == {r}"
         case PredicateInSet(values=vals):
-            return f"{var} in {set(sorted(vals))}"
+            return f"{var} in {{{', '.join(map(str, sorted(vals)))}}}"
         case _:
             raise ValueError(f"Unknown predicate: {pred}")
