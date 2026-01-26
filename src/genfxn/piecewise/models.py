@@ -70,3 +70,4 @@ class PiecewiseAxes(BaseModel):
     value_range: tuple[int, int] = Field(default=(-100, 100))
     coeff_range: tuple[int, int] = Field(default=(-5, 5))
     threshold_range: tuple[int, int] = Field(default=(-50, 50))
+    divisor_range: tuple[int, int] = Field(default=(2, 10))

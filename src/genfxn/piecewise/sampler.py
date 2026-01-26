@@ -17,6 +17,7 @@ from genfxn.piecewise.models import (
 def sample_expression(
     expr_type: ExprType,
     coeff_range: tuple[int, int],
+    divisor_range: tuple[int, int],
     rng: random.Random,
 ) -> Expression:
     lo, hi = coeff_range
@@ -38,7 +39,7 @@ def sample_expression(
                 b=rng.randint(lo, hi),
             )
         case ExprType.MOD:
-            divisor = rng.randint(2, 10)
+            divisor = rng.randint(divisor_range[0], divisor_range[1])
             return ExprMod(
                 divisor=divisor,
                 a=rng.randint(lo, hi),
@@ -66,11 +67,11 @@ def sample_piecewise_spec(axes: PiecewiseAxes, rng: random.Random | None = None)
     branches: list[Branch] = []
     for thresh in thresholds:
         expr_type = rng.choice(axes.expr_types)
-        expr = sample_expression(expr_type, axes.coeff_range, rng)
+        expr = sample_expression(expr_type, axes.coeff_range, axes.divisor_range, rng)
         condition = sample_condition(thresh, rng)
         branches.append(Branch(condition=condition, expr=expr))
 
     default_expr_type = rng.choice(axes.expr_types)
-    default_expr = sample_expression(default_expr_type, axes.coeff_range, rng)
+    default_expr = sample_expression(default_expr_type, axes.coeff_range, axes.divisor_range, rng)
 
     return PiecewiseSpec(branches=branches, default_expr=default_expr)
