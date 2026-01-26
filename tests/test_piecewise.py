@@ -1,5 +1,7 @@
 import random
 
+import pytest
+
 from genfxn.core.predicates import PredicateLe, PredicateLt
 from genfxn.piecewise.eval import eval_expression, eval_piecewise
 from genfxn.piecewise.models import (
@@ -150,6 +152,24 @@ class TestSampler:
             axes = PiecewiseAxes(n_branches=n, expr_types=[ExprType.AFFINE])
             spec = sample_piecewise_spec(axes, random.Random(42))
             assert len(spec.branches) == n
+
+
+class TestAxesValidation:
+    def test_invalid_value_range(self) -> None:
+        with pytest.raises(ValueError, match="value_range"):
+            PiecewiseAxes(value_range=(100, -100))
+
+    def test_invalid_coeff_range(self) -> None:
+        with pytest.raises(ValueError, match="coeff_range"):
+            PiecewiseAxes(coeff_range=(5, -5))
+
+    def test_invalid_threshold_range(self) -> None:
+        with pytest.raises(ValueError, match="threshold_range"):
+            PiecewiseAxes(threshold_range=(50, -50))
+
+    def test_invalid_divisor_range(self) -> None:
+        with pytest.raises(ValueError, match="divisor_range"):
+            PiecewiseAxes(divisor_range=(10, 2))
 
 
 class TestTaskGeneration:

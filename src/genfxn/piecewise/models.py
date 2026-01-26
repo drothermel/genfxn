@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from genfxn.core.predicates import Predicate
 
@@ -71,3 +71,11 @@ class PiecewiseAxes(BaseModel):
     coeff_range: tuple[int, int] = Field(default=(-5, 5))
     threshold_range: tuple[int, int] = Field(default=(-50, 50))
     divisor_range: tuple[int, int] = Field(default=(2, 10))
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> "PiecewiseAxes":
+        for name in ("value_range", "coeff_range", "threshold_range", "divisor_range"):
+            lo, hi = getattr(self, name)
+            if lo > hi:
+                raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+        return self
