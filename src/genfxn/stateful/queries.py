@@ -32,13 +32,14 @@ def _get_predicate_info(spec: StatefulSpec) -> tuple:
 
 def _make_matching_value(pred, value_range: tuple[int, int], rng: random.Random) -> int:
     lo, hi = value_range
+    clamp = lambda x: max(lo, min(x, hi))
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
             return rng.choice(candidates) if candidates else lo
         case PredicateOdd():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else lo + 1
+            return rng.choice(candidates) if candidates else clamp(lo + 1)
         case PredicateLt(value=v):
             return rng.randint(lo, min(v - 1, hi)) if lo <= v - 1 else lo
         case PredicateLe(value=v):
@@ -49,7 +50,11 @@ def _make_matching_value(pred, value_range: tuple[int, int], rng: random.Random)
             return rng.randint(max(v, lo), hi) if v <= hi else hi
         case PredicateModEq(divisor=d, remainder=r):
             candidates = [x for x in range(lo, hi + 1) if x % d == r]
-            return rng.choice(candidates) if candidates else r
+            if candidates:
+                return rng.choice(candidates)
+            # Compute smallest value >= lo congruent to r mod d, then clamp
+            base = lo + ((r - lo) % d)
+            return clamp(base)
         case _:
             return rng.randint(lo, hi)
 
@@ -58,10 +63,11 @@ def _make_non_matching_value(
     pred, value_range: tuple[int, int], rng: random.Random
 ) -> int:
     lo, hi = value_range
+    clamp = lambda x: max(lo, min(x, hi))
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else lo + 1
+            return rng.choice(candidates) if candidates else clamp(lo + 1)
         case PredicateOdd():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
             return rng.choice(candidates) if candidates else lo
@@ -75,7 +81,11 @@ def _make_non_matching_value(
             return rng.randint(lo, min(v - 1, hi)) if lo <= v - 1 else lo
         case PredicateModEq(divisor=d, remainder=r):
             candidates = [x for x in range(lo, hi + 1) if x % d != r]
-            return rng.choice(candidates) if candidates else (r + 1) % d
+            if candidates:
+                return rng.choice(candidates)
+            # Compute smallest value >= lo NOT congruent to r mod d, then clamp
+            base = lo + ((r + 1 - lo) % d)
+            return clamp(base)
         case _:
             return rng.randint(lo, hi)
 
