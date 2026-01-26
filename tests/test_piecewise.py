@@ -122,6 +122,20 @@ class TestRender:
             render_expression(ExprQuadratic(a=2, b=3, c=4)) == "2 * x * x + 3 * x + 4"
         )
 
+    def test_render_abs(self) -> None:
+        assert render_expression(ExprAbs(a=2, b=3)) == "2 * abs(x) + 3"
+        assert render_expression(ExprAbs(a=1, b=0)) == "abs(x)"
+        assert render_expression(ExprAbs(a=0, b=5)) == "5"
+        assert render_expression(ExprAbs(a=-1, b=0)) == "-abs(x)"
+        assert render_expression(ExprAbs(a=2, b=-3)) == "2 * abs(x) - 3"
+
+    def test_render_mod(self) -> None:
+        assert render_expression(ExprMod(divisor=3, a=2, b=1)) == "2 * (x % 3) + 1"
+        assert render_expression(ExprMod(divisor=5, a=1, b=0)) == "(x % 5)"
+        assert render_expression(ExprMod(divisor=7, a=0, b=4)) == "4"
+        assert render_expression(ExprMod(divisor=2, a=-1, b=0)) == "-(x % 2)"
+        assert render_expression(ExprMod(divisor=3, a=2, b=-1)) == "2 * (x % 3) - 1"
+
     def test_render_roundtrip(self) -> None:
         spec = PiecewiseSpec(
             branches=[
