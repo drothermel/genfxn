@@ -52,19 +52,14 @@ def _render_quadratic(a: int, b: int, c: int, var: str) -> str:
             parts.append(f"{a} * {var} * {var}")
 
     if b != 0:
-        if b == 1:
-            term = var
-        elif b == -1:
-            term = f"-{var}"
-        else:
-            term = f"{b} * {var}"
+        abs_term = var if abs(b) == 1 else f"{abs(b)} * {var}"
 
-        if parts and b > 0:
-            parts.append(f" + {term}")
-        elif parts and b < 0:
-            parts.append(f" - {-b} * {var}" if b != -1 else f" - {var}")
+        if not parts:
+            parts.append(f"-{abs_term}" if b < 0 else abs_term)
+        elif b > 0:
+            parts.append(f" + {abs_term}")
         else:
-            parts.append(term)
+            parts.append(f" - {abs_term}")
 
     if c != 0:
         if parts and c > 0:
