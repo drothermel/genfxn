@@ -7,7 +7,11 @@ authors = [
     { name = "Danielle Rothermel", email = "danielle.rothermel@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.0",
+    "typer>=0.9",
+    "srsly>=2.4",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -21,3 +25,8 @@ select = ["E", "F", "I", "UP"]
 
 [tool.ty]
 python-version = "3.12"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
