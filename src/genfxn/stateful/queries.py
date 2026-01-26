@@ -97,20 +97,15 @@ def _generate_random_list(
     return [rng.randint(*value_range) for _ in range(length)]
 
 
-def generate_stateful_queries(
-    spec: StatefulSpec,
-    axes: StatefulAxes,
-    rng: random.Random | None = None,
+def _generate_coverage_queries(
+    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
 ) -> list[Query]:
-    if rng is None:
-        rng = random.Random()
-
-    queries: list[Query] = []
+    """Empty list, single element, typical list."""
     lo, hi = axes.value_range
     len_lo, len_hi = axes.list_length_range
-    pred = _get_predicate_info(spec)
+    typical_len = (len_lo + len_hi) // 2
 
-    # Coverage: empty list, single element, typical list
+    queries: list[Query] = []
     queries.append(
         Query(input=[], output=eval_stateful(spec, []), tag=QueryTag.COVERAGE)
     )
@@ -118,7 +113,6 @@ def generate_stateful_queries(
     queries.append(
         Query(input=single, output=eval_stateful(spec, single), tag=QueryTag.COVERAGE)
     )
-    typical_len = (len_lo + len_hi) // 2
     typical_list = _generate_random_list(typical_len, (lo, hi), rng)
     queries.append(
         Query(
@@ -127,11 +121,21 @@ def generate_stateful_queries(
             tag=QueryTag.COVERAGE,
         )
     )
+    return queries
 
-    # Boundary: predicate transitions (True->False, False->True)
-    # List with matching then non-matching
+
+def _generate_boundary_queries(
+    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
+) -> list[Query]:
+    """Predicate transitions: True->False, False->True, alternating."""
+    lo, hi = axes.value_range
+    pred = _get_predicate_info(spec)
+
     match_val = _make_matching_value(pred, (lo, hi), rng)
     non_match_val = _make_non_matching_value(pred, (lo, hi), rng)
+
+    queries: list[Query] = []
+    # Matching then non-matching
     transition_tf = [match_val, match_val, non_match_val, non_match_val]
     queries.append(
         Query(
@@ -140,7 +144,7 @@ def generate_stateful_queries(
             tag=QueryTag.BOUNDARY,
         )
     )
-    # List with non-matching then matching
+    # Non-matching then matching
     transition_ft = [non_match_val, non_match_val, match_val, match_val]
     queries.append(
         Query(
@@ -158,16 +162,36 @@ def generate_stateful_queries(
             tag=QueryTag.BOUNDARY,
         )
     )
+    return queries
 
-    # Typical: random lists of varying lengths
+
+def _generate_typical_queries(
+    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
+) -> list[Query]:
+    """Random lists of varying lengths."""
+    lo, hi = axes.value_range
+    len_lo, len_hi = axes.list_length_range
+
+    queries: list[Query] = []
     for _ in range(4):
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
         queries.append(
             Query(input=xs, output=eval_stateful(spec, xs), tag=QueryTag.TYPICAL)
         )
+    return queries
 
-    # Adversarial: all-true, all-false, extremes
+
+def _generate_adversarial_queries(
+    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
+) -> list[Query]:
+    """All-matching, all-non-matching, and extreme values."""
+    lo, hi = axes.value_range
+    len_lo, len_hi = axes.list_length_range
+    typical_len = (len_lo + len_hi) // 2
+    pred = _get_predicate_info(spec)
+
+    queries: list[Query] = []
     # All matching
     all_match = [_make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)]
     queries.append(
@@ -198,7 +222,23 @@ def generate_stateful_queries(
             tag=QueryTag.ADVERSARIAL,
         )
     )
+    return queries
 
+
+def generate_stateful_queries(
+    spec: StatefulSpec,
+    axes: StatefulAxes,
+    rng: random.Random | None = None,
+) -> list[Query]:
+    if rng is None:
+        rng = random.Random()
+
+    queries = [
+        *_generate_coverage_queries(spec, axes, rng),
+        *_generate_boundary_queries(spec, axes, rng),
+        *_generate_typical_queries(spec, axes, rng),
+        *_generate_adversarial_queries(spec, axes, rng),
+    ]
     return _dedupe_queries(queries)
 
 
