@@ -22,7 +22,7 @@ from genfxn.core.transforms import (
     eval_transform,
     render_transform,
 )
-from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.codegen import render_tests, task_id_from_spec
 from genfxn.core.models import Query, QueryTag
 
 
@@ -41,8 +41,11 @@ class TestPredicates:
         p = PredicateOdd()
         assert eval_predicate(p, 1) is True
         assert eval_predicate(p, 3) is True
+        assert eval_predicate(p, -3) is True
+        assert eval_predicate(p, -7) is True
         assert eval_predicate(p, 0) is False
         assert eval_predicate(p, 2) is False
+        assert eval_predicate(p, -4) is False
         assert render_predicate(p) == "x % 2 == 1"
 
     def test_lt(self) -> None:
@@ -180,3 +183,20 @@ class TestTaskId:
         id1 = task_id_from_spec("test", spec1)
         id2 = task_id_from_spec("test", spec2)
         assert id1 == id2
+
+
+class TestRenderTests:
+    def test_render_tests(self) -> None:
+        queries = [
+            Query(input=5, output=10, tag=QueryTag.TYPICAL),
+            Query(input=-3, output=3, tag=QueryTag.BOUNDARY),
+        ]
+        result = render_tests("my_func", queries)
+        assert "assert my_func(5) == 10" in result
+        assert "assert my_func(-3) == 3" in result
+        assert "query 0 (typical)" in result
+        assert "query 1 (boundary)" in result
+
+    def test_render_tests_empty(self) -> None:
+        result = render_tests("f", [])
+        assert result == ""
