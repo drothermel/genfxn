@@ -12,6 +12,7 @@ from genfxn.piecewise.validate import (
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
+    CODE_SEMANTIC_ISSUES_CAPPED,
     CODE_SEMANTIC_MISMATCH,
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
@@ -280,3 +281,71 @@ class TestValueRangeDefault:
         # Should still validate without errors for a valid task
         errors = [i for i in issues if i.severity == Severity.ERROR]
         assert errors == []
+
+
+class TestSemanticIssueCapping:
+    def test_caps_semantic_mismatch_issues(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        # Code that always returns wrong value - would fail for all 201 inputs
+        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        issues = validate_piecewise_task(corrupted, value_range=(-100, 100))
+        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        # Should be capped at default of 10
+        assert len(semantic_issues) == 10
+        # Should have capped warning
+        assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
+
+    def test_caps_runtime_errors(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        # Code that always raises
+        corrupted = task.model_copy(
+            update={"code": "def f(x):\n    raise ValueError('boom')"}
+        )
+        issues = validate_piecewise_task(
+            corrupted, value_range=(0, 50), max_semantic_issues=5
+        )
+        runtime_issues = [i for i in issues if i.code == CODE_CODE_RUNTIME_ERROR]
+        assert len(runtime_issues) == 5
+        assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
+
+    def test_capped_warning_is_warning_severity(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(x):\n    return 0"})
+        issues = validate_piecewise_task(
+            corrupted, value_range=(0, 20), max_semantic_issues=3
+        )
+        capped = [i for i in issues if i.code == CODE_SEMANTIC_ISSUES_CAPPED]
+        assert len(capped) == 1
+        assert capped[0].severity == Severity.WARNING
+
+    def test_custom_cap_respected(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(x):\n    return 0"})
+        issues = validate_piecewise_task(
+            corrupted, value_range=(0, 100), max_semantic_issues=3
+        )
+        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        assert len(semantic_issues) == 3
+
+    def test_zero_cap_means_unlimited(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        # Small range to keep test fast
+        issues = validate_piecewise_task(
+            corrupted, value_range=(0, 20), max_semantic_issues=0
+        )
+        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        # Should have all 21 issues (0 through 20 inclusive)
+        assert len(semantic_issues) == 21
+        # No capped warning
+        assert not any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
+
+    def test_no_cap_warning_when_under_limit(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(x):\n    return 0"})
+        # Only 3 values to check, cap is 10
+        issues = validate_piecewise_task(
+            corrupted, value_range=(0, 2), max_semantic_issues=10
+        )
+        # Should not emit capped warning since we didn't hit the limit
+        assert not any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)

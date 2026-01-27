@@ -20,7 +20,9 @@ CODE_QUERY_INPUT_TYPE = "QUERY_INPUT_TYPE"
 CODE_QUERY_OUTPUT_TYPE = "QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "QUERY_OUTPUT_MISMATCH"
 CODE_SEMANTIC_MISMATCH = "SEMANTIC_MISMATCH"
+CODE_SEMANTIC_ISSUES_CAPPED = "SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
+CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
 CURRENT_FAMILY = "piecewise"
 
 
@@ -170,11 +172,24 @@ def _validate_semantics(
     func: Callable[[int], int],
     spec: PiecewiseSpec,
     value_range: tuple[int, int],
+    max_issues: int,
 ) -> list[Issue]:
     issues: list[Issue] = []
     lo, hi = value_range
 
     for x in range(lo, hi + 1):
+        if max_issues > 0 and len(issues) >= max_issues:
+            issues.append(
+                Issue(
+                    code=CODE_SEMANTIC_ISSUES_CAPPED,
+                    severity=Severity.WARNING,
+                    message=f"Stopped after {max_issues} semantic issues",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            )
+            break
+
         try:
             actual = func(x)
         except Exception as e:
@@ -243,6 +258,7 @@ def validate_piecewise_task(
     task: Task,
     value_range: tuple[int, int] | None = None,
     strict: bool = True,
+    max_semantic_issues: int = 10,
 ) -> list[Issue]:
     if task.family != CURRENT_FAMILY:
         return [
@@ -271,7 +287,9 @@ def validate_piecewise_task(
         issues.extend(_validate_query_outputs(task, spec))
 
     if spec is not None and func is not None:
-        issues.extend(_validate_semantics(task, func, spec, value_range))
+        issues.extend(
+            _validate_semantics(task, func, spec, value_range, max_semantic_issues)
+        )
 
     if spec is not None:
         issues.extend(_check_monotonic_thresholds(task, spec))
