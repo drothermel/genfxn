@@ -8,6 +8,7 @@ from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
 from genfxn.core.predicates import get_threshold
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
+from genfxn.piecewise.ast_safety import ALLOWED_AST_NODES, ALLOWED_CALL_NAMES
 from genfxn.piecewise.eval import eval_piecewise
 from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
 from genfxn.piecewise.queries import SUPPORTED_CONDITION_KINDS
@@ -26,7 +27,73 @@ CODE_SEMANTIC_ISSUES_CAPPED = "SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
 CODE_UNSUPPORTED_CONDITION = "UNSUPPORTED_CONDITION"
+CODE_UNSAFE_AST = "UNSAFE_AST"
 CURRENT_FAMILY = "piecewise"
+
+
+def _validate_ast_whitelist(
+    code: str, param_name: str = "x"
+) -> tuple[list[Issue], ast.Module | None]:
+    """Reject code containing disallowed AST nodes.
+
+    Returns (issues, tree) where tree is None if parse failed or issues found.
+    This prevents accidental bad code and obvious injection vectors,
+    but is NOT a security sandbox for adversarial code.
+    """
+    allowed_names = ALLOWED_CALL_NAMES | {param_name}
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return [], None  # Let _validate_code_compile handle syntax errors
+
+    issues: list[Issue] = []
+    for node in ast.walk(tree):
+        node_type = type(node)
+
+        # Check node type against whitelist
+        if node_type not in ALLOWED_AST_NODES:
+            issues.append(
+                Issue(
+                    code=CODE_UNSAFE_AST,
+                    severity=Severity.ERROR,
+                    message=f"Disallowed AST node: {node_type.__name__} at line {getattr(node, 'lineno', '?')}",
+                    location="code",
+                )
+            )
+            continue
+
+        # Strict Call check: only abs(single_arg)
+        if isinstance(node, ast.Call):
+            valid_call = (
+                isinstance(node.func, ast.Name)
+                and node.func.id in ALLOWED_CALL_NAMES
+                and len(node.args) == 1
+                and len(node.keywords) == 0
+            )
+            if not valid_call:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=f"Disallowed function call at line {getattr(node, 'lineno', '?')}",
+                        location="code",
+                    )
+                )
+
+        # Strict Name check: only param and allowed calls
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            if node.id not in allowed_names:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=f"Disallowed name '{node.id}' at line {node.lineno}",
+                        location="code",
+                    )
+                )
+
+    return issues, tree if not issues else None
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
@@ -276,6 +343,7 @@ def validate_piecewise_task(
     strict: bool = True,
     max_semantic_issues: int = 10,
     emit_diagnostics: bool = True,
+    paranoid: bool = False,
 ) -> list[Issue]:
     if task.family != CURRENT_FAMILY:
         return [
@@ -299,6 +367,12 @@ def validate_piecewise_task(
 
     if spec is not None:
         issues.extend(_validate_condition_support(task, spec))
+
+    if paranoid:
+        ast_issues, _ = _validate_ast_whitelist(task.code)
+        if ast_issues:
+            issues.extend(ast_issues)
+            return issues  # Bail early, don't exec unsafe code
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)

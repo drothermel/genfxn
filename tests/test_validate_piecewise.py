@@ -16,6 +16,7 @@ from genfxn.piecewise.validate import (
     CODE_SEMANTIC_MISMATCH,
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
+    CODE_UNSAFE_AST,
     CODE_UNSUPPORTED_CONDITION,
     validate_piecewise_task,
 )
@@ -466,3 +467,84 @@ class TestSemanticIssueCapping:
         )
         # Should not emit capped warning since we didn't hit the limit
         assert not any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
+
+
+def _make_task_with_code(code: str) -> "Task":
+    """Create a task with custom code for testing AST validation."""
+    from genfxn.core.models import Task
+
+    task = generate_piecewise_task(rng=random.Random(42))
+    return task.model_copy(update={"code": code})
+
+
+class TestParanoidMode:
+    """Test AST whitelist validation in paranoid mode."""
+
+    def test_valid_generated_code_passes(self) -> None:
+        """Generated piecewise code should pass paranoid check."""
+        task = generate_piecewise_task(rng=random.Random(42))
+        issues = validate_piecewise_task(task, paranoid=True)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_import_rejected(self) -> None:
+        """Import statements should be rejected."""
+        task = _make_task_with_code("import os\ndef f(x): return x")
+        issues = validate_piecewise_task(task, paranoid=True)
+        unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
+        assert len(unsafe) >= 1
+        assert "Import" in unsafe[0].message
+
+    def test_attribute_access_rejected(self) -> None:
+        """Attribute access should be rejected."""
+        task = _make_task_with_code("def f(x): return x.__class__")
+        issues = validate_piecewise_task(task, paranoid=True)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_disallowed_call_rejected(self) -> None:
+        """Calls other than abs() should be rejected."""
+        task = _make_task_with_code("def f(x): return len([x])")
+        issues = validate_piecewise_task(task, paranoid=True)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_abs_with_multiple_args_rejected(self) -> None:
+        """abs() with wrong arity should be rejected."""
+        task = _make_task_with_code("def f(x): return abs(x, 1)")
+        issues = validate_piecewise_task(task, paranoid=True)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_abs_call_allowed(self) -> None:
+        """abs(x) calls should be allowed."""
+        task = _make_task_with_code(
+            "def f(x):\n    if x < 0:\n        return abs(x)\n    else:\n        return x"
+        )
+        issues = validate_piecewise_task(task, paranoid=True)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_disallowed_name_rejected(self) -> None:
+        """Names other than x and abs should be rejected."""
+        task = _make_task_with_code("def f(x): return open")
+        issues = validate_piecewise_task(task, paranoid=True)
+        unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
+        assert any("open" in i.message for i in unsafe)
+
+    def test_error_includes_line_number(self) -> None:
+        """AST errors should include line numbers."""
+        task = _make_task_with_code("import os\ndef f(x): return x")
+        issues = validate_piecewise_task(task, paranoid=True)
+        unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
+        assert any("line" in i.message for i in unsafe)
+
+    def test_paranoid_false_allows_unsafe_code(self) -> None:
+        """Without paranoid mode, unsafe code is not flagged as UNSAFE_AST."""
+        task = _make_task_with_code("import os\ndef f(x): return x")
+        issues = validate_piecewise_task(task, paranoid=False)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_multiple_seeds_pass_paranoid(self) -> None:
+        """Multiple generated tasks should all pass paranoid check."""
+        for seed in [1, 42, 123, 999]:
+            task = generate_piecewise_task(rng=random.Random(seed))
+            issues = validate_piecewise_task(task, paranoid=True)
+            assert not any(
+                i.code == CODE_UNSAFE_AST for i in issues
+            ), f"Seed {seed} produced UNSAFE_AST issues"
