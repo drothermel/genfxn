@@ -325,6 +325,69 @@ class TestNonMonotonicThresholds:
         assert found_monotonic, "Could not find a task with monotonic thresholds"
 
 
+class TestEmitDiagnostics:
+    def test_diagnostics_emitted_by_default(self) -> None:
+        # Create a task with non-monotonic thresholds
+        task = generate_piecewise_task(rng=random.Random(42))
+        spec = dict(task.spec)
+        spec["branches"] = list(spec["branches"])
+        if len(spec["branches"]) >= 2:
+            # Swap threshold order to make non-monotonic
+            spec["branches"][0] = dict(spec["branches"][0])
+            spec["branches"][1] = dict(spec["branches"][1])
+            cond0 = dict(spec["branches"][0]["condition"])
+            cond1 = dict(spec["branches"][1]["condition"])
+            if "value" in cond0 and "value" in cond1:
+                # Make second threshold smaller than first
+                cond0["value"], cond1["value"] = 10, 5
+                spec["branches"][0]["condition"] = cond0
+                spec["branches"][1]["condition"] = cond1
+                corrupted = task.model_copy(update={"spec": spec})
+                issues = validate_piecewise_task(corrupted)
+                assert any(i.code == CODE_NON_MONOTONIC_THRESHOLDS for i in issues)
+
+    def test_diagnostics_suppressed_when_false(self) -> None:
+        # Create a task with non-monotonic thresholds
+        task = generate_piecewise_task(rng=random.Random(42))
+        spec = dict(task.spec)
+        spec["branches"] = list(spec["branches"])
+        if len(spec["branches"]) >= 2:
+            spec["branches"][0] = dict(spec["branches"][0])
+            spec["branches"][1] = dict(spec["branches"][1])
+            cond0 = dict(spec["branches"][0]["condition"])
+            cond1 = dict(spec["branches"][1]["condition"])
+            if "value" in cond0 and "value" in cond1:
+                cond0["value"], cond1["value"] = 10, 5
+                spec["branches"][0]["condition"] = cond0
+                spec["branches"][1]["condition"] = cond1
+                corrupted = task.model_copy(update={"spec": spec})
+                # With emit_diagnostics=False, no NON_MONOTONIC_THRESHOLDS
+                issues = validate_piecewise_task(corrupted, emit_diagnostics=False)
+                assert not any(i.code == CODE_NON_MONOTONIC_THRESHOLDS for i in issues)
+
+    def test_correctness_errors_still_emitted_when_diagnostics_off(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        # Corrupt the code - this is a correctness error, not a diagnostic
+        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        issues = validate_piecewise_task(
+            corrupted, value_range=(0, 5), emit_diagnostics=False
+        )
+        # Semantic mismatch errors should still be present
+        assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
+
+    def test_semantic_capped_warning_still_emitted_when_diagnostics_off(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        issues = validate_piecewise_task(
+            corrupted,
+            value_range=(-100, 100),
+            max_semantic_issues=5,
+            emit_diagnostics=False,
+        )
+        # SEMANTIC_ISSUES_CAPPED is operational, not diagnostic - should still emit
+        assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
+
+
 class TestValueRangeDefault:
     def test_uses_axes_default_when_none(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))

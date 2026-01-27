@@ -28,6 +28,13 @@ CODE_UNSUPPORTED_CONDITION = "UNSUPPORTED_CONDITION"
 CURRENT_FAMILY = "piecewise"
 
 
+def get_threshold_value(condition: dict[str, Any]) -> int | None:
+    kind = condition.get("kind")
+    if kind in ("lt", "le", "gt", "ge"):
+        return condition.get("value")
+    return None
+
+
 def _validate_task_id(task: Task) -> list[Issue]:
     expected = task_id_from_spec(family=task.family, spec=task.spec)
     if task.task_id != expected:
@@ -242,18 +249,11 @@ def _validate_semantics(
     return issues
 
 
-def _get_threshold_value(condition: dict[str, Any]) -> int | None:
-    kind = condition.get("kind")
-    if kind in ("lt", "le", "gt", "ge"):
-        return condition.get("value")
-    return None
-
-
 def _check_monotonic_thresholds(task: Task, spec: PiecewiseSpec) -> list[Issue]:
     thresholds: list[int] = []
     for branch in spec.branches:
         cond_dict = branch.condition.model_dump()
-        val = _get_threshold_value(cond_dict)
+        val = get_threshold_value(cond_dict)
         if val is not None:
             thresholds.append(val)
 
@@ -282,6 +282,7 @@ def validate_piecewise_task(
     value_range: tuple[int, int] | None = None,
     strict: bool = True,
     max_semantic_issues: int = 10,
+    emit_diagnostics: bool = True,
 ) -> list[Issue]:
     if task.family != CURRENT_FAMILY:
         return [
@@ -317,7 +318,7 @@ def validate_piecewise_task(
             _validate_semantics(task, func, spec, value_range, max_semantic_issues)
         )
 
-    if spec is not None:
+    if spec is not None and emit_diagnostics:
         issues.extend(_check_monotonic_thresholds(task, spec))
 
     return issues
