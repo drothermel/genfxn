@@ -261,18 +261,18 @@ class TestQueryOutputValidation:
 
     def test_location_includes_specific_query_index(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
+        assert len(task.queries) >= 2
         # Keep first query valid, corrupt second
         queries = list(task.queries[:2])
-        if len(queries) >= 2:
-            queries[1] = Query(
-                input=queries[1].input,
-                output=queries[1].output + 999,
-                tag=queries[1].tag,
-            )
-            corrupted = task.model_copy(update={"queries": queries})
-            issues = validate_piecewise_task(corrupted)
-            mismatch_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_MISMATCH]
-            assert any("queries[1]" in i.location for i in mismatch_issues)
+        queries[1] = Query(
+            input=queries[1].input,
+            output=queries[1].output + 999,
+            tag=queries[1].tag,
+        )
+        corrupted = task.model_copy(update={"queries": queries})
+        issues = validate_piecewise_task(corrupted)
+        mismatch_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_MISMATCH]
+        assert any("queries[1]" in i.location for i in mismatch_issues)
 
 
 class TestSemanticValidation:
@@ -298,7 +298,9 @@ class TestNonMonotonicThresholds:
         # or create one manually by modifying the spec
         task = generate_piecewise_task(rng=random.Random(42))
         issues = validate_piecewise_task(task)
-        monotonic_issues = [i for i in issues if i.code == CODE_NON_MONOTONIC_THRESHOLDS]
+        monotonic_issues = [
+            i for i in issues if i.code == CODE_NON_MONOTONIC_THRESHOLDS
+        ]
         # All such issues should be warnings
         assert all(i.severity == Severity.WARNING for i in monotonic_issues)
 

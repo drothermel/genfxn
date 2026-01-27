@@ -283,6 +283,8 @@ def validate_piecewise_task(
                 code=WRONG_FAMILY,
                 severity=Severity.ERROR,
                 message=f"Task family '{task.family}' is not '{CURRENT_FAMILY}'",
+                location="family",
+                task_id=task.task_id,
             )
         ]
     if value_range is None:
