@@ -2,6 +2,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+WRONG_FAMILY = "WRONG_FAMILY"
+
 
 class Severity(str, Enum):
     ERROR = "error"

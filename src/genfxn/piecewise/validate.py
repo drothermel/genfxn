@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
-from genfxn.core.validate import Issue, Severity
+from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.piecewise.eval import eval_piecewise
 from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
 
@@ -20,18 +20,19 @@ CODE_QUERY_INPUT_TYPE = "QUERY_INPUT_TYPE"
 CODE_QUERY_OUTPUT_TYPE = "QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "QUERY_OUTPUT_MISMATCH"
 CODE_SEMANTIC_MISMATCH = "SEMANTIC_MISMATCH"
-CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
+CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
+CURRENT_FAMILY = "piecewise"
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
-    expected = task_id_from_spec("piecewise", task.spec)
+    expected = task_id_from_spec(family=task.family, spec=task.spec)
     if task.task_id != expected:
         return [
             Issue(
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
                 message=(
-                    f"task_id '{task.task_id}' does not match spec hash '{expected}'",
+                    f"task_id '{task.task_id}' does not match spec hash '{expected}'"
                 ),
                 location="task_id",
                 task_id=task.task_id,
@@ -42,7 +43,7 @@ def _validate_task_id(task: Task) -> list[Issue]:
 
 def _validate_spec_deserialize(task: Task) -> tuple[list[Issue], PiecewiseSpec | None]:
     try:
-        spec = PiecewiseSpec.model_validate(task.spec)
+        spec = PiecewiseSpec.model_validate(task.spec, strict=True)
         return [], spec
     except ValidationError as e:
         return [
@@ -97,6 +98,17 @@ def _validate_code_compile(
             )
         ], None
 
+    if not callable(namespace["f"]):
+        return [
+            Issue(
+                code=CODE_FUNC_NOT_CALLABLE,
+                severity=Severity.ERROR,
+                message=f"Function 'f' is not callable: {type(namespace['f'])}",
+                location="code.f",
+                task_id=task.task_id,
+            )
+        ], None
+
     return [], namespace["f"]
 
 
@@ -143,7 +155,7 @@ def _validate_query_outputs(task: Task, spec: PiecewiseSpec) -> list[Issue]:
                     severity=Severity.ERROR,
                     message=(
                         f"Query output {q.output} != expected {expected} for input "
-                        f"{q.input}",
+                        f"{q.input}"
                     ),
                     location=f"queries[{i}]",
                     task_id=task.task_id,
@@ -232,6 +244,14 @@ def validate_piecewise_task(
     value_range: tuple[int, int] | None = None,
     strict: bool = True,
 ) -> list[Issue]:
+    if task.family != CURRENT_FAMILY:
+        return [
+            Issue(
+                code=WRONG_FAMILY,
+                severity=Severity.ERROR,
+                message=f"Task family '{task.family}' is not '{CURRENT_FAMILY}'",
+            )
+        ]
     if value_range is None:
         value_range = PiecewiseAxes().value_range
 
