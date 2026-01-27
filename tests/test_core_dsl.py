@@ -11,7 +11,9 @@ from genfxn.core.predicates import (
     PredicateLt,
     PredicateModEq,
     PredicateOdd,
+    ThresholdInfo,
     eval_predicate,
+    get_threshold,
     render_predicate,
 )
 from genfxn.core.transforms import (
@@ -97,6 +99,60 @@ class TestPredicates:
         assert eval_predicate(p, 0) is False
         assert eval_predicate(p, 4) is False
         assert render_predicate(p) == "x in {1, 2, 3}"
+
+
+class TestGetThreshold:
+    def test_lt_returns_threshold_info(self) -> None:
+        p = PredicateLt(value=5)
+        info = get_threshold(p)
+        assert info is not None
+        assert info.kind == "lt"
+        assert info.value == 5
+
+    def test_le_returns_threshold_info(self) -> None:
+        p = PredicateLe(value=10)
+        info = get_threshold(p)
+        assert info is not None
+        assert info.kind == "le"
+        assert info.value == 10
+
+    def test_gt_returns_threshold_info(self) -> None:
+        p = PredicateGt(value=-3)
+        info = get_threshold(p)
+        assert info is not None
+        assert info.kind == "gt"
+        assert info.value == -3
+
+    def test_ge_returns_threshold_info(self) -> None:
+        p = PredicateGe(value=0)
+        info = get_threshold(p)
+        assert info is not None
+        assert info.kind == "ge"
+        assert info.value == 0
+
+    def test_even_returns_none(self) -> None:
+        p = PredicateEven()
+        assert get_threshold(p) is None
+
+    def test_odd_returns_none(self) -> None:
+        p = PredicateOdd()
+        assert get_threshold(p) is None
+
+    def test_mod_eq_returns_none(self) -> None:
+        p = PredicateModEq(divisor=3, remainder=1)
+        assert get_threshold(p) is None
+
+    def test_in_set_returns_none(self) -> None:
+        p = PredicateInSet(values=frozenset({1, 2, 3}))
+        assert get_threshold(p) is None
+
+    def test_threshold_info_is_model(self) -> None:
+        info = ThresholdInfo(kind="lt", value=5)
+        assert info.kind == "lt"
+        assert info.value == 5
+        # Can serialize
+        data = info.model_dump()
+        assert data == {"kind": "lt", "value": 5}
 
 
 class TestTransforms:

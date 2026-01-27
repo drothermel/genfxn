@@ -117,3 +117,30 @@ def render_predicate(pred: Predicate, var: str = "x") -> str:
             return f"{var} in {{{', '.join(map(str, sorted(vals)))}}}"
         case _:
             raise ValueError(f"Unknown predicate: {pred}")
+
+
+class ThresholdInfo(BaseModel):
+    """Threshold information extracted from a comparison predicate."""
+
+    kind: Literal["lt", "le", "gt", "ge"] = Field(
+        description="Comparison operator kind"
+    )
+    value: int = Field(description="Threshold value")
+
+
+def get_threshold(pred: Predicate) -> ThresholdInfo | None:
+    """Extract threshold info from comparison predicates.
+
+    Returns ThresholdInfo for lt/le/gt/ge predicates, None for others.
+    """
+    match pred:
+        case PredicateLt(value=v):
+            return ThresholdInfo(kind="lt", value=v)
+        case PredicateLe(value=v):
+            return ThresholdInfo(kind="le", value=v)
+        case PredicateGt(value=v):
+            return ThresholdInfo(kind="gt", value=v)
+        case PredicateGe(value=v):
+            return ThresholdInfo(kind="ge", value=v)
+        case _:
+            return None

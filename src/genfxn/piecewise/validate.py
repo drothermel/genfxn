@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
+from genfxn.core.predicates import get_threshold
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.piecewise.eval import eval_piecewise
 from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
@@ -26,13 +27,6 @@ CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
 CODE_UNSUPPORTED_CONDITION = "UNSUPPORTED_CONDITION"
 CURRENT_FAMILY = "piecewise"
-
-
-def get_threshold_value(condition: dict[str, Any]) -> int | None:
-    kind = condition.get("kind")
-    if kind in ("lt", "le", "gt", "ge"):
-        return condition.get("value")
-    return None
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
@@ -252,10 +246,9 @@ def _validate_semantics(
 def _check_monotonic_thresholds(task: Task, spec: PiecewiseSpec) -> list[Issue]:
     thresholds: list[int] = []
     for branch in spec.branches:
-        cond_dict = branch.condition.model_dump()
-        val = get_threshold_value(cond_dict)
-        if val is not None:
-            thresholds.append(val)
+        info = get_threshold(branch.condition)
+        if info is not None:
+            thresholds.append(info.value)
 
     if len(thresholds) < 2:
         return []
