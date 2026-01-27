@@ -149,14 +149,7 @@ class TestCodeCompilation:
 
     def test_exec_error_caught(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
-        corrupted = task.model_copy(
-            update={"code": "def f(x):\n    return undefined_var"}
-        )
-        issues = validate_piecewise_task(corrupted)
-        # Code parses but exec catches undefined at definition time - actually this
-        # won't fail at exec time, only at runtime. Let me use a different example.
-        # Actually the above will parse and exec fine, it only fails at call time.
-        # Use something that fails at module exec time:
+        # Code that raises at module exec time (not at call time)
         corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
