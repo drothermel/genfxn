@@ -13,10 +13,10 @@ import random
 
 import srsly
 
-from genfxn.stateful.models import StatefulAxes, TemplateType
-from genfxn.stateful.task import generate_stateful_task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.transforms import TransformType
+from genfxn.stateful.models import StatefulAxes, TemplateType
+from genfxn.stateful.task import generate_stateful_task
 
 
 def main() -> None:

@@ -9,7 +9,9 @@ runner = CliRunner()
 class TestGenerate:
     def test_generate_piecewise(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
-        result = runner.invoke(app, ["generate", "-o", str(output), "-f", "piecewise", "-n", "5"])
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "piecewise", "-n", "5"]
+        )
 
         assert result.exit_code == 0
         assert "Generated 5 tasks" in result.stdout
@@ -20,7 +22,9 @@ class TestGenerate:
 
     def test_generate_stateful(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
-        result = runner.invoke(app, ["generate", "-o", str(output), "-f", "stateful", "-n", "5"])
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "stateful", "-n", "5"]
+        )
 
         assert result.exit_code == 0
         assert "Generated 5 tasks" in result.stdout
@@ -31,7 +35,9 @@ class TestGenerate:
 
     def test_generate_all(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
-        result = runner.invoke(app, ["generate", "-o", str(output), "-f", "all", "-n", "10"])
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "all", "-n", "10"]
+        )
 
         assert result.exit_code == 0
         tasks = list(srsly.read_jsonl(output))
@@ -44,8 +50,14 @@ class TestGenerate:
         output1 = tmp_path / "tasks1.jsonl"
         output2 = tmp_path / "tasks2.jsonl"
 
-        runner.invoke(app, ["generate", "-o", str(output1), "-f", "piecewise", "-n", "3", "-s", "42"])
-        runner.invoke(app, ["generate", "-o", str(output2), "-f", "piecewise", "-n", "3", "-s", "42"])
+        runner.invoke(
+            app,
+            ["generate", "-o", str(output1), "-f", "piecewise", "-n", "3", "-s", "42"],
+        )
+        runner.invoke(
+            app,
+            ["generate", "-o", str(output2), "-f", "piecewise", "-n", "3", "-s", "42"],
+        )
 
         tasks1 = list(srsly.read_jsonl(output1))
         tasks2 = list(srsly.read_jsonl(output2))
@@ -54,7 +66,9 @@ class TestGenerate:
 
     def test_generate_unknown_family(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
-        result = runner.invoke(app, ["generate", "-o", str(output), "-f", "unknown", "-n", "5"])
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "unknown", "-n", "5"]
+        )
 
         assert result.exit_code == 1
         assert "Unknown family" in result.output
@@ -66,7 +80,20 @@ class TestSplit:
         train_file = tmp_path / "train.jsonl"
         test_file = tmp_path / "test.jsonl"
 
-        runner.invoke(app, ["generate", "-o", str(input_file), "-f", "stateful", "-n", "20", "-s", "42"])
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "20",
+                "-s",
+                "42",
+            ],
+        )
 
         result = runner.invoke(
             app,
@@ -100,7 +127,20 @@ class TestSplit:
         train_file = tmp_path / "train.jsonl"
         test_file = tmp_path / "test.jsonl"
 
-        runner.invoke(app, ["generate", "-o", str(input_file), "-f", "piecewise", "-n", "20", "-s", "42"])
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "piecewise",
+                "-n",
+                "20",
+                "-s",
+                "42",
+            ],
+        )
 
         result = runner.invoke(
             app,
@@ -134,7 +174,10 @@ class TestSplit:
 class TestInfo:
     def test_info_output(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
-        runner.invoke(app, ["generate", "-o", str(input_file), "-f", "all", "-n", "10", "-s", "42"])
+        runner.invoke(
+            app,
+            ["generate", "-o", str(input_file), "-f", "all", "-n", "10", "-s", "42"],
+        )
 
         result = runner.invoke(app, ["info", str(input_file)])
 
@@ -145,7 +188,9 @@ class TestInfo:
 
     def test_info_single_family(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
-        runner.invoke(app, ["generate", "-o", str(input_file), "-f", "piecewise", "-n", "7"])
+        runner.invoke(
+            app, ["generate", "-o", str(input_file), "-f", "piecewise", "-n", "7"]
+        )
 
         result = runner.invoke(app, ["info", str(input_file)])
 
