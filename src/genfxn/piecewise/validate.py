@@ -9,6 +9,7 @@ from genfxn.core.models import Task
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.piecewise.eval import eval_piecewise
 from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
+from genfxn.piecewise.queries import SUPPORTED_CONDITION_KINDS
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -23,6 +24,7 @@ CODE_SEMANTIC_MISMATCH = "SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
+CODE_UNSUPPORTED_CONDITION = "UNSUPPORTED_CONDITION"
 CURRENT_FAMILY = "piecewise"
 
 
@@ -57,6 +59,27 @@ def _validate_spec_deserialize(task: Task) -> tuple[list[Issue], PiecewiseSpec |
                 task_id=task.task_id,
             )
         ], None
+
+
+def _validate_condition_support(task: Task, spec: PiecewiseSpec) -> list[Issue]:
+    issues: list[Issue] = []
+    for i, branch in enumerate(spec.branches):
+        kind = branch.condition.kind
+        if kind not in SUPPORTED_CONDITION_KINDS:
+            supported = ", ".join(sorted(SUPPORTED_CONDITION_KINDS))
+            issues.append(
+                Issue(
+                    code=CODE_UNSUPPORTED_CONDITION,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"Condition kind '{kind}' not supported by query generator "
+                        f"(supported: {supported})"
+                    ),
+                    location=f"spec.branches[{i}].condition",
+                    task_id=task.task_id,
+                )
+            )
+    return issues
 
 
 def _validate_code_compile(
@@ -277,6 +300,9 @@ def validate_piecewise_task(
 
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
+
+    if spec is not None:
+        issues.extend(_validate_condition_support(task, spec))
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)

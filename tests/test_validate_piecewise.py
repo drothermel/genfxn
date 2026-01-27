@@ -16,6 +16,7 @@ from genfxn.piecewise.validate import (
     CODE_SEMANTIC_MISMATCH,
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
+    CODE_UNSUPPORTED_CONDITION,
     validate_piecewise_task,
 )
 
@@ -75,6 +76,64 @@ class TestSpecDeserialization:
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
         assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+
+
+class TestConditionSupport:
+    def test_supported_conditions_pass(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        issues = validate_piecewise_task(task)
+        assert not any(i.code == CODE_UNSUPPORTED_CONDITION for i in issues)
+
+    def test_unsupported_condition_gt_detected(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        # Replace first branch condition with gt (unsupported)
+        spec = dict(task.spec)
+        spec["branches"] = list(spec["branches"])
+        spec["branches"][0] = dict(spec["branches"][0])
+        spec["branches"][0]["condition"] = {"kind": "gt", "value": 0}
+        corrupted = task.model_copy(update={"spec": spec})
+        issues = validate_piecewise_task(corrupted)
+        assert any(i.code == CODE_UNSUPPORTED_CONDITION for i in issues)
+        assert any(
+            i.code == CODE_UNSUPPORTED_CONDITION and i.severity == Severity.ERROR
+            for i in issues
+        )
+
+    def test_unsupported_condition_even_detected(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        spec = dict(task.spec)
+        spec["branches"] = list(spec["branches"])
+        spec["branches"][0] = dict(spec["branches"][0])
+        spec["branches"][0]["condition"] = {"kind": "even"}
+        corrupted = task.model_copy(update={"spec": spec})
+        issues = validate_piecewise_task(corrupted)
+        assert any(i.code == CODE_UNSUPPORTED_CONDITION for i in issues)
+
+    def test_location_includes_branch_index(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        spec = dict(task.spec)
+        spec["branches"] = list(spec["branches"])
+        # Corrupt second branch if it exists, otherwise first
+        idx = min(1, len(spec["branches"]) - 1)
+        spec["branches"][idx] = dict(spec["branches"][idx])
+        spec["branches"][idx]["condition"] = {"kind": "odd"}
+        corrupted = task.model_copy(update={"spec": spec})
+        issues = validate_piecewise_task(corrupted)
+        unsupported = [i for i in issues if i.code == CODE_UNSUPPORTED_CONDITION]
+        assert any(f"branches[{idx}]" in i.location for i in unsupported)
+
+    def test_message_includes_supported_kinds(self) -> None:
+        task = generate_piecewise_task(rng=random.Random(42))
+        spec = dict(task.spec)
+        spec["branches"] = list(spec["branches"])
+        spec["branches"][0] = dict(spec["branches"][0])
+        spec["branches"][0]["condition"] = {"kind": "ge", "value": 5}
+        corrupted = task.model_copy(update={"spec": spec})
+        issues = validate_piecewise_task(corrupted)
+        unsupported = [i for i in issues if i.code == CODE_UNSUPPORTED_CONDITION]
+        assert len(unsupported) == 1
+        assert "le" in unsupported[0].message
+        assert "lt" in unsupported[0].message
 
 
 class TestCodeCompilation:
