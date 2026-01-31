@@ -15,11 +15,15 @@ app = typer.Typer(help="Generate and split function synthesis tasks.")
 
 @app.command()
 def generate(
-    output: Annotated[Path, typer.Option("--output", "-o", help="Output JSONL file")],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Output JSONL file")
+    ],
     family: Annotated[
         str, typer.Option("--family", "-f", help="piecewise, stateful, or all")
     ] = "all",
-    count: Annotated[int, typer.Option("--count", "-n", help="Number of tasks")] = 100,
+    count: Annotated[
+        int, typer.Option("--count", "-n", help="Number of tasks")
+    ] = 100,
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
     ] = None,

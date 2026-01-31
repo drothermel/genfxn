@@ -15,7 +15,9 @@ class HoldoutType(str, Enum):
 
 class AxisHoldout(BaseModel):
     axis_path: str = Field(description="Dot-separated path to spec value")
-    holdout_type: HoldoutType = Field(description="How to match the holdout value")
+    holdout_type: HoldoutType = Field(
+        description="How to match the holdout value"
+    )
     holdout_value: Any = Field(description="Value to match against")
 
 

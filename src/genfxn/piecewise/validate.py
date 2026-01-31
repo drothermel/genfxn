@@ -119,7 +119,9 @@ def _validate_task_id(task: Task) -> list[Issue]:
     return []
 
 
-def _validate_spec_deserialize(task: Task) -> tuple[list[Issue], PiecewiseSpec | None]:
+def _validate_spec_deserialize(
+    task: Task,
+) -> tuple[list[Issue], PiecewiseSpec | None]:
     try:
         spec = PiecewiseSpec.model_validate(task.spec, strict=True)
         return [], spec
@@ -390,7 +392,9 @@ def validate_piecewise_task(
 
     if spec is not None and func is not None:
         issues.extend(
-            _validate_semantics(task, func, spec, value_range, max_semantic_issues)
+            _validate_semantics(
+                task, func, spec, value_range, max_semantic_issues
+            )
         )
 
     if spec is not None and emit_diagnostics:

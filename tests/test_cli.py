@@ -54,11 +54,31 @@ class TestGenerate:
 
         runner.invoke(
             app,
-            ["generate", "-o", str(output1), "-f", "piecewise", "-n", "3", "-s", "42"],
+            [
+                "generate",
+                "-o",
+                str(output1),
+                "-f",
+                "piecewise",
+                "-n",
+                "3",
+                "-s",
+                "42",
+            ],
         )
         runner.invoke(
             app,
-            ["generate", "-o", str(output2), "-f", "piecewise", "-n", "3", "-s", "42"],
+            [
+                "generate",
+                "-o",
+                str(output2),
+                "-f",
+                "piecewise",
+                "-n",
+                "3",
+                "-s",
+                "42",
+            ],
         )
 
         tasks1 = cast(list[dict[str, Any]], list(srsly.read_jsonl(output1)))
@@ -178,7 +198,17 @@ class TestInfo:
         input_file = tmp_path / "tasks.jsonl"
         runner.invoke(
             app,
-            ["generate", "-o", str(input_file), "-f", "all", "-n", "10", "-s", "42"],
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "all",
+                "-n",
+                "10",
+                "-s",
+                "42",
+            ],
         )
 
         result = runner.invoke(app, ["info", str(input_file)])
@@ -191,7 +221,8 @@ class TestInfo:
     def test_info_single_family(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         runner.invoke(
-            app, ["generate", "-o", str(input_file), "-f", "piecewise", "-n", "7"]
+            app,
+            ["generate", "-o", str(input_file), "-f", "piecewise", "-n", "7"],
         )
 
         result = runner.invoke(app, ["info", str(input_file)])

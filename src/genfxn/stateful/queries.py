@@ -31,7 +31,9 @@ def _get_predicate_info(spec: StatefulSpec) -> Predicate:
             return p
 
 
-def _make_matching_value(pred, value_range: tuple[int, int], rng: random.Random) -> int:
+def _make_matching_value(
+    pred, value_range: tuple[int, int], rng: random.Random
+) -> int:
     lo, hi = value_range
 
     def clamp(x: int) -> int:
@@ -117,7 +119,11 @@ def _generate_coverage_queries(
     )
     single = [rng.randint(lo, hi)]
     queries.append(
-        Query(input=single, output=eval_stateful(spec, single), tag=QueryTag.COVERAGE)
+        Query(
+            input=single,
+            output=eval_stateful(spec, single),
+            tag=QueryTag.COVERAGE,
+        )
     )
     typical_list = _generate_random_list(typical_len, (lo, hi), rng)
     queries.append(
@@ -160,7 +166,13 @@ def _generate_boundary_queries(
         )
     )
     # Alternating
-    alternating = [match_val, non_match_val, match_val, non_match_val, match_val]
+    alternating = [
+        match_val,
+        non_match_val,
+        match_val,
+        non_match_val,
+        match_val,
+    ]
     queries.append(
         Query(
             input=alternating,
@@ -183,7 +195,9 @@ def _generate_typical_queries(
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
         queries.append(
-            Query(input=xs, output=eval_stateful(spec, xs), tag=QueryTag.TYPICAL)
+            Query(
+                input=xs, output=eval_stateful(spec, xs), tag=QueryTag.TYPICAL
+            )
         )
     return queries
 
@@ -199,7 +213,9 @@ def _generate_adversarial_queries(
 
     queries: list[Query] = []
     # All matching
-    all_match = [_make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)]
+    all_match = [
+        _make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)
+    ]
     queries.append(
         Query(
             input=all_match,
@@ -209,7 +225,8 @@ def _generate_adversarial_queries(
     )
     # All non-matching
     all_non_match = [
-        _make_non_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)
+        _make_non_matching_value(pred, (lo, hi), rng)
+        for _ in range(typical_len)
     ]
     queries.append(
         Query(

@@ -13,28 +13,30 @@ obvious injection, not adversarial code execution.
 import ast
 
 # Nodes the piecewise renderer actually emits
-ALLOWED_AST_NODES: frozenset[type] = frozenset({
-    ast.Module,
-    ast.FunctionDef,
-    ast.arguments,
-    ast.arg,
-    ast.If,
-    ast.Return,
-    ast.Compare,
-    ast.Lt,
-    ast.LtE,
-    ast.BinOp,
-    ast.Add,
-    ast.Sub,
-    ast.Mult,
-    ast.Mod,
-    ast.UnaryOp,
-    ast.USub,
-    ast.Call,
-    ast.Name,
-    ast.Constant,
-    ast.Load,
-})
+ALLOWED_AST_NODES: frozenset[type] = frozenset(
+    {
+        ast.Module,
+        ast.FunctionDef,
+        ast.arguments,
+        ast.arg,
+        ast.If,
+        ast.Return,
+        ast.Compare,
+        ast.Lt,
+        ast.LtE,
+        ast.BinOp,
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Mod,
+        ast.UnaryOp,
+        ast.USub,
+        ast.Call,
+        ast.Name,
+        ast.Constant,
+        ast.Load,
+    }
+)
 
 # Names used in function calls and type annotations
 ALLOWED_CALL_NAMES: frozenset[str] = frozenset({"abs", "int"})

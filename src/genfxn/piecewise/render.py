@@ -75,7 +75,9 @@ def _render_quadratic(a: int, b: int, c: int, var: str) -> str:
     return "".join(parts)
 
 
-def render_piecewise(spec: PiecewiseSpec, func_name: str = "f", var: str = "x") -> str:
+def render_piecewise(
+    spec: PiecewiseSpec, func_name: str = "f", var: str = "x"
+) -> str:
     lines = [f"def {func_name}({var}: int) -> int:"]
 
     for i, branch in enumerate(spec.branches):

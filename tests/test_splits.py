@@ -29,7 +29,10 @@ class TestGetSpecValue:
 
     def test_list_index(self) -> None:
         spec = {
-            "branches": [{"condition": {"kind": "lt"}}, {"condition": {"kind": "ge"}}]
+            "branches": [
+                {"condition": {"kind": "lt"}},
+                {"condition": {"kind": "ge"}},
+            ]
         }
         assert get_spec_value(spec, "branches.0.condition.kind") == "lt"
         assert get_spec_value(spec, "branches.1.condition.kind") == "ge"
@@ -71,7 +74,9 @@ class TestSplitTasks:
         assert len(result.train) == 2
         assert len(result.test) == 1
         assert result.test[0].task_id == "t2"
-        assert all(t.spec["template"] == "conditional_linear_sum" for t in result.train)
+        assert all(
+            t.spec["template"] == "conditional_linear_sum" for t in result.train
+        )
 
     def test_nested_exact_holdout(self) -> None:
         tasks = [
@@ -157,7 +162,9 @@ class TestSplitTasks:
         ]
         holdouts = [
             AxisHoldout(
-                axis_path="template", holdout_type=HoldoutType.EXACT, holdout_value="b"
+                axis_path="template",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value="b",
             ),
             AxisHoldout(
                 axis_path="predicate.kind",
@@ -176,7 +183,9 @@ class TestSplitTasks:
     def test_empty_tasks(self) -> None:
         holdouts = [
             AxisHoldout(
-                axis_path="template", holdout_type=HoldoutType.EXACT, holdout_value="x"
+                axis_path="template",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value="x",
             )
         ]
         result = split_tasks([], holdouts)
@@ -199,7 +208,9 @@ class TestSplitTasks:
         ]
         holdouts = [
             AxisHoldout(
-                axis_path="template", holdout_type=HoldoutType.EXACT, holdout_value="c"
+                axis_path="template",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value="c",
             )
         ]
         result = split_tasks(tasks, holdouts)
@@ -214,7 +225,9 @@ class TestSplitTasks:
         ]
         holdouts = [
             AxisHoldout(
-                axis_path="template", holdout_type=HoldoutType.EXACT, holdout_value="a"
+                axis_path="template",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value="a",
             )
         ]
         result = split_tasks(tasks, holdouts)
@@ -229,7 +242,9 @@ class TestSplitTasks:
         ]
         holdouts = [
             AxisHoldout(
-                axis_path="template", holdout_type=HoldoutType.EXACT, holdout_value="a"
+                axis_path="template",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value="a",
             )
         ]
         result = split_tasks(tasks, holdouts)
@@ -242,9 +257,13 @@ class TestSplitTasks:
     def test_split_result_preserves_holdouts(self) -> None:
         tasks = [_make_task("t1", {"x": 1})]
         holdouts = [
-            AxisHoldout(axis_path="x", holdout_type=HoldoutType.EXACT, holdout_value=1),
             AxisHoldout(
-                axis_path="y", holdout_type=HoldoutType.RANGE, holdout_value=(0, 10)
+                axis_path="x", holdout_type=HoldoutType.EXACT, holdout_value=1
+            ),
+            AxisHoldout(
+                axis_path="y",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(0, 10),
             ),
         ]
         result = split_tasks(tasks, holdouts)

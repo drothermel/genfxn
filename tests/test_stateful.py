@@ -68,7 +68,9 @@ class TestConditionalLinearSumEval:
             init_value=0,
         )
         # Negative values: abs(x), non-negative: 2*x
-        assert eval_conditional_linear_sum(spec, [-5, 3, -2, 4]) == 5 + 6 + 2 + 8
+        assert (
+            eval_conditional_linear_sum(spec, [-5, 3, -2, 4]) == 5 + 6 + 2 + 8
+        )
 
 
 class TestResettingBestPrefixSumEval:
@@ -228,7 +230,13 @@ class TestRender:
         namespace: dict = {}
         exec(code, namespace)  # noqa: S102
         f = namespace["f"]
-        test_inputs = [[], [1, 2, 3], [1, -1, 2, 3], [-1, -2, -3], [5, 4, -1, 3, 2]]
+        test_inputs = [
+            [],
+            [1, 2, 3],
+            [1, -1, 2, 3],
+            [-1, -2, -3],
+            [5, 4, -1, 3, 2],
+        ]
         for xs in test_inputs:
             assert f(xs) == eval_stateful(spec, xs), f"Mismatch at xs={xs}"
 
@@ -275,11 +283,15 @@ class TestAxesValidation:
             StatefulAxes(templates=[])
 
     def test_empty_predicate_types(self) -> None:
-        with pytest.raises(ValueError, match="predicate_types must not be empty"):
+        with pytest.raises(
+            ValueError, match="predicate_types must not be empty"
+        ):
             StatefulAxes(predicate_types=[])
 
     def test_empty_transform_types(self) -> None:
-        with pytest.raises(ValueError, match="transform_types must not be empty"):
+        with pytest.raises(
+            ValueError, match="transform_types must not be empty"
+        ):
             StatefulAxes(transform_types=[])
 
     def test_zero_divisor(self) -> None:

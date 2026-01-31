@@ -50,7 +50,9 @@ class TestTaskIdValidation:
 
     def test_wrong_family_prefix_detected(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"task_id": "stateful_" + task.task_id[10:]})
+        corrupted = task.model_copy(
+            update={"task_id": "stateful_" + task.task_id[10:]}
+        )
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_TASK_ID_MISMATCH for i in issues)
 
@@ -62,7 +64,8 @@ class TestSpecDeserialization:
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
         assert any(
-            i.code == CODE_SPEC_DESERIALIZE_ERROR and i.severity == Severity.ERROR
+            i.code == CODE_SPEC_DESERIALIZE_ERROR
+            and i.severity == Severity.ERROR
             for i in issues
         )
 
@@ -71,7 +74,9 @@ class TestSpecDeserialization:
         corrupted = task.model_copy(
             update={
                 "spec": {"invalid": "spec"},
-                "queries": [Query(input="not_int", output=0, tag=QueryTag.TYPICAL)],
+                "queries": [
+                    Query(input="not_int", output=0, tag=QueryTag.TYPICAL)
+                ],
             }
         )
         issues = validate_piecewise_task(corrupted)
@@ -96,7 +101,8 @@ class TestConditionSupport:
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_UNSUPPORTED_CONDITION for i in issues)
         assert any(
-            i.code == CODE_UNSUPPORTED_CONDITION and i.severity == Severity.ERROR
+            i.code == CODE_UNSUPPORTED_CONDITION
+            and i.severity == Severity.ERROR
             for i in issues
         )
 
@@ -120,7 +126,9 @@ class TestConditionSupport:
         spec["branches"][idx]["condition"] = {"kind": "odd"}
         corrupted = task.model_copy(update={"spec": spec})
         issues = validate_piecewise_task(corrupted)
-        unsupported = [i for i in issues if i.code == CODE_UNSUPPORTED_CONDITION]
+        unsupported = [
+            i for i in issues if i.code == CODE_UNSUPPORTED_CONDITION
+        ]
         assert any(f"branches[{idx}]" in i.location for i in unsupported)
 
     def test_message_includes_supported_kinds(self) -> None:
@@ -131,7 +139,9 @@ class TestConditionSupport:
         spec["branches"][0]["condition"] = {"kind": "ge", "value": 5}
         corrupted = task.model_copy(update={"spec": spec})
         issues = validate_piecewise_task(corrupted)
-        unsupported = [i for i in issues if i.code == CODE_UNSUPPORTED_CONDITION]
+        unsupported = [
+            i for i in issues if i.code == CODE_UNSUPPORTED_CONDITION
+        ]
         assert len(unsupported) == 1
         assert "le" in unsupported[0].message
         assert "lt" in unsupported[0].message
@@ -185,7 +195,9 @@ class TestCodeRuntime:
             update={"code": "def f(x):\n    return 1 // x"}  # Fails at x=0
         )
         issues = validate_piecewise_task(corrupted, value_range=(-1, 1))
-        runtime_errors = [i for i in issues if i.code == CODE_CODE_RUNTIME_ERROR]
+        runtime_errors = [
+            i for i in issues if i.code == CODE_CODE_RUNTIME_ERROR
+        ]
         assert any("f(0)" in i.message for i in runtime_errors)
 
 
@@ -193,7 +205,9 @@ class TestQueryTypeValidation:
     def test_non_int_input_is_error_strict(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]}
+            update={
+                "queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]
+            }
         )
         issues = validate_piecewise_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
@@ -203,7 +217,9 @@ class TestQueryTypeValidation:
     def test_non_int_input_is_warning_lenient(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]}
+            update={
+                "queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]
+            }
         )
         issues = validate_piecewise_task(corrupted, strict=False)
         type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
@@ -213,7 +229,9 @@ class TestQueryTypeValidation:
     def test_non_int_output_is_error_strict(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"queries": [Query(input=0, output="text", tag=QueryTag.TYPICAL)]}
+            update={
+                "queries": [Query(input=0, output="text", tag=QueryTag.TYPICAL)]
+            }
         )
         issues = validate_piecewise_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
@@ -223,7 +241,9 @@ class TestQueryTypeValidation:
     def test_float_input_detected(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"queries": [Query(input=3.14, output=0, tag=QueryTag.TYPICAL)]}
+            update={
+                "queries": [Query(input=3.14, output=0, tag=QueryTag.TYPICAL)]
+            }
         )
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
@@ -256,7 +276,8 @@ class TestQueryOutputValidation:
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_QUERY_OUTPUT_MISMATCH for i in issues)
         assert any(
-            i.code == CODE_QUERY_OUTPUT_MISMATCH and i.severity == Severity.ERROR
+            i.code == CODE_QUERY_OUTPUT_MISMATCH
+            and i.severity == Severity.ERROR
             for i in issues
         )
 
@@ -272,7 +293,9 @@ class TestQueryOutputValidation:
         )
         corrupted = task.model_copy(update={"queries": queries})
         issues = validate_piecewise_task(corrupted)
-        mismatch_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_MISMATCH]
+        mismatch_issues = [
+            i for i in issues if i.code == CODE_QUERY_OUTPUT_MISMATCH
+        ]
         assert any("queries[1]" in i.location for i in mismatch_issues)
 
 
@@ -288,9 +311,13 @@ class TestSemanticValidation:
         task = generate_piecewise_task(rng=random.Random(42))
         corrupted = task.model_copy(update={"code": "def f(x):\n    return 0"})
         issues = validate_piecewise_task(corrupted, value_range=(0, 2))
-        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
         # Should have x value in message like "f(0) = 0, expected X"
-        assert all("f(" in i.message and ")" in i.message for i in semantic_issues)
+        assert all(
+            "f(" in i.message and ")" in i.message for i in semantic_issues
+        )
 
 
 class TestNonMonotonicThresholds:
@@ -318,7 +345,9 @@ class TestNonMonotonicThresholds:
             if not monotonic_issues:
                 found_monotonic = True
                 break
-        assert found_monotonic, "Could not find a task with monotonic thresholds"
+        assert found_monotonic, (
+            "Could not find a task with monotonic thresholds"
+        )
 
 
 class TestEmitDiagnostics:
@@ -340,7 +369,9 @@ class TestEmitDiagnostics:
                 spec["branches"][1]["condition"] = cond1
                 corrupted = task.model_copy(update={"spec": spec})
                 issues = validate_piecewise_task(corrupted)
-                assert any(i.code == CODE_NON_MONOTONIC_THRESHOLDS for i in issues)
+                assert any(
+                    i.code == CODE_NON_MONOTONIC_THRESHOLDS for i in issues
+                )
 
     def test_diagnostics_suppressed_when_false(self) -> None:
         # Create a task with non-monotonic thresholds
@@ -358,22 +389,34 @@ class TestEmitDiagnostics:
                 spec["branches"][1]["condition"] = cond1
                 corrupted = task.model_copy(update={"spec": spec})
                 # With emit_diagnostics=False, no NON_MONOTONIC_THRESHOLDS
-                issues = validate_piecewise_task(corrupted, emit_diagnostics=False)
-                assert not any(i.code == CODE_NON_MONOTONIC_THRESHOLDS for i in issues)
+                issues = validate_piecewise_task(
+                    corrupted, emit_diagnostics=False
+                )
+                assert not any(
+                    i.code == CODE_NON_MONOTONIC_THRESHOLDS for i in issues
+                )
 
-    def test_correctness_errors_still_emitted_when_diagnostics_off(self) -> None:
+    def test_correctness_errors_still_emitted_when_diagnostics_off(
+        self,
+    ) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         # Corrupt the code - this is a correctness error, not a diagnostic
-        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        corrupted = task.model_copy(
+            update={"code": "def f(x):\n    return 999999"}
+        )
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 5), emit_diagnostics=False
         )
         # Semantic mismatch errors should still be present
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
 
-    def test_semantic_capped_warning_still_emitted_when_diagnostics_off(self) -> None:
+    def test_semantic_capped_warning_still_emitted_when_diagnostics_off(
+        self,
+    ) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        corrupted = task.model_copy(
+            update={"code": "def f(x):\n    return 999999"}
+        )
         issues = validate_piecewise_task(
             corrupted,
             value_range=(-100, 100),
@@ -405,9 +448,13 @@ class TestSemanticIssueCapping:
     def test_caps_semantic_mismatch_issues(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         # Code that always returns wrong value - would fail for all 201 inputs
-        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        corrupted = task.model_copy(
+            update={"code": "def f(x):\n    return 999999"}
+        )
         issues = validate_piecewise_task(corrupted, value_range=(-100, 100))
-        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
         # Should be capped at default of 10
         assert len(semantic_issues) == 10
         # Should have capped warning
@@ -422,7 +469,9 @@ class TestSemanticIssueCapping:
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 50), max_semantic_issues=5
         )
-        runtime_issues = [i for i in issues if i.code == CODE_CODE_RUNTIME_ERROR]
+        runtime_issues = [
+            i for i in issues if i.code == CODE_CODE_RUNTIME_ERROR
+        ]
         assert len(runtime_issues) == 5
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
@@ -442,17 +491,23 @@ class TestSemanticIssueCapping:
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 100), max_semantic_issues=3
         )
-        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
         assert len(semantic_issues) == 3
 
     def test_zero_cap_means_unlimited(self) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(x):\n    return 999999"})
+        corrupted = task.model_copy(
+            update={"code": "def f(x):\n    return 999999"}
+        )
         # Small range to keep test fast
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 20), max_semantic_issues=0
         )
-        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
         # Should have all 21 issues (0 through 20 inclusive)
         assert len(semantic_issues) == 21
         # No capped warning
@@ -548,6 +603,6 @@ class TestParanoidMode:
         for seed in [1, 42, 123, 999]:
             task = generate_piecewise_task(rng=random.Random(seed))
             issues = validate_piecewise_task(task, paranoid=True)
-            assert not any(
-                i.code == CODE_UNSAFE_AST for i in issues
-            ), f"Seed {seed} produced UNSAFE_AST issues"
+            assert not any(i.code == CODE_UNSAFE_AST for i in issues), (
+                f"Seed {seed} produced UNSAFE_AST issues"
+            )

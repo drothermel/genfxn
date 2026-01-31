@@ -68,7 +68,9 @@ def render_longest_run(
     return "\n".join(lines)
 
 
-def render_stateful(spec: StatefulSpec, func_name: str = "f", var: str = "xs") -> str:
+def render_stateful(
+    spec: StatefulSpec, func_name: str = "f", var: str = "xs"
+) -> str:
     match spec:
         case ConditionalLinearSumSpec():
             return render_conditional_linear_sum(spec, func_name, var)

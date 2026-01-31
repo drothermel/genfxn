@@ -52,7 +52,9 @@ class TestBranchSelection:
     def test_single_branch_lt(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLt(value=5), expr=ExprAffine(a=1, b=0))
+                Branch(
+                    condition=PredicateLt(value=5), expr=ExprAffine(a=1, b=0)
+                )
             ],
             default_expr=ExprAffine(a=0, b=10),
         )
@@ -63,7 +65,9 @@ class TestBranchSelection:
     def test_single_branch_le(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLe(value=5), expr=ExprAffine(a=1, b=0))
+                Branch(
+                    condition=PredicateLe(value=5), expr=ExprAffine(a=1, b=0)
+                )
             ],
             default_expr=ExprAffine(a=0, b=10),
         )
@@ -74,8 +78,12 @@ class TestBranchSelection:
     def test_multiple_branches(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=0, b=-1)),
-                Branch(condition=PredicateLt(value=10), expr=ExprAffine(a=1, b=0)),
+                Branch(
+                    condition=PredicateLt(value=0), expr=ExprAffine(a=0, b=-1)
+                ),
+                Branch(
+                    condition=PredicateLt(value=10), expr=ExprAffine(a=1, b=0)
+                ),
             ],
             default_expr=ExprAffine(a=0, b=100),
         )
@@ -89,7 +97,9 @@ class TestQueryGeneration:
     def test_generates_queries(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))
+                Branch(
+                    condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0)
+                )
             ],
             default_expr=ExprAffine(a=2, b=0),
         )
@@ -99,7 +109,9 @@ class TestQueryGeneration:
     def test_all_queries_valid(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0))
+                Branch(
+                    condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0)
+                )
             ],
             default_expr=ExprAffine(a=2, b=0),
         )
@@ -119,7 +131,8 @@ class TestRender:
     def test_render_quadratic(self) -> None:
         assert render_expression(ExprQuadratic(a=1, b=0, c=0)) == "x * x"
         assert (
-            render_expression(ExprQuadratic(a=2, b=3, c=4)) == "2 * x * x + 3 * x + 4"
+            render_expression(ExprQuadratic(a=2, b=3, c=4))
+            == "2 * x * x + 3 * x + 4"
         )
 
     def test_render_abs(self) -> None:
@@ -130,18 +143,26 @@ class TestRender:
         assert render_expression(ExprAbs(a=2, b=-3)) == "2 * abs(x) - 3"
 
     def test_render_mod(self) -> None:
-        assert render_expression(ExprMod(divisor=3, a=2, b=1)) == "2 * (x % 3) + 1"
+        assert (
+            render_expression(ExprMod(divisor=3, a=2, b=1)) == "2 * (x % 3) + 1"
+        )
         assert render_expression(ExprMod(divisor=5, a=1, b=0)) == "(x % 5)"
         assert render_expression(ExprMod(divisor=7, a=0, b=4)) == "4"
         assert render_expression(ExprMod(divisor=2, a=-1, b=0)) == "-(x % 2)"
-        assert render_expression(ExprMod(divisor=3, a=2, b=-1)) == "2 * (x % 3) - 1"
+        assert (
+            render_expression(ExprMod(divisor=3, a=2, b=-1))
+            == "2 * (x % 3) - 1"
+        )
 
     def test_render_roundtrip(self) -> None:
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLt(value=0), expr=ExprAffine(a=2, b=1)),
                 Branch(
-                    condition=PredicateLt(value=10), expr=ExprQuadratic(a=1, b=0, c=0)
+                    condition=PredicateLt(value=0), expr=ExprAffine(a=2, b=1)
+                ),
+                Branch(
+                    condition=PredicateLt(value=10),
+                    expr=ExprQuadratic(a=1, b=0, c=0),
                 ),
             ],
             default_expr=ExprAffine(a=0, b=50),

@@ -91,7 +91,9 @@ Stateful functions iterate over list[int] and return int. Three templates:
         for q in task.queries:
             actual = f(q.input)
             if actual != q.output:
-                errors.append(f"f({q.input}): expected {q.output}, got {actual}")
+                errors.append(
+                    f"f({q.input}): expected {q.output}, got {actual}"
+                )
 
         if errors:
             print("\nVERIFICATION ERRORS:")

@@ -41,7 +41,9 @@ def generate_piecewise_queries(
     coverage_points = _get_coverage_points(spec, lo, hi)
     for x in coverage_points:
         queries.append(
-            Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.COVERAGE)
+            Query(
+                input=x, output=eval_piecewise(spec, x), tag=QueryTag.COVERAGE
+            )
         )
 
     # Boundary queries: at and around thresholds
@@ -52,7 +54,9 @@ def generate_piecewise_queries(
             if lo <= x <= hi:
                 queries.append(
                     Query(
-                        input=x, output=eval_piecewise(spec, x), tag=QueryTag.BOUNDARY
+                        input=x,
+                        output=eval_piecewise(spec, x),
+                        tag=QueryTag.BOUNDARY,
                     )
                 )
 
@@ -69,7 +73,11 @@ def generate_piecewise_queries(
     for x in adversarial_points:
         if lo <= x <= hi:
             queries.append(
-                Query(input=x, output=eval_piecewise(spec, x), tag=QueryTag.ADVERSARIAL)
+                Query(
+                    input=x,
+                    output=eval_piecewise(spec, x),
+                    tag=QueryTag.ADVERSARIAL,
+                )
             )
 
     return _dedupe_queries(queries)
