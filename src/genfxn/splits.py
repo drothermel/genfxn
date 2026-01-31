@@ -1,3 +1,4 @@
+import random
 from enum import Enum
 from typing import Any
 
@@ -53,3 +54,20 @@ def split_tasks(tasks: list[Task], holdouts: list[AxisHoldout]) -> SplitResult:
         else:
             train.append(task)
     return SplitResult(train=train, test=test, holdouts=holdouts)
+
+
+def random_split(
+    tasks: list[Task],
+    train_ratio: float,
+    seed: int | None = None,
+) -> SplitResult:
+    """Randomly split tasks into train/test."""
+    rng = random.Random(seed)
+    shuffled = tasks.copy()
+    rng.shuffle(shuffled)
+    split_idx = int(len(shuffled) * train_ratio)
+    return SplitResult(
+        train=shuffled[:split_idx],
+        test=shuffled[split_idx:],
+        holdouts=[],
+    )
