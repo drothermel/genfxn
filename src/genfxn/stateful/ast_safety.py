@@ -35,6 +35,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Call,
         ast.Name,
         ast.Constant,
+        ast.Set,
         # Comparisons
         ast.Lt,
         ast.LtE,

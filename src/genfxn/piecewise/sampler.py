@@ -1,6 +1,7 @@
 import random
 
 from genfxn.core.predicates import Predicate, PredicateLe, PredicateLt
+from genfxn.core.trace import TraceStep
 from genfxn.piecewise.models import (
     Branch,
     ExprAbs,
@@ -12,6 +13,21 @@ from genfxn.piecewise.models import (
     PiecewiseAxes,
     PiecewiseSpec,
 )
+
+
+def _expr_to_str(expr: Expression) -> str:
+    """Convert expression to human-readable string."""
+    match expr:
+        case ExprAffine(a=a, b=b):
+            return f"{a}x + {b}"
+        case ExprQuadratic(a=a, b=b, c=c):
+            return f"{a}x² + {b}x + {c}"
+        case ExprAbs(a=a, b=b):
+            return f"{a}|x| + {b}"
+        case ExprMod(divisor=d, a=a, b=b):
+            return f"{a}(x % {d}) + {b}"
+        case _:
+            return str(expr)
 
 
 def sample_expression(
@@ -70,7 +86,9 @@ def sample_condition(threshold: int, rng: random.Random) -> Predicate:
 
 
 def sample_piecewise_spec(
-    axes: PiecewiseAxes, rng: random.Random | None = None
+    axes: PiecewiseAxes,
+    rng: random.Random | None = None,
+    trace: list[TraceStep] | None = None,
 ) -> PiecewiseSpec:
     if rng is None:
         rng = random.Random()
@@ -90,18 +108,72 @@ def sample_piecewise_spec(
         )
     )
 
+    if trace is not None:
+        trace.append(
+            TraceStep(
+                step="sample_thresholds",
+                choice=f"Sampled {len(thresholds)} thresholds: {thresholds}",
+                value=thresholds,
+            )
+        )
+
     branches: list[Branch] = []
-    for thresh in thresholds:
+    for i, thresh in enumerate(thresholds):
         expr_type = rng.choice(axes.expr_types)
+        if trace is not None:
+            trace.append(
+                TraceStep(
+                    step=f"sample_branch_{i}_expr_type",
+                    choice=f"Branch {i}: chose {expr_type.value} expression",
+                    value=expr_type.value,
+                )
+            )
+
         expr = sample_expression(
             expr_type, axes.coeff_range, axes.divisor_range, rng
         )
+        if trace is not None:
+            trace.append(
+                TraceStep(
+                    step=f"sample_branch_{i}_expression",
+                    choice=f"Branch {i}: {_expr_to_str(expr)}",
+                    value=expr.model_dump(),
+                )
+            )
+
         condition = sample_condition(thresh, rng)
+        cond_str = "<" if isinstance(condition, PredicateLt) else "<="
+        if trace is not None:
+            trace.append(
+                TraceStep(
+                    step=f"sample_branch_{i}_condition",
+                    choice=f"Branch {i}: x {cond_str} {thresh}",
+                    value=condition.model_dump(),
+                )
+            )
+
         branches.append(Branch(condition=condition, expr=expr))
 
     default_expr_type = rng.choice(axes.expr_types)
+    if trace is not None:
+        trace.append(
+            TraceStep(
+                step="sample_default_expr_type",
+                choice=f"Default: chose {default_expr_type.value} expression",
+                value=default_expr_type.value,
+            )
+        )
+
     default_expr = sample_expression(
         default_expr_type, axes.coeff_range, axes.divisor_range, rng
     )
+    if trace is not None:
+        trace.append(
+            TraceStep(
+                step="sample_default_expression",
+                choice=f"Default: {_expr_to_str(default_expr)}",
+                value=default_expr.model_dump(),
+            )
+        )
 
     return PiecewiseSpec(branches=branches, default_expr=default_expr)
