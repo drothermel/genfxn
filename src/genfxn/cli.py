@@ -113,11 +113,11 @@ def generate(
     ] = None,
     predicate_types: Annotated[
         str | None,
-        typer.Option("--predicate-types", help="Predicate types (comma-separated)"),
+        typer.Option("--predicate-types", help="Predicate types"),
     ] = None,
     transform_types: Annotated[
         str | None,
-        typer.Option("--transform-types", help="Transform types (comma-separated)"),
+        typer.Option("--transform-types", help="Transform types"),
     ] = None,
     # Type filters - piecewise
     n_branches: Annotated[
@@ -165,13 +165,26 @@ def generate(
     tasks: list[Task] = []
 
     # Warn about mismatched options
-    stateful_only = [templates, predicate_types, transform_types, list_length_range, shift_range, scale_range]
+    stateful_only = [
+        templates,
+        predicate_types,
+        transform_types,
+        list_length_range,
+        shift_range,
+        scale_range,
+    ]
     piecewise_only = [n_branches, expr_types, coeff_range]
 
     if family == "piecewise" and any(opt is not None for opt in stateful_only):
-        typer.echo("Warning: stateful-only options ignored for piecewise family", err=True)
+        typer.echo(
+            "Warning: stateful-only options ignored for piecewise family",
+            err=True,
+        )
     if family == "stateful" and any(opt is not None for opt in piecewise_only):
-        typer.echo("Warning: piecewise-only options ignored for stateful family", err=True)
+        typer.echo(
+            "Warning: piecewise-only options ignored for stateful family",
+            err=True,
+        )
 
     # Build axes
     stateful_axes = _build_stateful_axes(
@@ -222,7 +235,7 @@ def split(
     # Random split options
     random_ratio: Annotated[
         float | None,
-        typer.Option("--random-ratio", help="Train ratio for random split (0-1)"),
+        typer.Option("--random-ratio", help="Train ratio (0-1)"),
     ] = None,
     split_seed: Annotated[
         int | None,
@@ -258,14 +271,17 @@ def split(
 
     if not has_random and not has_holdout:
         typer.echo(
-            "Error: Must provide either --random-ratio or --holdout-axis/--holdout-value",
+            "Error: Must provide --random-ratio or holdout options",
             err=True,
         )
         raise typer.Exit(1)
 
     if has_random:
+        assert random_ratio is not None
         if random_ratio <= 0 or random_ratio >= 1:
-            typer.echo("Error: --random-ratio must be between 0 and 1", err=True)
+            typer.echo(
+                "Error: --random-ratio must be between 0 and 1", err=True
+            )
             raise typer.Exit(1)
         result = random_split(tasks, random_ratio, seed=split_seed)
     else:

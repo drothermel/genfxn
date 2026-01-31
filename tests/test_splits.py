@@ -1,6 +1,6 @@
 from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Query, QueryTag, Task
-from genfxn.splits import AxisHoldout, HoldoutType, split_tasks
+from genfxn.splits import AxisHoldout, HoldoutType, random_split, split_tasks
 
 
 def _make_task(task_id: str, spec: dict) -> Task:
@@ -270,3 +270,127 @@ class TestSplitTasks:
 
         assert result.holdouts == holdouts
         assert len(result.holdouts) == 2
+
+
+class TestRandomSplit:
+    def test_basic_split_ratio(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(100)]
+        result = random_split(tasks, train_ratio=0.8, seed=42)
+
+        assert len(result.train) == 80
+        assert len(result.test) == 20
+
+    def test_different_ratios(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(100)]
+
+        result_90 = random_split(tasks, train_ratio=0.9, seed=42)
+        assert len(result_90.train) == 90
+        assert len(result_90.test) == 10
+
+        result_50 = random_split(tasks, train_ratio=0.5, seed=42)
+        assert len(result_50.train) == 50
+        assert len(result_50.test) == 50
+
+        result_10 = random_split(tasks, train_ratio=0.1, seed=42)
+        assert len(result_10.train) == 10
+        assert len(result_10.test) == 90
+
+    def test_reproducibility_same_seed(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(50)]
+
+        result1 = random_split(tasks, train_ratio=0.8, seed=123)
+        result2 = random_split(tasks, train_ratio=0.8, seed=123)
+
+        train1_ids = [t.task_id for t in result1.train]
+        train2_ids = [t.task_id for t in result2.train]
+        assert train1_ids == train2_ids
+
+        test1_ids = [t.task_id for t in result1.test]
+        test2_ids = [t.task_id for t in result2.test]
+        assert test1_ids == test2_ids
+
+    def test_different_seeds_different_results(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(50)]
+
+        result1 = random_split(tasks, train_ratio=0.8, seed=1)
+        result2 = random_split(tasks, train_ratio=0.8, seed=2)
+
+        # Very unlikely to be the same with different seeds
+        train_ids_1 = {t.task_id for t in result1.train}
+        train_ids_2 = {t.task_id for t in result2.train}
+        assert train_ids_1 != train_ids_2
+
+    def test_no_seed_works(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(20)]
+        result = random_split(tasks, train_ratio=0.8, seed=None)
+
+        assert len(result.train) == 16
+        assert len(result.test) == 4
+
+    def test_preserves_all_tasks(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(100)]
+        result = random_split(tasks, train_ratio=0.7, seed=42)
+
+        train_ids = {t.task_id for t in result.train}
+        test_ids = {t.task_id for t in result.test}
+        all_ids = train_ids | test_ids
+        original_ids = {t.task_id for t in tasks}
+
+        assert all_ids == original_ids
+        assert len(result.train) + len(result.test) == len(tasks)
+
+    def test_no_duplicates(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(50)]
+        result = random_split(tasks, train_ratio=0.8, seed=42)
+
+        train_ids = [t.task_id for t in result.train]
+        test_ids = [t.task_id for t in result.test]
+
+        assert len(train_ids) == len(set(train_ids))
+        assert len(test_ids) == len(set(test_ids))
+        assert set(train_ids).isdisjoint(set(test_ids))
+
+    def test_empty_tasks(self) -> None:
+        result = random_split([], train_ratio=0.8, seed=42)
+
+        assert result.train == []
+        assert result.test == []
+
+    def test_single_task_train(self) -> None:
+        tasks = [_make_task("t1", {"x": 1})]
+        result = random_split(tasks, train_ratio=0.8, seed=42)
+
+        # With ratio 0.8, int(1 * 0.8) = 0, so 0 train, 1 test
+        assert len(result.train) == 0
+        assert len(result.test) == 1
+
+    def test_single_task_test(self) -> None:
+        tasks = [_make_task("t1", {"x": 1})]
+        result = random_split(tasks, train_ratio=0.2, seed=42)
+
+        # With ratio 0.2, int(1 * 0.2) = 0, so 0 train, 1 test
+        assert len(result.train) == 0
+        assert len(result.test) == 1
+
+    def test_holdouts_empty(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(10)]
+        result = random_split(tasks, train_ratio=0.8, seed=42)
+
+        assert result.holdouts == []
+
+    def test_does_not_modify_original(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(20)]
+        original_order = [t.task_id for t in tasks]
+
+        random_split(tasks, train_ratio=0.8, seed=42)
+
+        assert [t.task_id for t in tasks] == original_order
+
+    def test_shuffles_tasks(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(50)]
+        result = random_split(tasks, train_ratio=0.8, seed=42)
+
+        # Check that train set isn't just the first N tasks
+        original_first_40_ids = {f"t{i}" for i in range(40)}
+        train_ids = {t.task_id for t in result.train}
+        assert train_ids != original_first_40_ids
