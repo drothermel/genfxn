@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-viewer-api = "viewer_api.main:app"
+viewer-api = "viewer_api.main:cli"
 
 [build-system]
 requires = ["hatchling"]
