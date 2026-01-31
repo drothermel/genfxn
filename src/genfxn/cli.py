@@ -7,6 +7,7 @@ import typer
 
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
+from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
@@ -192,6 +193,22 @@ def generate(
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
     ] = None,
+    # Difficulty presets
+    difficulty: Annotated[
+        int | None,
+        typer.Option(
+            "--difficulty",
+            "-d",
+            help="Target difficulty level (1-5, depends on family)",
+        ),
+    ] = None,
+    variant: Annotated[
+        str | None,
+        typer.Option(
+            "--variant",
+            help="Specific preset variant (e.g., '3A', '3B'). Random if not specified.",
+        ),
+    ] = None,
     # Type filters - stateful
     templates: Annotated[
         str | None,
@@ -301,42 +318,74 @@ def generate(
     rng = random.Random(seed)
     tasks: list[Task] = []
 
-    # Build axes for all families
-    stateful_axes = _build_stateful_axes(
-        templates=templates,
-        predicate_types=predicate_types,
-        transform_types=transform_types,
-        value_range=value_range,
-        threshold_range=threshold_range,
-        divisor_range=divisor_range,
-        list_length_range=list_length_range,
-        shift_range=shift_range,
-        scale_range=scale_range,
-    )
-    piecewise_axes = _build_piecewise_axes(
-        n_branches=n_branches,
-        expr_types=expr_types,
-        value_range=value_range,
-        threshold_range=threshold_range,
-        divisor_range=divisor_range,
-        coeff_range=coeff_range,
-    )
-    simple_algo_axes = _build_simple_algorithms_axes(
-        algorithm_types=algorithm_types,
-        tie_break_modes=tie_break_modes,
-        counting_modes=counting_modes,
-        window_size_range=window_size_range,
-        target_range=target_range,
-        value_range=value_range,
-        list_length_range=list_length_range,
-    )
-    stringrules_axes = _build_stringrules_axes(
-        n_rules=n_rules,
-        string_predicate_types=string_predicate_types,
-        string_transform_types=string_transform_types,
-        overlap_level=overlap_level,
-        string_length_range=string_length_range,
-    )
+    # Validate difficulty/variant options
+    if difficulty is not None:
+        if family == "all":
+            typer.echo(
+                "Error: --difficulty requires a specific family, not 'all'",
+                err=True,
+            )
+            raise typer.Exit(1)
+        try:
+            valid = get_valid_difficulties(family)
+        except ValueError as e:
+            typer.echo(f"Error: {e}", err=True)
+            raise typer.Exit(1)
+        if difficulty not in valid:
+            typer.echo(
+                f"Error: Invalid difficulty {difficulty} for {family}. Valid: {valid}",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+    if variant is not None and difficulty is None:
+        typer.echo(
+            "Error: --variant requires --difficulty to be specified",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    # Build axes for all families (or use preset if difficulty specified)
+    if difficulty is not None:
+        # Use difficulty preset - generate axes per task for variety
+        pass  # Will build axes in the generation loop
+    else:
+        # Build static axes from CLI options
+        stateful_axes = _build_stateful_axes(
+            templates=templates,
+            predicate_types=predicate_types,
+            transform_types=transform_types,
+            value_range=value_range,
+            threshold_range=threshold_range,
+            divisor_range=divisor_range,
+            list_length_range=list_length_range,
+            shift_range=shift_range,
+            scale_range=scale_range,
+        )
+        piecewise_axes = _build_piecewise_axes(
+            n_branches=n_branches,
+            expr_types=expr_types,
+            value_range=value_range,
+            threshold_range=threshold_range,
+            divisor_range=divisor_range,
+            coeff_range=coeff_range,
+        )
+        simple_algo_axes = _build_simple_algorithms_axes(
+            algorithm_types=algorithm_types,
+            tie_break_modes=tie_break_modes,
+            counting_modes=counting_modes,
+            window_size_range=window_size_range,
+            target_range=target_range,
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
+        stringrules_axes = _build_stringrules_axes(
+            n_rules=n_rules,
+            string_predicate_types=string_predicate_types,
+            string_transform_types=string_transform_types,
+            overlap_level=overlap_level,
+            string_length_range=string_length_range,
+        )
 
     if family == "all":
         # Split evenly among all 4 families
@@ -354,17 +403,33 @@ def generate(
             tasks.append(task)
     elif family == "piecewise":
         for _ in range(count):
-            tasks.append(generate_piecewise_task(axes=piecewise_axes, rng=rng))
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = piecewise_axes
+            tasks.append(generate_piecewise_task(axes=axes, rng=rng))
     elif family == "stateful":
         for _ in range(count):
-            tasks.append(generate_stateful_task(axes=stateful_axes, rng=rng))
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = stateful_axes
+            tasks.append(generate_stateful_task(axes=axes, rng=rng))
     elif family == "simple_algorithms":
         for _ in range(count):
-            t = generate_simple_algorithms_task(axes=simple_algo_axes, rng=rng)
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = simple_algo_axes
+            t = generate_simple_algorithms_task(axes=axes, rng=rng)
             tasks.append(t)
     elif family == "stringrules":
         for _ in range(count):
-            task = generate_stringrules_task(axes=stringrules_axes, rng=rng)
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = stringrules_axes
+            task = generate_stringrules_task(axes=axes, rng=rng)
             tasks.append(task)
     else:
         typer.echo(f"Unknown family: {family}", err=True)

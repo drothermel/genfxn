@@ -182,7 +182,7 @@ def _generate_count_pairs_queries(
         )
 
     # Two elements that don't sum to target (both in [lo, hi])
-    two_distinct = _distinct_in_range(lo, hi, 2)
+    two_distinct = _distinct_in_range(lo, hi, 3)
     if len(two_distinct) >= 2:
         na, nb = two_distinct[0], two_distinct[1]
         if na + nb == target and len(two_distinct) >= 3:
@@ -292,6 +292,7 @@ def _generate_max_window_queries(
     # List shorter than k (values in [lo, hi]; length exactly k-1)
     if k - 1 > 0:
         short_base = _distinct_in_range(lo, hi, k - 1)
+        # Repeat base values to fill length k-1, then truncate.
         short = (short_base * ((k - 1) // max(1, len(short_base)) + 1))[: k - 1]
         if len(short) == k - 1:
             queries.append(
@@ -342,7 +343,6 @@ def _generate_max_window_queries(
         )
 
     # Max at start (hi repeated then lo repeated; all in [lo, hi])
-    mid = _mid(lo, hi)
     max_at_start = [hi, hi, hi] + [lo] * 5
     if len(max_at_start) >= k:
         queries.append(
@@ -364,6 +364,7 @@ def _generate_max_window_queries(
             )
         )
 
+    mid = _mid(lo, hi)
     # All same values (mid in [lo, hi])
     all_same = [mid] * 10
     if len(all_same) >= k:

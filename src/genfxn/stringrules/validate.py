@@ -115,7 +115,13 @@ def _validate_ast_whitelist(
             elif isinstance(node.func, ast.Attribute):
                 method_name = node.func.attr
                 if method_name in ALLOWED_METHOD_NAMES:
-                    allowed_arities = METHOD_ARITIES.get(method_name, set())
+                    if method_name not in METHOD_ARITIES:
+                        raise AssertionError(
+                            f"Method '{method_name}' is in ALLOWED_METHOD_NAMES but "
+                            "has no entry in METHOD_ARITIES; add arity metadata in "
+                            "ast_safety.METHOD_ARITIES."
+                        )
+                    allowed_arities = METHOD_ARITIES[method_name]
                     if len(node.args) in allowed_arities and len(node.keywords) == 0:
                         valid_call = True
                     elif len(node.keywords) != 0 or allowed_arities:

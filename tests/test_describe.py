@@ -79,7 +79,7 @@ class TestDescribeTransform:
         )
 
     def test_negate(self) -> None:
-        assert _describe_transform({"kind": "negate"}) == "negative the element"
+        assert _describe_transform({"kind": "negate"}) == "the negation of the element"
 
     def test_shift_positive(self) -> None:
         result = _describe_transform({"kind": "shift", "offset": 5})
@@ -224,7 +224,7 @@ class TestDescribeStateful:
         assert "accumulator of negative 5" in result
         assert "the element is greater than 0" in result
         assert "add the element to the accumulator" in result
-        assert "add negative the element" in result
+        assert "add the negation of the element" in result
 
     def test_resetting_best_prefix_sum(self) -> None:
         spec = {
