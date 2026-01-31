@@ -333,21 +333,22 @@ class TestNonMonotonicThresholds:
         assert all(i.severity == Severity.WARNING for i in monotonic_issues)
 
     def test_monotonic_thresholds_no_warning(self) -> None:
-        # Most generated tasks should have monotonic thresholds
-        # since the sampler picks distinct values from threshold_range
-        found_monotonic = False
-        for seed in range(100):
-            task = generate_piecewise_task(rng=random.Random(seed))
-            issues = validate_piecewise_task(task)
-            monotonic_issues = [
-                i for i in issues if i.code == CODE_NON_MONOTONIC_THRESHOLDS
-            ]
-            if not monotonic_issues:
-                found_monotonic = True
-                break
-        assert found_monotonic, (
-            "Could not find a task with monotonic thresholds"
-        )
+        # Create a task with known monotonic thresholds by mutating the spec.
+        task = generate_piecewise_task(rng=random.Random(42))
+        spec = dict(task.spec)
+        spec["branches"] = list(spec["branches"])
+        for i in range(len(spec["branches"])):
+            spec["branches"][i] = dict(spec["branches"][i])
+            cond = dict(spec["branches"][i]["condition"])
+            if "value" in cond:
+                cond["value"] = 5 + i * 5
+                spec["branches"][i]["condition"] = cond
+        modified_task = task.model_copy(update={"spec": spec})
+        issues = validate_piecewise_task(modified_task)
+        monotonic_issues = [
+            i for i in issues if i.code == CODE_NON_MONOTONIC_THRESHOLDS
+        ]
+        assert monotonic_issues == []
 
 
 class TestEmitDiagnostics:

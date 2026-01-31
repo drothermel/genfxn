@@ -221,7 +221,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
     severity = Severity.ERROR if strict else Severity.WARNING
 
     for i, q in enumerate(task.queries):
-        if not isinstance(q.input, int):
+        if type(q.input) is not int:
             issues.append(
                 Issue(
                     code=CODE_QUERY_INPUT_TYPE,
@@ -233,7 +233,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     task_id=task.task_id,
                 )
             )
-        if not isinstance(q.output, int):
+        if type(q.output) is not int:
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -254,7 +254,7 @@ def _validate_query_outputs(task: Task, spec: PiecewiseSpec) -> list[Issue]:
     issues: list[Issue] = []
 
     for i, q in enumerate(task.queries):
-        if not isinstance(q.input, int):
+        if type(q.input) is not int:
             continue
         expected = eval_piecewise(spec, q.input)
         if q.output != expected:
