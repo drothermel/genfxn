@@ -95,8 +95,7 @@ def _validate_ast_whitelist(
                         code=CODE_UNSAFE_AST,
                         severity=Severity.ERROR,
                         message=(
-                            f"Disallowed name '{node.id}' at line "
-                            f"{node.lineno}"
+                            f"Disallowed name '{node.id}' at line {node.lineno}"
                         ),
                         location="code",
                     )
@@ -228,8 +227,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     code=CODE_QUERY_INPUT_TYPE,
                     severity=severity,
                     message=(
-                        f"Query input is {type(q.input).__name__}, "
-                        f"expected int"
+                        f"Query input is {type(q.input).__name__}, expected int"
                     ),
                     location=f"queries[{i}].input",
                     task_id=task.task_id,
