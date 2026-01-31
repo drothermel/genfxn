@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import Severity
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.piecewise.validate import (
@@ -469,10 +469,8 @@ class TestSemanticIssueCapping:
         assert not any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
 
-def _make_task_with_code(code: str) -> "Task":
+def _make_task_with_code(code: str) -> Task:
     """Create a task with custom code for testing AST validation."""
-    from genfxn.core.models import Task
-
     task = generate_piecewise_task(rng=random.Random(42))
     return task.model_copy(update={"code": code})
 
@@ -514,9 +512,14 @@ class TestParanoidMode:
 
     def test_abs_call_allowed(self) -> None:
         """abs(x) calls should be allowed."""
-        task = _make_task_with_code(
-            "def f(x):\n    if x < 0:\n        return abs(x)\n    else:\n        return x"
+        code = (
+            "def f(x):\n"
+            "    if x < 0:\n"
+            "        return abs(x)\n"
+            "    else:\n"
+            "        return x"
         )
+        task = _make_task_with_code(code)
         issues = validate_piecewise_task(task, paranoid=True)
         assert not any(i.code == CODE_UNSAFE_AST for i in issues)
 

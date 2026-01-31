@@ -65,7 +65,7 @@ def split(
 ) -> None:
     """Split tasks using axis holdouts."""
     raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task(**t) for t in raw]
+    tasks = [Task.model_validate(t) for t in raw]
 
     parsed_value: str | tuple[int, int] = holdout_value
     if holdout_type == "range":
@@ -92,7 +92,7 @@ def info(
 ) -> None:
     """Show info about tasks file."""
     raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task(**t) for t in raw]
+    tasks = [Task.model_validate(t) for t in raw]
 
     by_family: dict[str, int] = {}
     for t in tasks:

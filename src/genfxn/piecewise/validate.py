@@ -1,6 +1,6 @@
 import ast
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError
 
@@ -57,7 +57,10 @@ def _validate_ast_whitelist(
                 Issue(
                     code=CODE_UNSAFE_AST,
                     severity=Severity.ERROR,
-                    message=f"Disallowed AST node: {node_type.__name__} at line {getattr(node, 'lineno', '?')}",
+                    message=(
+                        f"Disallowed AST node: {node_type.__name__} at line "
+                        f"{getattr(node, 'lineno', '?')}"
+                    ),
                     location="code",
                 )
             )
@@ -76,7 +79,10 @@ def _validate_ast_whitelist(
                     Issue(
                         code=CODE_UNSAFE_AST,
                         severity=Severity.ERROR,
-                        message=f"Disallowed function call at line {getattr(node, 'lineno', '?')}",
+                        message=(
+                            f"Disallowed function call at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
                         location="code",
                     )
                 )
@@ -202,7 +208,7 @@ def _validate_code_compile(
             )
         ], None
 
-    return [], namespace["f"]
+    return [], cast(Callable[[int], int], namespace["f"])
 
 
 def _validate_query_types(task: Task, strict: bool) -> list[Issue]:

@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import srsly
 from typer.testing import CliRunner
 
@@ -16,7 +18,7 @@ class TestGenerate:
         assert result.exit_code == 0
         assert "Generated 5 tasks" in result.stdout
 
-        tasks = list(srsly.read_jsonl(output))
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 5
         assert all(t["family"] == "piecewise" for t in tasks)
 
@@ -29,7 +31,7 @@ class TestGenerate:
         assert result.exit_code == 0
         assert "Generated 5 tasks" in result.stdout
 
-        tasks = list(srsly.read_jsonl(output))
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 5
         assert all(t["family"] == "stateful" for t in tasks)
 
@@ -40,7 +42,7 @@ class TestGenerate:
         )
 
         assert result.exit_code == 0
-        tasks = list(srsly.read_jsonl(output))
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 10
 
         families = {t["family"] for t in tasks}
@@ -59,8 +61,8 @@ class TestGenerate:
             ["generate", "-o", str(output2), "-f", "piecewise", "-n", "3", "-s", "42"],
         )
 
-        tasks1 = list(srsly.read_jsonl(output1))
-        tasks2 = list(srsly.read_jsonl(output2))
+        tasks1 = cast(list[dict[str, Any]], list(srsly.read_jsonl(output1)))
+        tasks2 = cast(list[dict[str, Any]], list(srsly.read_jsonl(output2)))
 
         assert [t["task_id"] for t in tasks1] == [t["task_id"] for t in tasks2]
 
@@ -115,8 +117,8 @@ class TestSplit:
         assert "Train:" in result.stdout
         assert "Test:" in result.stdout
 
-        train = list(srsly.read_jsonl(train_file))
-        test = list(srsly.read_jsonl(test_file))
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
 
         assert len(train) + len(test) == 20
         assert all(t["spec"]["template"] == "longest_run" for t in test)
@@ -162,12 +164,12 @@ class TestSplit:
 
         assert result.exit_code == 0
 
-        train = list(srsly.read_jsonl(train_file))
-        test = list(srsly.read_jsonl(test_file))
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
 
         assert len(train) + len(test) == 20
         for t in test:
-            val = t["spec"]["branches"][0]["condition"]["value"]
+            val = int(t["spec"]["branches"][0]["condition"]["value"])
             assert -10 <= val <= 10
 
 

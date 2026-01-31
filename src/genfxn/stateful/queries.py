@@ -33,7 +33,10 @@ def _get_predicate_info(spec: StatefulSpec) -> Predicate:
 
 def _make_matching_value(pred, value_range: tuple[int, int], rng: random.Random) -> int:
     lo, hi = value_range
-    clamp = lambda x: max(lo, min(x, hi))
+
+    def clamp(x: int) -> int:
+        return max(lo, min(x, hi))
+
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
@@ -64,7 +67,10 @@ def _make_non_matching_value(
     pred, value_range: tuple[int, int], rng: random.Random
 ) -> int:
     lo, hi = value_range
-    clamp = lambda x: max(lo, min(x, hi))
+
+    def clamp(x: int) -> int:
+        return max(lo, min(x, hi))
+
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
