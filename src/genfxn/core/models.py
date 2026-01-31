@@ -31,3 +31,9 @@ class Task(BaseModel):
     axes: dict[str, Any] | None = Field(
         default=None, description="Axes/ranges used for sampling"
     )
+    difficulty: int | None = Field(
+        default=None, description="Difficulty score (1-5)"
+    )
+    description: str | None = Field(
+        default=None, description="Natural language description of the task"
+    )

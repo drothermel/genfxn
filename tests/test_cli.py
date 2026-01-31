@@ -38,15 +38,16 @@ class TestGenerate:
     def test_generate_all(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
-            app, ["generate", "-o", str(output), "-f", "all", "-n", "10"]
+            app, ["generate", "-o", str(output), "-f", "all", "-n", "20"]
         )
 
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
-        assert len(tasks) == 10
+        assert len(tasks) == 20
 
         families = {t["family"] for t in tasks}
-        assert families == {"piecewise", "stateful"}
+        expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
+        assert families == expected
 
     def test_generate_with_seed(self, tmp_path) -> None:
         output1 = tmp_path / "tasks1.jsonl"
@@ -205,7 +206,7 @@ class TestInfo:
                 "-f",
                 "all",
                 "-n",
-                "10",
+                "20",
                 "-s",
                 "42",
             ],
@@ -214,9 +215,11 @@ class TestInfo:
         result = runner.invoke(app, ["info", str(input_file)])
 
         assert result.exit_code == 0
-        assert "10 tasks" in result.stdout
-        assert "piecewise: 5" in result.stdout
-        assert "stateful: 5" in result.stdout
+        assert "20 tasks" in result.stdout
+        assert "piecewise:" in result.stdout
+        assert "stateful:" in result.stdout
+        assert "simple_algorithms:" in result.stdout
+        assert "stringrules:" in result.stdout
 
     def test_info_single_family(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

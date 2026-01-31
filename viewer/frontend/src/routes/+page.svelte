@@ -11,6 +11,17 @@
 	let loading = $state(true);
 	let error: string | null = $state(null);
 
+	function getDifficultyColor(difficulty: number): string {
+		const colors: Record<number, string> = {
+			1: 'bg-green-100 text-green-800 border-green-200',
+			2: 'bg-lime-100 text-lime-800 border-lime-200',
+			3: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+			4: 'bg-orange-100 text-orange-800 border-orange-200',
+			5: 'bg-red-100 text-red-800 border-red-200'
+		};
+		return colors[difficulty] || 'bg-gray-100 text-gray-800 border-gray-200';
+	}
+
 	async function loadData() {
 		loading = true;
 		error = null;
@@ -91,6 +102,15 @@
 								<div class="flex items-center gap-3">
 									<CardTitle class="font-mono text-base">{task.task_id}</CardTitle>
 									<Badge variant="secondary">{task.family}</Badge>
+									{#if task.difficulty != null}
+										<span
+											class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {getDifficultyColor(
+												task.difficulty
+											)}"
+										>
+											{task.difficulty}/5
+										</span>
+									{/if}
 								</div>
 								<div class="flex items-center gap-2 text-sm text-muted-foreground">
 									<span>{task.queries.length} queries</span>

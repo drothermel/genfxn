@@ -1,0 +1,335 @@
+import random
+
+import pytest
+
+from genfxn.core.string_predicates import (
+    StringPredicateContains,
+    StringPredicateEndsWith,
+    StringPredicateIsAlpha,
+    StringPredicateIsDigit,
+    StringPredicateLengthCmp,
+    StringPredicateStartsWith,
+    eval_string_predicate,
+    render_string_predicate,
+)
+from genfxn.core.string_transforms import (
+    StringTransformAppend,
+    StringTransformCapitalize,
+    StringTransformLowercase,
+    StringTransformPrepend,
+    StringTransformReplace,
+    StringTransformReverse,
+    StringTransformStrip,
+    StringTransformUppercase,
+    eval_string_transform,
+    render_string_transform,
+)
+from genfxn.stringrules.eval import eval_stringrules
+from genfxn.stringrules.models import (
+    OverlapLevel,
+    StringRule,
+    StringRulesAxes,
+    StringRulesSpec,
+)
+from genfxn.stringrules.queries import generate_stringrules_queries
+from genfxn.stringrules.render import render_stringrules
+from genfxn.stringrules.sampler import sample_stringrules_spec
+from genfxn.stringrules.task import generate_stringrules_task
+
+
+class TestStringPredicates:
+    def test_starts_with(self) -> None:
+        pred = StringPredicateStartsWith(prefix="hello")
+        assert eval_string_predicate(pred, "hello world") is True
+        assert eval_string_predicate(pred, "world hello") is False
+        assert eval_string_predicate(pred, "hello") is True
+        assert eval_string_predicate(pred, "hel") is False
+
+    def test_ends_with(self) -> None:
+        pred = StringPredicateEndsWith(suffix="world")
+        assert eval_string_predicate(pred, "hello world") is True
+        assert eval_string_predicate(pred, "world hello") is False
+
+    def test_contains(self) -> None:
+        pred = StringPredicateContains(substring="ell")
+        assert eval_string_predicate(pred, "hello") is True
+        assert eval_string_predicate(pred, "world") is False
+
+    def test_is_alpha(self) -> None:
+        pred = StringPredicateIsAlpha()
+        assert eval_string_predicate(pred, "hello") is True
+        assert eval_string_predicate(pred, "hello123") is False
+        assert eval_string_predicate(pred, "") is False
+
+    def test_is_digit(self) -> None:
+        pred = StringPredicateIsDigit()
+        assert eval_string_predicate(pred, "123") is True
+        assert eval_string_predicate(pred, "12a") is False
+        assert eval_string_predicate(pred, "") is False
+
+    def test_length_cmp(self) -> None:
+        pred_lt = StringPredicateLengthCmp(op="lt", value=5)
+        assert eval_string_predicate(pred_lt, "abc") is True
+        assert eval_string_predicate(pred_lt, "abcde") is False
+
+        pred_ge = StringPredicateLengthCmp(op="ge", value=3)
+        assert eval_string_predicate(pred_ge, "abc") is True
+        assert eval_string_predicate(pred_ge, "ab") is False
+
+
+class TestStringPredicatesRender:
+    def test_starts_with_render(self) -> None:
+        pred = StringPredicateStartsWith(prefix="test")
+        assert render_string_predicate(pred, "s") == "s.startswith('test')"
+
+    def test_contains_render(self) -> None:
+        pred = StringPredicateContains(substring="sub")
+        assert render_string_predicate(pred, "s") == "'sub' in s"
+
+    def test_length_cmp_render(self) -> None:
+        pred = StringPredicateLengthCmp(op="gt", value=10)
+        assert render_string_predicate(pred, "s") == "len(s) > 10"
+
+
+class TestStringTransforms:
+    def test_lowercase(self) -> None:
+        t = StringTransformLowercase()
+        assert eval_string_transform(t, "HELLO") == "hello"
+
+    def test_uppercase(self) -> None:
+        t = StringTransformUppercase()
+        assert eval_string_transform(t, "hello") == "HELLO"
+
+    def test_capitalize(self) -> None:
+        t = StringTransformCapitalize()
+        assert eval_string_transform(t, "hello world") == "Hello world"
+
+    def test_reverse(self) -> None:
+        t = StringTransformReverse()
+        assert eval_string_transform(t, "hello") == "olleh"
+
+    def test_replace(self) -> None:
+        t = StringTransformReplace(old="a", new="X")
+        assert eval_string_transform(t, "banana") == "bXnXnX"
+
+    def test_strip(self) -> None:
+        t = StringTransformStrip(chars=None)
+        assert eval_string_transform(t, "  hello  ") == "hello"
+
+        t2 = StringTransformStrip(chars="_")
+        assert eval_string_transform(t2, "__hello__") == "hello"
+
+    def test_prepend(self) -> None:
+        t = StringTransformPrepend(prefix="PRE_")
+        assert eval_string_transform(t, "hello") == "PRE_hello"
+
+    def test_append(self) -> None:
+        t = StringTransformAppend(suffix="_SUF")
+        assert eval_string_transform(t, "hello") == "hello_SUF"
+
+
+class TestStringTransformsRender:
+    def test_lowercase_render(self) -> None:
+        t = StringTransformLowercase()
+        assert render_string_transform(t, "s") == "s.lower()"
+
+    def test_reverse_render(self) -> None:
+        t = StringTransformReverse()
+        assert render_string_transform(t, "s") == "s[::-1]"
+
+    def test_prepend_render(self) -> None:
+        t = StringTransformPrepend(prefix="pre")
+        assert render_string_transform(t, "s") == "'pre' + s"
+
+
+class TestStringRulesEval:
+    def test_first_match_wins(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="a"),
+                    transform=StringTransformUppercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateIsAlpha(),
+                    transform=StringTransformLowercase(),
+                ),
+            ],
+            default_transform=StringTransformReverse(),
+        )
+        # "abc" matches both rules, first should win
+        assert eval_stringrules(spec, "abc") == "ABC"
+        # "xyz" only matches second rule
+        assert (
+            eval_stringrules(spec, "xyz") == "xyz"
+        )  # isalpha -> lowercase (no change)
+        # "123" matches no rules, default applies
+        assert eval_stringrules(spec, "123") == "321"
+
+    def test_default_when_no_match(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="x"),
+                    transform=StringTransformUppercase(),
+                ),
+            ],
+            default_transform=StringTransformReverse(),
+        )
+        assert eval_stringrules(spec, "hello") == "olleh"
+
+
+class TestStringRulesRender:
+    def test_single_rule(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="test"),
+                    transform=StringTransformUppercase(),
+                ),
+            ],
+            default_transform=StringTransformLowercase(),
+        )
+        code = render_stringrules(spec)
+        assert "def f(s: str) -> str:" in code
+        assert "if s.startswith('test'):" in code
+        assert "s.upper()" in code
+        assert "else:" in code
+        assert "s.lower()" in code
+
+    def test_multiple_rules(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="a"),
+                    transform=StringTransformUppercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateEndsWith(suffix="z"),
+                    transform=StringTransformReverse(),
+                ),
+            ],
+            default_transform=StringTransformLowercase(),
+        )
+        code = render_stringrules(spec)
+        assert "if s.startswith('a'):" in code
+        assert "elif s.endswith('z'):" in code
+        assert "else:" in code
+
+
+class TestRenderRoundtrip:
+    def test_single_rule_roundtrip(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsAlpha(),
+                    transform=StringTransformUppercase(),
+                ),
+            ],
+            default_transform=StringTransformReverse(),
+        )
+        code = render_stringrules(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = ["hello", "123", "abc123", ""]
+        for s in test_inputs:
+            assert f(s) == eval_stringrules(spec, s), f"s={s!r}"
+
+    def test_multiple_rules_roundtrip(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="a"),
+                    transform=StringTransformUppercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateLengthCmp(op="lt", value=3),
+                    transform=StringTransformReverse(),
+                ),
+            ],
+            default_transform=StringTransformLowercase(),
+        )
+        code = render_stringrules(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = ["abc", "ab", "ABC", "xy", "hello"]
+        for s in test_inputs:
+            assert f(s) == eval_stringrules(spec, s), f"s={s!r}"
+
+
+class TestSampler:
+    def test_reproducible(self) -> None:
+        axes = StringRulesAxes(n_rules=2)
+        spec1 = sample_stringrules_spec(axes, random.Random(42))
+        spec2 = sample_stringrules_spec(axes, random.Random(42))
+        assert spec1 == spec2
+
+    def test_respects_n_rules(self) -> None:
+        for n in [1, 3, 5]:
+            axes = StringRulesAxes(n_rules=n)
+            spec = sample_stringrules_spec(axes, random.Random(42))
+            assert len(spec.rules) == n
+
+
+class TestQueryGeneration:
+    def test_generates_queries(self) -> None:
+        axes = StringRulesAxes(n_rules=2)
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        assert len(queries) > 0
+
+    def test_all_queries_valid(self) -> None:
+        axes = StringRulesAxes(n_rules=2)
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        for q in queries:
+            assert q.output == eval_stringrules(spec, q.input)
+
+
+class TestAxesValidation:
+    def test_invalid_string_length_range(self) -> None:
+        with pytest.raises(ValueError, match="string_length_range"):
+            StringRulesAxes(string_length_range=(20, 5))
+
+    def test_n_rules_too_low(self) -> None:
+        with pytest.raises(ValueError):
+            StringRulesAxes(n_rules=0)
+
+    def test_n_rules_too_high(self) -> None:
+        with pytest.raises(ValueError):
+            StringRulesAxes(n_rules=10)
+
+    def test_empty_predicate_types(self) -> None:
+        with pytest.raises(
+            ValueError, match="predicate_types must not be empty"
+        ):
+            StringRulesAxes(predicate_types=[])
+
+
+class TestTaskGeneration:
+    def test_full_pipeline(self) -> None:
+        axes = StringRulesAxes(n_rules=2)
+        task = generate_stringrules_task(axes, random.Random(42))
+        assert task.family == "stringrules"
+        assert task.task_id.startswith("stringrules_")
+        assert len(task.queries) > 0
+
+        namespace: dict = {}
+        exec(task.code, namespace)  # noqa: S102
+        f = namespace["f"]
+        for q in task.queries:
+            assert f(q.input) == q.output
+
+    def test_different_overlap_levels(self) -> None:
+        for overlap in OverlapLevel:
+            axes = StringRulesAxes(n_rules=3, overlap_level=overlap)
+            task = generate_stringrules_task(axes, random.Random(42))
+            assert len(task.spec["rules"]) == 3
+
+            namespace: dict = {}
+            exec(task.code, namespace)  # noqa: S102
+            f = namespace["f"]
+            for q in task.queries:
+                assert f(q.input) == q.output, f"Overlap {overlap}: mismatch"

@@ -5,6 +5,7 @@
 	import type { Task } from '$lib/types';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import MetadataCard from '$lib/components/cards/metadata-card.svelte';
+	import DescriptionCard from '$lib/components/cards/description-card.svelte';
 	import TraceCard from '$lib/components/cards/trace-card.svelte';
 	import CodeCard from '$lib/components/cards/code-card.svelte';
 	import QueriesCard from '$lib/components/cards/queries-card.svelte';
@@ -54,6 +55,8 @@
 
 		<div class="space-y-6">
 			<MetadataCard {task} />
+
+			<DescriptionCard {task} />
 
 			{#if task.axes}
 				<AxesCard {task} />

@@ -1,0 +1,232 @@
+import random
+
+from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.validate import Severity
+from genfxn.simple_algorithms.task import generate_simple_algorithms_task
+from genfxn.simple_algorithms.validate import (
+    CODE_CODE_EXEC_ERROR,
+    CODE_CODE_MISSING_FUNC,
+    CODE_CODE_PARSE_ERROR,
+    CODE_CODE_RUNTIME_ERROR,
+    CODE_QUERY_INPUT_TYPE,
+    CODE_QUERY_OUTPUT_MISMATCH,
+    CODE_QUERY_OUTPUT_TYPE,
+    CODE_SEMANTIC_ISSUES_CAPPED,
+    CODE_SEMANTIC_MISMATCH,
+    CODE_SPEC_DESERIALIZE_ERROR,
+    CODE_TASK_ID_MISMATCH,
+    CODE_UNSAFE_AST,
+    validate_simple_algorithms_task,
+)
+
+
+class TestValidTask:
+    def test_generated_task_has_no_errors(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        issues = validate_simple_algorithms_task(task)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert errors == []
+
+    def test_multiple_seeds_valid(self) -> None:
+        for seed in [1, 42, 123, 999]:
+            task = generate_simple_algorithms_task(rng=random.Random(seed))
+            issues = validate_simple_algorithms_task(task)
+            errors = [i for i in issues if i.severity == Severity.ERROR]
+            assert errors == [], f"Seed {seed} produced errors: {errors}"
+
+
+class TestTaskIdValidation:
+    def test_corrupted_task_id_detected(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={"task_id": "simple_algorithms_00000000"}
+        )
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_TASK_ID_MISMATCH for i in issues)
+        assert any(
+            i.code == CODE_TASK_ID_MISMATCH and i.severity == Severity.ERROR
+            for i in issues
+        )
+
+
+class TestSpecDeserialization:
+    def test_invalid_spec_caught(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"spec": {"invalid": "spec"}})
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
+
+    def test_wrong_template_discriminator(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={"spec": {"template": "nonexistent_template"}}
+        )
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
+
+
+class TestCodeCompilation:
+    def test_syntax_error_caught(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(xs):\n    return ("})
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
+    def test_exec_error_caught(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+
+    def test_missing_func_caught(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def g(xs):\n    return 0"})
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
+
+
+class TestCodeRuntime:
+    def test_runtime_error_caught(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    raise ZeroDivisionError('oops')"}
+        )
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
+
+
+class TestQueryTypeValidation:
+    def test_non_list_input_is_error_strict(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={
+                "queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]
+            }
+        )
+        issues = validate_simple_algorithms_task(corrupted, strict=True)
+        type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
+        assert len(type_issues) > 0
+
+    def test_non_int_output_is_error_strict(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={
+                "queries": [
+                    Query(input=[1, 2], output="text", tag=QueryTag.TYPICAL)
+                ]
+            }
+        )
+        issues = validate_simple_algorithms_task(corrupted, strict=True)
+        type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
+        assert len(type_issues) > 0
+
+
+class TestQueryOutputValidation:
+    def test_wrong_output_caught(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        first_query = task.queries[0]
+        wrong_query = Query(
+            input=first_query.input,
+            output=first_query.output + 999,
+            tag=first_query.tag,
+        )
+        corrupted = task.model_copy(update={"queries": [wrong_query]})
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_QUERY_OUTPUT_MISMATCH for i in issues)
+
+
+class TestSemanticValidation:
+    def test_code_differing_from_spec_caught(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
+
+
+class TestSemanticIssueCapping:
+    def test_caps_semantic_mismatch_issues(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    return 999999"}
+        )
+        issues = validate_simple_algorithms_task(corrupted)
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
+        assert len(semantic_issues) == 10
+        assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
+
+    def test_custom_cap_respected(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+        issues = validate_simple_algorithms_task(
+            corrupted, max_semantic_issues=3
+        )
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
+        assert len(semantic_issues) == 3
+
+
+def _make_task_with_code(code: str) -> Task:
+    task = generate_simple_algorithms_task(rng=random.Random(42))
+    return task.model_copy(update={"code": code})
+
+
+class TestParanoidMode:
+    def test_valid_generated_code_passes(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        issues = validate_simple_algorithms_task(task, paranoid=True)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_import_rejected(self) -> None:
+        task = _make_task_with_code("import os\ndef f(xs): return 0")
+        issues = validate_simple_algorithms_task(task, paranoid=True)
+        unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
+        assert len(unsafe) >= 1
+
+    def test_multiple_seeds_pass_paranoid(self) -> None:
+        for seed in [1, 42, 123, 999]:
+            task = generate_simple_algorithms_task(rng=random.Random(seed))
+            issues = validate_simple_algorithms_task(task, paranoid=True)
+            assert not any(i.code == CODE_UNSAFE_AST for i in issues), (
+                f"Seed {seed} produced UNSAFE_AST issues"
+            )
+
+
+class TestEachTemplate:
+    def test_most_frequent_valid(self) -> None:
+        from genfxn.simple_algorithms.models import (
+            SimpleAlgorithmsAxes,
+            TemplateType,
+        )
+
+        axes = SimpleAlgorithmsAxes(templates=[TemplateType.MOST_FREQUENT])
+        task = generate_simple_algorithms_task(axes=axes, rng=random.Random(42))
+        issues = validate_simple_algorithms_task(task, axes=axes, paranoid=True)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert errors == [], f"Errors: {errors}"
+
+    def test_count_pairs_sum_valid(self) -> None:
+        from genfxn.simple_algorithms.models import (
+            SimpleAlgorithmsAxes,
+            TemplateType,
+        )
+
+        axes = SimpleAlgorithmsAxes(templates=[TemplateType.COUNT_PAIRS_SUM])
+        task = generate_simple_algorithms_task(axes=axes, rng=random.Random(42))
+        issues = validate_simple_algorithms_task(task, axes=axes, paranoid=True)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert errors == [], f"Errors: {errors}"
+
+    def test_max_window_sum_valid(self) -> None:
+        from genfxn.simple_algorithms.models import (
+            SimpleAlgorithmsAxes,
+            TemplateType,
+        )
+
+        axes = SimpleAlgorithmsAxes(templates=[TemplateType.MAX_WINDOW_SUM])
+        task = generate_simple_algorithms_task(axes=axes, rng=random.Random(42))
+        issues = validate_simple_algorithms_task(task, axes=axes, paranoid=True)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert errors == [], f"Errors: {errors}"

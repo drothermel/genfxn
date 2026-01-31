@@ -7,12 +7,25 @@ import typer
 
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
+from genfxn.core.string_predicates import StringPredicateType
+from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.simple_algorithms.models import (
+    CountingMode,
+    SimpleAlgorithmsAxes,
+    TieBreakMode,
+)
+from genfxn.simple_algorithms.models import (
+    TemplateType as SimpleAlgoTemplateType,
+)
+from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.splits import AxisHoldout, HoldoutType, random_split, split_tasks
 from genfxn.stateful.models import StatefulAxes, TemplateType
 from genfxn.stateful.task import generate_stateful_task
+from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
+from genfxn.stringrules.task import generate_stringrules_task
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
 
@@ -92,13 +105,81 @@ def _build_piecewise_axes(
     return PiecewiseAxes(**kwargs)
 
 
+def _build_simple_algorithms_axes(
+    algorithm_types: str | None,
+    tie_break_modes: str | None,
+    counting_modes: str | None,
+    window_size_range: str | None,
+    target_range: str | None,
+    value_range: str | None,
+    list_length_range: str | None,
+) -> SimpleAlgorithmsAxes:
+    """Build SimpleAlgorithmsAxes from CLI options."""
+    kwargs: dict = {}
+    if algorithm_types:
+        kwargs["templates"] = [
+            SimpleAlgoTemplateType(t.strip())
+            for t in algorithm_types.split(",")
+        ]
+    if tie_break_modes:
+        kwargs["tie_break_modes"] = [
+            TieBreakMode(m.strip()) for m in tie_break_modes.split(",")
+        ]
+    if counting_modes:
+        kwargs["counting_modes"] = [
+            CountingMode(m.strip()) for m in counting_modes.split(",")
+        ]
+    if window_size_range:
+        kwargs["window_size_range"] = _parse_range(window_size_range)
+    if target_range:
+        kwargs["target_range"] = _parse_range(target_range)
+    if value_range:
+        kwargs["value_range"] = _parse_range(value_range)
+    if list_length_range:
+        kwargs["list_length_range"] = _parse_range(list_length_range)
+    return SimpleAlgorithmsAxes(**kwargs)
+
+
+def _build_stringrules_axes(
+    n_rules: int | None,
+    string_predicate_types: str | None,
+    string_transform_types: str | None,
+    overlap_level: str | None,
+    string_length_range: str | None,
+) -> StringRulesAxes:
+    """Build StringRulesAxes from CLI options."""
+    kwargs: dict = {}
+    if n_rules is not None:
+        kwargs["n_rules"] = n_rules
+    if string_predicate_types:
+        kwargs["predicate_types"] = [
+            StringPredicateType(p.strip())
+            for p in string_predicate_types.split(",")
+        ]
+    if string_transform_types:
+        kwargs["transform_types"] = [
+            StringTransformType(t.strip())
+            for t in string_transform_types.split(",")
+        ]
+    if overlap_level:
+        kwargs["overlap_level"] = OverlapLevel(overlap_level.strip())
+    if string_length_range:
+        kwargs["string_length_range"] = _parse_range(string_length_range)
+    return StringRulesAxes(**kwargs)
+
+
 @app.command()
 def generate(
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Output JSONL file")
     ],
     family: Annotated[
-        str, typer.Option("--family", "-f", help="piecewise, stateful, or all")
+        str,
+        typer.Option(
+            "--family",
+            "-f",
+            help="piecewise, stateful, simple_algorithms, stringrules, or all",
+        ),
     ] = "all",
     count: Annotated[
         int, typer.Option("--count", "-n", help="Number of tasks")
@@ -127,6 +208,59 @@ def generate(
     expr_types: Annotated[
         str | None,
         typer.Option("--expr-types", help="Expression types (comma-separated)"),
+    ] = None,
+    # Type filters - simple_algorithms
+    algorithm_types: Annotated[
+        str | None,
+        typer.Option(
+            "--algorithm-types",
+            help="Algorithm types: most_frequent, count_pairs_sum, etc.",
+        ),
+    ] = None,
+    tie_break_modes: Annotated[
+        str | None,
+        typer.Option("--tie-break-modes", help="smallest, first_seen"),
+    ] = None,
+    counting_modes: Annotated[
+        str | None,
+        typer.Option(
+            "--counting-modes", help="Counting: all_indices, unique_values"
+        ),
+    ] = None,
+    window_size_range: Annotated[
+        str | None,
+        typer.Option("--window-size-range", help="Window size range (lo,hi)"),
+    ] = None,
+    target_range: Annotated[
+        str | None,
+        typer.Option("--target-range", help="Target sum range (lo,hi)"),
+    ] = None,
+    # Type filters - stringrules
+    n_rules: Annotated[
+        int | None,
+        typer.Option("--n-rules", help="Number of string rules (1-8)"),
+    ] = None,
+    string_predicate_types: Annotated[
+        str | None,
+        typer.Option(
+            "--string-predicate-types",
+            help="Predicate types: starts_with, ends_with, etc.",
+        ),
+    ] = None,
+    string_transform_types: Annotated[
+        str | None,
+        typer.Option(
+            "--string-transform-types",
+            help="String transform types: lowercase, uppercase, reverse, etc.",
+        ),
+    ] = None,
+    overlap_level: Annotated[
+        str | None,
+        typer.Option("--overlap-level", help="Overlap level: none, low, high"),
+    ] = None,
+    string_length_range: Annotated[
+        str | None,
+        typer.Option("--string-length-range", help="String length (lo,hi)"),
     ] = None,
     # Range options - shared
     value_range: Annotated[
@@ -164,29 +298,7 @@ def generate(
     rng = random.Random(seed)
     tasks: list[Task] = []
 
-    # Warn about mismatched options
-    stateful_only = [
-        templates,
-        predicate_types,
-        transform_types,
-        list_length_range,
-        shift_range,
-        scale_range,
-    ]
-    piecewise_only = [n_branches, expr_types, coeff_range]
-
-    if family == "piecewise" and any(opt is not None for opt in stateful_only):
-        typer.echo(
-            "Warning: stateful-only options ignored for piecewise family",
-            err=True,
-        )
-    if family == "stateful" and any(opt is not None for opt in piecewise_only):
-        typer.echo(
-            "Warning: piecewise-only options ignored for stateful family",
-            err=True,
-        )
-
-    # Build axes
+    # Build axes for all families
     stateful_axes = _build_stateful_axes(
         templates=templates,
         predicate_types=predicate_types,
@@ -206,19 +318,51 @@ def generate(
         divisor_range=divisor_range,
         coeff_range=coeff_range,
     )
+    simple_algo_axes = _build_simple_algorithms_axes(
+        algorithm_types=algorithm_types,
+        tie_break_modes=tie_break_modes,
+        counting_modes=counting_modes,
+        window_size_range=window_size_range,
+        target_range=target_range,
+        value_range=value_range,
+        list_length_range=list_length_range,
+    )
+    stringrules_axes = _build_stringrules_axes(
+        n_rules=n_rules,
+        string_predicate_types=string_predicate_types,
+        string_transform_types=string_transform_types,
+        overlap_level=overlap_level,
+        string_length_range=string_length_range,
+    )
 
     if family == "all":
-        half = count // 2
-        for _ in range(half):
+        # Split evenly among all 4 families
+        quarter = count // 4
+        for _ in range(quarter):
             tasks.append(generate_piecewise_task(axes=piecewise_axes, rng=rng))
-        for _ in range(count - half):
+        for _ in range(quarter):
             tasks.append(generate_stateful_task(axes=stateful_axes, rng=rng))
+        for _ in range(quarter):
+            t = generate_simple_algorithms_task(axes=simple_algo_axes, rng=rng)
+            tasks.append(t)
+        # Remainder goes to stringrules
+        for _ in range(count - 3 * quarter):
+            task = generate_stringrules_task(axes=stringrules_axes, rng=rng)
+            tasks.append(task)
     elif family == "piecewise":
         for _ in range(count):
             tasks.append(generate_piecewise_task(axes=piecewise_axes, rng=rng))
     elif family == "stateful":
         for _ in range(count):
             tasks.append(generate_stateful_task(axes=stateful_axes, rng=rng))
+    elif family == "simple_algorithms":
+        for _ in range(count):
+            t = generate_simple_algorithms_task(axes=simple_algo_axes, rng=rng)
+            tasks.append(t)
+    elif family == "stringrules":
+        for _ in range(count):
+            task = generate_stringrules_task(axes=stringrules_axes, rng=rng)
+            tasks.append(task)
     else:
         typer.echo(f"Unknown family: {family}", err=True)
         raise typer.Exit(1)

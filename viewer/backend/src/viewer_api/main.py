@@ -40,7 +40,7 @@ def create_app(jsonl_path: Path) -> FastAPI:
 
 @cli.command()
 def serve(
-    jsonl_path: Path = typer.Argument(..., help="Path to JSONL file with tasks"),
+    jsonl_path: Path = typer.Argument(..., help="Path to JSONL file"),
     host: str = typer.Option("127.0.0.1", help="Host to bind to"),
     port: int = typer.Option(8000, help="Port to bind to"),
 ) -> None:
