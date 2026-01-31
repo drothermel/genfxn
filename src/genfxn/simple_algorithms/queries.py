@@ -198,16 +198,19 @@ def _generate_count_pairs_queries(
             )
         )
 
-    # No pairs: five distinct values all < target//2, or [v]*5 with 2*v != target
+    # No pairs: five distinct values when possible; only use duplicates as last resort.
+    # Collect up to five distinct integers: first from v < target//2, then allow v >= target//2
+    # while skipping any v where 2*v == target to avoid pair sums.
     start = max(lo, 0)
-    candidates = [start + i for i in range(5) if start + i < target // 2]
-    if len(candidates) >= 5:
-        no_pairs = candidates[:5]
-    else:
-        v = start
-        if 2 * v == target:
-            v = start + 1
-        no_pairs = [v] * 5
+    no_pairs: list[int] = []
+    v = start
+    while v < target // 2 and len(no_pairs) < 5:
+        no_pairs.append(v)
+        v += 1
+    while len(no_pairs) < 5:
+        if 2 * v != target:
+            no_pairs.append(v)
+        v += 1
     queries.append(
         Query(
             input=no_pairs,

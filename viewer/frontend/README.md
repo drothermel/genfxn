@@ -18,6 +18,10 @@ To recreate this project with the same configuration:
 npx sv create --template minimal --types ts --no-install frontend
 ```
 
+## Environment
+
+- **`VITE_API_BASE`** – API base URL for the viewer backend (no trailing slash). Unset or omit to use same-origin `/api`. For local dev with a separate backend, set e.g. `VITE_API_BASE=http://127.0.0.1:8000/api` in `.env`. See `.env.example`.
+
 ## Developing
 
 Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:

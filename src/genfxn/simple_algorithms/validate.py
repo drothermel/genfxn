@@ -51,12 +51,28 @@ def _validate_ast_whitelist(
     """Reject code containing disallowed AST nodes."""
     allowed_names = ALLOWED_CALL_NAMES | ALLOWED_VAR_NAMES | {param_name}
 
+    issues: list[Issue] = []
     try:
         tree = ast.parse(code)
-    except SyntaxError:
-        return [], None
+    except SyntaxError as e:
+        msg = e.msg or str(e)
+        if e.lineno is not None:
+            loc = f" at line {e.lineno}"
+            if e.offset is not None:
+                loc += f", column {e.offset}"
+            message = f"Syntax error in code: {msg}{loc}"
+        else:
+            message = f"Syntax error in code: {msg}"
+        issues.append(
+            Issue(
+                code=CODE_CODE_PARSE_ERROR,
+                severity=Severity.ERROR,
+                message=message,
+                location="code",
+            )
+        )
+        return issues, None
 
-    issues: list[Issue] = []
     for node in ast.walk(tree):
         node_type = type(node)
 
@@ -423,10 +439,17 @@ def _generate_test_inputs(
     inputs.append([2, 1, 2, 1])  # Tie-break test
     inputs.append([1, 1, 1, 2, 2, 2])  # Multi-way tie
 
-    # Random samples
-    for _ in range(num_samples - len(inputs)):
+    # Random samples (avoid negative range when edge cases >= num_samples)
+    to_add = max(0, num_samples - len(inputs))
+    for _ in range(to_add):
         length = rng.randint(len_lo, len_hi)
         inputs.append([rng.randint(val_lo, val_hi) for _ in range(length)])
+
+    # Guarantee exactly num_samples: trim if over, duplicate randomly if under
+    if len(inputs) > num_samples:
+        inputs[:] = rng.sample(inputs, num_samples)
+    while len(inputs) < num_samples:
+        inputs.append(rng.choice(inputs)[:])
 
     return inputs
 

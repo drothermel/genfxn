@@ -10,8 +10,8 @@
 		const kind = expr.kind as string;
 		switch (kind) {
 			case 'affine': {
-				const a = expr.a as number;
-				const b = expr.b as number;
+				const a = Number(expr.a ?? 0);
+				const b = Number(expr.b ?? 0);
 				const parts: string[] = [];
 				if (a !== 0) parts.push(a === 1 ? v : a === -1 ? `-${v}` : `${a}${v}`);
 				if (b !== 0 || parts.length === 0)
@@ -19,9 +19,9 @@
 				return parts.join(' ');
 			}
 			case 'quadratic': {
-				const a = expr.a as number;
-				const b = expr.b as number;
-				const c = expr.c as number;
+				const a = Number(expr.a ?? 0);
+				const b = Number(expr.b ?? 0);
+				const c = Number(expr.c ?? 0);
 				const parts: string[] = [];
 				if (a !== 0) parts.push(`${a}${v}²`);
 				if (b !== 0) parts.push(b > 0 && parts.length > 0 ? `+ ${b}${v}` : `${b}${v}`);
@@ -30,16 +30,16 @@
 				return parts.join(' ');
 			}
 			case 'abs': {
-				const a = expr.a as number;
-				const b = expr.b as number;
+				const a = Number(expr.a ?? 0);
+				const b = Number(expr.b ?? 0);
 				const abs = a === 1 ? `|${v}|` : a === -1 ? `-|${v}|` : `${a}|${v}|`;
 				if (b === 0) return abs;
 				return b > 0 ? `${abs} + ${b}` : `${abs} - ${-b}`;
 			}
 			case 'mod': {
-				const divisor = expr.divisor as number;
-				const a = expr.a as number;
-				const b = expr.b as number;
+				const divisor = Number(expr.divisor ?? 1);
+				const a = Number(expr.a ?? 0);
+				const b = Number(expr.b ?? 0);
 				const mod = a === 1 ? `(${v} % ${divisor})` : `${a}(${v} % ${divisor})`;
 				if (b === 0) return mod;
 				return b > 0 ? `${mod} + ${b}` : `${mod} - ${-b}`;

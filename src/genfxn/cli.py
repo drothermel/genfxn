@@ -37,19 +37,15 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
     try:
         parts = value.split(",")
         if len(parts) != 2:
-            raise typer.BadParameter(
-                "Invalid range: expected 'LO,HI' with integers"
-            )
+            raise typer.BadParameter("Invalid range: expected 'LO,HI' with integers")
         lo_s, hi_s = parts[0].strip(), parts[1].strip()
         if not lo_s or not hi_s:
-            raise typer.BadParameter(
-                "Invalid range: expected 'LO,HI' with integers"
-            )
+            raise typer.BadParameter("Invalid range: expected 'LO,HI' with integers")
         return (int(lo_s), int(hi_s))
-    except (ValueError, IndexError):
+    except (ValueError, IndexError) as err:
         raise typer.BadParameter(
             "Invalid range: expected 'LO,HI' with integers"
-        )
+        ) from err
 
 
 def _build_stateful_axes(
@@ -66,9 +62,7 @@ def _build_stateful_axes(
     """Build StatefulAxes from CLI options."""
     kwargs: dict = {}
     if templates:
-        kwargs["templates"] = [
-            TemplateType(t.strip()) for t in templates.split(",")
-        ]
+        kwargs["templates"] = [TemplateType(t.strip()) for t in templates.split(",")]
     if predicate_types:
         tokens = [p.strip() for p in predicate_types.split(",")]
         if any(t.lower() == "in_set" for t in tokens):
@@ -111,9 +105,7 @@ def _build_piecewise_axes(
     if n_branches is not None:
         kwargs["n_branches"] = n_branches
     if expr_types:
-        kwargs["expr_types"] = [
-            ExprType(e.strip()) for e in expr_types.split(",")
-        ]
+        kwargs["expr_types"] = [ExprType(e.strip()) for e in expr_types.split(",")]
     if value_range:
         kwargs["value_range"] = _parse_range(value_range)
     if threshold_range:
@@ -138,8 +130,7 @@ def _build_simple_algorithms_axes(
     kwargs: dict = {}
     if algorithm_types:
         kwargs["templates"] = [
-            SimpleAlgoTemplateType(t.strip())
-            for t in algorithm_types.split(",")
+            SimpleAlgoTemplateType(t.strip()) for t in algorithm_types.split(",")
         ]
     if tie_break_modes:
         kwargs["tie_break_modes"] = [
@@ -173,13 +164,11 @@ def _build_stringrules_axes(
         kwargs["n_rules"] = n_rules
     if string_predicate_types:
         kwargs["predicate_types"] = [
-            StringPredicateType(p.strip())
-            for p in string_predicate_types.split(",")
+            StringPredicateType(p.strip()) for p in string_predicate_types.split(",")
         ]
     if string_transform_types:
         kwargs["transform_types"] = [
-            StringTransformType(t.strip())
-            for t in string_transform_types.split(",")
+            StringTransformType(t.strip()) for t in string_transform_types.split(",")
         ]
     if overlap_level:
         kwargs["overlap_level"] = OverlapLevel(overlap_level.strip())
@@ -190,9 +179,7 @@ def _build_stringrules_axes(
 
 @app.command()
 def generate(
-    output: Annotated[
-        Path, typer.Option("--output", "-o", help="Output JSONL file")
-    ],
+    output: Annotated[Path, typer.Option("--output", "-o", help="Output JSONL file")],
     family: Annotated[
         str,
         typer.Option(
@@ -201,9 +188,7 @@ def generate(
             help="piecewise, stateful, simple_algorithms, stringrules, or all",
         ),
     ] = "all",
-    count: Annotated[
-        int, typer.Option("--count", "-n", help="Number of tasks")
-    ] = 100,
+    count: Annotated[int, typer.Option("--count", "-n", help="Number of tasks")] = 100,
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
     ] = None,
@@ -243,9 +228,7 @@ def generate(
     ] = None,
     counting_modes: Annotated[
         str | None,
-        typer.Option(
-            "--counting-modes", help="Counting: all_indices, unique_values"
-        ),
+        typer.Option("--counting-modes", help="Counting: all_indices, unique_values"),
     ] = None,
     window_size_range: Annotated[
         str | None,
@@ -399,7 +382,7 @@ def split(
     # Random split options
     random_ratio: Annotated[
         float | None,
-        typer.Option("--random-ratio", help="Train ratio (0-1)"),
+        typer.Option("--random-ratio", help="Train ratio in [0, 1]"),
     ] = None,
     split_seed: Annotated[
         int | None,
@@ -442,14 +425,10 @@ def split(
 
     if has_random:
         if random_ratio is None:
-            typer.echo(
-                "Error: --random-ratio is required for random split", err=True
-            )
+            typer.echo("Error: --random-ratio is required for random split", err=True)
             raise typer.Exit(1)
-        if random_ratio <= 0 or random_ratio >= 1:
-            typer.echo(
-                "Error: --random-ratio must be between 0 and 1", err=True
-            )
+        if random_ratio < 0 or random_ratio > 1:
+            typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
         result = random_split(tasks, random_ratio, seed=split_seed)
     else:

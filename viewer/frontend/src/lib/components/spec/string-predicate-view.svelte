@@ -31,7 +31,12 @@
 					ge: '>=',
 					eq: '=='
 				};
-				return `len(${v}) ${opMap[pred.op as string] ?? '=='} ${pred.value}`;
+				const op = pred.op as string;
+				if (op == null || !(op in opMap)) {
+					console.warn('[string-predicate-view] unknown length_cmp operator:', op, '; valid:', Object.keys(opMap));
+					return `len(${v}) UNKNOWN_OP(${op ?? 'missing'}) ${pred.value}`;
+				}
+				return `len(${v}) ${opMap[op]} ${pred.value}`;
 			}
 			default:
 				return JSON.stringify(pred);

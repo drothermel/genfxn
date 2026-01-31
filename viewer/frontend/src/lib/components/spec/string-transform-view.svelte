@@ -6,6 +6,39 @@
 
 	let { transform, variable = 's' }: Props = $props();
 
+	/** Escape a JS string for use inside a Python double-quoted string literal. */
+	function escapePythonString(s: string): string {
+		let out = '';
+		for (let i = 0; i < s.length; i++) {
+			const c = s[i];
+			const code = c.charCodeAt(0);
+			switch (c) {
+				case '\\':
+					out += '\\\\';
+					break;
+				case '"':
+					out += '\\"';
+					break;
+				case '\n':
+					out += '\\n';
+					break;
+				case '\r':
+					out += '\\r';
+					break;
+				case '\t':
+					out += '\\t';
+					break;
+				default:
+					if (code < 32 || code === 127) {
+						out += '\\x' + code.toString(16).padStart(2, '0');
+					} else {
+						out += c;
+					}
+			}
+		}
+		return out;
+	}
+
 	function renderTransform(t: Record<string, unknown>, v: string): string {
 		const kind = t.kind as string;
 		switch (kind) {
@@ -22,18 +55,18 @@
 			case 'reverse':
 				return `${v}[::-1]`;
 			case 'replace':
-				return `${v}.replace("${t.old}", "${t.new}")`;
+				return `${v}.replace("${escapePythonString(String(t.old ?? ''))}", "${escapePythonString(String(t.new ?? ''))}")`;
 			case 'strip': {
 				const chars = t.chars as string | null;
 				if (chars) {
-					return `${v}.strip("${chars}")`;
+					return `${v}.strip("${escapePythonString(chars)}")`;
 				}
 				return `${v}.strip()`;
 			}
 			case 'prepend':
-				return `"${t.prefix}" + ${v}`;
+				return `"${escapePythonString(String(t.prefix ?? ''))}" + ${v}`;
 			case 'append':
-				return `${v} + "${t.suffix}"`;
+				return `${v} + "${escapePythonString(String(t.suffix ?? ''))}"`;
 			default:
 				return JSON.stringify(t);
 		}

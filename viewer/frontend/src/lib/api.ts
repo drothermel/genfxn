@@ -1,9 +1,11 @@
 import type { Task } from './types';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+/** API base URL. Set VITE_API_BASE in .env or deployment config; falls back to /api for same-origin. */
+const API_BASE =
+	(typeof import.meta.env.VITE_API_BASE === 'string' && import.meta.env.VITE_API_BASE) || '/api';
 
 export async function fetchTasks(family?: string): Promise<Task[]> {
-	const url = family ? `${API_BASE}/tasks?family=${family}` : `${API_BASE}/tasks`;
+	const url = family ? `${API_BASE}/tasks?family=${encodeURIComponent(family)}` : `${API_BASE}/tasks`;
 	const response = await fetch(url);
 	if (!response.ok) {
 		throw new Error(`Failed to fetch tasks: ${response.statusText}`);

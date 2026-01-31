@@ -53,10 +53,27 @@ def serve(
     uvicorn.run(app, host=host, port=port)
 
 
-# For programmatic use: uvicorn viewer_api.main:app (app = FastAPI instance)
-# Default path from GENFXN_VIEWER_JSONL env var, or "tasks.jsonl" in cwd.
+# Lazy app for uvicorn: viewer_api.main:app (no file loading at import time).
 _default_jsonl = Path(os.environ.get("GENFXN_VIEWER_JSONL", "tasks.jsonl"))
-app = create_app(_default_jsonl)
+_cached_app: FastAPI | None = None
+
+
+def get_app() -> FastAPI:
+    """Return the FastAPI app, creating it from _default_jsonl on first use."""
+    global _cached_app
+    if _cached_app is None:
+        _cached_app = create_app(_default_jsonl)
+    return _cached_app
+
+
+class _LazyASGI:
+    """ASGI callable that delegates to get_app() on first request."""
+
+    async def __call__(self, scope, receive, send):
+        await get_app()(scope, receive, send)
+
+
+app = _LazyASGI()
 
 if __name__ == "__main__":
     cli()

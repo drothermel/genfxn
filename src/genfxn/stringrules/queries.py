@@ -16,26 +16,7 @@ from genfxn.core.string_predicates import (
 )
 from genfxn.stringrules.eval import eval_stringrules
 from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
-
-
-def _get_charset(name: str) -> str:
-    charsets = {
-        "ascii_letters_digits": string.ascii_letters + string.digits,
-        "ascii_lowercase": string.ascii_lowercase,
-        "ascii_uppercase": string.ascii_uppercase,
-        "digits": string.digits,
-        "ascii_letters": string.ascii_letters,
-    }
-    return charsets.get(name, name)
-
-
-def _random_string(
-    length: int, charset: str, rng: random.Random, exclude: str = ""
-) -> str:
-    available = [c for c in charset if c not in exclude]
-    if not available:
-        available = list(charset)
-    return "".join(rng.choice(available) for _ in range(length))
+from genfxn.stringrules.utils import _get_charset, _random_string
 
 
 def _generate_matching_string(
@@ -73,15 +54,11 @@ def _generate_matching_string(
 
         case StringPredicateIsUpper():
             length = rng.randint(max(1, lo), hi)
-            return _random_string(
-                length, string.ascii_uppercase + string.digits, rng
-            )
+            return _random_string(length, string.ascii_uppercase + string.digits, rng)
 
         case StringPredicateIsLower():
             length = rng.randint(max(1, lo), hi)
-            return _random_string(
-                length, string.ascii_lowercase + string.digits, rng
-            )
+            return _random_string(length, string.ascii_lowercase + string.digits, rng)
 
         case StringPredicateLengthCmp(op=op, value=v):
             match op:
@@ -129,7 +106,11 @@ def _generate_non_matching_string(
             if not suffix:
                 last_char = rng.choice(charset)
             else:
-                last_char = rng.choice([c for c in charset if c != suffix[-1]])
+                excluded = [c for c in charset if c != suffix[-1]]
+                if not excluded:
+                    last_char = rng.choice(charset)
+                else:
+                    last_char = rng.choice(excluded)
             length = rng.randint(max(1, lo), hi)
             return _random_string(length - 1, charset, rng) + last_char
 

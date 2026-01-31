@@ -193,6 +193,68 @@ class TestSplit:
             val = int(t["spec"]["branches"][0]["condition"]["value"])
             assert -10 <= val <= 10
 
+    def test_split_random_ratio_accepts_zero_and_one(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "10",
+                "-s",
+                "42",
+            ],
+        )
+
+        result_0 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0",
+                "--seed",
+                "42",
+            ],
+        )
+        assert result_0.exit_code == 0
+        train_0 = list(srsly.read_jsonl(train_file))
+        test_0 = list(srsly.read_jsonl(test_file))
+        assert len(train_0) == 0
+        assert len(test_0) == 10
+
+        result_1 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "1",
+                "--seed",
+                "42",
+            ],
+        )
+        assert result_1.exit_code == 0
+        train_1 = list(srsly.read_jsonl(train_file))
+        test_1 = list(srsly.read_jsonl(test_file))
+        assert len(train_1) == 10
+        assert len(test_1) == 0
+
 
 class TestInfo:
     def test_info_output(self, tmp_path) -> None:

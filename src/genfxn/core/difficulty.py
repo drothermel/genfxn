@@ -28,7 +28,10 @@ def _piecewise_difficulty(spec: dict[str, Any]) -> int:
     n_branches = len(branches) + 1
     branch_score = min(n_branches, 5)
 
-    all_exprs = [b["expr"] for b in branches] + [default_expr]
+    branch_exprs = [b.get("expr") for b in branches]
+    all_exprs = [e for e in branch_exprs if e is not None]
+    if default_expr is not None:
+        all_exprs.append(default_expr)
     expr_score = max((_expr_type_score(e) for e in all_exprs), default=0)
 
     all_coeffs = []
@@ -104,9 +107,7 @@ def _stateful_difficulty(spec: dict[str, Any]) -> int:
 
     transforms = _collect_transforms(spec)
     if transforms:
-        transform_score = sum(_transform_score(t) for t in transforms) / len(
-            transforms
-        )
+        transform_score = sum(_transform_score(t) for t in transforms) / len(transforms)
     else:
         transform_score = 1
 
@@ -232,14 +233,10 @@ def _stringrules_difficulty(spec: dict[str, Any]) -> int:
     else:
         rule_score = 5
 
-    pred_scores = [
-        _string_predicate_score(r.get("predicate", {})) for r in rules
-    ]
+    pred_scores = [_string_predicate_score(r.get("predicate", {})) for r in rules]
     pred_score = sum(pred_scores) / len(pred_scores) if pred_scores else 1
 
-    all_transforms = [r.get("transform", {}) for r in rules] + [
-        default_transform
-    ]
+    all_transforms = [r.get("transform", {}) for r in rules] + [default_transform]
     trans_scores = [_string_transform_score(t) for t in all_transforms]
     trans_score = sum(trans_scores) / len(trans_scores) if trans_scores else 1
 

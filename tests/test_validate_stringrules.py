@@ -2,6 +2,7 @@ import random
 
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import Severity
+from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
 from genfxn.stringrules.task import generate_stringrules_task
 from genfxn.stringrules.validate import (
     CODE_CODE_EXEC_ERROR,
@@ -98,11 +99,7 @@ class TestQueryTypeValidation:
     def test_non_str_input_is_error_strict(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={
-                "queries": [
-                    Query(input=123, output="abc", tag=QueryTag.TYPICAL)
-                ]
-            }
+            update={"queries": [Query(input=123, output="abc", tag=QueryTag.TYPICAL)]}
         )
         issues = validate_stringrules_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
@@ -111,11 +108,7 @@ class TestQueryTypeValidation:
     def test_non_str_output_is_error_strict(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={
-                "queries": [
-                    Query(input="hello", output=123, tag=QueryTag.TYPICAL)
-                ]
-            }
+            update={"queries": [Query(input="hello", output=123, tag=QueryTag.TYPICAL)]}
         )
         issues = validate_stringrules_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
@@ -139,9 +132,7 @@ class TestQueryOutputValidation:
 class TestSemanticValidation:
     def test_code_differing_from_spec_caught(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
-        corrupted = task.model_copy(
-            update={"code": "def f(s):\n    return 'wrong'"}
-        )
+        corrupted = task.model_copy(update={"code": "def f(s):\n    return 'wrong'"})
         issues = validate_stringrules_task(corrupted)
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
 
@@ -149,25 +140,17 @@ class TestSemanticValidation:
 class TestSemanticIssueCapping:
     def test_caps_semantic_mismatch_issues(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
-        corrupted = task.model_copy(
-            update={"code": "def f(s):\n    return 'WRONG'"}
-        )
+        corrupted = task.model_copy(update={"code": "def f(s):\n    return 'WRONG'"})
         issues = validate_stringrules_task(corrupted)
-        semantic_issues = [
-            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
-        ]
+        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
         assert len(semantic_issues) == DEFAULT_MAX_SEMANTIC_ISSUES
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
     def test_custom_cap_respected(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
-        corrupted = task.model_copy(
-            update={"code": "def f(s):\n    return 'wrong'"}
-        )
+        corrupted = task.model_copy(update={"code": "def f(s):\n    return 'wrong'"})
         issues = validate_stringrules_task(corrupted, max_semantic_issues=3)
-        semantic_issues = [
-            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
-        ]
+        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
         assert len(semantic_issues) == 3
 
 
@@ -188,6 +171,17 @@ class TestParanoidMode:
         unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
         assert len(unsafe) >= 1
 
+    def test_method_arity_mismatch_rejected(self) -> None:
+        # replace() requires 2 or 3 args; 1 arg is invalid
+        task = _make_task_with_code('def f(s): return s.replace("a")')
+        issues = validate_stringrules_task(task, paranoid=True)
+        unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
+        assert len(unsafe) >= 1
+        assert any(
+            "replace" in i.message and "argument" in i.message.lower()
+            for i in unsafe
+        )
+
     def test_multiple_seeds_pass_paranoid(self) -> None:
         for seed in [1, 42, 123, 999]:
             task = generate_stringrules_task(rng=random.Random(seed))
@@ -199,8 +193,6 @@ class TestParanoidMode:
 
 class TestDifferentConfigurations:
     def test_different_n_rules(self) -> None:
-        from genfxn.stringrules.models import StringRulesAxes
-
         for n in [1, 2, 4]:
             axes = StringRulesAxes(n_rules=n)
             task = generate_stringrules_task(axes=axes, rng=random.Random(42))
@@ -209,8 +201,6 @@ class TestDifferentConfigurations:
             assert errors == [], f"n_rules={n}: {errors}"
 
     def test_different_overlap_levels(self) -> None:
-        from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
-
         for overlap in OverlapLevel:
             axes = StringRulesAxes(n_rules=3, overlap_level=overlap)
             task = generate_stringrules_task(axes=axes, rng=random.Random(42))

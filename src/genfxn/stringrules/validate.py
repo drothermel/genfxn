@@ -14,8 +14,9 @@ from genfxn.stringrules.ast_safety import (
     ALLOWED_AST_NODES,
     ALLOWED_CALL_NAMES,
     ALLOWED_METHOD_NAMES,
-    ALLOWED_VAR_NAMES,
     CALL_ARITIES,
+    METHOD_ARITIES,
+    ALLOWED_VAR_NAMES,
 )
 from genfxn.stringrules.eval import eval_stringrules
 from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
@@ -92,6 +93,7 @@ def _validate_ast_whitelist(
         # Call check: function calls or method calls
         if isinstance(node, ast.Call):
             valid_call = False
+            arity_error_message: str | None = None
             if (
                 isinstance(node.func, ast.Name)
                 and node.func.id in ALLOWED_CALL_NAMES
@@ -103,20 +105,43 @@ def _validate_ast_whitelist(
                     and len(node.keywords) == 0
                 ):
                     valid_call = True
-            elif (
-                isinstance(node.func, ast.Attribute)
-                and node.func.attr in ALLOWED_METHOD_NAMES
-            ):
-                valid_call = True
+                elif len(node.keywords) != 0 or allowed_arities:
+                    arity_error_message = (
+                        f"Function '{func_name}' called with "
+                        f"{len(node.args)} argument(s) at line "
+                        f"{getattr(node, 'lineno', '?')}; "
+                        f"allowed arities: {sorted(allowed_arities)}"
+                    )
+            elif isinstance(node.func, ast.Attribute):
+                method_name = node.func.attr
+                if method_name in ALLOWED_METHOD_NAMES:
+                    allowed_arities = METHOD_ARITIES.get(method_name, set())
+                    if (
+                        len(node.args) in allowed_arities
+                        and len(node.keywords) == 0
+                    ):
+                        valid_call = True
+                    elif len(node.keywords) != 0 or allowed_arities:
+                        arity_error_message = (
+                            f"Method '{method_name}' called with "
+                            f"{len(node.args)} argument(s) at line "
+                            f"{getattr(node, 'lineno', '?')}; "
+                            f"allowed arities: {sorted(allowed_arities)}"
+                        )
             if not valid_call:
+                message = (
+                    arity_error_message
+                    if arity_error_message
+                    else (
+                        f"Disallowed function call at line "
+                        f"{getattr(node, 'lineno', '?')}"
+                    )
+                )
                 issues.append(
                     Issue(
                         code=CODE_UNSAFE_AST,
                         severity=Severity.ERROR,
-                        message=(
-                            f"Disallowed function call at line "
-                            f"{getattr(node, 'lineno', '?')}"
-                        ),
+                        message=message,
                         location="code",
                     )
                 )
@@ -164,7 +189,6 @@ def _validate_spec_deserialize(
 ) -> tuple[list[Issue], StringRulesSpec | None]:
     try:
         spec = _spec_adapter.validate_python(task.spec, strict=True)
-        return [], spec
     except ValidationError as e:
         return [
             Issue(
@@ -175,6 +199,8 @@ def _validate_spec_deserialize(
                 task_id=task.task_id,
             )
         ], None
+    else:
+        return [], spec
 
 
 def _validate_code_compile(

@@ -1,5 +1,4 @@
 import random
-import string
 
 from genfxn.core.string_predicates import (
     StringPredicate,
@@ -34,21 +33,7 @@ from genfxn.stringrules.models import (
     StringRulesAxes,
     StringRulesSpec,
 )
-
-
-def _get_charset(name: str) -> str:
-    charsets = {
-        "ascii_letters_digits": string.ascii_letters + string.digits,
-        "ascii_lowercase": string.ascii_lowercase,
-        "ascii_uppercase": string.ascii_uppercase,
-        "digits": string.digits,
-        "ascii_letters": string.ascii_letters,
-    }
-    return charsets.get(name, name)
-
-
-def _random_string(length: int, charset: str, rng: random.Random) -> str:
-    return "".join(rng.choice(charset) for _ in range(length))
+from genfxn.stringrules.utils import _get_charset, _random_string
 
 
 def sample_string_predicate(
@@ -185,9 +170,7 @@ def sample_stringrules_spec(
         # Select predicate type - avoid repeats unless overlapping
         available_types = list(axes.predicate_types)
         if not _should_overlap(axes.overlap_level, rng) and used_pred_types:
-            available_types = [
-                t for t in available_types if t not in used_pred_types
-            ]
+            available_types = [t for t in available_types if t not in used_pred_types]
             if not available_types:
                 available_types = list(axes.predicate_types)
 

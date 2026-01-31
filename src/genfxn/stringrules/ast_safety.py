@@ -79,3 +79,21 @@ ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset({"str"})
 CALL_ARITIES: dict[str, set[int]] = {
     "len": {1},
 }
+
+# Method arity requirements: method name -> allowed arg counts (excluding self).
+# Used for string method calls (e.g. s.replace(old, new) -> 2, s.replace(old, new, count) -> 3).
+METHOD_ARITIES: dict[str, set[int]] = {
+    "startswith": {1, 2, 3},
+    "endswith": {1, 2, 3},
+    "replace": {2, 3},
+    "strip": {0, 1},
+    "find": {1, 2, 3},
+    "lower": {0},
+    "upper": {0},
+    "capitalize": {0},
+    "swapcase": {0},
+    "isalpha": {0},
+    "isdigit": {0},
+    "isupper": {0},
+    "islower": {0},
+}

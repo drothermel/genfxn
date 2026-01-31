@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Card, CardHeader, CardTitle, CardContent } from '$lib/components/ui/card';
 	import { codeToHtml } from 'shiki';
 
@@ -10,11 +9,15 @@
 	let { code }: Props = $props();
 	let highlightedHtml: string = $state('');
 
-	onMount(async () => {
-		highlightedHtml = await codeToHtml(code, {
-			lang: 'python',
-			theme: 'github-light'
+	$effect(() => {
+		const c = code;
+		let cancelled = false;
+		codeToHtml(c, { lang: 'python', theme: 'github-light' }).then((html) => {
+			if (!cancelled) highlightedHtml = html;
 		});
+		return () => {
+			cancelled = true;
+		};
 	});
 </script>
 

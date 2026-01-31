@@ -21,10 +21,16 @@ def _describe_piecewise(spec: dict[str, Any]) -> str:
 
     parts = []
     for branch in branches:
-        cond = branch["condition"]
-        expr = branch["expr"]
-        cond_text = _describe_predicate(cond, "x")
-        expr_text = _describe_expression(expr)
+        cond = branch.get("condition")
+        expr = branch.get("expr")
+        if isinstance(cond, dict):
+            cond_text = _describe_predicate(cond, "x")
+        else:
+            cond_text = "unknown condition"
+        if isinstance(expr, dict):
+            expr_text = _describe_expression(expr)
+        else:
+            expr_text = "unknown expression"
         parts.append(f"When {cond_text}, return {expr_text}.")
 
     default_text = _describe_expression(default_expr)

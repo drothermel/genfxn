@@ -269,7 +269,7 @@ cd viewer/backend && uv run viewer-api ../../tasks.jsonl --port 8000
 cd viewer/frontend && bun dev
 ```
 
-Open http://localhost:5173
+Open [http://localhost:5173](http://localhost:5173)
 
 ## CLI Reference
 
