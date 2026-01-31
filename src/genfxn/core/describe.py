@@ -7,6 +7,10 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_piecewise(spec)
     elif family == "stateful":
         return _describe_stateful(spec)
+    elif family == "simple_algorithms":
+        return _describe_simple_algorithms(spec)
+    elif family == "stringrules":
+        return _describe_stringrules(spec)
     return ""
 
 
@@ -298,3 +302,134 @@ def _format_number(n: int) -> str:
     if n < 0:
         return f"negative {abs(n)}"
     return str(n)
+
+
+def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
+    """Generate natural language description for simple_algorithms functions."""
+    template = spec.get("template", "")
+
+    if template == "most_frequent":
+        tie_break = spec.get("tie_break", "smallest")
+        empty_default = spec.get("empty_default", 0)
+        tie_text = "the smallest value" if tie_break == "smallest" else "the first value seen"
+        default_text = _format_number(empty_default)
+        return (
+            f"Given a list of integers, find the most frequently occurring value. "
+            f"When there's a tie, return {tie_text}. "
+            f"Return {default_text} for an empty list."
+        )
+
+    elif template == "count_pairs_sum":
+        target = spec.get("target", 0)
+        counting_mode = spec.get("counting_mode", "all_indices")
+        target_text = _format_number(target)
+        if counting_mode == "all_indices":
+            mode_text = "all index pairs (i, j) where i < j"
+        else:
+            mode_text = "unique value pairs only"
+        return (
+            f"Given a list of integers, count the number of pairs that sum to {target_text}. "
+            f"Count {mode_text}."
+        )
+
+    elif template == "max_window_sum":
+        k = spec.get("k", 1)
+        invalid_default = spec.get("invalid_k_default", 0)
+        default_text = _format_number(invalid_default)
+        return (
+            f"Given a list of integers, find the maximum sum of any {k} consecutive elements. "
+            f"If the list has fewer than {k} elements, return {default_text}."
+        )
+
+    return ""
+
+
+def _describe_stringrules(spec: dict[str, Any]) -> str:
+    """Generate natural language description for stringrules functions."""
+    rules = spec.get("rules", [])
+    default_transform = spec.get("default_transform", {})
+
+    parts = ["Given a string, transform it according to these rules:"]
+
+    for rule in rules:
+        pred = rule.get("predicate", {})
+        trans = rule.get("transform", {})
+        pred_text = _describe_string_predicate(pred)
+        trans_text = _describe_string_transform(trans)
+        parts.append(f"If {pred_text}, {trans_text}.")
+
+    default_text = _describe_string_transform(default_transform)
+    parts.append(f"Otherwise, {default_text}.")
+
+    return " ".join(parts)
+
+
+def _describe_string_predicate(pred: dict[str, Any]) -> str:
+    """Convert string predicate to natural language."""
+    kind = pred.get("kind", "")
+
+    if kind == "starts_with":
+        prefix = pred.get("prefix", "")
+        return f"the string starts with '{prefix}'"
+    elif kind == "ends_with":
+        suffix = pred.get("suffix", "")
+        return f"the string ends with '{suffix}'"
+    elif kind == "contains":
+        substring = pred.get("substring", "")
+        return f"the string contains '{substring}'"
+    elif kind == "is_alpha":
+        return "the string contains only letters"
+    elif kind == "is_digit":
+        return "the string contains only digits"
+    elif kind == "is_upper":
+        return "the string is all uppercase"
+    elif kind == "is_lower":
+        return "the string is all lowercase"
+    elif kind == "length_cmp":
+        op = pred.get("op", "eq")
+        value = pred.get("value", 0)
+        op_map = {
+            "lt": "fewer than",
+            "le": "at most",
+            "gt": "more than",
+            "ge": "at least",
+            "eq": "exactly",
+        }
+        return f"the string has {op_map.get(op, 'exactly')} {value} characters"
+
+    return "the string matches condition"
+
+
+def _describe_string_transform(trans: dict[str, Any]) -> str:
+    """Convert string transform to natural language."""
+    kind = trans.get("kind", "identity")
+
+    if kind == "identity":
+        return "return it unchanged"
+    elif kind == "lowercase":
+        return "convert to lowercase"
+    elif kind == "uppercase":
+        return "convert to uppercase"
+    elif kind == "capitalize":
+        return "capitalize the first letter"
+    elif kind == "swapcase":
+        return "swap the case of each letter"
+    elif kind == "reverse":
+        return "reverse the string"
+    elif kind == "replace":
+        old = trans.get("old", "")
+        new = trans.get("new", "")
+        return f"replace '{old}' with '{new}'"
+    elif kind == "strip":
+        chars = trans.get("chars")
+        if chars:
+            return f"strip '{chars}'"
+        return "strip whitespace"
+    elif kind == "prepend":
+        prefix = trans.get("prefix", "")
+        return f"prepend '{prefix}'"
+    elif kind == "append":
+        suffix = trans.get("suffix", "")
+        return f"append '{suffix}'"
+
+    return "return it unchanged"

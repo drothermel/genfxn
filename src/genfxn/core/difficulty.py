@@ -156,3 +156,109 @@ def _transform_score(trans: dict[str, Any]) -> int:
     elif kind in ("shift", "scale", "clip"):
         return 3
     return 1
+
+
+def _simple_algorithms_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for simple_algorithms functions.
+
+    Scoring:
+    - Template (50%): most_frequent=2, count_pairs_sum=3, max_window_sum=3
+    - Mode complexity (30%):
+      - tie_break: smallest=1, first_seen=2
+      - counting_mode: all_indices=2, unique_values=3
+      - k: 1-2=1, 3-5=2, 6+=3
+    - Edge cases (20%): non-zero defaults = +1
+    """
+    template = spec.get("template", "")
+    template_scores = {
+        "most_frequent": 2,
+        "count_pairs_sum": 3,
+        "max_window_sum": 3,
+    }
+    template_score = template_scores.get(template, 2)
+
+    mode_score = 1
+    if template == "most_frequent":
+        tie_break = spec.get("tie_break", "smallest")
+        mode_score = 1 if tie_break == "smallest" else 2
+    elif template == "count_pairs_sum":
+        counting_mode = spec.get("counting_mode", "all_indices")
+        mode_score = 2 if counting_mode == "all_indices" else 3
+    elif template == "max_window_sum":
+        k = spec.get("k", 1)
+        if k <= 2:
+            mode_score = 1
+        elif k <= 5:
+            mode_score = 2
+        else:
+            mode_score = 3
+
+    edge_score = 1
+    if template == "most_frequent":
+        if spec.get("empty_default", 0) != 0:
+            edge_score = 2
+    elif template == "max_window_sum":
+        if spec.get("invalid_k_default", 0) != 0:
+            edge_score = 2
+
+    raw = 0.5 * template_score + 0.3 * mode_score + 0.2 * edge_score
+    return max(1, min(5, round(raw)))
+
+
+def _stringrules_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for stringrules functions.
+
+    Scoring:
+    - Rule count (40%): 1=1, 2=2, 3=3, 4+=4-5
+    - Predicate complexity (30%): avg of predicates
+    - Transform complexity (30%): avg of transforms
+    """
+    rules = spec.get("rules", [])
+    default_transform = spec.get("default_transform", {})
+
+    n_rules = len(rules)
+    if n_rules <= 1:
+        rule_score = 1
+    elif n_rules == 2:
+        rule_score = 2
+    elif n_rules == 3:
+        rule_score = 3
+    elif n_rules == 4:
+        rule_score = 4
+    else:
+        rule_score = 5
+
+    pred_scores = [_string_predicate_score(r.get("predicate", {})) for r in rules]
+    pred_score = sum(pred_scores) / len(pred_scores) if pred_scores else 1
+
+    all_transforms = [r.get("transform", {}) for r in rules] + [default_transform]
+    trans_scores = [_string_transform_score(t) for t in all_transforms]
+    trans_score = sum(trans_scores) / len(trans_scores) if trans_scores else 1
+
+    raw = 0.4 * rule_score + 0.3 * pred_score + 0.3 * trans_score
+    return max(1, min(5, round(raw)))
+
+
+def _string_predicate_score(pred: dict[str, Any]) -> int:
+    """Score string predicate: simple=1, pattern=2, length_cmp=2-3."""
+    kind = pred.get("kind", "")
+    if kind in ("is_alpha", "is_digit", "is_upper", "is_lower"):
+        return 1
+    elif kind in ("starts_with", "ends_with", "contains"):
+        return 2
+    elif kind == "length_cmp":
+        op = pred.get("op", "eq")
+        return 3 if op in ("lt", "gt") else 2
+    return 1
+
+
+def _string_transform_score(trans: dict[str, Any]) -> int:
+    """Score string transform: identity=1, simple=2, parameterized=3."""
+    kind = trans.get("kind", "identity")
+    if kind == "identity":
+        return 1
+    elif kind in ("lowercase", "uppercase", "capitalize", "swapcase", "reverse"):
+        return 2
+    elif kind in ("replace", "strip", "prepend", "append"):
+        return 3
+    return 1

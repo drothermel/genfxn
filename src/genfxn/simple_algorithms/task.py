@@ -1,6 +1,8 @@
 import random
 
 from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.describe import describe_task
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.simple_algorithms.models import SimpleAlgorithmsAxes
@@ -35,4 +37,6 @@ def generate_simple_algorithms_task(
         queries=queries,
         trace=trace,
         axes=axes.model_dump(),
+        difficulty=compute_difficulty("simple_algorithms", spec_dict),
+        description=describe_task("simple_algorithms", spec_dict),
     )

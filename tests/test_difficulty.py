@@ -4,9 +4,13 @@ from genfxn.core.difficulty import (
     compute_difficulty,
     _piecewise_difficulty,
     _stateful_difficulty,
+    _simple_algorithms_difficulty,
+    _stringrules_difficulty,
     _expr_type_score,
     _predicate_score,
     _transform_score,
+    _string_predicate_score,
+    _string_transform_score,
 )
 
 
@@ -184,6 +188,170 @@ class TestStatefulDifficulty:
         assert _stateful_difficulty(spec_identity) < _stateful_difficulty(spec_scale)
 
 
+class TestStringPredicateScore:
+    def test_simple_predicates(self) -> None:
+        assert _string_predicate_score({"kind": "is_alpha"}) == 1
+        assert _string_predicate_score({"kind": "is_digit"}) == 1
+        assert _string_predicate_score({"kind": "is_upper"}) == 1
+        assert _string_predicate_score({"kind": "is_lower"}) == 1
+
+    def test_pattern_predicates(self) -> None:
+        assert _string_predicate_score({"kind": "starts_with"}) == 2
+        assert _string_predicate_score({"kind": "ends_with"}) == 2
+        assert _string_predicate_score({"kind": "contains"}) == 2
+
+    def test_length_cmp_predicates(self) -> None:
+        assert _string_predicate_score({"kind": "length_cmp", "op": "eq"}) == 2
+        assert _string_predicate_score({"kind": "length_cmp", "op": "le"}) == 2
+        assert _string_predicate_score({"kind": "length_cmp", "op": "lt"}) == 3
+        assert _string_predicate_score({"kind": "length_cmp", "op": "gt"}) == 3
+
+
+class TestStringTransformScore:
+    def test_identity(self) -> None:
+        assert _string_transform_score({"kind": "identity"}) == 1
+
+    def test_simple_transforms(self) -> None:
+        assert _string_transform_score({"kind": "lowercase"}) == 2
+        assert _string_transform_score({"kind": "uppercase"}) == 2
+        assert _string_transform_score({"kind": "capitalize"}) == 2
+        assert _string_transform_score({"kind": "swapcase"}) == 2
+        assert _string_transform_score({"kind": "reverse"}) == 2
+
+    def test_parameterized_transforms(self) -> None:
+        assert _string_transform_score({"kind": "replace"}) == 3
+        assert _string_transform_score({"kind": "strip"}) == 3
+        assert _string_transform_score({"kind": "prepend"}) == 3
+        assert _string_transform_score({"kind": "append"}) == 3
+
+
+class TestSimpleAlgorithmsDifficulty:
+    def test_most_frequent_simple(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": 0,
+        }
+        difficulty = _simple_algorithms_difficulty(spec)
+        assert 1 <= difficulty <= 2
+
+    def test_most_frequent_first_seen_harder(self) -> None:
+        spec_smallest = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": 0,
+        }
+        spec_first_seen = {
+            "template": "most_frequent",
+            "tie_break": "first_seen",
+            "empty_default": 0,
+        }
+        assert _simple_algorithms_difficulty(spec_smallest) <= _simple_algorithms_difficulty(spec_first_seen)
+
+    def test_count_pairs_sum_medium(self) -> None:
+        spec = {
+            "template": "count_pairs_sum",
+            "target": 10,
+            "counting_mode": "all_indices",
+        }
+        difficulty = _simple_algorithms_difficulty(spec)
+        assert 2 <= difficulty <= 3
+
+    def test_unique_values_harder(self) -> None:
+        spec_all = {
+            "template": "count_pairs_sum",
+            "target": 10,
+            "counting_mode": "all_indices",
+        }
+        spec_unique = {
+            "template": "count_pairs_sum",
+            "target": 10,
+            "counting_mode": "unique_values",
+        }
+        assert _simple_algorithms_difficulty(spec_all) <= _simple_algorithms_difficulty(spec_unique)
+
+    def test_max_window_sum_small_k(self) -> None:
+        spec = {
+            "template": "max_window_sum",
+            "k": 2,
+            "invalid_k_default": 0,
+        }
+        difficulty = _simple_algorithms_difficulty(spec)
+        assert 1 <= difficulty <= 2
+
+    def test_max_window_sum_large_k_harder(self) -> None:
+        spec_small = {
+            "template": "max_window_sum",
+            "k": 2,
+            "invalid_k_default": 0,
+        }
+        spec_large = {
+            "template": "max_window_sum",
+            "k": 8,
+            "invalid_k_default": 0,
+        }
+        assert _simple_algorithms_difficulty(spec_small) <= _simple_algorithms_difficulty(spec_large)
+
+
+class TestStringrulesDifficulty:
+    def test_single_rule_simple(self) -> None:
+        spec = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        difficulty = _stringrules_difficulty(spec)
+        assert difficulty == 1
+
+    def test_more_rules_increase_difficulty(self) -> None:
+        spec_1 = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        spec_3 = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+                {"predicate": {"kind": "is_digit"}, "transform": {"kind": "identity"}},
+                {"predicate": {"kind": "is_upper"}, "transform": {"kind": "identity"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        assert _stringrules_difficulty(spec_1) < _stringrules_difficulty(spec_3)
+
+    def test_complex_predicates_increase_difficulty(self) -> None:
+        spec_simple = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "lowercase"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        spec_complex = {
+            "rules": [
+                {"predicate": {"kind": "length_cmp", "op": "gt", "value": 5}, "transform": {"kind": "lowercase"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        assert _stringrules_difficulty(spec_simple) < _stringrules_difficulty(spec_complex)
+
+    def test_parameterized_transforms_increase_difficulty(self) -> None:
+        spec_simple = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "lowercase"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        spec_param = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "replace", "old": "a", "new": "b"}},
+            ],
+            "default_transform": {"kind": "append", "suffix": "!"},
+        }
+        assert _stringrules_difficulty(spec_simple) < _stringrules_difficulty(spec_param)
+
+
 class TestComputeDifficulty:
     def test_piecewise_family(self) -> None:
         spec = {
@@ -198,6 +366,25 @@ class TestComputeDifficulty:
             "match_predicate": {"kind": "even"},
         }
         assert compute_difficulty("stateful", spec) == 1
+
+    def test_simple_algorithms_family(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": 0,
+        }
+        difficulty = compute_difficulty("simple_algorithms", spec)
+        assert 1 <= difficulty <= 5
+
+    def test_stringrules_family(self) -> None:
+        spec = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        difficulty = compute_difficulty("stringrules", spec)
+        assert 1 <= difficulty <= 5
 
     def test_unknown_family_defaults_to_3(self) -> None:
         assert compute_difficulty("unknown", {}) == 3

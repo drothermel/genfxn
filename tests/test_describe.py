@@ -4,9 +4,13 @@ from genfxn.core.describe import (
     describe_task,
     _describe_piecewise,
     _describe_stateful,
+    _describe_simple_algorithms,
+    _describe_stringrules,
     _describe_predicate,
     _describe_transform,
     _describe_expression,
+    _describe_string_predicate,
+    _describe_string_transform,
     _format_number,
 )
 
@@ -211,6 +215,179 @@ class TestDescribeStateful:
         assert "Return the best sum" in result
 
 
+class TestDescribeStringPredicate:
+    def test_starts_with(self) -> None:
+        result = _describe_string_predicate({"kind": "starts_with", "prefix": "abc"})
+        assert result == "the string starts with 'abc'"
+
+    def test_ends_with(self) -> None:
+        result = _describe_string_predicate({"kind": "ends_with", "suffix": "xyz"})
+        assert result == "the string ends with 'xyz'"
+
+    def test_contains(self) -> None:
+        result = _describe_string_predicate({"kind": "contains", "substring": "test"})
+        assert result == "the string contains 'test'"
+
+    def test_is_alpha(self) -> None:
+        result = _describe_string_predicate({"kind": "is_alpha"})
+        assert result == "the string contains only letters"
+
+    def test_is_digit(self) -> None:
+        result = _describe_string_predicate({"kind": "is_digit"})
+        assert result == "the string contains only digits"
+
+    def test_is_upper(self) -> None:
+        result = _describe_string_predicate({"kind": "is_upper"})
+        assert result == "the string is all uppercase"
+
+    def test_is_lower(self) -> None:
+        result = _describe_string_predicate({"kind": "is_lower"})
+        assert result == "the string is all lowercase"
+
+    def test_length_cmp_lt(self) -> None:
+        result = _describe_string_predicate({"kind": "length_cmp", "op": "lt", "value": 5})
+        assert result == "the string has fewer than 5 characters"
+
+    def test_length_cmp_le(self) -> None:
+        result = _describe_string_predicate({"kind": "length_cmp", "op": "le", "value": 10})
+        assert result == "the string has at most 10 characters"
+
+    def test_length_cmp_gt(self) -> None:
+        result = _describe_string_predicate({"kind": "length_cmp", "op": "gt", "value": 3})
+        assert result == "the string has more than 3 characters"
+
+    def test_length_cmp_ge(self) -> None:
+        result = _describe_string_predicate({"kind": "length_cmp", "op": "ge", "value": 8})
+        assert result == "the string has at least 8 characters"
+
+    def test_length_cmp_eq(self) -> None:
+        result = _describe_string_predicate({"kind": "length_cmp", "op": "eq", "value": 4})
+        assert result == "the string has exactly 4 characters"
+
+
+class TestDescribeStringTransform:
+    def test_identity(self) -> None:
+        assert _describe_string_transform({"kind": "identity"}) == "return it unchanged"
+
+    def test_lowercase(self) -> None:
+        assert _describe_string_transform({"kind": "lowercase"}) == "convert to lowercase"
+
+    def test_uppercase(self) -> None:
+        assert _describe_string_transform({"kind": "uppercase"}) == "convert to uppercase"
+
+    def test_capitalize(self) -> None:
+        assert _describe_string_transform({"kind": "capitalize"}) == "capitalize the first letter"
+
+    def test_swapcase(self) -> None:
+        assert _describe_string_transform({"kind": "swapcase"}) == "swap the case of each letter"
+
+    def test_reverse(self) -> None:
+        assert _describe_string_transform({"kind": "reverse"}) == "reverse the string"
+
+    def test_replace(self) -> None:
+        result = _describe_string_transform({"kind": "replace", "old": "a", "new": "b"})
+        assert result == "replace 'a' with 'b'"
+
+    def test_strip_whitespace(self) -> None:
+        result = _describe_string_transform({"kind": "strip", "chars": None})
+        assert result == "strip whitespace"
+
+    def test_strip_chars(self) -> None:
+        result = _describe_string_transform({"kind": "strip", "chars": "xy"})
+        assert result == "strip 'xy'"
+
+    def test_prepend(self) -> None:
+        result = _describe_string_transform({"kind": "prepend", "prefix": "pre_"})
+        assert result == "prepend 'pre_'"
+
+    def test_append(self) -> None:
+        result = _describe_string_transform({"kind": "append", "suffix": "_end"})
+        assert result == "append '_end'"
+
+
+class TestDescribeSimpleAlgorithms:
+    def test_most_frequent_smallest(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": 0,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "most frequently occurring value" in result
+        assert "the smallest value" in result
+        assert "Return 0 for an empty list" in result
+
+    def test_most_frequent_first_seen(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "first_seen",
+            "empty_default": -1,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "the first value seen" in result
+        assert "Return negative 1 for an empty list" in result
+
+    def test_count_pairs_sum_all_indices(self) -> None:
+        spec = {
+            "template": "count_pairs_sum",
+            "target": 10,
+            "counting_mode": "all_indices",
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "pairs that sum to 10" in result
+        assert "all index pairs (i, j) where i < j" in result
+
+    def test_count_pairs_sum_unique_values(self) -> None:
+        spec = {
+            "template": "count_pairs_sum",
+            "target": -5,
+            "counting_mode": "unique_values",
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "pairs that sum to negative 5" in result
+        assert "unique value pairs only" in result
+
+    def test_max_window_sum(self) -> None:
+        spec = {
+            "template": "max_window_sum",
+            "k": 3,
+            "invalid_k_default": 0,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "maximum sum of any 3 consecutive elements" in result
+        assert "fewer than 3 elements, return 0" in result
+
+
+class TestDescribeStringrules:
+    def test_single_rule(self) -> None:
+        spec = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "lowercase"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        result = _describe_stringrules(spec)
+        assert "transform it according to these rules" in result
+        assert "contains only letters" in result
+        assert "convert to lowercase" in result
+        assert "Otherwise, return it unchanged." in result
+
+    def test_multiple_rules(self) -> None:
+        spec = {
+            "rules": [
+                {"predicate": {"kind": "starts_with", "prefix": "a"}, "transform": {"kind": "uppercase"}},
+                {"predicate": {"kind": "ends_with", "suffix": "z"}, "transform": {"kind": "reverse"}},
+            ],
+            "default_transform": {"kind": "capitalize"},
+        }
+        result = _describe_stringrules(spec)
+        assert "starts with 'a'" in result
+        assert "convert to uppercase" in result
+        assert "ends with 'z'" in result
+        assert "reverse the string" in result
+        assert "capitalize the first letter" in result
+
+
 class TestDescribeTask:
     def test_piecewise_family(self) -> None:
         spec = {
@@ -227,6 +404,25 @@ class TestDescribeTask:
         }
         result = describe_task("stateful", spec)
         assert "the element is odd" in result
+
+    def test_simple_algorithms_family(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": 0,
+        }
+        result = describe_task("simple_algorithms", spec)
+        assert "most frequently occurring value" in result
+
+    def test_stringrules_family(self) -> None:
+        spec = {
+            "rules": [
+                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        result = describe_task("stringrules", spec)
+        assert "transform it according to these rules" in result
 
     def test_unknown_family_returns_empty(self) -> None:
         assert describe_task("unknown", {}) == ""
