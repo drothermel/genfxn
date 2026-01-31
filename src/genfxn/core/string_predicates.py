@@ -106,6 +106,8 @@ def eval_string_predicate(pred: StringPredicate, s: str) -> bool:
                     return length >= v
                 case "eq":
                     return length == v
+                case _:
+                    return False
         case _:
             raise ValueError(f"Unknown string predicate: {pred}")
 

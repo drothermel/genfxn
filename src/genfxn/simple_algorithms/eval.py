@@ -40,7 +40,10 @@ def eval_count_pairs_sum(spec: CountPairsSumSpec, xs: list[int]) -> int:
         for i in range(len(xs)):
             for j in range(i + 1, len(xs)):
                 if xs[i] + xs[j] == spec.target:
-                    pair = tuple(sorted([xs[i], xs[j]]))
+                    pair: tuple[int, int] = (
+                        min(xs[i], xs[j]),
+                        max(xs[i], xs[j]),
+                    )
                     seen_pairs.add(pair)
         return len(seen_pairs)
 

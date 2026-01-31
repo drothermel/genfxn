@@ -1,16 +1,14 @@
-import pytest
-
 from genfxn.core.difficulty import (
-    compute_difficulty,
-    _piecewise_difficulty,
-    _stateful_difficulty,
-    _simple_algorithms_difficulty,
-    _stringrules_difficulty,
     _expr_type_score,
+    _piecewise_difficulty,
     _predicate_score,
-    _transform_score,
+    _simple_algorithms_difficulty,
+    _stateful_difficulty,
     _string_predicate_score,
     _string_transform_score,
+    _stringrules_difficulty,
+    _transform_score,
+    compute_difficulty,
 )
 
 
@@ -73,7 +71,10 @@ class TestPiecewiseDifficulty:
     def test_two_branches_affine(self) -> None:
         spec = {
             "branches": [
-                {"condition": {"kind": "lt", "value": 0}, "expr": {"kind": "affine", "a": 1, "b": 0}},
+                {
+                    "condition": {"kind": "lt", "value": 0},
+                    "expr": {"kind": "affine", "a": 1, "b": 0},
+                },
             ],
             "default_expr": {"kind": "affine", "a": -1, "b": 0},
         }
@@ -87,8 +88,14 @@ class TestPiecewiseDifficulty:
         }
         spec_3 = {
             "branches": [
-                {"condition": {"kind": "lt", "value": -10}, "expr": {"kind": "affine", "a": 1, "b": 0}},
-                {"condition": {"kind": "lt", "value": 10}, "expr": {"kind": "affine", "a": 2, "b": 0}},
+                {
+                    "condition": {"kind": "lt", "value": -10},
+                    "expr": {"kind": "affine", "a": 1, "b": 0},
+                },
+                {
+                    "condition": {"kind": "lt", "value": 10},
+                    "expr": {"kind": "affine", "a": 2, "b": 0},
+                },
             ],
             "default_expr": {"kind": "affine", "a": 3, "b": 0},
         }
@@ -103,7 +110,9 @@ class TestPiecewiseDifficulty:
             "branches": [],
             "default_expr": {"kind": "quadratic", "a": 1, "b": 0, "c": 0},
         }
-        assert _piecewise_difficulty(spec_affine) < _piecewise_difficulty(spec_quad)
+        assert _piecewise_difficulty(spec_affine) < _piecewise_difficulty(
+            spec_quad
+        )
 
     def test_large_coeffs_increase_difficulty(self) -> None:
         spec_small = {
@@ -114,7 +123,9 @@ class TestPiecewiseDifficulty:
             "branches": [],
             "default_expr": {"kind": "affine", "a": 10, "b": 10},
         }
-        assert _piecewise_difficulty(spec_small) < _piecewise_difficulty(spec_large)
+        assert _piecewise_difficulty(spec_small) < _piecewise_difficulty(
+            spec_large
+        )
 
     def test_difficulty_clamped_1_to_5(self) -> None:
         spec_simple = {
@@ -123,7 +134,10 @@ class TestPiecewiseDifficulty:
         }
         spec_complex = {
             "branches": [
-                {"condition": {"kind": "lt", "value": i}, "expr": {"kind": "quadratic", "a": 10, "b": 10, "c": 10}}
+                {
+                    "condition": {"kind": "lt", "value": i},
+                    "expr": {"kind": "quadratic", "a": 10, "b": 10, "c": 10},
+                }
                 for i in range(5)
             ],
             "default_expr": {"kind": "quadratic", "a": 10, "b": 10, "c": 10},
@@ -185,7 +199,9 @@ class TestStatefulDifficulty:
             "false_transform": {"kind": "shift", "offset": 5},
         }
         # More complex predicate + transforms should increase difficulty
-        assert _stateful_difficulty(spec_identity) < _stateful_difficulty(spec_scale)
+        assert _stateful_difficulty(spec_identity) < _stateful_difficulty(
+            spec_scale
+        )
 
 
 class TestStringPredicateScore:
@@ -246,7 +262,9 @@ class TestSimpleAlgorithmsDifficulty:
             "tie_break": "first_seen",
             "empty_default": 0,
         }
-        assert _simple_algorithms_difficulty(spec_smallest) <= _simple_algorithms_difficulty(spec_first_seen)
+        assert _simple_algorithms_difficulty(
+            spec_smallest
+        ) <= _simple_algorithms_difficulty(spec_first_seen)
 
     def test_count_pairs_sum_medium(self) -> None:
         spec = {
@@ -268,7 +286,9 @@ class TestSimpleAlgorithmsDifficulty:
             "target": 10,
             "counting_mode": "unique_values",
         }
-        assert _simple_algorithms_difficulty(spec_all) <= _simple_algorithms_difficulty(spec_unique)
+        assert _simple_algorithms_difficulty(
+            spec_all
+        ) <= _simple_algorithms_difficulty(spec_unique)
 
     def test_max_window_sum_small_k(self) -> None:
         spec = {
@@ -290,14 +310,19 @@ class TestSimpleAlgorithmsDifficulty:
             "k": 8,
             "invalid_k_default": 0,
         }
-        assert _simple_algorithms_difficulty(spec_small) <= _simple_algorithms_difficulty(spec_large)
+        assert _simple_algorithms_difficulty(
+            spec_small
+        ) <= _simple_algorithms_difficulty(spec_large)
 
 
 class TestStringrulesDifficulty:
     def test_single_rule_simple(self) -> None:
         spec = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "identity"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }
@@ -307,15 +332,27 @@ class TestStringrulesDifficulty:
     def test_more_rules_increase_difficulty(self) -> None:
         spec_1 = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "identity"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }
         spec_3 = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
-                {"predicate": {"kind": "is_digit"}, "transform": {"kind": "identity"}},
-                {"predicate": {"kind": "is_upper"}, "transform": {"kind": "identity"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "identity"},
+                },
+                {
+                    "predicate": {"kind": "is_digit"},
+                    "transform": {"kind": "identity"},
+                },
+                {
+                    "predicate": {"kind": "is_upper"},
+                    "transform": {"kind": "identity"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }
@@ -324,32 +361,48 @@ class TestStringrulesDifficulty:
     def test_complex_predicates_increase_difficulty(self) -> None:
         spec_simple = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "lowercase"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "lowercase"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }
         spec_complex = {
             "rules": [
-                {"predicate": {"kind": "length_cmp", "op": "gt", "value": 5}, "transform": {"kind": "lowercase"}},
+                {
+                    "predicate": {"kind": "length_cmp", "op": "gt", "value": 5},
+                    "transform": {"kind": "lowercase"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }
-        assert _stringrules_difficulty(spec_simple) < _stringrules_difficulty(spec_complex)
+        assert _stringrules_difficulty(spec_simple) < _stringrules_difficulty(
+            spec_complex
+        )
 
     def test_parameterized_transforms_increase_difficulty(self) -> None:
         spec_simple = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "lowercase"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "lowercase"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }
         spec_param = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "replace", "old": "a", "new": "b"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "replace", "old": "a", "new": "b"},
+                },
             ],
             "default_transform": {"kind": "append", "suffix": "!"},
         }
-        assert _stringrules_difficulty(spec_simple) < _stringrules_difficulty(spec_param)
+        assert _stringrules_difficulty(spec_simple) < _stringrules_difficulty(
+            spec_param
+        )
 
 
 class TestComputeDifficulty:
@@ -379,7 +432,10 @@ class TestComputeDifficulty:
     def test_stringrules_family(self) -> None:
         spec = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "identity"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }

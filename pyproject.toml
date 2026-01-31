@@ -25,5 +25,8 @@ select = ["E", "F", "I", "UP"]
 [tool.ty.environment]
 python-version = "3.12"
 
+[tool.ty.src]
+exclude = ["viewer/backend"]
+
 [dependency-groups]
 dev = ["ty>=0.0.14", "pytest>=9.0.2", "ruff>=0.14.14"]

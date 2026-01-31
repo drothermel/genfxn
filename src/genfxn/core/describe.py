@@ -57,9 +57,11 @@ def _describe_stateful(spec: dict[str, Any]) -> str:
 
         init_text = _format_number(init)
         return (
-            f"Given a list of integers, start with an accumulator of {init_text}. "
-            f"For each element: when {pred_text}, add {true_text} to the accumulator; "
-            f"otherwise, add {false_text}. Return the final accumulator value."
+            f"Given a list of integers, start with an accumulator of "
+            f"{init_text}. "
+            f"For each element: when {pred_text}, add {true_text} to the "
+            f"accumulator; otherwise, add {false_text}. "
+            f"Return the final accumulator value."
         )
 
     elif template == "resetting_best_prefix_sum":
@@ -70,10 +72,11 @@ def _describe_stateful(spec: dict[str, Any]) -> str:
         init_text = _format_number(init)
 
         return (
-            f"Given a list of integers, track a running sum and the best sum seen. "
-            f"Start both at {init_text}. For each element: add it to the running sum; "
-            f"when {pred_text}, reset the running sum to {init_text}; "
-            f"update best sum if running sum is larger. Return the best sum."
+            f"Given a list of integers, track a running sum and the best sum "
+            f"seen. Start both at {init_text}. For each element: add it to the "
+            f"running sum; when {pred_text}, reset the running sum to "
+            f"{init_text}; update best sum if running sum is larger. "
+            f"Return the best sum."
         )
 
     return ""
@@ -116,7 +119,7 @@ def _describe_predicate(pred: dict[str, Any], var: str) -> str:
 
 
 def _describe_transform(trans: dict[str, Any]) -> str:
-    """Convert transform to natural language (for use with 'add X to accumulator')."""
+    """Convert transform to natural language ('add X to accumulator')."""
     kind = trans.get("kind", "identity")
 
     if kind == "identity":
@@ -311,11 +314,15 @@ def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
     if template == "most_frequent":
         tie_break = spec.get("tie_break", "smallest")
         empty_default = spec.get("empty_default", 0)
-        tie_text = "the smallest value" if tie_break == "smallest" else "the first value seen"
+        tie_text = (
+            "the smallest value"
+            if tie_break == "smallest"
+            else "the first value seen"
+        )
         default_text = _format_number(empty_default)
         return (
-            f"Given a list of integers, find the most frequently occurring value. "
-            f"When there's a tie, return {tie_text}. "
+            f"Given a list of integers, find the most frequently occurring "
+            f"value. When there's a tie, return {tie_text}. "
             f"Return {default_text} for an empty list."
         )
 
@@ -328,8 +335,8 @@ def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
         else:
             mode_text = "unique value pairs only"
         return (
-            f"Given a list of integers, count the number of pairs that sum to {target_text}. "
-            f"Count {mode_text}."
+            f"Given a list of integers, count the number of pairs that sum to "
+            f"{target_text}. Count {mode_text}."
         )
 
     elif template == "max_window_sum":
@@ -337,8 +344,9 @@ def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
         invalid_default = spec.get("invalid_k_default", 0)
         default_text = _format_number(invalid_default)
         return (
-            f"Given a list of integers, find the maximum sum of any {k} consecutive elements. "
-            f"If the list has fewer than {k} elements, return {default_text}."
+            f"Given a list of integers, find the maximum sum of any {k} "
+            f"consecutive elements. If the list has fewer than {k} elements, "
+            f"return {default_text}."
         )
 
     return ""

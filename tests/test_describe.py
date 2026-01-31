@@ -1,17 +1,15 @@
-import pytest
-
 from genfxn.core.describe import (
-    describe_task,
-    _describe_piecewise,
-    _describe_stateful,
-    _describe_simple_algorithms,
-    _describe_stringrules,
-    _describe_predicate,
-    _describe_transform,
     _describe_expression,
+    _describe_piecewise,
+    _describe_predicate,
+    _describe_simple_algorithms,
+    _describe_stateful,
     _describe_string_predicate,
     _describe_string_transform,
+    _describe_stringrules,
+    _describe_transform,
     _format_number,
+    describe_task,
 )
 
 
@@ -58,11 +56,15 @@ class TestDescribePredicate:
         assert result == "the x is at least negative 10"
 
     def test_mod_eq(self) -> None:
-        result = _describe_predicate({"kind": "mod_eq", "divisor": 3, "remainder": 1}, "element")
+        result = _describe_predicate(
+            {"kind": "mod_eq", "divisor": 3, "remainder": 1}, "element"
+        )
         assert result == "the element mod 3 equals 1"
 
     def test_in_set(self) -> None:
-        result = _describe_predicate({"kind": "in_set", "values": [3, 1, 2]}, "x")
+        result = _describe_predicate(
+            {"kind": "in_set", "values": [3, 1, 2]}, "x"
+        )
         assert result == "the x is in {1, 2, 3}"
 
 
@@ -71,7 +73,10 @@ class TestDescribeTransform:
         assert _describe_transform({"kind": "identity"}) == "the element"
 
     def test_abs(self) -> None:
-        assert _describe_transform({"kind": "abs"}) == "the absolute value of the element"
+        assert (
+            _describe_transform({"kind": "abs"})
+            == "the absolute value of the element"
+        )
 
     def test_negate(self) -> None:
         assert _describe_transform({"kind": "negate"}) == "negative the element"
@@ -123,15 +128,21 @@ class TestDescribeExpression:
         assert result == "0"
 
     def test_quadratic_full(self) -> None:
-        result = _describe_expression({"kind": "quadratic", "a": 2, "b": 3, "c": 1})
+        result = _describe_expression(
+            {"kind": "quadratic", "a": 2, "b": 3, "c": 1}
+        )
         assert result == "2 times x squared plus 3 times x plus 1"
 
     def test_quadratic_a_is_one(self) -> None:
-        result = _describe_expression({"kind": "quadratic", "a": 1, "b": 0, "c": 0})
+        result = _describe_expression(
+            {"kind": "quadratic", "a": 1, "b": 0, "c": 0}
+        )
         assert result == "x squared"
 
     def test_quadratic_negative_terms(self) -> None:
-        result = _describe_expression({"kind": "quadratic", "a": -1, "b": -2, "c": -3})
+        result = _describe_expression(
+            {"kind": "quadratic", "a": -1, "b": -2, "c": -3}
+        )
         assert result == "negative x squared minus 2 times x minus 3"
 
     def test_abs_simple(self) -> None:
@@ -143,11 +154,15 @@ class TestDescribeExpression:
         assert result == "the absolute value of x"
 
     def test_mod_simple(self) -> None:
-        result = _describe_expression({"kind": "mod", "divisor": 7, "a": 1, "b": 0})
+        result = _describe_expression(
+            {"kind": "mod", "divisor": 7, "a": 1, "b": 0}
+        )
         assert result == "x mod 7"
 
     def test_mod_with_coeff(self) -> None:
-        result = _describe_expression({"kind": "mod", "divisor": 3, "a": 2, "b": 5})
+        result = _describe_expression(
+            {"kind": "mod", "divisor": 3, "a": 2, "b": 5}
+        )
         assert result == "2 times x mod 3 plus 5"
 
 
@@ -155,7 +170,10 @@ class TestDescribePiecewise:
     def test_single_branch(self) -> None:
         spec = {
             "branches": [
-                {"condition": {"kind": "lt", "value": 0}, "expr": {"kind": "affine", "a": -1, "b": 0}},
+                {
+                    "condition": {"kind": "lt", "value": 0},
+                    "expr": {"kind": "affine", "a": -1, "b": 0},
+                },
             ],
             "default_expr": {"kind": "affine", "a": 1, "b": 0},
         }
@@ -166,8 +184,14 @@ class TestDescribePiecewise:
     def test_multiple_branches(self) -> None:
         spec = {
             "branches": [
-                {"condition": {"kind": "lt", "value": -10}, "expr": {"kind": "affine", "a": 2, "b": 0}},
-                {"condition": {"kind": "lt", "value": 10}, "expr": {"kind": "affine", "a": 1, "b": 0}},
+                {
+                    "condition": {"kind": "lt", "value": -10},
+                    "expr": {"kind": "affine", "a": 2, "b": 0},
+                },
+                {
+                    "condition": {"kind": "lt", "value": 10},
+                    "expr": {"kind": "affine", "a": 1, "b": 0},
+                },
             ],
             "default_expr": {"kind": "affine", "a": 3, "b": 0},
         }
@@ -217,15 +241,21 @@ class TestDescribeStateful:
 
 class TestDescribeStringPredicate:
     def test_starts_with(self) -> None:
-        result = _describe_string_predicate({"kind": "starts_with", "prefix": "abc"})
+        result = _describe_string_predicate(
+            {"kind": "starts_with", "prefix": "abc"}
+        )
         assert result == "the string starts with 'abc'"
 
     def test_ends_with(self) -> None:
-        result = _describe_string_predicate({"kind": "ends_with", "suffix": "xyz"})
+        result = _describe_string_predicate(
+            {"kind": "ends_with", "suffix": "xyz"}
+        )
         assert result == "the string ends with 'xyz'"
 
     def test_contains(self) -> None:
-        result = _describe_string_predicate({"kind": "contains", "substring": "test"})
+        result = _describe_string_predicate(
+            {"kind": "contains", "substring": "test"}
+        )
         assert result == "the string contains 'test'"
 
     def test_is_alpha(self) -> None:
@@ -245,47 +275,77 @@ class TestDescribeStringPredicate:
         assert result == "the string is all lowercase"
 
     def test_length_cmp_lt(self) -> None:
-        result = _describe_string_predicate({"kind": "length_cmp", "op": "lt", "value": 5})
+        result = _describe_string_predicate(
+            {"kind": "length_cmp", "op": "lt", "value": 5}
+        )
         assert result == "the string has fewer than 5 characters"
 
     def test_length_cmp_le(self) -> None:
-        result = _describe_string_predicate({"kind": "length_cmp", "op": "le", "value": 10})
+        result = _describe_string_predicate(
+            {"kind": "length_cmp", "op": "le", "value": 10}
+        )
         assert result == "the string has at most 10 characters"
 
     def test_length_cmp_gt(self) -> None:
-        result = _describe_string_predicate({"kind": "length_cmp", "op": "gt", "value": 3})
+        result = _describe_string_predicate(
+            {"kind": "length_cmp", "op": "gt", "value": 3}
+        )
         assert result == "the string has more than 3 characters"
 
     def test_length_cmp_ge(self) -> None:
-        result = _describe_string_predicate({"kind": "length_cmp", "op": "ge", "value": 8})
+        result = _describe_string_predicate(
+            {"kind": "length_cmp", "op": "ge", "value": 8}
+        )
         assert result == "the string has at least 8 characters"
 
     def test_length_cmp_eq(self) -> None:
-        result = _describe_string_predicate({"kind": "length_cmp", "op": "eq", "value": 4})
+        result = _describe_string_predicate(
+            {"kind": "length_cmp", "op": "eq", "value": 4}
+        )
         assert result == "the string has exactly 4 characters"
 
 
 class TestDescribeStringTransform:
     def test_identity(self) -> None:
-        assert _describe_string_transform({"kind": "identity"}) == "return it unchanged"
+        assert (
+            _describe_string_transform({"kind": "identity"})
+            == "return it unchanged"
+        )
 
     def test_lowercase(self) -> None:
-        assert _describe_string_transform({"kind": "lowercase"}) == "convert to lowercase"
+        assert (
+            _describe_string_transform({"kind": "lowercase"})
+            == "convert to lowercase"
+        )
 
     def test_uppercase(self) -> None:
-        assert _describe_string_transform({"kind": "uppercase"}) == "convert to uppercase"
+        assert (
+            _describe_string_transform({"kind": "uppercase"})
+            == "convert to uppercase"
+        )
 
     def test_capitalize(self) -> None:
-        assert _describe_string_transform({"kind": "capitalize"}) == "capitalize the first letter"
+        assert (
+            _describe_string_transform({"kind": "capitalize"})
+            == "capitalize the first letter"
+        )
 
     def test_swapcase(self) -> None:
-        assert _describe_string_transform({"kind": "swapcase"}) == "swap the case of each letter"
+        assert (
+            _describe_string_transform({"kind": "swapcase"})
+            == "swap the case of each letter"
+        )
 
     def test_reverse(self) -> None:
-        assert _describe_string_transform({"kind": "reverse"}) == "reverse the string"
+        assert (
+            _describe_string_transform({"kind": "reverse"})
+            == "reverse the string"
+        )
 
     def test_replace(self) -> None:
-        result = _describe_string_transform({"kind": "replace", "old": "a", "new": "b"})
+        result = _describe_string_transform(
+            {"kind": "replace", "old": "a", "new": "b"}
+        )
         assert result == "replace 'a' with 'b'"
 
     def test_strip_whitespace(self) -> None:
@@ -297,11 +357,15 @@ class TestDescribeStringTransform:
         assert result == "strip 'xy'"
 
     def test_prepend(self) -> None:
-        result = _describe_string_transform({"kind": "prepend", "prefix": "pre_"})
+        result = _describe_string_transform(
+            {"kind": "prepend", "prefix": "pre_"}
+        )
         assert result == "prepend 'pre_'"
 
     def test_append(self) -> None:
-        result = _describe_string_transform({"kind": "append", "suffix": "_end"})
+        result = _describe_string_transform(
+            {"kind": "append", "suffix": "_end"}
+        )
         assert result == "append '_end'"
 
 
@@ -362,7 +426,10 @@ class TestDescribeStringrules:
     def test_single_rule(self) -> None:
         spec = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "lowercase"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "lowercase"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }
@@ -375,8 +442,14 @@ class TestDescribeStringrules:
     def test_multiple_rules(self) -> None:
         spec = {
             "rules": [
-                {"predicate": {"kind": "starts_with", "prefix": "a"}, "transform": {"kind": "uppercase"}},
-                {"predicate": {"kind": "ends_with", "suffix": "z"}, "transform": {"kind": "reverse"}},
+                {
+                    "predicate": {"kind": "starts_with", "prefix": "a"},
+                    "transform": {"kind": "uppercase"},
+                },
+                {
+                    "predicate": {"kind": "ends_with", "suffix": "z"},
+                    "transform": {"kind": "reverse"},
+                },
             ],
             "default_transform": {"kind": "capitalize"},
         }
@@ -417,7 +490,10 @@ class TestDescribeTask:
     def test_stringrules_family(self) -> None:
         spec = {
             "rules": [
-                {"predicate": {"kind": "is_alpha"}, "transform": {"kind": "identity"}},
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {"kind": "identity"},
+                },
             ],
             "default_transform": {"kind": "identity"},
         }

@@ -82,9 +82,11 @@ def _stateful_difficulty(spec: dict[str, Any]) -> int:
     """Compute difficulty for stateful functions.
 
     Scoring:
-    - Template (40%): longest_run=1, conditional_linear_sum=3, resetting_best_prefix_sum=4
+    - Template (40%): longest_run=1, conditional_linear_sum=3,
+      resetting_best_prefix_sum=4
     - Predicate (30%): even/odd=1, lt/le/gt/ge=2, mod_eq=4
-    - Transforms (30%): identity=1, abs/negate=2, shift/scale=3 (avg of transforms)
+    - Transforms (30%): identity=1, abs/negate=2, shift/scale=3
+      (avg of transforms)
     """
     template = spec.get("template", "")
     template_scores = {
@@ -102,7 +104,9 @@ def _stateful_difficulty(spec: dict[str, Any]) -> int:
 
     transforms = _collect_transforms(spec)
     if transforms:
-        transform_score = sum(_transform_score(t) for t in transforms) / len(transforms)
+        transform_score = sum(_transform_score(t) for t in transforms) / len(
+            transforms
+        )
     else:
         transform_score = 1
 
@@ -228,10 +232,14 @@ def _stringrules_difficulty(spec: dict[str, Any]) -> int:
     else:
         rule_score = 5
 
-    pred_scores = [_string_predicate_score(r.get("predicate", {})) for r in rules]
+    pred_scores = [
+        _string_predicate_score(r.get("predicate", {})) for r in rules
+    ]
     pred_score = sum(pred_scores) / len(pred_scores) if pred_scores else 1
 
-    all_transforms = [r.get("transform", {}) for r in rules] + [default_transform]
+    all_transforms = [r.get("transform", {}) for r in rules] + [
+        default_transform
+    ]
     trans_scores = [_string_transform_score(t) for t in all_transforms]
     trans_score = sum(trans_scores) / len(trans_scores) if trans_scores else 1
 
@@ -257,7 +265,13 @@ def _string_transform_score(trans: dict[str, Any]) -> int:
     kind = trans.get("kind", "identity")
     if kind == "identity":
         return 1
-    elif kind in ("lowercase", "uppercase", "capitalize", "swapcase", "reverse"):
+    elif kind in (
+        "lowercase",
+        "uppercase",
+        "capitalize",
+        "swapcase",
+        "reverse",
+    ):
         return 2
     elif kind in ("replace", "strip", "prepend", "append"):
         return 3

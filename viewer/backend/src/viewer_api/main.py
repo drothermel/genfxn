@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import typer
@@ -53,7 +54,9 @@ def serve(
 
 
 # For use with: uvicorn viewer_api.main:app
-app = cli
+# Default path from GENFXN_VIEWER_JSONL env var, or "tasks.jsonl" in cwd.
+_default_jsonl = Path(os.environ.get("GENFXN_VIEWER_JSONL", "tasks.jsonl"))
+app = create_app(_default_jsonl)
 
 if __name__ == "__main__":
     cli()
