@@ -108,7 +108,7 @@ def _describe_predicate(pred: dict[str, Any], var: str) -> str:
         return f"the {var} mod {divisor} equals {remainder}"
     elif kind == "in_set":
         values = pred.get("values", [])
-        if isinstance(values, (list, set, frozenset)):
+        if isinstance(values, list | set | frozenset):
             sorted_vals = sorted(values)
         else:
             sorted_vals = list(values)
@@ -127,7 +127,7 @@ def _describe_transform(trans: dict[str, Any]) -> str:
     elif kind == "abs":
         return "the absolute value of the element"
     elif kind == "negate":
-        return "negative the element"
+        return "the negation of the element"
     elif kind == "shift":
         offset = trans.get("offset", 0)
         if offset >= 0:
@@ -315,9 +315,7 @@ def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
         tie_break = spec.get("tie_break", "smallest")
         empty_default = spec.get("empty_default", 0)
         tie_text = (
-            "the smallest value"
-            if tie_break == "smallest"
-            else "the first value seen"
+            "the smallest value" if tie_break == "smallest" else "the first value seen"
         )
         default_text = _format_number(empty_default)
         return (

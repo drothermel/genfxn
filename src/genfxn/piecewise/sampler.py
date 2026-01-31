@@ -142,8 +142,8 @@ def sample_piecewise_spec(
             )
 
         condition = sample_condition(thresh, rng)
-        cond_str = "<" if isinstance(condition, PredicateLt) else "<="
         if trace is not None:
+            cond_str = "<" if isinstance(condition, PredicateLt) else "<="
             trace.append(
                 TraceStep(
                     step=f"sample_branch_{i}_condition",

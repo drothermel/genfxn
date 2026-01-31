@@ -11,11 +11,14 @@ class TaskStore:
         self._tasks: dict[str, Task] = {}
 
     def load_jsonl(self, path: Path) -> int:
-        """Load tasks from JSONL file. Returns count of tasks loaded."""
+        """Load tasks from JSONL file. Returns count of newly added tasks."""
+        newly_added = 0
         for line in srsly.read_jsonl(path):
             task = Task.model_validate(line)
+            if task.task_id not in self._tasks:
+                newly_added += 1
             self._tasks[task.task_id] = task
-        return len(self._tasks)
+        return newly_added
 
     def list_tasks(self, family: str | None = None) -> list[Task]:
         """List all tasks, optionally filtered by family."""

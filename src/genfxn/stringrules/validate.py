@@ -10,6 +10,7 @@ from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.stringrules.ast_safety import (
+    ALLOWED_ANNOTATION_NAMES,
     ALLOWED_AST_NODES,
     ALLOWED_CALL_NAMES,
     ALLOWED_METHOD_NAMES,
@@ -36,7 +37,26 @@ CODE_SHADOWED_RULE = "SHADOWED_RULE"
 CODE_EMPTY_RULESET = "EMPTY_RULESET"
 CURRENT_FAMILY = "stringrules"
 
+DEFAULT_MAX_SEMANTIC_ISSUES = 10
+
 _spec_adapter = TypeAdapter(StringRulesSpec)
+
+
+def _annotation_positions(tree: ast.Module) -> set[tuple[int, int]]:
+    """Positions (lineno, col_offset) of nodes inside type annotations."""
+    positions: set[tuple[int, int]] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            for arg in node.args.args:
+                if arg.annotation is not None:
+                    for n in ast.walk(arg.annotation):
+                        if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                            positions.add((n.lineno, n.col_offset))
+            if node.returns is not None:
+                for n in ast.walk(node.returns):
+                    if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                        positions.add((n.lineno, n.col_offset))
+    return positions
 
 
 def _validate_ast_whitelist(
@@ -50,6 +70,7 @@ def _validate_ast_whitelist(
     except SyntaxError:
         return [], None
 
+    annotation_positions = _annotation_positions(tree)
     issues: list[Issue] = []
     for node in ast.walk(tree):
         node_type = type(node)
@@ -100,8 +121,13 @@ def _validate_ast_whitelist(
                     )
                 )
 
-        # Name check
+        # Name check: only Load-context names (runtime use). Names in type
+        # annotations (e.g. def f(s: str) -> str:) are allowed if in
+        # ALLOWED_ANNOTATION_NAMES.
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            in_annotation = (node.lineno, node.col_offset) in annotation_positions
+            if in_annotation and node.id in ALLOWED_ANNOTATION_NAMES:
+                continue
             if node.id not in allowed_names:
                 issues.append(
                     Issue(
@@ -346,7 +372,7 @@ def validate_stringrules_task(
     task: Task,
     axes: StringRulesAxes | None = None,
     strict: bool = True,
-    max_semantic_issues: int = 10,
+    max_semantic_issues: int = DEFAULT_MAX_SEMANTIC_ISSUES,
     emit_diagnostics: bool = True,  # noqa: ARG001 - kept for API parity
     paranoid: bool = False,
     rng: random.Random | None = None,

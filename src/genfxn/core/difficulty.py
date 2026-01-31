@@ -29,7 +29,7 @@ def _piecewise_difficulty(spec: dict[str, Any]) -> int:
     branch_score = min(n_branches, 5)
 
     all_exprs = [b["expr"] for b in branches] + [default_expr]
-    expr_score = max(_expr_type_score(e) for e in all_exprs)
+    expr_score = max((_expr_type_score(e) for e in all_exprs), default=0)
 
     all_coeffs = []
     for e in all_exprs:

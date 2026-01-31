@@ -198,8 +198,16 @@ def _generate_count_pairs_queries(
             )
         )
 
-    # No pairs at all
-    no_pairs = list(range(max(lo, 0), max(lo, 0) + 5))
+    # No pairs: five distinct values all < target//2, or [v]*5 with 2*v != target
+    start = max(lo, 0)
+    candidates = [start + i for i in range(5) if start + i < target // 2]
+    if len(candidates) >= 5:
+        no_pairs = candidates[:5]
+    else:
+        v = start
+        if 2 * v == target:
+            v = start + 1
+        no_pairs = [v] * 5
     queries.append(
         Query(
             input=no_pairs,

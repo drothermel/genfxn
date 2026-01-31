@@ -113,13 +113,23 @@ def _generate_non_matching_string(
     match pred:
         case StringPredicateStartsWith(prefix=prefix):
             # Start with something different
-            first_char = rng.choice([c for c in charset if c != prefix[0]])
+            if not prefix:
+                first_char = rng.choice(charset)
+            else:
+                excluded = [c for c in charset if c != prefix[0]]
+                if not excluded:
+                    first_char = rng.choice(charset)
+                else:
+                    first_char = rng.choice(excluded)
             length = rng.randint(max(1, lo), hi)
             return first_char + _random_string(length - 1, charset, rng)
 
         case StringPredicateEndsWith(suffix=suffix):
             # End with something different
-            last_char = rng.choice([c for c in charset if c != suffix[-1]])
+            if not suffix:
+                last_char = rng.choice(charset)
+            else:
+                last_char = rng.choice([c for c in charset if c != suffix[-1]])
             length = rng.randint(max(1, lo), hi)
             return _random_string(length - 1, charset, rng) + last_char
 
@@ -225,13 +235,13 @@ def _generate_coverage_queries(
 
 
 def _generate_boundary_queries(
-    spec: StringRulesSpec, axes: StringRulesAxes, rng: random.Random
+    spec: StringRulesSpec, _axes: StringRulesAxes, _rng: random.Random
 ) -> list[Query]:
     """Generate inputs that test rule precedence (match multiple rules)."""
     queries: list[Query] = []
 
     # Generate strings that could match multiple rules
-    for i, rule in enumerate(spec.rules):
+    for rule in spec.rules:
         # For pattern predicates, test exact matches and near-matches
         match rule.predicate:
             case StringPredicateStartsWith(prefix=prefix):

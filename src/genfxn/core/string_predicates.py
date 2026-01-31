@@ -1,9 +1,3 @@
-"""String predicates for the stringrules family.
-
-These predicates check conditions on strings using common string methods.
-No regex is used to keep the DSL simple and query generation tractable.
-"""
-
 from enum import Enum
 from typing import Annotated, Literal
 

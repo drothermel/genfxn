@@ -2,6 +2,7 @@ import random
 
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import Severity
+from genfxn.simple_algorithms.models import SimpleAlgorithmsAxes, TemplateType
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.simple_algorithms.validate import (
     CODE_CODE_EXEC_ERROR,
@@ -196,11 +197,6 @@ class TestParanoidMode:
 
 class TestEachTemplate:
     def test_most_frequent_valid(self) -> None:
-        from genfxn.simple_algorithms.models import (
-            SimpleAlgorithmsAxes,
-            TemplateType,
-        )
-
         axes = SimpleAlgorithmsAxes(templates=[TemplateType.MOST_FREQUENT])
         task = generate_simple_algorithms_task(axes=axes, rng=random.Random(42))
         issues = validate_simple_algorithms_task(task, axes=axes, paranoid=True)
@@ -208,11 +204,6 @@ class TestEachTemplate:
         assert errors == [], f"Errors: {errors}"
 
     def test_count_pairs_sum_valid(self) -> None:
-        from genfxn.simple_algorithms.models import (
-            SimpleAlgorithmsAxes,
-            TemplateType,
-        )
-
         axes = SimpleAlgorithmsAxes(templates=[TemplateType.COUNT_PAIRS_SUM])
         task = generate_simple_algorithms_task(axes=axes, rng=random.Random(42))
         issues = validate_simple_algorithms_task(task, axes=axes, paranoid=True)
@@ -220,11 +211,6 @@ class TestEachTemplate:
         assert errors == [], f"Errors: {errors}"
 
     def test_max_window_sum_valid(self) -> None:
-        from genfxn.simple_algorithms.models import (
-            SimpleAlgorithmsAxes,
-            TemplateType,
-        )
-
         axes = SimpleAlgorithmsAxes(templates=[TemplateType.MAX_WINDOW_SUM])
         task = generate_simple_algorithms_task(axes=axes, rng=random.Random(42))
         issues = validate_simple_algorithms_task(task, axes=axes, paranoid=True)

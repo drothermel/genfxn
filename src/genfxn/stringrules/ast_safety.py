@@ -67,13 +67,13 @@ ALLOWED_METHOD_NAMES: frozenset[str] = frozenset(
     }
 )
 
-# Variable names used in rendered stringrules code
-ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
-    {
-        "s",  # input param
-        "str",  # type annotation
-    }
-)
+# Runtime variable names allowed in rendered code (e.g. input param "s").
+# Type annotations (e.g. def f(s: str) -> str:) are not checked here; see
+# ALLOWED_ANNOTATION_NAMES and validate.py.
+ALLOWED_VAR_NAMES: frozenset[str] = frozenset({"s"})
+
+# Names allowed only inside type annotations (arg.annotation, FunctionDef.returns).
+ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset({"str"})
 
 # Call arity requirements: function name -> allowed arg counts
 CALL_ARITIES: dict[str, set[int]] = {

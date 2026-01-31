@@ -17,6 +17,9 @@ from genfxn.simple_algorithms.ast_safety import (
 )
 from genfxn.simple_algorithms.eval import eval_simple_algorithms
 from genfxn.simple_algorithms.models import (
+    CountPairsSumSpec,
+    CountingMode,
+    MostFrequentSpec,
     SimpleAlgorithmsAxes,
     SimpleAlgorithmsSpec,
 )
@@ -283,6 +286,125 @@ def _validate_query_outputs(
     return issues
 
 
+# Canonical tie-break inputs for most_frequent (same value counts, order differs).
+_TIE_BREAK_INPUTS: list[list[int]] = [
+    [1, 2, 1, 2],
+    [2, 1, 2, 1],
+    [1, 1, 1, 2, 2, 2],
+]
+
+
+def _check_tie_break_consistency(
+    task: Task, spec: SimpleAlgorithmsSpec
+) -> list[Issue]:
+    """Emit CODE_TIE_BREAK_MISMATCH when a query's output disagrees with spec tie-break."""
+    if not isinstance(spec, MostFrequentSpec):
+        return []
+    issues: list[Issue] = []
+    for i, q in enumerate(task.queries):
+        if not isinstance(q.input, list) or not all(
+            type(elem) is int for elem in q.input
+        ):
+            continue
+        if q.input not in _TIE_BREAK_INPUTS:
+            continue
+        expected = eval_simple_algorithms(spec, q.input)
+        if q.output != expected:
+            issues.append(
+                Issue(
+                    code=CODE_TIE_BREAK_MISMATCH,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"Query output {q.output} != expected {expected} "
+                        f"for tie-break input {q.input} (tie_break={spec.tie_break})"
+                    ),
+                    location=f"queries[{i}]",
+                    task_id=task.task_id,
+                )
+            )
+    return issues
+
+
+def _check_counting_mode_consistency(
+    task: Task, spec: SimpleAlgorithmsSpec
+) -> list[Issue]:
+    """Emit CODE_COUNTING_MODE_MISMATCH when output matches the wrong counting mode."""
+    if not isinstance(spec, CountPairsSumSpec):
+        return []
+    issues: list[Issue] = []
+    other_mode = (
+        CountingMode.UNIQUE_VALUES
+        if spec.counting_mode == CountingMode.ALL_INDICES
+        else CountingMode.ALL_INDICES
+    )
+    alt_spec = CountPairsSumSpec(
+        template="count_pairs_sum",
+        target=spec.target,
+        counting_mode=other_mode,
+    )
+    for i, q in enumerate(task.queries):
+        if not isinstance(q.input, list) or not all(
+            type(elem) is int for elem in q.input
+        ):
+            continue
+        expected = eval_simple_algorithms(spec, q.input)
+        if q.output == expected:
+            continue
+        other_expected = eval_simple_algorithms(alt_spec, q.input)
+        if q.output == other_expected:
+            issues.append(
+                Issue(
+                    code=CODE_COUNTING_MODE_MISMATCH,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"Query output {q.output} matches {other_mode}, "
+                        f"spec has counting_mode={spec.counting_mode} (expected {expected})"
+                    ),
+                    location=f"queries[{i}]",
+                    task_id=task.task_id,
+                )
+            )
+    return issues
+
+
+def _check_edge_case_handling(
+    task: Task,
+    func: Callable[[list[int]], int],
+    spec: SimpleAlgorithmsSpec,
+    axes: SimpleAlgorithmsAxes,
+) -> list[Issue]:
+    """Emit CODE_EDGE_CASE_FAILURE when code fails or disagrees on edge-case inputs."""
+    issues: list[Issue] = []
+    val_lo, val_hi = axes.value_range
+    edge_inputs: list[list[int]] = [[], [val_lo], [val_hi]]
+    for xs in edge_inputs:
+        try:
+            actual = func(xs)
+        except Exception as e:
+            issues.append(
+                Issue(
+                    code=CODE_EDGE_CASE_FAILURE,
+                    severity=Severity.ERROR,
+                    message=f"f({xs}) raised {type(e).__name__}: {e}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            )
+            continue
+        expected = eval_simple_algorithms(spec, xs)
+        if actual != expected:
+            issues.append(
+                Issue(
+                    code=CODE_EDGE_CASE_FAILURE,
+                    severity=Severity.ERROR,
+                    message=f"f({xs}) = {actual}, expected {expected}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            )
+    return issues
+
+
 def _generate_test_inputs(
     axes: SimpleAlgorithmsAxes, rng: random.Random, num_samples: int = 50
 ) -> list[list[int]]:
@@ -421,8 +543,11 @@ def validate_simple_algorithms_task(
 
     if spec is not None:
         issues.extend(_validate_query_outputs(task, spec))
+        issues.extend(_check_tie_break_consistency(task, spec))
+        issues.extend(_check_counting_mode_consistency(task, spec))
 
     if spec is not None and func is not None:
+        issues.extend(_check_edge_case_handling(task, func, spec, axes))
         issues.extend(
             _validate_semantics(
                 task, func, spec, axes, max_semantic_issues, rng

@@ -166,12 +166,9 @@ def _should_overlap(overlap_level: OverlapLevel, rng: random.Random) -> bool:
 
 def sample_stringrules_spec(
     axes: StringRulesAxes,
-    rng: random.Random | None = None,
+    rng: random.Random,
     trace: list[TraceStep] | None = None,
 ) -> StringRulesSpec:
-    if rng is None:
-        rng = random.Random()
-
     if trace is not None:
         trace.append(
             TraceStep(

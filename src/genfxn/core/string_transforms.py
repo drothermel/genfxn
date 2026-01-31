@@ -1,8 +1,3 @@
-"""String transforms for the stringrules family.
-
-These transforms modify strings using common string methods.
-"""
-
 from enum import Enum
 from typing import Annotated, Literal
 

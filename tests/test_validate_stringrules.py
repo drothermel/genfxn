@@ -16,6 +16,7 @@ from genfxn.stringrules.validate import (
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
     CODE_UNSAFE_AST,
+    DEFAULT_MAX_SEMANTIC_ISSUES,
     validate_stringrules_task,
 )
 
@@ -155,7 +156,7 @@ class TestSemanticIssueCapping:
         semantic_issues = [
             i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
         ]
-        assert len(semantic_issues) == 10
+        assert len(semantic_issues) == DEFAULT_MAX_SEMANTIC_ISSUES
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
     def test_custom_cap_respected(self) -> None:
