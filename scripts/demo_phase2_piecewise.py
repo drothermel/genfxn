@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Phase 2 Demo: Piecewise numeric functions.
 
-This demo shows the complete pipeline for generating piecewise int->int functions:
+This demo shows the complete pipeline for generating piecewise int->int
+functions:
   1. Define axes (configuration for what kinds of functions to generate)
   2. Sample a spec (the mathematical definition of a specific function)
   3. Render to Python code
@@ -43,7 +44,8 @@ as the knobs you can turn to control complexity:
   - coeff_range: Range for coefficients (a, b, c values)
   - threshold_range: Range for branch thresholds
 
-Below we configure axes for 2-branch functions with affine/quadratic expressions.
+Below we configure axes for 2-branch functions with affine/quadratic
+expressions.
 """)
 
     axes = PiecewiseAxes(

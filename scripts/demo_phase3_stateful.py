@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """Phase 3 Demo: Stateful iteration functions (list[int] -> int).
 
-This demo shows the complete pipeline for generating stateful iterator functions:
-  1. Three template types: ConditionalLinearSum, ResettingBestPrefixSum, LongestRun
+This demo shows the complete pipeline for generating stateful iterator
+functions:
+  1. Three template types: ConditionalLinearSum, ResettingBestPrefixSum,
+     LongestRun
   2. Each template uses predicates and transforms from the core DSL
   3. Generated functions iterate over lists with accumulator state
 
@@ -13,10 +15,10 @@ import random
 
 import srsly
 
-from genfxn.stateful.models import StatefulAxes, TemplateType
-from genfxn.stateful.task import generate_stateful_task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.transforms import TransformType
+from genfxn.stateful.models import StatefulAxes, TemplateType
+from genfxn.stateful.task import generate_stateful_task
 
 
 def main() -> None:
@@ -91,7 +93,9 @@ Stateful functions iterate over list[int] and return int. Three templates:
         for q in task.queries:
             actual = f(q.input)
             if actual != q.output:
-                errors.append(f"f({q.input}): expected {q.output}, got {actual}")
+                errors.append(
+                    f"f({q.input}): expected {q.output}, got {actual}"
+                )
 
         if errors:
             print("\nVERIFICATION ERRORS:")

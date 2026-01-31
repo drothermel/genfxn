@@ -15,11 +15,15 @@ app = typer.Typer(help="Generate and split function synthesis tasks.")
 
 @app.command()
 def generate(
-    output: Annotated[Path, typer.Option("--output", "-o", help="Output JSONL file")],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Output JSONL file")
+    ],
     family: Annotated[
         str, typer.Option("--family", "-f", help="piecewise, stateful, or all")
     ] = "all",
-    count: Annotated[int, typer.Option("--count", "-n", help="Number of tasks")] = 100,
+    count: Annotated[
+        int, typer.Option("--count", "-n", help="Number of tasks")
+    ] = 100,
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
     ] = None,
@@ -65,7 +69,7 @@ def split(
 ) -> None:
     """Split tasks using axis holdouts."""
     raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task(**t) for t in raw]
+    tasks = [Task.model_validate(t) for t in raw]
 
     parsed_value: str | tuple[int, int] = holdout_value
     if holdout_type == "range":
@@ -92,7 +96,7 @@ def info(
 ) -> None:
     """Show info about tasks file."""
     raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task(**t) for t in raw]
+    tasks = [Task.model_validate(t) for t in raw]
 
     by_family: dict[str, int] = {}
     for t in tasks:

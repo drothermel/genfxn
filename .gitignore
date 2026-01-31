@@ -1,3 +1,5 @@
+genfxn_src_*.md
+
 # Python
 __pycache__/
 *.py[cod]

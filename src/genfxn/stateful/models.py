@@ -45,7 +45,9 @@ StatefulSpec = Annotated[
 
 
 class StatefulAxes(BaseModel):
-    templates: list[TemplateType] = Field(default_factory=lambda: list(TemplateType))
+    templates: list[TemplateType] = Field(
+        default_factory=lambda: list(TemplateType)
+    )
     predicate_types: list[PredicateType] = Field(
         default_factory=lambda: [
             PredicateType.EVEN,

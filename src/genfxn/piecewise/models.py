@@ -66,7 +66,9 @@ class PiecewiseSpec(BaseModel):
 
 class PiecewiseAxes(BaseModel):
     n_branches: int = Field(default=2, ge=1, le=5)
-    expr_types: list[ExprType] = Field(default_factory=lambda: [ExprType.AFFINE])
+    expr_types: list[ExprType] = Field(
+        default_factory=lambda: [ExprType.AFFINE]
+    )
     value_range: tuple[int, int] = Field(default=(-100, 100))
     coeff_range: tuple[int, int] = Field(default=(-5, 5))
     threshold_range: tuple[int, int] = Field(default=(-50, 50))
@@ -77,7 +79,12 @@ class PiecewiseAxes(BaseModel):
         if not self.expr_types:
             raise ValueError("expr_types must not be empty")
 
-        for name in ("value_range", "coeff_range", "threshold_range", "divisor_range"):
+        for name in (
+            "value_range",
+            "coeff_range",
+            "threshold_range",
+            "divisor_range",
+        ):
             lo, hi = getattr(self, name)
             if lo > hi:
                 raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")

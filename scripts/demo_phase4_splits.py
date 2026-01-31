@@ -68,7 +68,10 @@ def main() -> None:
         ),
     ]
     result = split_tasks(tasks, holdouts)
-    print("\nHoldout: template == 'resetting_best_prefix_sum' OR default_expr.kind == 'quadratic'")
+    print(
+        "\nHoldout: template == 'resetting_best_prefix_sum' OR "
+        "default_expr.kind == 'quadratic'"
+    )
     print(f"  Train: {len(result.train)}, Test: {len(result.test)}")
 
     # Show sample specs from test set
@@ -77,7 +80,10 @@ def main() -> None:
         for task in result.test[:3]:
             template = task.spec.get("template", "N/A")
             default_expr = task.spec.get("default_expr", {}).get("kind", "N/A")
-            print(f"    {task.task_id}: template={template}, default_expr.kind={default_expr}")
+            print(
+                f"    {task.task_id}: template={template}, "
+                f"default_expr.kind={default_expr}"
+            )
 
 
 if __name__ == "__main__":

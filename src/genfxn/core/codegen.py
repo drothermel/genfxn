@@ -38,5 +38,7 @@ def render_tests(func_name: str, queries: list[Query]) -> str:
         input_repr = repr(q.input)
         output_repr = repr(q.output)
         msg = f"query {i} ({q.tag.value})"
-        lines.append(f"assert {func_name}({input_repr}) == {output_repr}, {msg!r}")
+        lines.append(
+            f"assert {func_name}({input_repr}) == {output_repr}, {msg!r}"
+        )
     return "\n".join(lines)

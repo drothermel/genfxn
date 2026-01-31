@@ -8,7 +8,9 @@ from genfxn.stateful.models import (
 )
 
 
-def eval_conditional_linear_sum(spec: ConditionalLinearSumSpec, xs: list[int]) -> int:
+def eval_conditional_linear_sum(
+    spec: ConditionalLinearSumSpec, xs: list[int]
+) -> int:
     acc = spec.init_value
     for x in xs:
         if eval_predicate(spec.predicate, x):

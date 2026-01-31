@@ -85,14 +85,17 @@ def sample_piecewise_spec(
 
     thresholds = sorted(
         rng.sample(
-            range(lo_thresh, hi_thresh + 1), min(n_branches, hi_thresh - lo_thresh + 1)
+            range(lo_thresh, hi_thresh + 1),
+            min(n_branches, hi_thresh - lo_thresh + 1),
         )
     )
 
     branches: list[Branch] = []
     for thresh in thresholds:
         expr_type = rng.choice(axes.expr_types)
-        expr = sample_expression(expr_type, axes.coeff_range, axes.divisor_range, rng)
+        expr = sample_expression(
+            expr_type, axes.coeff_range, axes.divisor_range, rng
+        )
         condition = sample_condition(thresh, rng)
         branches.append(Branch(condition=condition, expr=expr))
 
