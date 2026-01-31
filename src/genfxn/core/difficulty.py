@@ -7,6 +7,10 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _piecewise_difficulty(spec)
     elif family == "stateful":
         return _stateful_difficulty(spec)
+    elif family == "simple_algorithms":
+        return _simple_algorithms_difficulty(spec)
+    elif family == "stringrules":
+        return _stringrules_difficulty(spec)
     return 3
 
 
