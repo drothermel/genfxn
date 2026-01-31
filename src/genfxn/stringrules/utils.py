@@ -1,4 +1,4 @@
-"""Shared stringrules helpers for charset resolution and random string generation."""
+"""Stringrules helpers for charset resolution and random string generation."""
 
 import random
 import string
@@ -18,15 +18,15 @@ def _get_charset(name: str) -> str:
 def _random_string(
     length: int, charset: str, rng: random.Random, exclude: str = ""
 ) -> str:
-    """Return a random string of length from charset, excluding any chars in exclude.
+    """Return a random string from charset (length), excluding chars in exclude.
 
-    Raises ValueError if length > 0 and charset (after applying exclude) is empty.
+    Raises ValueError if length > 0 and charset after exclude is empty.
     """
     available = [c for c in charset if c not in exclude]
     if not available:
         available = list(charset)
     if length > 0 and not available:
         raise ValueError(
-            "charset (after applying exclude) must contain at least one character"
+            "charset (after exclude) must contain at least one character"
         )
     return "".join(rng.choice(available) for _ in range(length))

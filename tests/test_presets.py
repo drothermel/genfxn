@@ -2,15 +2,16 @@
 
 import random
 from collections import Counter
+from typing import cast
 
 import pytest
 
 from genfxn.core.presets import (
-    DifficultyPreset,
     PIECEWISE_PRESETS,
     SIMPLE_ALGORITHMS_PRESETS,
     STATEFUL_PRESETS,
     STRINGRULES_PRESETS,
+    DifficultyPreset,
     get_difficulty_axes,
     get_difficulty_presets,
     get_valid_difficulties,
@@ -87,10 +88,19 @@ class TestGetDifficultyAxes:
         assert isinstance(axes, StringRulesAxes)
 
     def test_variant_selects_specific_preset(self) -> None:
-        axes_a = get_difficulty_axes("piecewise", 3, variant="3A")
-        axes_b = get_difficulty_axes("piecewise", 3, variant="3B")
+        axes_a = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 3, variant="3A"),
+        )
+        axes_b = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 3, variant="3B"),
+        )
         # Different variants should have different configurations
-        assert axes_a.expr_types != axes_b.expr_types or axes_a.n_branches != axes_b.n_branches
+        assert (
+            axes_a.expr_types != axes_b.expr_types
+            or axes_a.n_branches != axes_b.n_branches
+        )
 
     def test_invalid_variant_raises(self) -> None:
         with pytest.raises(ValueError, match="Invalid variant"):
@@ -98,9 +108,15 @@ class TestGetDifficultyAxes:
 
     def test_random_selection_with_rng(self) -> None:
         rng = random.Random(42)
-        axes1 = get_difficulty_axes("piecewise", 3, rng=rng)
+        axes1 = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 3, rng=rng),
+        )
         rng = random.Random(42)
-        axes2 = get_difficulty_axes("piecewise", 3, rng=rng)
+        axes2 = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 3, rng=rng),
+        )
         # Same seed should give same result
         assert axes1.n_branches == axes2.n_branches
         assert axes1.expr_types == axes2.expr_types
@@ -131,13 +147,21 @@ class TestPresetAccuracy:
         for _ in range(n):
             axes = get_difficulty_axes(family, difficulty, rng=rng)
             if family == "piecewise":
-                task = generate_piecewise_task(axes=axes, rng=rng)
+                task = generate_piecewise_task(
+                    axes=cast(PiecewiseAxes, axes), rng=rng
+                )
             elif family == "stateful":
-                task = generate_stateful_task(axes=axes, rng=rng)
+                task = generate_stateful_task(
+                    axes=cast(StatefulAxes, axes), rng=rng
+                )
             elif family == "simple_algorithms":
-                task = generate_simple_algorithms_task(axes=axes, rng=rng)
+                task = generate_simple_algorithms_task(
+                    axes=cast(SimpleAlgorithmsAxes, axes), rng=rng
+                )
             elif family == "stringrules":
-                task = generate_stringrules_task(axes=axes, rng=rng)
+                task = generate_stringrules_task(
+                    axes=cast(StringRulesAxes, axes), rng=rng
+                )
             else:
                 raise ValueError(f"Unknown family: {family}")
 
@@ -157,12 +181,16 @@ class TestPresetAccuracy:
 
     @pytest.mark.parametrize("difficulty", [2, 3])
     def test_simple_algorithms_preset_accuracy(self, difficulty: int) -> None:
-        difficulties = self._generate_tasks_for_preset("simple_algorithms", difficulty)
+        difficulties = self._generate_tasks_for_preset(
+            "simple_algorithms", difficulty
+        )
         self._verify_accuracy(difficulties, difficulty, "simple_algorithms")
 
     @pytest.mark.parametrize("difficulty", [1, 2, 3, 4])
     def test_stringrules_preset_accuracy(self, difficulty: int) -> None:
-        difficulties = self._generate_tasks_for_preset("stringrules", difficulty)
+        difficulties = self._generate_tasks_for_preset(
+            "stringrules", difficulty
+        )
         self._verify_accuracy(difficulties, difficulty, "stringrules")
 
     def _verify_accuracy(
@@ -184,7 +212,9 @@ class TestPresetAccuracy:
         # Use relaxed thresholds for edge difficulties
         is_edge = (family, target) in self.EDGE_DIFFICULTIES
         mean_tolerance = self.EDGE_MEAN_TOLERANCE if is_edge else 0.5
-        exact_threshold = self.EDGE_EXACT_THRESHOLD if is_edge else self.EXACT_THRESHOLD
+        exact_threshold = (
+            self.EDGE_EXACT_THRESHOLD if is_edge else self.EXACT_THRESHOLD
+        )
 
         # Verify accuracy thresholds
         assert abs(mean_diff - target) <= mean_tolerance, (
@@ -196,7 +226,8 @@ class TestPresetAccuracy:
             f"(need {exact_threshold:.0%}). Distribution: {dist_str}"
         )
         assert within_one_ratio >= self.WITHIN_ONE_THRESHOLD, (
-            f"{family} difficulty {target}: only {within_one_ratio:.0%} within ±1 "
+            f"{family} difficulty {target}: only {within_one_ratio:.0%} "
+            f"within ±1 "
             f"(need {self.WITHIN_ONE_THRESHOLD:.0%}). Distribution: {dist_str}"
         )
 
@@ -208,8 +239,14 @@ class TestPresetVariety:
         presets_3 = get_difficulty_presets("piecewise", 3)
         assert len(presets_3) >= 2, "Need multiple variants to test variety"
 
-        axes_a = get_difficulty_axes("piecewise", 3, variant=presets_3[0].name)
-        axes_b = get_difficulty_axes("piecewise", 3, variant=presets_3[1].name)
+        axes_a = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 3, variant=presets_3[0].name),
+        )
+        axes_b = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 3, variant=presets_3[1].name),
+        )
 
         # At least one axis should differ
         differs = (
@@ -217,22 +254,32 @@ class TestPresetVariety:
             or axes_a.expr_types != axes_b.expr_types
             or axes_a.coeff_range != axes_b.coeff_range
         )
-        assert differs, "Different variants should have different configurations"
+        assert differs, (
+            "Different variants should have different configurations"
+        )
 
     def test_stringrules_variants_differ(self) -> None:
         presets_2 = get_difficulty_presets("stringrules", 2)
         if len(presets_2) < 2:
             pytest.skip("Need multiple variants to test variety")
 
-        axes_a = get_difficulty_axes("stringrules", 2, variant=presets_2[0].name)
-        axes_b = get_difficulty_axes("stringrules", 2, variant=presets_2[1].name)
+        axes_a = cast(
+            StringRulesAxes,
+            get_difficulty_axes("stringrules", 2, variant=presets_2[0].name),
+        )
+        axes_b = cast(
+            StringRulesAxes,
+            get_difficulty_axes("stringrules", 2, variant=presets_2[1].name),
+        )
 
         differs = (
             axes_a.n_rules != axes_b.n_rules
             or axes_a.predicate_types != axes_b.predicate_types
             or axes_a.transform_types != axes_b.transform_types
         )
-        assert differs, "Different variants should have different configurations"
+        assert differs, (
+            "Different variants should have different configurations"
+        )
 
 
 class TestPresetCompleteness:
@@ -283,5 +330,7 @@ class TestPresetCompleteness:
             for difficulty, presets in preset_dict.items():
                 for preset in presets:
                     # Should not raise validation errors
-                    axes = get_difficulty_axes(family, difficulty, variant=preset.name)
+                    axes = get_difficulty_axes(
+                        family, difficulty, variant=preset.name
+                    )
                     assert axes is not None

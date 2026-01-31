@@ -107,7 +107,9 @@ def _stateful_difficulty(spec: dict[str, Any]) -> int:
 
     transforms = _collect_transforms(spec)
     if transforms:
-        transform_score = sum(_transform_score(t) for t in transforms) / len(transforms)
+        transform_score = sum(_transform_score(t) for t in transforms) / len(
+            transforms
+        )
     else:
         transform_score = 1
 
@@ -233,10 +235,14 @@ def _stringrules_difficulty(spec: dict[str, Any]) -> int:
     else:
         rule_score = 5
 
-    pred_scores = [_string_predicate_score(r.get("predicate", {})) for r in rules]
+    pred_scores = [
+        _string_predicate_score(r.get("predicate", {})) for r in rules
+    ]
     pred_score = sum(pred_scores) / len(pred_scores) if pred_scores else 1
 
-    all_transforms = [r.get("transform", {}) for r in rules] + [default_transform]
+    all_transforms = [r.get("transform", {}) for r in rules] + [
+        default_transform
+    ]
     trans_scores = [_string_transform_score(t) for t in all_transforms]
     trans_score = sum(trans_scores) / len(trans_scores) if trans_scores else 1
 

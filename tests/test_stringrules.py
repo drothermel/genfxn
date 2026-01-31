@@ -347,7 +347,10 @@ class TestRandomStringUtils:
         rng = random.Random(42)
         with pytest.raises(
             ValueError,
-            match="charset \\(after applying exclude\\) must contain at least one character",
+            match=(
+                "charset \\(after exclude\\) must contain "
+                "at least one character"
+            ),
         ):
             _random_string(3, "", rng)
 

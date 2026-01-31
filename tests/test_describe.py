@@ -79,7 +79,10 @@ class TestDescribeTransform:
         )
 
     def test_negate(self) -> None:
-        assert _describe_transform({"kind": "negate"}) == "the negation of the element"
+        assert (
+            _describe_transform({"kind": "negate"})
+            == "the negation of the element"
+        )
 
     def test_shift_positive(self) -> None:
         result = _describe_transform({"kind": "shift", "offset": 5})

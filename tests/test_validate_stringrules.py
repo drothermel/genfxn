@@ -99,7 +99,11 @@ class TestQueryTypeValidation:
     def test_non_str_input_is_error_strict(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"queries": [Query(input=123, output="abc", tag=QueryTag.TYPICAL)]}
+            update={
+                "queries": [
+                    Query(input=123, output="abc", tag=QueryTag.TYPICAL)
+                ]
+            }
         )
         issues = validate_stringrules_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
@@ -108,7 +112,11 @@ class TestQueryTypeValidation:
     def test_non_str_output_is_error_strict(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"queries": [Query(input="hello", output=123, tag=QueryTag.TYPICAL)]}
+            update={
+                "queries": [
+                    Query(input="hello", output=123, tag=QueryTag.TYPICAL)
+                ]
+            }
         )
         issues = validate_stringrules_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
@@ -132,7 +140,9 @@ class TestQueryOutputValidation:
 class TestSemanticValidation:
     def test_code_differing_from_spec_caught(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(s):\n    return 'wrong'"})
+        corrupted = task.model_copy(
+            update={"code": "def f(s):\n    return 'wrong'"}
+        )
         issues = validate_stringrules_task(corrupted)
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
 
@@ -140,17 +150,25 @@ class TestSemanticValidation:
 class TestSemanticIssueCapping:
     def test_caps_semantic_mismatch_issues(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(s):\n    return 'WRONG'"})
+        corrupted = task.model_copy(
+            update={"code": "def f(s):\n    return 'WRONG'"}
+        )
         issues = validate_stringrules_task(corrupted)
-        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
         assert len(semantic_issues) == DEFAULT_MAX_SEMANTIC_ISSUES
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
     def test_custom_cap_respected(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(s):\n    return 'wrong'"})
+        corrupted = task.model_copy(
+            update={"code": "def f(s):\n    return 'wrong'"}
+        )
         issues = validate_stringrules_task(corrupted, max_semantic_issues=3)
-        semantic_issues = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        semantic_issues = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
         assert len(semantic_issues) == 3
 
 

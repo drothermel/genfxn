@@ -198,7 +198,7 @@ def _generate_count_pairs_queries(
             )
 
     # Duplicates - distinguishes ALL_INDICES from UNIQUE_VALUES
-    # [v, v, target-v] -> ALL_INDICES=2 pairs, UNIQUE_VALUES=1 unique pair (v, target-v in [lo, hi])
+    # [v, v, target-v] -> ALL_INDICES=2 pairs, UNIQUE_VALUES=1
     dup_v_lo = max(lo, target - hi)
     dup_v_hi = min(hi, target - lo)
     if dup_v_lo <= dup_v_hi:
@@ -320,8 +320,14 @@ def _generate_max_window_queries(
         single_vals = _distinct_in_range(lo, hi, 8)
         if len(single_vals) >= 8:
             single_max = [
-                single_vals[2], single_vals[0], single_vals[3], single_vals[0],
-                single_vals[4], single_vals[7], single_vals[1], single_vals[5],
+                single_vals[2],
+                single_vals[0],
+                single_vals[3],
+                single_vals[0],
+                single_vals[4],
+                single_vals[7],
+                single_vals[1],
+                single_vals[5],
             ]
             queries.append(
                 Query(

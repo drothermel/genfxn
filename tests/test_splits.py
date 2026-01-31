@@ -293,9 +293,13 @@ class TestRandomSplit:
 
     def test_train_ratio_out_of_range_raises(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(10)]
-        with pytest.raises(ValueError, match=r"train_ratio must be in \[0\.0, 1\.0\]"):
+        with pytest.raises(
+            ValueError, match=r"train_ratio must be in \[0\.0, 1\.0\]"
+        ):
             random_split(tasks, train_ratio=-0.1, seed=42)
-        with pytest.raises(ValueError, match=r"train_ratio must be in \[0\.0, 1\.0\]"):
+        with pytest.raises(
+            ValueError, match=r"train_ratio must be in \[0\.0, 1\.0\]"
+        ):
             random_split(tasks, train_ratio=1.5, seed=42)
         with pytest.raises(ValueError, match=r"got 2\.0"):
             random_split(tasks, train_ratio=2.0, seed=42)

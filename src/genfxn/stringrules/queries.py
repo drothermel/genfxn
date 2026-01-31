@@ -54,11 +54,15 @@ def _generate_matching_string(
 
         case StringPredicateIsUpper():
             length = rng.randint(max(1, lo), hi)
-            return _random_string(length, string.ascii_uppercase + string.digits, rng)
+            return _random_string(
+                length, string.ascii_uppercase + string.digits, rng
+            )
 
         case StringPredicateIsLower():
             length = rng.randint(max(1, lo), hi)
-            return _random_string(length, string.ascii_lowercase + string.digits, rng)
+            return _random_string(
+                length, string.ascii_lowercase + string.digits, rng
+            )
 
         case StringPredicateLengthCmp(op=op, value=v):
             match op:
@@ -203,7 +207,7 @@ def _generate_non_matching_string(
                     if v < hi:
                         length = v + 1
                     else:
-                        # v >= hi: use v - 1 (may be 0 or below lo; still doesn't match eq v)
+                        # v >= hi: use v - 1 (may be 0 or below lo)
                         length = v - 1
                 case _:
                     length = rng.randint(lo, hi)

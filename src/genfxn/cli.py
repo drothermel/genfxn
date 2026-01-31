@@ -1,6 +1,6 @@
 import random
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import srsly
 import typer
@@ -32,16 +32,20 @@ app = typer.Typer(help="Generate and split function synthesis tasks.")
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
-    """Parse 'lo,hi' string into tuple. Raises typer.BadParameter on invalid input."""
+    """Parse 'lo,hi' into tuple. Raises typer.BadParameter on invalid input."""
     if value is None:
         return None
     try:
         parts = value.split(",")
         if len(parts) != 2:
-            raise typer.BadParameter("Invalid range: expected 'LO,HI' with integers")
+            raise typer.BadParameter(
+                "Invalid range: expected 'LO,HI' with integers"
+            )
         lo_s, hi_s = parts[0].strip(), parts[1].strip()
         if not lo_s or not hi_s:
-            raise typer.BadParameter("Invalid range: expected 'LO,HI' with integers")
+            raise typer.BadParameter(
+                "Invalid range: expected 'LO,HI' with integers"
+            )
         return (int(lo_s), int(hi_s))
     except (ValueError, IndexError) as err:
         raise typer.BadParameter(
@@ -63,7 +67,9 @@ def _build_stateful_axes(
     """Build StatefulAxes from CLI options."""
     kwargs: dict = {}
     if templates:
-        kwargs["templates"] = [TemplateType(t.strip()) for t in templates.split(",")]
+        kwargs["templates"] = [
+            TemplateType(t.strip()) for t in templates.split(",")
+        ]
     if predicate_types:
         tokens = [p.strip() for p in predicate_types.split(",")]
         if any(t.lower() == "in_set" for t in tokens):
@@ -106,7 +112,9 @@ def _build_piecewise_axes(
     if n_branches is not None:
         kwargs["n_branches"] = n_branches
     if expr_types:
-        kwargs["expr_types"] = [ExprType(e.strip()) for e in expr_types.split(",")]
+        kwargs["expr_types"] = [
+            ExprType(e.strip()) for e in expr_types.split(",")
+        ]
     if value_range:
         kwargs["value_range"] = _parse_range(value_range)
     if threshold_range:
@@ -131,7 +139,8 @@ def _build_simple_algorithms_axes(
     kwargs: dict = {}
     if algorithm_types:
         kwargs["templates"] = [
-            SimpleAlgoTemplateType(t.strip()) for t in algorithm_types.split(",")
+            SimpleAlgoTemplateType(t.strip())
+            for t in algorithm_types.split(",")
         ]
     if tie_break_modes:
         kwargs["tie_break_modes"] = [
@@ -165,11 +174,13 @@ def _build_stringrules_axes(
         kwargs["n_rules"] = n_rules
     if string_predicate_types:
         kwargs["predicate_types"] = [
-            StringPredicateType(p.strip()) for p in string_predicate_types.split(",")
+            StringPredicateType(p.strip())
+            for p in string_predicate_types.split(",")
         ]
     if string_transform_types:
         kwargs["transform_types"] = [
-            StringTransformType(t.strip()) for t in string_transform_types.split(",")
+            StringTransformType(t.strip())
+            for t in string_transform_types.split(",")
         ]
     if overlap_level:
         kwargs["overlap_level"] = OverlapLevel(overlap_level.strip())
@@ -180,7 +191,9 @@ def _build_stringrules_axes(
 
 @app.command()
 def generate(
-    output: Annotated[Path, typer.Option("--output", "-o", help="Output JSONL file")],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Output JSONL file")
+    ],
     family: Annotated[
         str,
         typer.Option(
@@ -189,7 +202,9 @@ def generate(
             help="piecewise, stateful, simple_algorithms, stringrules, or all",
         ),
     ] = "all",
-    count: Annotated[int, typer.Option("--count", "-n", help="Number of tasks")] = 100,
+    count: Annotated[
+        int, typer.Option("--count", "-n", help="Number of tasks")
+    ] = 100,
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
     ] = None,
@@ -206,7 +221,7 @@ def generate(
         str | None,
         typer.Option(
             "--variant",
-            help="Specific preset variant (e.g., '3A', '3B'). Random if not specified.",
+            help="Preset variant (e.g. '3A', '3B'). Random if omitted.",
         ),
     ] = None,
     # Type filters - stateful
@@ -245,7 +260,9 @@ def generate(
     ] = None,
     counting_modes: Annotated[
         str | None,
-        typer.Option("--counting-modes", help="Counting: all_indices, unique_values"),
+        typer.Option(
+            "--counting-modes", help="Counting: all_indices, unique_values"
+        ),
     ] = None,
     window_size_range: Annotated[
         str | None,
@@ -330,10 +347,11 @@ def generate(
             valid = get_valid_difficulties(family)
         except ValueError as e:
             typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
         if difficulty not in valid:
             typer.echo(
-                f"Error: Invalid difficulty {difficulty} for {family}. Valid: {valid}",
+                f"Error: Invalid difficulty {difficulty} for {family}. "
+                f"Valid: {valid}",
                 err=True,
             )
             raise typer.Exit(1)
@@ -407,21 +425,27 @@ def generate(
                 axes = get_difficulty_axes(family, difficulty, variant, rng)
             else:
                 axes = piecewise_axes
-            tasks.append(generate_piecewise_task(axes=axes, rng=rng))
+            tasks.append(
+                generate_piecewise_task(axes=cast(PiecewiseAxes, axes), rng=rng)
+            )
     elif family == "stateful":
         for _ in range(count):
             if difficulty is not None:
                 axes = get_difficulty_axes(family, difficulty, variant, rng)
             else:
                 axes = stateful_axes
-            tasks.append(generate_stateful_task(axes=axes, rng=rng))
+            tasks.append(
+                generate_stateful_task(axes=cast(StatefulAxes, axes), rng=rng)
+            )
     elif family == "simple_algorithms":
         for _ in range(count):
             if difficulty is not None:
                 axes = get_difficulty_axes(family, difficulty, variant, rng)
             else:
                 axes = simple_algo_axes
-            t = generate_simple_algorithms_task(axes=axes, rng=rng)
+            t = generate_simple_algorithms_task(
+                axes=cast(SimpleAlgorithmsAxes, axes), rng=rng
+            )
             tasks.append(t)
     elif family == "stringrules":
         for _ in range(count):
@@ -429,7 +453,9 @@ def generate(
                 axes = get_difficulty_axes(family, difficulty, variant, rng)
             else:
                 axes = stringrules_axes
-            task = generate_stringrules_task(axes=axes, rng=rng)
+            task = generate_stringrules_task(
+                axes=cast(StringRulesAxes, axes), rng=rng
+            )
             tasks.append(task)
     else:
         typer.echo(f"Unknown family: {family}", err=True)
@@ -490,7 +516,9 @@ def split(
 
     if has_random:
         if random_ratio is None:
-            typer.echo("Error: --random-ratio is required for random split", err=True)
+            typer.echo(
+                "Error: --random-ratio is required for random split", err=True
+            )
             raise typer.Exit(1)
         if random_ratio < 0 or random_ratio > 1:
             typer.echo("Error: --random-ratio must be in [0, 1]", err=True)

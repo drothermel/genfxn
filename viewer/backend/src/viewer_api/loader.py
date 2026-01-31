@@ -11,7 +11,7 @@ class TaskStore:
         self._tasks: dict[str, Task] = {}
 
     def load_jsonl(self, path: Path) -> int:
-        """Load tasks from JSONL file. Returns total count of lines processed."""
+        """Load tasks from JSONL file. Returns count of lines processed."""
         total_loaded = 0
         for line in srsly.read_jsonl(path):
             task = Task.model_validate(line)

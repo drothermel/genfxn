@@ -73,7 +73,7 @@ ALLOWED_METHOD_NAMES: frozenset[str] = frozenset(
 # ALLOWED_ANNOTATION_NAMES and validate.py.
 ALLOWED_VAR_NAMES: frozenset[str] = frozenset({"s"})
 
-# Names allowed only inside type annotations (arg.annotation, FunctionDef.returns).
+# Names allowed only in type annotations (arg.annotation, FunctionDef.returns).
 ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset({"str"})
 
 # Call arity requirements: function name -> allowed arg counts
@@ -82,7 +82,7 @@ CALL_ARITIES: dict[str, set[int]] = {
 }
 
 # Method arity requirements: method name -> allowed arg counts (excluding self).
-# Used for string method calls (e.g. s.replace(old, new) -> 2, s.replace(old, new, count) -> 3).
+# e.g. s.replace(old, new) -> 2, s.replace(old, new, count) -> 3.
 METHOD_ARITIES: dict[str, set[int]] = {
     "startswith": {1, 2, 3},
     "endswith": {1, 2, 3},

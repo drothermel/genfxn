@@ -52,11 +52,21 @@ def _annotation_positions(tree: ast.Module) -> set[tuple[int, int]]:
                 if arg.annotation is not None:
                     for n in ast.walk(arg.annotation):
                         if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                            positions.add((n.lineno, n.col_offset))
+                            positions.add(
+                                cast(
+                                    tuple[int, int],
+                                    (n.lineno, n.col_offset),
+                                )
+                            )
             if node.returns is not None:
                 for n in ast.walk(node.returns):
                     if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                        positions.add((n.lineno, n.col_offset))
+                        positions.add(
+                            cast(
+                                tuple[int, int],
+                                (n.lineno, n.col_offset),
+                            )
+                        )
     return positions
 
 
@@ -94,7 +104,10 @@ def _validate_ast_whitelist(
         if isinstance(node, ast.Call):
             valid_call = False
             arity_error_message: str | None = None
-            if isinstance(node.func, ast.Name) and node.func.id in ALLOWED_CALL_NAMES:
+            if (
+                isinstance(node.func, ast.Name)
+                and node.func.id in ALLOWED_CALL_NAMES
+            ):
                 func_name = node.func.id
                 if func_name not in CALL_ARITIES:
                     raise AssertionError(
@@ -103,7 +116,10 @@ def _validate_ast_whitelist(
                         "ast_safety.CALL_ARITIES."
                     )
                 allowed_arities = CALL_ARITIES[func_name]
-                if len(node.args) in allowed_arities and len(node.keywords) == 0:
+                if (
+                    len(node.args) in allowed_arities
+                    and len(node.keywords) == 0
+                ):
                     valid_call = True
                 elif len(node.keywords) != 0 or allowed_arities:
                     arity_error_message = (
@@ -117,12 +133,14 @@ def _validate_ast_whitelist(
                 if method_name in ALLOWED_METHOD_NAMES:
                     if method_name not in METHOD_ARITIES:
                         raise AssertionError(
-                            f"Method '{method_name}' is in ALLOWED_METHOD_NAMES but "
-                            "has no entry in METHOD_ARITIES; add arity metadata in "
-                            "ast_safety.METHOD_ARITIES."
+                            f"Method '{method_name}' in ALLOWED_METHOD_NAMES "
+                            "but missing METHOD_ARITIES; add in ast_safety."
                         )
                     allowed_arities = METHOD_ARITIES[method_name]
-                    if len(node.args) in allowed_arities and len(node.keywords) == 0:
+                    if (
+                        len(node.args) in allowed_arities
+                        and len(node.keywords) == 0
+                    ):
                         valid_call = True
                     elif len(node.keywords) != 0 or allowed_arities:
                         arity_error_message = (
@@ -153,7 +171,10 @@ def _validate_ast_whitelist(
         # annotations (e.g. def f(s: str) -> str:) are allowed if in
         # ALLOWED_ANNOTATION_NAMES.
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-            in_annotation = (node.lineno, node.col_offset) in annotation_positions
+            in_annotation = (
+                node.lineno,
+                node.col_offset,
+            ) in annotation_positions
             if in_annotation and node.id in ALLOWED_ANNOTATION_NAMES:
                 continue
             if node.id not in allowed_names:
@@ -177,7 +198,8 @@ def _validate_task_id(task: Task) -> list[Issue]:
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
                 message=(
-                    f"task_id '{task.task_id}' does not match spec hash '{expected}'"
+                    f"task_id '{task.task_id}' does not match spec hash "
+                    f"'{expected}'"
                 ),
                 location="task_id",
                 task_id=task.task_id,
@@ -458,7 +480,9 @@ def validate_stringrules_task(
 
     if spec is not None and func is not None:
         issues.extend(
-            _validate_semantics(task, func, spec, axes, max_semantic_issues, rng)
+            _validate_semantics(
+                task, func, spec, axes, max_semantic_issues, rng
+            )
         )
 
     return issues

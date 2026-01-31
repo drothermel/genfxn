@@ -321,7 +321,9 @@ def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
         tie_break = spec.get("tie_break", "smallest")
         empty_default = spec.get("empty_default", 0)
         tie_text = (
-            "the smallest value" if tie_break == "smallest" else "the first value seen"
+            "the smallest value"
+            if tie_break == "smallest"
+            else "the first value seen"
         )
         default_text = _format_number(empty_default)
         return (
@@ -363,7 +365,10 @@ def _describe_stringrules(spec: dict[str, Any]) -> str:
     default_text = _describe_string_transform(default_transform)
 
     if not rules:
-        return f"Given a string, transform it using the default rule: {default_text}."
+        return (
+            f"Given a string, transform it using the default rule: "
+            f"{default_text}."
+        )
 
     parts = ["Given a string, transform it according to these rules:"]
     for rule in rules:

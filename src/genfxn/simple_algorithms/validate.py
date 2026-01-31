@@ -17,8 +17,8 @@ from genfxn.simple_algorithms.ast_safety import (
 )
 from genfxn.simple_algorithms.eval import eval_simple_algorithms
 from genfxn.simple_algorithms.models import (
-    CountPairsSumSpec,
     CountingMode,
+    CountPairsSumSpec,
     MostFrequentSpec,
     SimpleAlgorithmsAxes,
     SimpleAlgorithmsSpec,
@@ -302,7 +302,7 @@ def _validate_query_outputs(
     return issues
 
 
-# Canonical tie-break inputs for most_frequent (same value counts, order differs).
+# Canonical tie-break inputs for most_frequent (same counts, order differs).
 _TIE_BREAK_INPUTS: list[list[int]] = [
     [1, 2, 1, 2],
     [2, 1, 2, 1],
@@ -313,7 +313,7 @@ _TIE_BREAK_INPUTS: list[list[int]] = [
 def _check_tie_break_consistency(
     task: Task, spec: SimpleAlgorithmsSpec
 ) -> list[Issue]:
-    """Emit CODE_TIE_BREAK_MISMATCH when a query's output disagrees with spec tie-break."""
+    """Emit CODE_TIE_BREAK_MISMATCH when output disagrees with spec."""
     if not isinstance(spec, MostFrequentSpec):
         return []
     issues: list[Issue] = []
@@ -332,7 +332,8 @@ def _check_tie_break_consistency(
                     severity=Severity.ERROR,
                     message=(
                         f"Query output {q.output} != expected {expected} "
-                        f"for tie-break input {q.input} (tie_break={spec.tie_break})"
+                        f"for tie-break input {q.input} "
+                        f"(tie_break={spec.tie_break})"
                     ),
                     location=f"queries[{i}]",
                     task_id=task.task_id,
@@ -344,7 +345,7 @@ def _check_tie_break_consistency(
 def _check_counting_mode_consistency(
     task: Task, spec: SimpleAlgorithmsSpec
 ) -> list[Issue]:
-    """Emit CODE_COUNTING_MODE_MISMATCH when output matches the wrong counting mode."""
+    """Emit CODE_COUNTING_MODE_MISMATCH when output matches wrong mode."""
     if not isinstance(spec, CountPairsSumSpec):
         return []
     issues: list[Issue] = []
@@ -374,7 +375,8 @@ def _check_counting_mode_consistency(
                     severity=Severity.ERROR,
                     message=(
                         f"Query output {q.output} matches {other_mode}, "
-                        f"spec has counting_mode={spec.counting_mode} (expected {expected})"
+                        f"spec has counting_mode={spec.counting_mode} "
+                        f"(expected {expected})"
                     ),
                     location=f"queries[{i}]",
                     task_id=task.task_id,
@@ -389,7 +391,7 @@ def _check_edge_case_handling(
     spec: SimpleAlgorithmsSpec,
     axes: SimpleAlgorithmsAxes,
 ) -> list[Issue]:
-    """Emit CODE_EDGE_CASE_FAILURE when code fails or disagrees on edge-case inputs."""
+    """Emit CODE_EDGE_CASE_FAILURE when code fails on edge-case inputs."""
     issues: list[Issue] = []
     val_lo, val_hi = axes.value_range
     edge_inputs: list[list[int]] = [[], [val_lo], [val_hi]]

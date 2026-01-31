@@ -4,9 +4,9 @@ Each family has multiple preset configurations per difficulty level,
 enabling variety while targeting specific difficulty scores.
 """
 
+import random
 from dataclasses import dataclass
 from typing import Any
-import random
 
 from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
@@ -16,10 +16,17 @@ from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.simple_algorithms.models import (
     CountingMode,
     SimpleAlgorithmsAxes,
-    TemplateType as SimpleAlgoTemplateType,
     TieBreakMode,
 )
-from genfxn.stateful.models import StatefulAxes, TemplateType as StatefulTemplateType
+from genfxn.simple_algorithms.models import (
+    TemplateType as SimpleAlgoTemplateType,
+)
+from genfxn.stateful.models import (
+    StatefulAxes,
+)
+from genfxn.stateful.models import (
+    TemplateType as StatefulTemplateType,
+)
 from genfxn.stringrules.models import StringRulesAxes
 
 
@@ -546,7 +553,9 @@ def get_valid_difficulties(family: str) -> list[int]:
     return sorted(presets.keys())
 
 
-def get_difficulty_presets(family: str, difficulty: int) -> list[DifficultyPreset]:
+def get_difficulty_presets(
+    family: str, difficulty: int
+) -> list[DifficultyPreset]:
     """Get all presets for a family/difficulty combination."""
     presets = _FAMILY_PRESETS.get(family)
     if presets is None:
@@ -588,8 +597,8 @@ def get_difficulty_axes(
         if not matching:
             valid_variants = [p.name for p in presets]
             raise ValueError(
-                f"Invalid variant '{variant}' for {family} difficulty {difficulty}. "
-                f"Valid: {valid_variants}"
+                f"Invalid variant '{variant}' for {family} difficulty "
+                f"{difficulty}. Valid: {valid_variants}"
             )
         preset = matching[0]
     else:
@@ -604,13 +613,14 @@ def _build_axes(
     family: str, overrides: dict[str, Any]
 ) -> PiecewiseAxes | StatefulAxes | SimpleAlgorithmsAxes | StringRulesAxes:
     """Build axes object from overrides."""
-    if family == "piecewise":
-        return PiecewiseAxes(**overrides)
-    elif family == "stateful":
-        return StatefulAxes(**overrides)
-    elif family == "simple_algorithms":
-        return SimpleAlgorithmsAxes(**overrides)
-    elif family == "stringrules":
-        return StringRulesAxes(**overrides)
-    else:
-        raise ValueError(f"Unknown family: {family}")
+    match family:
+        case "piecewise":
+            return PiecewiseAxes(**overrides)
+        case "stateful":
+            return StatefulAxes(**overrides)
+        case "simple_algorithms":
+            return SimpleAlgorithmsAxes(**overrides)
+        case "stringrules":
+            return StringRulesAxes(**overrides)
+        case _:
+            raise ValueError(f"Unknown family: {family}")

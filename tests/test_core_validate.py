@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.models import Task
 from genfxn.core.validate import Issue, Severity
 
 

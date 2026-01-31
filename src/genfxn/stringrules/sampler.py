@@ -170,7 +170,9 @@ def sample_stringrules_spec(
         # Select predicate type - avoid repeats unless overlapping
         available_types = list(axes.predicate_types)
         if not _should_overlap(axes.overlap_level, rng) and used_pred_types:
-            available_types = [t for t in available_types if t not in used_pred_types]
+            available_types = [
+                t for t in available_types if t not in used_pred_types
+            ]
             if not available_types:
                 available_types = list(axes.predicate_types)
 

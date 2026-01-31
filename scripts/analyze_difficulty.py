@@ -16,14 +16,18 @@ Usage:
 import random
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import typer
 
 from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
+from genfxn.piecewise.models import PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.simple_algorithms.models import SimpleAlgorithmsAxes
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
+from genfxn.stateful.models import StatefulAxes
 from genfxn.stateful.task import generate_stateful_task
+from genfxn.stringrules.models import StringRulesAxes
 from genfxn.stringrules.task import generate_stringrules_task
 
 app = typer.Typer(help="Analyze difficulty scoring and presets.")
@@ -54,6 +58,8 @@ class FamilyAnalysis:
 
 # =============================================================================
 # Scoring formulas (mirrored from difficulty.py for analysis)
+# NOTE: Keep these in sync with the actual difficulty calculation logic.
+# Consider importing from the source if refactoring to avoid duplication.
 # =============================================================================
 
 PIECEWISE_WEIGHTS = {"branches": 0.4, "expr_type": 0.4, "coeff": 0.2}
@@ -111,7 +117,11 @@ STRINGRULES_AXES = {
         ("LENGTH_CMP eq/ne", 2),
         ("LENGTH_CMP lt/gt", 3),
     ],
-    "transform": [("IDENTITY", 1), ("LOWER/UPPER/REVERSE/...", 2), ("REPLACE/STRIP/...", 3)],
+    "transform": [
+        ("IDENTITY", 1),
+        ("LOWER/UPPER/REVERSE/...", 2),
+        ("REPLACE/STRIP/...", 3),
+    ],
 }
 
 
@@ -120,7 +130,9 @@ def analyze_family(family: str) -> FamilyAnalysis:
     if family == "piecewise":
         weights = PIECEWISE_WEIGHTS
         axes = PIECEWISE_AXES
-        formula = "raw = 0.4 × branch_score + 0.4 × expr_score + 0.2 × coeff_score"
+        formula = (
+            "raw = 0.4 × branch_score + 0.4 × expr_score + 0.2 × coeff_score"
+        )
     elif family == "stateful":
         weights = STATEFUL_WEIGHTS
         axes = STATEFUL_AXES
@@ -194,7 +206,10 @@ def format_plain(analysis: FamilyAnalysis) -> str:
         if c.axis != current_axis:
             lines.append(f"  {c.axis} (weight={c.weight}):")
             current_axis = c.axis
-        lines.append(f"    {c.value}: score={c.score} → contribution={c.contribution:.1f}")
+        lines.append(
+            f"    {c.value}: score={c.score} → contribution="
+            f"{c.contribution:.1f}"
+        )
 
     return "\n".join(lines)
 
@@ -217,12 +232,18 @@ def format_markdown(analysis: FamilyAnalysis) -> str:
     ]
 
     for c in analysis.contributions:
-        lines.append(f"| {c.axis} | {c.value} | {c.score} | {c.weight} | {c.contribution:.1f} |")
+        row = (
+            f"| {c.axis} | {c.value} | {c.score} | {c.weight} | "
+            f"{c.contribution:.1f} |"
+        )
+        lines.append(row)
 
     return "\n".join(lines)
 
 
-def verify_presets(family: str, n_samples: int = 50) -> dict[int, dict[str, Any]]:
+def verify_presets(
+    family: str, n_samples: int = 50
+) -> dict[int, dict[str, Any]]:
     """Verify preset accuracy for a family."""
     results: dict[int, dict[str, Any]] = {}
 
@@ -233,13 +254,21 @@ def verify_presets(family: str, n_samples: int = 50) -> dict[int, dict[str, Any]
         for _ in range(n_samples):
             axes = get_difficulty_axes(family, difficulty, rng=rng)
             if family == "piecewise":
-                task = generate_piecewise_task(axes=axes, rng=rng)
+                task = generate_piecewise_task(
+                    axes=cast(PiecewiseAxes, axes), rng=rng
+                )
             elif family == "stateful":
-                task = generate_stateful_task(axes=axes, rng=rng)
+                task = generate_stateful_task(
+                    axes=cast(StatefulAxes, axes), rng=rng
+                )
             elif family == "simple_algorithms":
-                task = generate_simple_algorithms_task(axes=axes, rng=rng)
+                task = generate_simple_algorithms_task(
+                    axes=cast(SimpleAlgorithmsAxes, axes), rng=rng
+                )
             elif family == "stringrules":
-                task = generate_stringrules_task(axes=axes, rng=rng)
+                task = generate_stringrules_task(
+                    axes=cast(StringRulesAxes, axes), rng=rng
+                )
             else:
                 raise ValueError(f"Unknown family: {family}")
 
@@ -266,7 +295,7 @@ def analyze(
     family: str | None = typer.Option(
         None, "--family", "-f", help="Analyze specific family"
     ),
-    format: str = typer.Option(
+    output_format: str = typer.Option(
         "plain", "--format", help="Output format: plain or markdown"
     ),
     verify: bool = typer.Option(
@@ -277,12 +306,16 @@ def analyze(
     ),
 ) -> None:
     """Analyze difficulty scoring and optionally verify presets."""
-    families = [family] if family else ["piecewise", "stateful", "simple_algorithms", "stringrules"]
+    families = (
+        [family]
+        if family
+        else ["piecewise", "stateful", "simple_algorithms", "stringrules"]
+    )
 
     for fam in families:
         analysis = analyze_family(fam)
 
-        if format == "markdown":
+        if output_format == "markdown":
             typer.echo(format_markdown(analysis))
         else:
             typer.echo(format_plain(analysis))
