@@ -2,6 +2,7 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
+from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.stateful.models import StatefulAxes
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stateful.render import render_stateful
@@ -17,11 +18,14 @@ def generate_stateful_task(
     if rng is None:
         rng = random.Random()
 
-    spec = sample_stateful_spec(axes, rng)
+    trace_steps: list[TraceStep] = []
+    spec = sample_stateful_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
     task_id = task_id_from_spec("stateful", spec_dict)
     code = render_stateful(spec)
     queries = generate_stateful_queries(spec, axes, rng)
+
+    trace = GenerationTrace(family="stateful", steps=trace_steps)
 
     return Task(
         task_id=task_id,
@@ -29,4 +33,6 @@ def generate_stateful_task(
         spec=spec_dict,
         code=code,
         queries=queries,
+        trace=trace,
+        axes=axes.model_dump(),
     )

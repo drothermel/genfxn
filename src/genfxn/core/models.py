@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from genfxn.core.trace import GenerationTrace
+
 
 class QueryTag(str, Enum):
     TYPICAL = "typical"
@@ -23,3 +25,9 @@ class Task(BaseModel):
     spec: dict[str, Any] = Field(description="Full specification as dict")
     code: str = Field(description="Rendered Python function")
     queries: list[Query] = Field(description="Test queries with tags")
+    trace: GenerationTrace | None = Field(
+        default=None, description="Optional generation trace for debugging"
+    )
+    axes: dict[str, Any] | None = Field(
+        default=None, description="Axes/ranges used for sampling"
+    )

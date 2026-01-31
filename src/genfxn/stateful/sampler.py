@@ -10,7 +10,9 @@ from genfxn.core.predicates import (
     PredicateModEq,
     PredicateOdd,
     PredicateType,
+    render_predicate,
 )
+from genfxn.core.trace import TraceStep
 from genfxn.core.transforms import (
     Transform,
     TransformAbs,
@@ -19,6 +21,7 @@ from genfxn.core.transforms import (
     TransformScale,
     TransformShift,
     TransformType,
+    render_transform,
 )
 from genfxn.stateful.models import (
     ConditionalLinearSumSpec,
@@ -79,28 +82,84 @@ def sample_transform(
 
 
 def sample_stateful_spec(
-    axes: StatefulAxes, rng: random.Random | None = None
+    axes: StatefulAxes,
+    rng: random.Random | None = None,
+    trace: list[TraceStep] | None = None,
 ) -> StatefulSpec:
     if rng is None:
         rng = random.Random()
 
     template = rng.choice(axes.templates)
 
+    if trace is not None:
+        trace.append(
+            TraceStep(
+                step="sample_template",
+                choice=f"Selected template: {template.value}",
+                value=template.value,
+            )
+        )
+
     match template:
         case TemplateType.CONDITIONAL_LINEAR_SUM:
             pred_type = rng.choice(axes.predicate_types)
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_predicate_type",
+                        choice=f"Predicate type: {pred_type.value}",
+                        value=pred_type.value,
+                    )
+                )
+
             predicate = sample_predicate(
                 pred_type, axes.threshold_range, axes.divisor_range, rng
             )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_predicate",
+                        choice=f"Predicate: {render_predicate(predicate)}",
+                        value=predicate.model_dump(),
+                    )
+                )
+
             true_trans_type = rng.choice(axes.transform_types)
             true_transform = sample_transform(
                 true_trans_type, axes.shift_range, axes.scale_range, rng
             )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_true_transform",
+                        choice=f"True transform: {render_transform(true_transform)}",
+                        value=true_transform.model_dump(),
+                    )
+                )
+
             false_trans_type = rng.choice(axes.transform_types)
             false_transform = sample_transform(
                 false_trans_type, axes.shift_range, axes.scale_range, rng
             )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_false_transform",
+                        choice=f"False transform: {render_transform(false_transform)}",
+                        value=false_transform.model_dump(),
+                    )
+                )
+
             init_value = rng.randint(-10, 10)
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_init_value",
+                        choice=f"Initial value: {init_value}",
+                        value=init_value,
+                    )
+                )
+
             return ConditionalLinearSumSpec(
                 predicate=predicate,
                 true_transform=true_transform,
@@ -110,10 +169,37 @@ def sample_stateful_spec(
 
         case TemplateType.RESETTING_BEST_PREFIX_SUM:
             pred_type = rng.choice(axes.predicate_types)
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_predicate_type",
+                        choice=f"Reset predicate type: {pred_type.value}",
+                        value=pred_type.value,
+                    )
+                )
+
             reset_predicate = sample_predicate(
                 pred_type, axes.threshold_range, axes.divisor_range, rng
             )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_reset_predicate",
+                        choice=f"Reset predicate: {render_predicate(reset_predicate)}",
+                        value=reset_predicate.model_dump(),
+                    )
+                )
+
             init_value = rng.randint(-10, 10)
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_init_value",
+                        choice=f"Initial value: {init_value}",
+                        value=init_value,
+                    )
+                )
+
             return ResettingBestPrefixSumSpec(
                 reset_predicate=reset_predicate,
                 init_value=init_value,
@@ -121,9 +207,27 @@ def sample_stateful_spec(
 
         case TemplateType.LONGEST_RUN:
             pred_type = rng.choice(axes.predicate_types)
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_predicate_type",
+                        choice=f"Match predicate type: {pred_type.value}",
+                        value=pred_type.value,
+                    )
+                )
+
             match_predicate = sample_predicate(
                 pred_type, axes.threshold_range, axes.divisor_range, rng
             )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_match_predicate",
+                        choice=f"Match predicate: {render_predicate(match_predicate)}",
+                        value=match_predicate.model_dump(),
+                    )
+                )
+
             return LongestRunSpec(match_predicate=match_predicate)
 
         case _:
