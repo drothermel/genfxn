@@ -14,7 +14,7 @@ export async function fetchTasks(family?: string): Promise<Task[]> {
 }
 
 export async function fetchTask(taskId: string): Promise<Task> {
-	const response = await fetch(`${API_BASE}/tasks/${taskId}`);
+	const response = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}`);
 	if (!response.ok) {
 		throw new Error(`Failed to fetch task: ${response.statusText}`);
 	}

@@ -214,10 +214,12 @@
         </div>
       </div>
     {:else if isStringrules}
-      {@const rules = task.spec.rules as Array<{
-        predicate: Record<string, unknown>;
-        transform: Record<string, unknown>;
-      }>}
+      {@const rules = Array.isArray(task.spec.rules)
+        ? (task.spec.rules as Array<{
+            predicate: Record<string, unknown>;
+            transform: Record<string, unknown>;
+          }>)
+        : []}
       {@const defaultTransform = task.spec.default_transform as Record<
         string,
         unknown

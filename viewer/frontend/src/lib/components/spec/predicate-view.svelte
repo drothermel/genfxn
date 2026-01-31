@@ -43,7 +43,7 @@
 				if (!Array.isArray(values) || values.length === 0) {
 					return `[in_set: values must be non-empty array] ${JSON.stringify(pred)}`;
 				}
-				return `${safeV} in {${values.join(', ')}}`;
+				return `${safeV} in {${values.map(v => JSON.stringify(v)).join(', ')}}`;
 			}
 			default:
 				return kind ? `[unknown kind: ${kind}] ${JSON.stringify(pred)}` : JSON.stringify(pred);

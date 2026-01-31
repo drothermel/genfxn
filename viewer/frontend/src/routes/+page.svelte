@@ -16,14 +16,19 @@
   let loading = $state(true);
   let error: string | null = $state(null);
 
-  async function loadData(family: string) {
+  async function initFamilies() {
+    try {
+      families = await fetchFamilies();
+    } catch {
+      // Families fetch failure does not block the UI; dropdown stays empty
+    }
+  }
+
+  async function loadTasks(family: string) {
     loading = true;
     error = null;
     try {
-      [families, tasks] = await Promise.all([
-        fetchFamilies(),
-        fetchTasks(family || undefined),
-      ]);
+      tasks = await fetchTasks(family || undefined);
     } catch (e) {
       error = e instanceof Error ? e.message : "Unknown error";
     } finally {
@@ -32,7 +37,12 @@
   }
 
   $effect(() => {
-    loadData(selectedFamily);
+    initFamilies();
+  });
+
+  $effect(() => {
+    const family = selectedFamily;
+    loadTasks(family);
   });
 </script>
 

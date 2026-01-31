@@ -17,6 +17,22 @@ def _generate_random_list(
     return [rng.randint(*value_range) for _ in range(length)]
 
 
+def _mid(lo: int, hi: int) -> int:
+    return (lo + hi) // 2
+
+
+def _clamp(x: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, x))
+
+
+def _distinct_in_range(lo: int, hi: int, n: int) -> list[int]:
+    """Up to n distinct integers in [lo, hi]; fewer if range is too narrow."""
+    span = hi - lo + 1
+    if span <= 0:
+        return [lo] * min(1, n)
+    return list(range(lo, min(lo + n, hi + 1)))
+
+
 def _generate_most_frequent_queries(
     spec: MostFrequentSpec, axes: SimpleAlgorithmsAxes, rng: random.Random
 ) -> list[Query]:
@@ -49,47 +65,57 @@ def _generate_most_frequent_queries(
             )
         )
 
-    # Clear winner - no tie
-    clear_winner = [1, 1, 1, 2, 3]
-    queries.append(
-        Query(
-            input=clear_winner,
-            output=eval_simple_algorithms(spec, clear_winner),
-            tag=QueryTag.TYPICAL,
+    # Clear winner - no tie (one value appears 3x, others once; all in [lo, hi])
+    three_vals = _distinct_in_range(lo, hi, 3)
+    if len(three_vals) >= 3:
+        a, b, c = three_vals[0], three_vals[1], three_vals[2]
+        clear_winner = [a, a, a, b, c]
+        queries.append(
+            Query(
+                input=clear_winner,
+                output=eval_simple_algorithms(spec, clear_winner),
+                tag=QueryTag.TYPICAL,
+            )
         )
-    )
 
     # Tie between values - tests tie_break semantics
-    # [2,1,2,1] vs [1,2,1,2] - first_seen differs
-    tie_a = [2, 1, 2, 1]
-    tie_b = [1, 2, 1, 2]
-    queries.append(
-        Query(
-            input=tie_a,
-            output=eval_simple_algorithms(spec, tie_a),
-            tag=QueryTag.BOUNDARY,
+    # [b,a,b,a] vs [a,b,a,b] - first_seen differs; need 2 distinct in [lo, hi]
+    two_vals = _distinct_in_range(lo, hi, 2)
+    if len(two_vals) >= 2:
+        a, b = two_vals[0], two_vals[1]
+        tie_a = [b, a, b, a]
+        tie_b = [a, b, a, b]
+        queries.append(
+            Query(
+                input=tie_a,
+                output=eval_simple_algorithms(spec, tie_a),
+                tag=QueryTag.BOUNDARY,
+            )
         )
-    )
-    queries.append(
-        Query(
-            input=tie_b,
-            output=eval_simple_algorithms(spec, tie_b),
-            tag=QueryTag.BOUNDARY,
+        queries.append(
+            Query(
+                input=tie_b,
+                output=eval_simple_algorithms(spec, tie_b),
+                tag=QueryTag.BOUNDARY,
+            )
         )
-    )
 
-    # Multi-way tie
-    multi_tie = [1, 2, 3, 1, 2, 3]
-    queries.append(
-        Query(
-            input=multi_tie,
-            output=eval_simple_algorithms(spec, multi_tie),
-            tag=QueryTag.ADVERSARIAL,
+    # Multi-way tie (3 distinct values, each 2x)
+    three_for_tie = _distinct_in_range(lo, hi, 3)
+    if len(three_for_tie) >= 3:
+        a, b, c = three_for_tie[0], three_for_tie[1], three_for_tie[2]
+        multi_tie = [a, b, c, a, b, c]
+        queries.append(
+            Query(
+                input=multi_tie,
+                output=eval_simple_algorithms(spec, multi_tie),
+                tag=QueryTag.ADVERSARIAL,
+            )
         )
-    )
 
-    # All same value
-    all_same = [5, 5, 5, 5]
+    # All same value (within [lo, hi])
+    mid = _mid(lo, hi)
+    all_same = [mid, mid, mid, mid]
     queries.append(
         Query(
             input=all_same,
@@ -130,84 +156,96 @@ def _generate_count_pairs_queries(
         )
     )
 
-    # Single element - no pairs
+    # Single element - no pairs (value in [lo, hi])
+    single_val = _clamp(target // 2, lo, hi)
     queries.append(
         Query(
-            input=[target // 2],
-            output=eval_simple_algorithms(spec, [target // 2]),
+            input=[single_val],
+            output=eval_simple_algorithms(spec, [single_val]),
             tag=QueryTag.COVERAGE,
         )
     )
 
-    # Two elements that sum to target
-    half = target // 2
-    other_half = target - half
-    pair_list = [half, other_half]
-    queries.append(
-        Query(
-            input=pair_list,
-            output=eval_simple_algorithms(spec, pair_list),
-            tag=QueryTag.BOUNDARY,
-        )
-    )
-
-    # Two elements that don't sum to target
-    no_pair = [half, half + 100]
-    queries.append(
-        Query(
-            input=no_pair,
-            output=eval_simple_algorithms(spec, no_pair),
-            tag=QueryTag.BOUNDARY,
-        )
-    )
-
-    # Duplicates - distinguishes ALL_INDICES from UNIQUE_VALUES
-    # [v, v, target-v] -> ALL_INDICES=2 pairs, UNIQUE_VALUES=1 unique pair
-    v = target // 3
-    dups = [v, v, target - v]
-    queries.append(
-        Query(
-            input=dups,
-            output=eval_simple_algorithms(spec, dups),
-            tag=QueryTag.ADVERSARIAL,
-        )
-    )
-
-    # More duplicates
-    # [a, a, b, b] where a+b=target -> ALL_INDICES=4, UNIQUE_VALUES=1
-    a = target // 2
-    b = target - a
-    more_dups = [a, a, b, b]
-    queries.append(
-        Query(
-            input=more_dups,
-            output=eval_simple_algorithms(spec, more_dups),
-            tag=QueryTag.ADVERSARIAL,
-        )
-    )
-
-    # Self-pairing: target=2v -> [v,v,v] has multiple self-pairs
-    if target % 2 == 0:
-        self_val = target // 2
-        self_pairs = [self_val, self_val, self_val]
+    # Two elements that sum to target (both in [lo, hi])
+    pair_lo = max(lo, target - hi)
+    pair_hi = min(hi, target - lo)
+    if pair_lo <= pair_hi:
+        half = (pair_lo + pair_hi) // 2
+        other_half = target - half
+        pair_list = [half, other_half]
         queries.append(
             Query(
-                input=self_pairs,
-                output=eval_simple_algorithms(spec, self_pairs),
+                input=pair_list,
+                output=eval_simple_algorithms(spec, pair_list),
+                tag=QueryTag.BOUNDARY,
+            )
+        )
+
+    # Two elements that don't sum to target (both in [lo, hi])
+    two_distinct = _distinct_in_range(lo, hi, 2)
+    if len(two_distinct) >= 2:
+        na, nb = two_distinct[0], two_distinct[1]
+        if na + nb == target and len(two_distinct) >= 3:
+            nb = two_distinct[2]
+        if na + nb != target:
+            no_pair = [na, nb]
+            queries.append(
+                Query(
+                    input=no_pair,
+                    output=eval_simple_algorithms(spec, no_pair),
+                    tag=QueryTag.BOUNDARY,
+                )
+            )
+
+    # Duplicates - distinguishes ALL_INDICES from UNIQUE_VALUES
+    # [v, v, target-v] -> ALL_INDICES=2 pairs, UNIQUE_VALUES=1 unique pair (v, target-v in [lo, hi])
+    dup_v_lo = max(lo, target - hi)
+    dup_v_hi = min(hi, target - lo)
+    if dup_v_lo <= dup_v_hi:
+        v = (dup_v_lo + dup_v_hi) // 2
+        dups = [v, v, target - v]
+        queries.append(
+            Query(
+                input=dups,
+                output=eval_simple_algorithms(spec, dups),
                 tag=QueryTag.ADVERSARIAL,
             )
         )
 
-    # No pairs: five distinct values when possible; only use duplicates as last resort.
-    # Collect up to five distinct integers: first from v < target//2, then allow v >= target//2
-    # while skipping any v where 2*v == target to avoid pair sums.
+    # More duplicates: [a, a, b, b] where a+b=target (a, b in [lo, hi])
+    if pair_lo <= pair_hi:
+        a = (pair_lo + pair_hi) // 2
+        b = target - a
+        more_dups = [a, a, b, b]
+        queries.append(
+            Query(
+                input=more_dups,
+                output=eval_simple_algorithms(spec, more_dups),
+                tag=QueryTag.ADVERSARIAL,
+            )
+        )
+
+    # Self-pairing: target=2v -> [v,v,v] (only when target//2 in [lo, hi])
+    if target % 2 == 0:
+        self_val = target // 2
+        if lo <= self_val <= hi:
+            self_pairs = [self_val, self_val, self_val]
+            queries.append(
+                Query(
+                    input=self_pairs,
+                    output=eval_simple_algorithms(spec, self_pairs),
+                    tag=QueryTag.ADVERSARIAL,
+                )
+            )
+
+    # No pairs: up to five distinct values in [lo, hi], none summing to target
     start = max(lo, 0)
     no_pairs: list[int] = []
     v = start
-    while v < target // 2 and len(no_pairs) < 5:
+    while v <= hi and v < target // 2 and len(no_pairs) < 5:
         no_pairs.append(v)
         v += 1
-    while len(no_pairs) < 5:
+    while v <= hi and len(no_pairs) < 5:
         if 2 * v != target:
             no_pairs.append(v)
         v += 1
@@ -251,51 +289,61 @@ def _generate_max_window_queries(
         )
     )
 
-    # List shorter than k
-    short = list(range(1, k))
-    if short:
+    # List shorter than k (values in [lo, hi]; length exactly k-1)
+    if k - 1 > 0:
+        short_base = _distinct_in_range(lo, hi, k - 1)
+        short = (short_base * ((k - 1) // max(1, len(short_base)) + 1))[: k - 1]
+        if len(short) == k - 1:
+            queries.append(
+                Query(
+                    input=short,
+                    output=spec.invalid_k_default,
+                    tag=QueryTag.BOUNDARY,
+                )
+            )
+
+    # Exactly k elements (distinct in [lo, hi])
+    exact_k = _distinct_in_range(lo, hi, k)
+    if len(exact_k) >= k:
+        exact_k = exact_k[:k]
         queries.append(
             Query(
-                input=short,
-                output=spec.invalid_k_default,
+                input=exact_k,
+                output=eval_simple_algorithms(spec, exact_k),
                 tag=QueryTag.BOUNDARY,
             )
         )
 
-    # Exactly k elements
-    exact_k = list(range(1, k + 1))
-    queries.append(
-        Query(
-            input=exact_k,
-            output=eval_simple_algorithms(spec, exact_k),
-            tag=QueryTag.BOUNDARY,
-        )
-    )
-
-    # k=1 edge case test
-    if k == 1:
-        single_max = [3, 1, 4, 1, 5, 9, 2, 6]
-        queries.append(
-            Query(
-                input=single_max,
-                output=eval_simple_algorithms(spec, single_max),
-                tag=QueryTag.BOUNDARY,
+    # k=1 edge case test (several values in [lo, hi], max is one of them)
+    if k == 1 and hi >= lo:
+        single_vals = _distinct_in_range(lo, hi, 8)
+        if len(single_vals) >= 8:
+            single_max = [
+                single_vals[2], single_vals[0], single_vals[3], single_vals[0],
+                single_vals[4], single_vals[7], single_vals[1], single_vals[5],
+            ]
+            queries.append(
+                Query(
+                    input=single_max,
+                    output=eval_simple_algorithms(spec, single_max),
+                    tag=QueryTag.BOUNDARY,
+                )
             )
-        )
 
-    # All negative
-    all_neg = [-5, -3, -7, -1, -4, -2, -8, -6]
-    if len(all_neg) >= k:
+    # All at low end of range (adversarial: small window sums)
+    low_vals = [lo] * 8
+    if len(low_vals) >= k:
         queries.append(
             Query(
-                input=all_neg,
-                output=eval_simple_algorithms(spec, all_neg),
+                input=low_vals,
+                output=eval_simple_algorithms(spec, low_vals),
                 tag=QueryTag.ADVERSARIAL,
             )
         )
 
-    # Max at start
-    max_at_start = [10, 10, 10] + [1] * 5
+    # Max at start (hi repeated then lo repeated; all in [lo, hi])
+    mid = _mid(lo, hi)
+    max_at_start = [hi, hi, hi] + [lo] * 5
     if len(max_at_start) >= k:
         queries.append(
             Query(
@@ -305,8 +353,8 @@ def _generate_max_window_queries(
             )
         )
 
-    # Max at end
-    max_at_end = [1] * 5 + [10, 10, 10]
+    # Max at end (lo repeated then hi repeated)
+    max_at_end = [lo] * 5 + [hi, hi, hi]
     if len(max_at_end) >= k:
         queries.append(
             Query(
@@ -316,8 +364,8 @@ def _generate_max_window_queries(
             )
         )
 
-    # All same values
-    all_same = [5] * 10
+    # All same values (mid in [lo, hi])
+    all_same = [mid] * 10
     if len(all_same) >= k:
         queries.append(
             Query(

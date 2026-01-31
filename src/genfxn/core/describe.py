@@ -360,17 +360,18 @@ def _describe_stringrules(spec: dict[str, Any]) -> str:
     """Generate natural language description for stringrules functions."""
     rules = spec.get("rules", [])
     default_transform = spec.get("default_transform", {})
+    default_text = _describe_string_transform(default_transform)
+
+    if not rules:
+        return f"Given a string, transform it using the default rule: {default_text}."
 
     parts = ["Given a string, transform it according to these rules:"]
-
     for rule in rules:
         pred = rule.get("predicate", {})
         trans = rule.get("transform", {})
         pred_text = _describe_string_predicate(pred)
         trans_text = _describe_string_transform(trans)
         parts.append(f"If {pred_text}, {trans_text}.")
-
-    default_text = _describe_string_transform(default_transform)
     parts.append(f"Otherwise, {default_text}.")
 
     return " ".join(parts)

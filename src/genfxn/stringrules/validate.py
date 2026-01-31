@@ -14,9 +14,9 @@ from genfxn.stringrules.ast_safety import (
     ALLOWED_AST_NODES,
     ALLOWED_CALL_NAMES,
     ALLOWED_METHOD_NAMES,
+    ALLOWED_VAR_NAMES,
     CALL_ARITIES,
     METHOD_ARITIES,
-    ALLOWED_VAR_NAMES,
 )
 from genfxn.stringrules.eval import eval_stringrules
 from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
@@ -94,16 +94,16 @@ def _validate_ast_whitelist(
         if isinstance(node, ast.Call):
             valid_call = False
             arity_error_message: str | None = None
-            if (
-                isinstance(node.func, ast.Name)
-                and node.func.id in ALLOWED_CALL_NAMES
-            ):
+            if isinstance(node.func, ast.Name) and node.func.id in ALLOWED_CALL_NAMES:
                 func_name = node.func.id
-                allowed_arities = CALL_ARITIES.get(func_name, set())
-                if (
-                    len(node.args) in allowed_arities
-                    and len(node.keywords) == 0
-                ):
+                if func_name not in CALL_ARITIES:
+                    raise AssertionError(
+                        f"Function '{func_name}' is in ALLOWED_CALL_NAMES but "
+                        "has no entry in CALL_ARITIES; add arity metadata in "
+                        "ast_safety.CALL_ARITIES."
+                    )
+                allowed_arities = CALL_ARITIES[func_name]
+                if len(node.args) in allowed_arities and len(node.keywords) == 0:
                     valid_call = True
                 elif len(node.keywords) != 0 or allowed_arities:
                     arity_error_message = (
@@ -116,10 +116,7 @@ def _validate_ast_whitelist(
                 method_name = node.func.attr
                 if method_name in ALLOWED_METHOD_NAMES:
                     allowed_arities = METHOD_ARITIES.get(method_name, set())
-                    if (
-                        len(node.args) in allowed_arities
-                        and len(node.keywords) == 0
-                    ):
+                    if len(node.args) in allowed_arities and len(node.keywords) == 0:
                         valid_call = True
                     elif len(node.keywords) != 0 or allowed_arities:
                         arity_error_message = (
@@ -174,8 +171,7 @@ def _validate_task_id(task: Task) -> list[Issue]:
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
                 message=(
-                    f"task_id '{task.task_id}' does not match spec hash "
-                    f"'{expected}'"
+                    f"task_id '{task.task_id}' does not match spec hash '{expected}'"
                 ),
                 location="task_id",
                 task_id=task.task_id,
@@ -456,9 +452,7 @@ def validate_stringrules_task(
 
     if spec is not None and func is not None:
         issues.extend(
-            _validate_semantics(
-                task, func, spec, axes, max_semantic_issues, rng
-            )
+            _validate_semantics(task, func, spec, axes, max_semantic_issues, rng)
         )
 
     return issues

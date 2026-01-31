@@ -22,6 +22,9 @@
   const isStringRules = $derived(task.family === "stringrules");
 
   function formatRange(range: unknown): string {
+    if (range == null) {
+      return "—";
+    }
     if (Array.isArray(range) && range.length === 2) {
       return `[${range[0]}, ${range[1]}]`;
     }

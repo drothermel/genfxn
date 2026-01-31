@@ -63,17 +63,48 @@ def _generate_matching_string(
         case StringPredicateLengthCmp(op=op, value=v):
             match op:
                 case "lt":
-                    length = rng.randint(max(1, lo), max(1, v - 1))
+                    # length < v: only length 0 when v==1; none when v==0
+                    if v <= 1:
+                        return _random_string(0, charset, rng)
+                    low, high = max(lo, 0), min(hi, v - 1)
+                    if low <= high:
+                        length = rng.randint(low, high)
+                    else:
+                        return _random_string(0, charset, rng)
                 case "le":
-                    length = rng.randint(max(1, lo), max(1, v))
+                    # length <= v: only length 0 when v==0
+                    if v == 0:
+                        return _random_string(0, charset, rng)
+                    low, high = max(lo, 0), min(hi, v)
+                    if low <= high:
+                        length = rng.randint(low, high)
+                    else:
+                        return _random_string(0, charset, rng)
                 case "gt":
-                    length = rng.randint(v + 1, max(v + 1, hi))
+                    # length > v
+                    low, high = max(lo, v + 1), hi
+                    if low <= high:
+                        length = rng.randint(low, high)
+                    else:
+                        return _random_string(0, charset, rng)
                 case "ge":
-                    length = rng.randint(max(v, 1), max(v, hi))
+                    # length >= v
+                    low, high = max(lo, v), hi
+                    if low <= high:
+                        length = rng.randint(low, high)
+                    else:
+                        return _random_string(0, charset, rng)
                 case "eq":
-                    length = max(1, v)
+                    # length == v: must be 0 when v==0
+                    if v == 0:
+                        return _random_string(0, charset, rng)
+                    length = v
                 case _:
-                    length = rng.randint(lo, hi)
+                    low, high = lo, hi
+                    if low <= high:
+                        length = rng.randint(low, high)
+                    else:
+                        return _random_string(0, charset, rng)
             return _random_string(length, charset, rng)
 
         case _:
@@ -160,12 +191,20 @@ def _generate_non_matching_string(
                 case "le":
                     length = rng.randint(v + 1, max(v + 1, hi))
                 case "gt":
-                    length = rng.randint(max(1, lo), max(1, v))
+                    # Non-matching: length <= v; clamp upper to hi
+                    upper = min(v, hi)
+                    length = lo if upper < lo else rng.randint(lo, upper)
                 case "ge":
-                    length = rng.randint(max(1, lo), max(1, v - 1))
+                    # Non-matching: length < v; clamp upper to hi
+                    upper = min(v - 1, hi)
+                    length = lo if upper < lo else rng.randint(lo, upper)
                 case "eq":
                     # Any length except v
-                    length = v + 1 if v < hi else max(1, v - 1)
+                    if v < hi:
+                        length = v + 1
+                    else:
+                        # v >= hi: use v - 1 (may be 0 or below lo; still doesn't match eq v)
+                        length = v - 1
                 case _:
                     length = rng.randint(lo, hi)
             return _random_string(length, charset, rng)

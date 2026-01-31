@@ -35,6 +35,7 @@ from genfxn.stringrules.queries import generate_stringrules_queries
 from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.stringrules.utils import _random_string
 
 
 class TestStringPredicates:
@@ -333,3 +334,25 @@ class TestTaskGeneration:
             f = namespace["f"]
             for q in task.queries:
                 assert f(q.input) == q.output, f"Overlap {overlap}: mismatch"
+
+
+class TestRandomStringUtils:
+    """Tests for _random_string edge cases (empty charset / exclude)."""
+
+    def test_empty_charset_length_zero_returns_empty_string(self) -> None:
+        rng = random.Random(42)
+        assert _random_string(0, "", rng) == ""
+
+    def test_empty_charset_length_positive_raises(self) -> None:
+        rng = random.Random(42)
+        with pytest.raises(
+            ValueError,
+            match="charset \\(after applying exclude\\) must contain at least one character",
+        ):
+            _random_string(3, "", rng)
+
+    def test_normal_case_returns_string_of_requested_length(self) -> None:
+        rng = random.Random(42)
+        s = _random_string(5, "abc", rng)
+        assert len(s) == 5
+        assert all(c in "abc" for c in s)

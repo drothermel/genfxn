@@ -64,6 +64,7 @@ ALLOWED_METHOD_NAMES: frozenset[str] = frozenset(
         "swapcase",
         "replace",
         "strip",
+        "find",
     }
 )
 
