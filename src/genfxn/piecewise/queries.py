@@ -5,8 +5,8 @@ from genfxn.core.predicates import get_threshold
 from genfxn.piecewise.eval import eval_piecewise
 from genfxn.piecewise.models import Branch, PiecewiseSpec
 
-# Condition kinds supported by query generation. This is the authoritative contract -
-# validators should import this constant rather than duplicating the set.
+# Condition kinds supported by query generation. This is the authoritative
+# contract - validators should import this constant rather than duplicating.
 SUPPORTED_CONDITION_KINDS: frozenset[str] = frozenset({"lt", "le"})
 
 

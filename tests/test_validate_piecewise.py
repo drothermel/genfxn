@@ -423,7 +423,7 @@ class TestEmitDiagnostics:
             max_semantic_issues=5,
             emit_diagnostics=False,
         )
-        # SEMANTIC_ISSUES_CAPPED is operational, not diagnostic - should still emit
+        # SEMANTIC_ISSUES_CAPPED is operational, not diagnostic - still emit
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
 

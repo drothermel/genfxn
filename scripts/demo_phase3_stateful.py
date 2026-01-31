@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """Phase 3 Demo: Stateful iteration functions (list[int] -> int).
 
-This demo shows the complete pipeline for generating stateful iterator functions:
-  1. Three template types: ConditionalLinearSum, ResettingBestPrefixSum, LongestRun
+This demo shows the complete pipeline for generating stateful iterator
+functions:
+  1. Three template types: ConditionalLinearSum, ResettingBestPrefixSum,
+     LongestRun
   2. Each template uses predicates and transforms from the core DSL
   3. Generated functions iterate over lists with accumulator state
 

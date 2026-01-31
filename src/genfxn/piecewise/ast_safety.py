@@ -1,7 +1,8 @@
 """AST safety checks for piecewise code validation.
 
 This module defines what AST nodes the piecewise renderer is expected to emit.
-The whitelist should be expanded intentionally when new expression forms are added.
+The whitelist should be expanded intentionally when new expression forms
+are added.
 
 IMPORTANT: If you change the renderer to emit new node types, update this
 whitelist and the tests will catch any drift.

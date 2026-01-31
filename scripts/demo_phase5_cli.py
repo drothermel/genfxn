@@ -57,7 +57,8 @@ def main() -> None:
         run(
             f"uv run genfxn split {piecewise} "
             f"--train {train2} --test {test2} "
-            f"--holdout-axis branches.0.condition.value --holdout-value -10,10 --holdout-type range"
+            f"--holdout-axis branches.0.condition.value --holdout-value "
+            f"-10,10 --holdout-type range"
         )
         run(f"uv run genfxn info {train2}")
         run(f"uv run genfxn info {test2}")

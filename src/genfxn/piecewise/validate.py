@@ -94,7 +94,10 @@ def _validate_ast_whitelist(
                     Issue(
                         code=CODE_UNSAFE_AST,
                         severity=Severity.ERROR,
-                        message=f"Disallowed name '{node.id}' at line {node.lineno}",
+                        message=(
+                            f"Disallowed name '{node.id}' at line "
+                            f"{node.lineno}"
+                        ),
                         location="code",
                     )
                 )
@@ -110,7 +113,8 @@ def _validate_task_id(task: Task) -> list[Issue]:
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
                 message=(
-                    f"task_id '{task.task_id}' does not match spec hash '{expected}'"
+                    f"task_id '{task.task_id}' does not match spec hash "
+                    f"'{expected}'"
                 ),
                 location="task_id",
                 task_id=task.task_id,
@@ -148,8 +152,8 @@ def _validate_condition_support(task: Task, spec: PiecewiseSpec) -> list[Issue]:
                     code=CODE_UNSUPPORTED_CONDITION,
                     severity=Severity.ERROR,
                     message=(
-                        f"Condition kind '{kind}' not supported by query generator "
-                        f"(supported: {supported})"
+                        f"Condition kind '{kind}' not supported by query "
+                        f"generator (supported: {supported})"
                     ),
                     location=f"spec.branches[{i}].condition",
                     task_id=task.task_id,
@@ -223,7 +227,10 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                 Issue(
                     code=CODE_QUERY_INPUT_TYPE,
                     severity=severity,
-                    message=f"Query input is {type(q.input).__name__}, expected int",
+                    message=(
+                        f"Query input is {type(q.input).__name__}, "
+                        f"expected int"
+                    ),
                     location=f"queries[{i}].input",
                     task_id=task.task_id,
                 )
@@ -233,7 +240,10 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
                     severity=severity,
-                    message=f"Query output is {type(q.output).__name__}, expected int",
+                    message=(
+                        f"Query output is {type(q.output).__name__}, "
+                        f"expected int"
+                    ),
                     location=f"queries[{i}].output",
                     task_id=task.task_id,
                 )
@@ -255,8 +265,8 @@ def _validate_query_outputs(task: Task, spec: PiecewiseSpec) -> list[Issue]:
                     code=CODE_QUERY_OUTPUT_MISMATCH,
                     severity=Severity.ERROR,
                     message=(
-                        f"Query output {q.output} != expected {expected} for input "
-                        f"{q.input}"
+                        f"Query output {q.output} != expected {expected} "
+                        f"for input {q.input}"
                     ),
                     location=f"queries[{i}]",
                     task_id=task.task_id,
@@ -336,7 +346,10 @@ def _check_monotonic_thresholds(task: Task, spec: PiecewiseSpec) -> list[Issue]:
             Issue(
                 code=CODE_NON_MONOTONIC_THRESHOLDS,
                 severity=Severity.WARNING,
-                message=f"Branch thresholds are not strictly increasing: {thresholds}",
+                message=(
+                    f"Branch thresholds are not strictly increasing: "
+                    f"{thresholds}"
+                ),
                 location="spec.branches",
                 task_id=task.task_id,
             )
@@ -358,7 +371,9 @@ def validate_piecewise_task(
             Issue(
                 code=WRONG_FAMILY,
                 severity=Severity.ERROR,
-                message=f"Task family '{task.family}' is not '{CURRENT_FAMILY}'",
+                message=(
+                    f"Task family '{task.family}' is not '{CURRENT_FAMILY}'"
+                ),
                 location="family",
                 task_id=task.task_id,
             )
