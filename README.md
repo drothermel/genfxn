@@ -116,13 +116,21 @@ Web UI for browsing generated tasks.
 uv run genfxn generate -o tasks.jsonl -n 50
 
 # 2. Start backend (from repo root)
-cd viewer/backend && uv run viewer-api serve ../../tasks.jsonl --port 8000
+cd viewer/backend && uv run viewer-api ../../tasks.jsonl --port 8000
 
 # 3. Start frontend (separate terminal)
 cd viewer/frontend && bun dev
 ```
 
 Open http://localhost:5173 to browse tasks.
+
+### API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/tasks` | List all tasks (optional `?family=` filter) |
+| `GET /api/tasks/{task_id}` | Get single task by ID |
+| `GET /api/families` | List available task families |
 
 ## Function Families
 

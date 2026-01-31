@@ -28,3 +28,6 @@ class Task(BaseModel):
     trace: GenerationTrace | None = Field(
         default=None, description="Optional generation trace for debugging"
     )
+    axes: dict[str, Any] | None = Field(
+        default=None, description="Axes/ranges used for sampling"
+    )

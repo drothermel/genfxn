@@ -34,4 +34,5 @@ def generate_piecewise_task(
         code=code,
         queries=queries,
         trace=trace,
+        axes=axes.model_dump(),
     )

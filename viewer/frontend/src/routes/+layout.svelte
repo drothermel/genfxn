@@ -10,6 +10,6 @@
 	<title>genfxn Trace Viewer</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 font-sans">
+<div class="min-h-screen bg-muted/40 font-sans antialiased">
 	{@render children()}
 </div>
