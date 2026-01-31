@@ -157,6 +157,11 @@ def _should_overlap(overlap_level: OverlapLevel, rng: random.Random) -> bool:
             return rng.random() < 0.2
         case OverlapLevel.HIGH:
             return rng.random() < 0.6
+        case _:
+            raise ValueError(
+                f"Unknown OverlapLevel: {overlap_level!r}; expected one of "
+                f"{list(OverlapLevel)}"
+            )
 
 
 def sample_stringrules_spec(

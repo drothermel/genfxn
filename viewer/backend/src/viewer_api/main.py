@@ -53,7 +53,7 @@ def serve(
     uvicorn.run(app, host=host, port=port)
 
 
-# For use with: uvicorn viewer_api.main:app
+# For programmatic use: uvicorn viewer_api.main:app (app = FastAPI instance)
 # Default path from GENFXN_VIEWER_JSONL env var, or "tasks.jsonl" in cwd.
 _default_jsonl = Path(os.environ.get("GENFXN_VIEWER_JSONL", "tasks.jsonl"))
 app = create_app(_default_jsonl)

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { fetchTasks, fetchFamilies } from '$lib/api';
 	import type { Task } from '$lib/types';
 	import { Card, CardHeader, CardTitle, CardContent } from '$lib/components/ui/card';
@@ -37,13 +36,9 @@
 		}
 	}
 
-	onMount(loadData);
-
 	$effect(() => {
-		// Re-fetch when family changes
-		if (selectedFamily !== undefined) {
-			loadData();
-		}
+		// Load on mount and re-fetch when family changes (selectedFamily is read inside loadData)
+		loadData();
 	});
 </script>
 

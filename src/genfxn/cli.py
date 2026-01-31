@@ -31,11 +31,25 @@ app = typer.Typer(help="Generate and split function synthesis tasks.")
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
-    """Parse 'lo,hi' string into tuple."""
+    """Parse 'lo,hi' string into tuple. Raises typer.BadParameter on invalid input."""
     if value is None:
         return None
-    lo, hi = value.split(",")
-    return (int(lo.strip()), int(hi.strip()))
+    try:
+        parts = value.split(",")
+        if len(parts) != 2:
+            raise typer.BadParameter(
+                "Invalid range: expected 'LO,HI' with integers"
+            )
+        lo_s, hi_s = parts[0].strip(), parts[1].strip()
+        if not lo_s or not hi_s:
+            raise typer.BadParameter(
+                "Invalid range: expected 'LO,HI' with integers"
+            )
+        return (int(lo_s), int(hi_s))
+    except (ValueError, IndexError):
+        raise typer.BadParameter(
+            "Invalid range: expected 'LO,HI' with integers"
+        )
 
 
 def _build_stateful_axes(
@@ -56,9 +70,15 @@ def _build_stateful_axes(
             TemplateType(t.strip()) for t in templates.split(",")
         ]
     if predicate_types:
-        kwargs["predicate_types"] = [
-            PredicateType(p.strip()) for p in predicate_types.split(",")
-        ]
+        tokens = [p.strip() for p in predicate_types.split(",")]
+        if any(t.lower() == "in_set" for t in tokens):
+            typer.echo(
+                "IN_SET is not supported for stateful generation",
+                err=True,
+            )
+            raise typer.Exit(1)
+        parsed_predicate_types = [PredicateType(t) for t in tokens]
+        kwargs["predicate_types"] = parsed_predicate_types
     if transform_types:
         kwargs["transform_types"] = [
             TransformType(t.strip()) for t in transform_types.split(",")
@@ -421,7 +441,11 @@ def split(
         raise typer.Exit(1)
 
     if has_random:
-        assert random_ratio is not None
+        if random_ratio is None:
+            typer.echo(
+                "Error: --random-ratio is required for random split", err=True
+            )
+            raise typer.Exit(1)
         if random_ratio <= 0 or random_ratio >= 1:
             typer.echo(
                 "Error: --random-ratio must be between 0 and 1", err=True
@@ -438,8 +462,14 @@ def split(
 
         parsed_value: str | tuple[int, int] = holdout_value
         if holdout_type == "range":
-            lo, hi = holdout_value.split(",")
-            parsed_value = (int(lo), int(hi))
+            range_val = _parse_range(holdout_value)
+            if range_val is None:
+                typer.echo(
+                    "Error: --holdout-value is required for range holdout",
+                    err=True,
+                )
+                raise typer.Exit(1)
+            parsed_value = range_val
 
         holdouts = [
             AxisHoldout(

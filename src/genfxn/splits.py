@@ -62,6 +62,10 @@ def random_split(
     seed: int | None = None,
 ) -> SplitResult:
     """Randomly split tasks into train/test."""
+    if not (0.0 <= train_ratio <= 1.0):
+        raise ValueError(
+            f"train_ratio must be in [0.0, 1.0], got {train_ratio!r}"
+        )
     rng = random.Random(seed)
     shuffled = tasks.copy()
     rng.shuffle(shuffled)

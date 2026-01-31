@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { fetchTask } from '$lib/api';
 	import type { Task } from '$lib/types';
@@ -19,14 +18,27 @@
 
 	const taskId = $derived(page.params.id);
 
-	onMount(async () => {
-		try {
-			task = await fetchTask(taskId);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Unknown error';
-		} finally {
+	$effect(() => {
+		const id = taskId;
+		if (id == null) {
 			loading = false;
+			return;
 		}
+		loading = true;
+		error = null;
+		task = null;
+		fetchTask(id)
+			.then((t) => {
+				if (page.params.id === id) task = t;
+			})
+			.catch((e) => {
+				if (page.params.id === id) {
+					error = e instanceof Error ? e.message : 'Unknown error';
+				}
+			})
+			.finally(() => {
+				if (page.params.id === id) loading = false;
+			});
 	});
 </script>
 
