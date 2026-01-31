@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import typer
@@ -40,7 +41,7 @@ def create_app(jsonl_path: Path) -> FastAPI:
 
 @cli.command()
 def serve(
-    jsonl_path: Path = typer.Argument(..., help="Path to JSONL file with tasks"),
+    jsonl_path: Path = typer.Argument(..., help="Path to JSONL file"),
     host: str = typer.Option("127.0.0.1", help="Host to bind to"),
     port: int = typer.Option(8000, help="Port to bind to"),
 ) -> None:
@@ -52,8 +53,27 @@ def serve(
     uvicorn.run(app, host=host, port=port)
 
 
-# For use with: uvicorn viewer_api.main:app
-app = cli
+# Lazy app for uvicorn: viewer_api.main:app (no file loading at import time).
+_default_jsonl = Path(os.environ.get("GENFXN_VIEWER_JSONL", "tasks.jsonl"))
+_cached_app: FastAPI | None = None
+
+
+def get_app() -> FastAPI:
+    """Return the FastAPI app, creating it from _default_jsonl on first use."""
+    global _cached_app
+    if _cached_app is None:
+        _cached_app = create_app(_default_jsonl)
+    return _cached_app
+
+
+class _LazyASGI:
+    """ASGI callable that delegates to get_app() on first request."""
+
+    async def __call__(self, scope, receive, send):
+        await get_app()(scope, receive, send)
+
+
+app = _LazyASGI()
 
 if __name__ == "__main__":
     cli()

@@ -38,15 +38,16 @@ class TestGenerate:
     def test_generate_all(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
-            app, ["generate", "-o", str(output), "-f", "all", "-n", "10"]
+            app, ["generate", "-o", str(output), "-f", "all", "-n", "20"]
         )
 
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
-        assert len(tasks) == 10
+        assert len(tasks) == 20
 
         families = {t["family"] for t in tasks}
-        assert families == {"piecewise", "stateful"}
+        expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
+        assert families == expected
 
     def test_generate_with_seed(self, tmp_path) -> None:
         output1 = tmp_path / "tasks1.jsonl"
@@ -192,6 +193,68 @@ class TestSplit:
             val = int(t["spec"]["branches"][0]["condition"]["value"])
             assert -10 <= val <= 10
 
+    def test_split_random_ratio_accepts_zero_and_one(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "10",
+                "-s",
+                "42",
+            ],
+        )
+
+        result_0 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0",
+                "--seed",
+                "42",
+            ],
+        )
+        assert result_0.exit_code == 0
+        train_0 = list(srsly.read_jsonl(train_file))
+        test_0 = list(srsly.read_jsonl(test_file))
+        assert len(train_0) == 0
+        assert len(test_0) == 10
+
+        result_1 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "1",
+                "--seed",
+                "42",
+            ],
+        )
+        assert result_1.exit_code == 0
+        train_1 = list(srsly.read_jsonl(train_file))
+        test_1 = list(srsly.read_jsonl(test_file))
+        assert len(train_1) == 10
+        assert len(test_1) == 0
+
 
 class TestInfo:
     def test_info_output(self, tmp_path) -> None:
@@ -205,7 +268,7 @@ class TestInfo:
                 "-f",
                 "all",
                 "-n",
-                "10",
+                "20",
                 "-s",
                 "42",
             ],
@@ -214,9 +277,11 @@ class TestInfo:
         result = runner.invoke(app, ["info", str(input_file)])
 
         assert result.exit_code == 0
-        assert "10 tasks" in result.stdout
-        assert "piecewise: 5" in result.stdout
-        assert "stateful: 5" in result.stdout
+        assert "20 tasks" in result.stdout
+        assert "piecewise:" in result.stdout
+        assert "stateful:" in result.stdout
+        assert "simple_algorithms:" in result.stdout
+        assert "stringrules:" in result.stdout
 
     def test_info_single_family(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

@@ -1,6 +1,8 @@
 import random
 
 from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.describe import describe_task
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.piecewise.models import PiecewiseAxes
@@ -26,6 +28,8 @@ def generate_piecewise_task(
     queries = generate_piecewise_queries(spec, axes.value_range, rng)
 
     trace = GenerationTrace(family="piecewise", steps=trace_steps)
+    difficulty = compute_difficulty("piecewise", spec_dict)
+    description = describe_task("piecewise", spec_dict)
 
     return Task(
         task_id=task_id,
@@ -35,4 +39,6 @@ def generate_piecewise_task(
         queries=queries,
         trace=trace,
         axes=axes.model_dump(),
+        difficulty=difficulty,
+        description=description,
     )

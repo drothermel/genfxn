@@ -1,28 +1,56 @@
 import random
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import srsly
 import typer
 
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
+from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
+from genfxn.core.string_predicates import StringPredicateType
+from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.simple_algorithms.models import (
+    CountingMode,
+    SimpleAlgorithmsAxes,
+    TieBreakMode,
+)
+from genfxn.simple_algorithms.models import (
+    TemplateType as SimpleAlgoTemplateType,
+)
+from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.splits import AxisHoldout, HoldoutType, random_split, split_tasks
 from genfxn.stateful.models import StatefulAxes, TemplateType
 from genfxn.stateful.task import generate_stateful_task
+from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
+from genfxn.stringrules.task import generate_stringrules_task
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
-    """Parse 'lo,hi' string into tuple."""
+    """Parse 'lo,hi' into tuple. Raises typer.BadParameter on invalid input."""
     if value is None:
         return None
-    lo, hi = value.split(",")
-    return (int(lo.strip()), int(hi.strip()))
+    try:
+        parts = value.split(",")
+        if len(parts) != 2:
+            raise typer.BadParameter(
+                "Invalid range: expected 'LO,HI' with integers"
+            )
+        lo_s, hi_s = parts[0].strip(), parts[1].strip()
+        if not lo_s or not hi_s:
+            raise typer.BadParameter(
+                "Invalid range: expected 'LO,HI' with integers"
+            )
+        return (int(lo_s), int(hi_s))
+    except (ValueError, IndexError) as err:
+        raise typer.BadParameter(
+            "Invalid range: expected 'LO,HI' with integers"
+        ) from err
 
 
 def _build_stateful_axes(
@@ -43,9 +71,15 @@ def _build_stateful_axes(
             TemplateType(t.strip()) for t in templates.split(",")
         ]
     if predicate_types:
-        kwargs["predicate_types"] = [
-            PredicateType(p.strip()) for p in predicate_types.split(",")
-        ]
+        tokens = [p.strip() for p in predicate_types.split(",")]
+        if any(t.lower() == "in_set" for t in tokens):
+            typer.echo(
+                "IN_SET is not supported for stateful generation",
+                err=True,
+            )
+            raise typer.Exit(1)
+        parsed_predicate_types = [PredicateType(t) for t in tokens]
+        kwargs["predicate_types"] = parsed_predicate_types
     if transform_types:
         kwargs["transform_types"] = [
             TransformType(t.strip()) for t in transform_types.split(",")
@@ -92,19 +126,103 @@ def _build_piecewise_axes(
     return PiecewiseAxes(**kwargs)
 
 
+def _build_simple_algorithms_axes(
+    algorithm_types: str | None,
+    tie_break_modes: str | None,
+    counting_modes: str | None,
+    window_size_range: str | None,
+    target_range: str | None,
+    value_range: str | None,
+    list_length_range: str | None,
+) -> SimpleAlgorithmsAxes:
+    """Build SimpleAlgorithmsAxes from CLI options."""
+    kwargs: dict = {}
+    if algorithm_types:
+        kwargs["templates"] = [
+            SimpleAlgoTemplateType(t.strip())
+            for t in algorithm_types.split(",")
+        ]
+    if tie_break_modes:
+        kwargs["tie_break_modes"] = [
+            TieBreakMode(m.strip()) for m in tie_break_modes.split(",")
+        ]
+    if counting_modes:
+        kwargs["counting_modes"] = [
+            CountingMode(m.strip()) for m in counting_modes.split(",")
+        ]
+    if window_size_range:
+        kwargs["window_size_range"] = _parse_range(window_size_range)
+    if target_range:
+        kwargs["target_range"] = _parse_range(target_range)
+    if value_range:
+        kwargs["value_range"] = _parse_range(value_range)
+    if list_length_range:
+        kwargs["list_length_range"] = _parse_range(list_length_range)
+    return SimpleAlgorithmsAxes(**kwargs)
+
+
+def _build_stringrules_axes(
+    n_rules: int | None,
+    string_predicate_types: str | None,
+    string_transform_types: str | None,
+    overlap_level: str | None,
+    string_length_range: str | None,
+) -> StringRulesAxes:
+    """Build StringRulesAxes from CLI options."""
+    kwargs: dict = {}
+    if n_rules is not None:
+        kwargs["n_rules"] = n_rules
+    if string_predicate_types:
+        kwargs["predicate_types"] = [
+            StringPredicateType(p.strip())
+            for p in string_predicate_types.split(",")
+        ]
+    if string_transform_types:
+        kwargs["transform_types"] = [
+            StringTransformType(t.strip())
+            for t in string_transform_types.split(",")
+        ]
+    if overlap_level:
+        kwargs["overlap_level"] = OverlapLevel(overlap_level.strip())
+    if string_length_range:
+        kwargs["string_length_range"] = _parse_range(string_length_range)
+    return StringRulesAxes(**kwargs)
+
+
 @app.command()
 def generate(
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Output JSONL file")
     ],
     family: Annotated[
-        str, typer.Option("--family", "-f", help="piecewise, stateful, or all")
+        str,
+        typer.Option(
+            "--family",
+            "-f",
+            help="piecewise, stateful, simple_algorithms, stringrules, or all",
+        ),
     ] = "all",
     count: Annotated[
         int, typer.Option("--count", "-n", help="Number of tasks")
     ] = 100,
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
+    ] = None,
+    # Difficulty presets
+    difficulty: Annotated[
+        int | None,
+        typer.Option(
+            "--difficulty",
+            "-d",
+            help="Target difficulty level (1-5, depends on family)",
+        ),
+    ] = None,
+    variant: Annotated[
+        str | None,
+        typer.Option(
+            "--variant",
+            help="Preset variant (e.g. '3A', '3B'). Random if omitted.",
+        ),
     ] = None,
     # Type filters - stateful
     templates: Annotated[
@@ -127,6 +245,59 @@ def generate(
     expr_types: Annotated[
         str | None,
         typer.Option("--expr-types", help="Expression types (comma-separated)"),
+    ] = None,
+    # Type filters - simple_algorithms
+    algorithm_types: Annotated[
+        str | None,
+        typer.Option(
+            "--algorithm-types",
+            help="Algorithm types: most_frequent, count_pairs_sum, etc.",
+        ),
+    ] = None,
+    tie_break_modes: Annotated[
+        str | None,
+        typer.Option("--tie-break-modes", help="smallest, first_seen"),
+    ] = None,
+    counting_modes: Annotated[
+        str | None,
+        typer.Option(
+            "--counting-modes", help="Counting: all_indices, unique_values"
+        ),
+    ] = None,
+    window_size_range: Annotated[
+        str | None,
+        typer.Option("--window-size-range", help="Window size range (lo,hi)"),
+    ] = None,
+    target_range: Annotated[
+        str | None,
+        typer.Option("--target-range", help="Target sum range (lo,hi)"),
+    ] = None,
+    # Type filters - stringrules
+    n_rules: Annotated[
+        int | None,
+        typer.Option("--n-rules", help="Number of string rules (1-8)"),
+    ] = None,
+    string_predicate_types: Annotated[
+        str | None,
+        typer.Option(
+            "--string-predicate-types",
+            help="Predicate types: starts_with, ends_with, etc.",
+        ),
+    ] = None,
+    string_transform_types: Annotated[
+        str | None,
+        typer.Option(
+            "--string-transform-types",
+            help="String transform types: lowercase, uppercase, reverse, etc.",
+        ),
+    ] = None,
+    overlap_level: Annotated[
+        str | None,
+        typer.Option("--overlap-level", help="Overlap level: none, low, high"),
+    ] = None,
+    string_length_range: Annotated[
+        str | None,
+        typer.Option("--string-length-range", help="String length (lo,hi)"),
     ] = None,
     # Range options - shared
     value_range: Annotated[
@@ -164,61 +335,128 @@ def generate(
     rng = random.Random(seed)
     tasks: list[Task] = []
 
-    # Warn about mismatched options
-    stateful_only = [
-        templates,
-        predicate_types,
-        transform_types,
-        list_length_range,
-        shift_range,
-        scale_range,
-    ]
-    piecewise_only = [n_branches, expr_types, coeff_range]
+    # Validate difficulty/variant options
+    if difficulty is not None:
+        if family == "all":
+            typer.echo(
+                "Error: --difficulty requires a specific family, not 'all'",
+                err=True,
+            )
+            raise typer.Exit(1)
+        try:
+            valid = get_valid_difficulties(family)
+        except ValueError as e:
+            typer.echo(f"Error: {e}", err=True)
+            raise typer.Exit(1) from e
+        if difficulty not in valid:
+            typer.echo(
+                f"Error: Invalid difficulty {difficulty} for {family}. "
+                f"Valid: {valid}",
+                err=True,
+            )
+            raise typer.Exit(1)
 
-    if family == "piecewise" and any(opt is not None for opt in stateful_only):
+    if variant is not None and difficulty is None:
         typer.echo(
-            "Warning: stateful-only options ignored for piecewise family",
+            "Error: --variant requires --difficulty to be specified",
             err=True,
         )
-    if family == "stateful" and any(opt is not None for opt in piecewise_only):
-        typer.echo(
-            "Warning: piecewise-only options ignored for stateful family",
-            err=True,
-        )
+        raise typer.Exit(1)
 
-    # Build axes
-    stateful_axes = _build_stateful_axes(
-        templates=templates,
-        predicate_types=predicate_types,
-        transform_types=transform_types,
-        value_range=value_range,
-        threshold_range=threshold_range,
-        divisor_range=divisor_range,
-        list_length_range=list_length_range,
-        shift_range=shift_range,
-        scale_range=scale_range,
-    )
-    piecewise_axes = _build_piecewise_axes(
-        n_branches=n_branches,
-        expr_types=expr_types,
-        value_range=value_range,
-        threshold_range=threshold_range,
-        divisor_range=divisor_range,
-        coeff_range=coeff_range,
-    )
+    # Build axes for all families (or use preset if difficulty specified)
+    if difficulty is not None:
+        # Use difficulty preset - generate axes per task for variety
+        pass  # Will build axes in the generation loop
+    else:
+        # Build static axes from CLI options
+        stateful_axes = _build_stateful_axes(
+            templates=templates,
+            predicate_types=predicate_types,
+            transform_types=transform_types,
+            value_range=value_range,
+            threshold_range=threshold_range,
+            divisor_range=divisor_range,
+            list_length_range=list_length_range,
+            shift_range=shift_range,
+            scale_range=scale_range,
+        )
+        piecewise_axes = _build_piecewise_axes(
+            n_branches=n_branches,
+            expr_types=expr_types,
+            value_range=value_range,
+            threshold_range=threshold_range,
+            divisor_range=divisor_range,
+            coeff_range=coeff_range,
+        )
+        simple_algo_axes = _build_simple_algorithms_axes(
+            algorithm_types=algorithm_types,
+            tie_break_modes=tie_break_modes,
+            counting_modes=counting_modes,
+            window_size_range=window_size_range,
+            target_range=target_range,
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
+        stringrules_axes = _build_stringrules_axes(
+            n_rules=n_rules,
+            string_predicate_types=string_predicate_types,
+            string_transform_types=string_transform_types,
+            overlap_level=overlap_level,
+            string_length_range=string_length_range,
+        )
 
     if family == "all":
-        half = count // 2
-        for _ in range(half):
+        # Split evenly among all 4 families
+        quarter = count // 4
+        for _ in range(quarter):
             tasks.append(generate_piecewise_task(axes=piecewise_axes, rng=rng))
-        for _ in range(count - half):
+        for _ in range(quarter):
             tasks.append(generate_stateful_task(axes=stateful_axes, rng=rng))
+        for _ in range(quarter):
+            t = generate_simple_algorithms_task(axes=simple_algo_axes, rng=rng)
+            tasks.append(t)
+        # Remainder goes to stringrules
+        for _ in range(count - 3 * quarter):
+            task = generate_stringrules_task(axes=stringrules_axes, rng=rng)
+            tasks.append(task)
     elif family == "piecewise":
         for _ in range(count):
-            tasks.append(generate_piecewise_task(axes=piecewise_axes, rng=rng))
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = piecewise_axes
+            tasks.append(
+                generate_piecewise_task(axes=cast(PiecewiseAxes, axes), rng=rng)
+            )
     elif family == "stateful":
         for _ in range(count):
-            tasks.append(generate_stateful_task(axes=stateful_axes, rng=rng))
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = stateful_axes
+            tasks.append(
+                generate_stateful_task(axes=cast(StatefulAxes, axes), rng=rng)
+            )
+    elif family == "simple_algorithms":
+        for _ in range(count):
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = simple_algo_axes
+            t = generate_simple_algorithms_task(
+                axes=cast(SimpleAlgorithmsAxes, axes), rng=rng
+            )
+            tasks.append(t)
+    elif family == "stringrules":
+        for _ in range(count):
+            if difficulty is not None:
+                axes = get_difficulty_axes(family, difficulty, variant, rng)
+            else:
+                axes = stringrules_axes
+            task = generate_stringrules_task(
+                axes=cast(StringRulesAxes, axes), rng=rng
+            )
+            tasks.append(task)
     else:
         typer.echo(f"Unknown family: {family}", err=True)
         raise typer.Exit(1)
@@ -235,7 +473,7 @@ def split(
     # Random split options
     random_ratio: Annotated[
         float | None,
-        typer.Option("--random-ratio", help="Train ratio (0-1)"),
+        typer.Option("--random-ratio", help="Train ratio in [0, 1]"),
     ] = None,
     split_seed: Annotated[
         int | None,
@@ -277,11 +515,13 @@ def split(
         raise typer.Exit(1)
 
     if has_random:
-        assert random_ratio is not None
-        if random_ratio <= 0 or random_ratio >= 1:
+        if random_ratio is None:
             typer.echo(
-                "Error: --random-ratio must be between 0 and 1", err=True
+                "Error: --random-ratio is required for random split", err=True
             )
+            raise typer.Exit(1)
+        if random_ratio < 0 or random_ratio > 1:
+            typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
         result = random_split(tasks, random_ratio, seed=split_seed)
     else:
@@ -294,8 +534,14 @@ def split(
 
         parsed_value: str | tuple[int, int] = holdout_value
         if holdout_type == "range":
-            lo, hi = holdout_value.split(",")
-            parsed_value = (int(lo), int(hi))
+            range_val = _parse_range(holdout_value)
+            if range_val is None:
+                typer.echo(
+                    "Error: --holdout-value is required for range holdout",
+                    err=True,
+                )
+                raise typer.Exit(1)
+            parsed_value = range_val
 
         holdouts = [
             AxisHoldout(

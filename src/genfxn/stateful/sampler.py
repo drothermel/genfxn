@@ -132,7 +132,7 @@ def sample_stateful_spec(
                 trace.append(
                     TraceStep(
                         step="sample_true_transform",
-                        choice=f"True transform: {render_transform(true_transform)}",
+                        choice=f"True: {render_transform(true_transform)}",
                         value=true_transform.model_dump(),
                     )
                 )
@@ -145,7 +145,7 @@ def sample_stateful_spec(
                 trace.append(
                     TraceStep(
                         step="sample_false_transform",
-                        choice=f"False transform: {render_transform(false_transform)}",
+                        choice=f"False: {render_transform(false_transform)}",
                         value=false_transform.model_dump(),
                     )
                 )
@@ -185,7 +185,7 @@ def sample_stateful_spec(
                 trace.append(
                     TraceStep(
                         step="sample_reset_predicate",
-                        choice=f"Reset predicate: {render_predicate(reset_predicate)}",
+                        choice=f"Reset: {render_predicate(reset_predicate)}",
                         value=reset_predicate.model_dump(),
                     )
                 )
@@ -223,7 +223,7 @@ def sample_stateful_spec(
                 trace.append(
                     TraceStep(
                         step="sample_match_predicate",
-                        choice=f"Match predicate: {render_predicate(match_predicate)}",
+                        choice=f"Match: {render_predicate(match_predicate)}",
                         value=match_predicate.model_dump(),
                     )
                 )

@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 class TraceStep(BaseModel):
     """Single step in the generation trace."""
 
-    step: str = Field(description="Step identifier, e.g., 'sample_thresholds'")
-    choice: str = Field(description="Human-readable description of what was chosen")
-    value: Any = Field(description="The actual sampled value (serializable)")
+    step: str = Field(description="Step identifier")
+    choice: str = Field(description="Human-readable description of choice")
+    value: Any = Field(description="The actual sampled value")
 
 
 class GenerationTrace(BaseModel):

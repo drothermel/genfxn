@@ -1,3 +1,5 @@
+import pytest
+
 from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.splits import AxisHoldout, HoldoutType, random_split, split_tasks
@@ -279,6 +281,28 @@ class TestRandomSplit:
 
         assert len(result.train) == 80
         assert len(result.test) == 20
+
+    def test_train_ratio_accepts_zero_and_one(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(10)]
+        result_0 = random_split(tasks, train_ratio=0.0, seed=42)
+        assert len(result_0.train) == 0
+        assert len(result_0.test) == 10
+        result_1 = random_split(tasks, train_ratio=1.0, seed=42)
+        assert len(result_1.train) == 10
+        assert len(result_1.test) == 0
+
+    def test_train_ratio_out_of_range_raises(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(10)]
+        with pytest.raises(
+            ValueError, match=r"train_ratio must be in \[0\.0, 1\.0\]"
+        ):
+            random_split(tasks, train_ratio=-0.1, seed=42)
+        with pytest.raises(
+            ValueError, match=r"train_ratio must be in \[0\.0, 1\.0\]"
+        ):
+            random_split(tasks, train_ratio=1.5, seed=42)
+        with pytest.raises(ValueError, match=r"got 2\.0"):
+            random_split(tasks, train_ratio=2.0, seed=42)
 
     def test_different_ratios(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(100)]

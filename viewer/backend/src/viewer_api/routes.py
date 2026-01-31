@@ -1,14 +1,12 @@
 from fastapi import APIRouter, HTTPException
-
 from genfxn.core.models import Task
 
 from viewer_api.loader import TaskStore
 
-router = APIRouter(prefix="/api")
-
 
 def create_routes(store: TaskStore) -> APIRouter:
     """Create API routes with access to the task store."""
+    router = APIRouter(prefix="/api")
 
     @router.get("/tasks")
     def list_tasks(family: str | None = None) -> list[Task]:

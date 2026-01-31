@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { fetchTask } from '$lib/api';
 	import type { Task } from '$lib/types';
 	import { Card, CardContent } from '$lib/components/ui/card';
 	import MetadataCard from '$lib/components/cards/metadata-card.svelte';
+	import DescriptionCard from '$lib/components/cards/description-card.svelte';
 	import TraceCard from '$lib/components/cards/trace-card.svelte';
 	import CodeCard from '$lib/components/cards/code-card.svelte';
 	import QueriesCard from '$lib/components/cards/queries-card.svelte';
@@ -18,14 +18,27 @@
 
 	const taskId = $derived(page.params.id);
 
-	onMount(async () => {
-		try {
-			task = await fetchTask(taskId);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Unknown error';
-		} finally {
+	$effect(() => {
+		const id = taskId;
+		if (id == null) {
 			loading = false;
+			return;
 		}
+		loading = true;
+		error = null;
+		task = null;
+		fetchTask(id)
+			.then((t) => {
+				if (page.params.id === id) task = t;
+			})
+			.catch((e) => {
+				if (page.params.id === id) {
+					error = e instanceof Error ? e.message : 'Unknown error';
+				}
+			})
+			.finally(() => {
+				if (page.params.id === id) loading = false;
+			});
 	});
 </script>
 
@@ -54,6 +67,8 @@
 
 		<div class="space-y-6">
 			<MetadataCard {task} />
+
+			<DescriptionCard {task} />
 
 			{#if task.axes}
 				<AxesCard {task} />
