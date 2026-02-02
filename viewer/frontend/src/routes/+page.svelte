@@ -80,9 +80,15 @@
     <Card>
       <CardContent class="py-8 text-center">
         <p class="text-red-500">{error}</p>
-        <p class="mt-2 text-sm text-muted-foreground">
-          Make sure the backend is running on http://127.0.0.1:8000
-        </p>
+        {#if error.includes("404")}
+          <p class="mt-2 text-sm text-muted-foreground">
+            Tasks API not available. Start the backend with a JSONL file, or browse <a href="/runs" class="underline hover:text-foreground">Runs</a> instead.
+          </p>
+        {:else}
+          <p class="mt-2 text-sm text-muted-foreground">
+            Make sure the backend is running.
+          </p>
+        {/if}
       </CardContent>
     </Card>
   {:else if tasks.length === 0}
