@@ -689,7 +689,7 @@ def generate_suite(
     tasks: list[Task] = []
     for spec, spec_dict, task_id, _features in selected[: quota.total]:
         task_rng = random.Random(
-            _stable_seed(seed, family, difficulty, hash(task_id) & 0xFFFFFFFF)
+            _stable_seed(seed, family, difficulty, zlib.crc32(task_id.encode()) & 0xFFFFFFFF)
         )
         task = _generate_task_from_spec(
             family, spec, spec_dict, task_id, task_rng

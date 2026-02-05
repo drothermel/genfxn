@@ -519,6 +519,23 @@ class TestPoolGeneration:
             assert compute_difficulty(family, spec_dict) == difficulty
 
 
+# ── Determinism test ─────────────────────────────────────────────────────
+
+
+class TestDeterminism:
+    def test_generate_suite_deterministic(self) -> None:
+        """Same seed produces identical task_ids and queries across calls."""
+        from genfxn.suites.generate import generate_suite
+
+        a = generate_suite("stringrules", 3, seed=7, pool_size=500)
+        b = generate_suite("stringrules", 3, seed=7, pool_size=500)
+
+        assert len(a) == len(b) > 0
+        for ta, tb in zip(a, b):
+            assert ta.task_id == tb.task_id
+            assert ta.queries == tb.queries
+
+
 # ── Integration test (marked slow) ──────────────────────────────────────
 
 
