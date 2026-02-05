@@ -405,6 +405,185 @@ class TestStringrulesDifficulty:
         )
 
 
+class TestComposedPredicateScore:
+    def test_not_predicate(self) -> None:
+        assert _predicate_score({"kind": "not"}) == 5
+
+    def test_and_predicate(self) -> None:
+        assert _predicate_score({"kind": "and"}) == 5
+
+    def test_or_predicate(self) -> None:
+        assert _predicate_score({"kind": "or"}) == 5
+
+
+class TestPipelineTransformScore:
+    def test_two_step_no_param(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [{"kind": "abs"}, {"kind": "negate"}],
+        }
+        assert _transform_score(spec) == 3
+
+    def test_two_step_one_param(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [{"kind": "abs"}, {"kind": "shift", "offset": 1}],
+        }
+        assert _transform_score(spec) == 4
+
+    def test_two_step_two_param(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [
+                {"kind": "shift", "offset": 1},
+                {"kind": "scale", "factor": 2},
+            ],
+        }
+        assert _transform_score(spec) == 5
+
+    def test_three_step(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [{"kind": "abs"}, {"kind": "negate"}, {"kind": "abs"}],
+        }
+        assert _transform_score(spec) == 5
+
+
+class TestStringComposedPredicateScore:
+    def test_not(self) -> None:
+        assert _string_predicate_score({"kind": "not"}) == 4
+
+    def test_and_two_operands(self) -> None:
+        assert (
+            _string_predicate_score({"kind": "and", "operands": [{}, {}]}) == 4
+        )
+
+    def test_and_three_operands(self) -> None:
+        assert (
+            _string_predicate_score({"kind": "and", "operands": [{}, {}, {}]})
+            == 5
+        )
+
+    def test_or_two_operands(self) -> None:
+        assert (
+            _string_predicate_score({"kind": "or", "operands": [{}, {}]}) == 4
+        )
+
+    def test_or_three_operands(self) -> None:
+        assert (
+            _string_predicate_score({"kind": "or", "operands": [{}, {}, {}]})
+            == 5
+        )
+
+
+class TestStringPipelineTransformScore:
+    def test_two_step_no_param(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [{"kind": "lowercase"}, {"kind": "reverse"}],
+        }
+        assert _string_transform_score(spec) == 3
+
+    def test_two_step_one_param(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [
+                {"kind": "lowercase"},
+                {"kind": "replace", "old": "a", "new": "b"},
+            ],
+        }
+        assert _string_transform_score(spec) == 4
+
+    def test_two_step_two_param(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [
+                {"kind": "replace", "old": "a", "new": "b"},
+                {"kind": "append", "suffix": "!"},
+            ],
+        }
+        assert _string_transform_score(spec) == 5
+
+    def test_three_step(self) -> None:
+        spec = {
+            "kind": "pipeline",
+            "steps": [
+                {"kind": "lowercase"},
+                {"kind": "reverse"},
+                {"kind": "uppercase"},
+            ],
+        }
+        assert _string_transform_score(spec) == 5
+
+
+class TestToggleSumDifficulty:
+    def test_toggle_sum_template_score(self) -> None:
+        spec = {
+            "template": "toggle_sum",
+            "toggle_predicate": {"kind": "even"},
+            "on_transform": {"kind": "identity"},
+            "off_transform": {"kind": "identity"},
+            "init_value": 0,
+        }
+        # toggle_sum=4, even=1, identity avg=1
+        # 0.4*4 + 0.3*1 + 0.3*1 = 1.6+0.3+0.3 = 2.2 -> 2
+        assert _stateful_difficulty(spec) == 2
+
+    def test_toggle_sum_with_composed_pred(self) -> None:
+        spec = {
+            "template": "toggle_sum",
+            "toggle_predicate": {"kind": "and"},
+            "on_transform": {"kind": "shift", "offset": 1},
+            "off_transform": {"kind": "scale", "factor": 2},
+            "init_value": 0,
+        }
+        # toggle_sum=4, and=5, shift+scale avg=3
+        # 0.4*4 + 0.3*5 + 0.3*3 = 1.6+1.5+0.9 = 4.0 -> 4
+        assert _stateful_difficulty(spec) == 4
+
+
+class TestSimpleAlgoWithPreprocess:
+    def test_legacy_scoring_unchanged(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": 0,
+        }
+        # Legacy: 0.5*2 + 0.3*1 + 0.2*1 = 1.5 -> 2
+        assert _simple_algorithms_difficulty(spec) == 2
+
+    def test_with_pre_filter(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "first_seen",
+            "empty_default": 0,
+            "pre_filter": {"kind": "mod_eq", "divisor": 3, "remainder": 0},
+        }
+        # Extended: template=2+1=3, mode=max(2, 4)=4, edge=1
+        # 0.5*3 + 0.3*4 + 0.2*1 = 1.5+1.2+0.2 = 2.9 -> 3
+        assert _simple_algorithms_difficulty(spec) == 3
+
+    def test_with_pre_filter_and_transform(self) -> None:
+        spec = {
+            "template": "count_pairs_sum",
+            "target": 10,
+            "counting_mode": "unique_values",
+            "pre_filter": {"kind": "and"},
+            "pre_transform": {
+                "kind": "pipeline",
+                "steps": [
+                    {"kind": "shift", "offset": 1},
+                    {"kind": "scale", "factor": 2},
+                ],
+            },
+            "no_result_default": -1,
+            "short_list_default": 0,
+        }
+        # Extended: template=3+2=5, mode=max(3, max(5,5))=5, edge=1+2=3
+        # 0.5*5 + 0.3*5 + 0.2*3 = 2.5+1.5+0.6 = 4.6 -> 5
+        assert _simple_algorithms_difficulty(spec) == 5
+
+
 class TestComputeDifficulty:
     def test_piecewise_family(self) -> None:
         spec = {

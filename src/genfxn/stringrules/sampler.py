@@ -2,6 +2,7 @@ import random
 
 from genfxn.core.string_predicates import (
     StringPredicate,
+    StringPredicateAnd,
     StringPredicateContains,
     StringPredicateEndsWith,
     StringPredicateIsAlpha,
@@ -9,6 +10,8 @@ from genfxn.core.string_predicates import (
     StringPredicateIsLower,
     StringPredicateIsUpper,
     StringPredicateLengthCmp,
+    StringPredicateNot,
+    StringPredicateOr,
     StringPredicateStartsWith,
     StringPredicateType,
 )
@@ -18,6 +21,7 @@ from genfxn.core.string_transforms import (
     StringTransformCapitalize,
     StringTransformIdentity,
     StringTransformLowercase,
+    StringTransformPipeline,
     StringTransformPrepend,
     StringTransformReplace,
     StringTransformReverse,
@@ -76,6 +80,50 @@ def sample_string_predicate(
             value = rng.randint(*axes.length_threshold_range)
             return StringPredicateLengthCmp(op=op, value=value)
 
+        case StringPredicateType.NOT:
+            composed = {
+                StringPredicateType.NOT,
+                StringPredicateType.AND,
+                StringPredicateType.OR,
+            }
+            atom_types = [t for t in axes.predicate_types if t not in composed]
+            if not atom_types:
+                atom_types = [StringPredicateType.IS_ALPHA]
+            operand = sample_string_predicate(rng.choice(atom_types), axes, rng)
+            return StringPredicateNot(operand=operand)
+
+        case StringPredicateType.AND:
+            composed = {
+                StringPredicateType.NOT,
+                StringPredicateType.AND,
+                StringPredicateType.OR,
+            }
+            atom_types = [t for t in axes.predicate_types if t not in composed]
+            if not atom_types:
+                atom_types = [StringPredicateType.IS_ALPHA]
+            n = rng.choice([2, 3])
+            operands = [
+                sample_string_predicate(rng.choice(atom_types), axes, rng)
+                for _ in range(n)
+            ]
+            return StringPredicateAnd(operands=operands)
+
+        case StringPredicateType.OR:
+            composed = {
+                StringPredicateType.NOT,
+                StringPredicateType.AND,
+                StringPredicateType.OR,
+            }
+            atom_types = [t for t in axes.predicate_types if t not in composed]
+            if not atom_types:
+                atom_types = [StringPredicateType.IS_ALPHA]
+            n = rng.choice([2, 3])
+            operands = [
+                sample_string_predicate(rng.choice(atom_types), axes, rng)
+                for _ in range(n)
+            ]
+            return StringPredicateOr(operands=operands)
+
         case _:
             raise ValueError(f"Unknown predicate type: {pred_type}")
 
@@ -128,6 +176,21 @@ def sample_string_transform(
             length = rng.randint(*axes.prefix_suffix_length_range)
             suffix = _random_string(length, charset, rng)
             return StringTransformAppend(suffix=suffix)
+
+        case StringTransformType.PIPELINE:
+            n = rng.choice([2, 3])
+            atom_types = [
+                t
+                for t in axes.transform_types
+                if t != StringTransformType.PIPELINE
+            ]
+            if not atom_types:
+                atom_types = [StringTransformType.LOWERCASE]
+            steps = [
+                sample_string_transform(rng.choice(atom_types), axes, rng)
+                for _ in range(n)
+            ]
+            return StringTransformPipeline(steps=steps)
 
         case _:
             raise ValueError(f"Unknown transform type: {trans_type}")

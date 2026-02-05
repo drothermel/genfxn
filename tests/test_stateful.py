@@ -22,6 +22,7 @@ from genfxn.stateful.eval import (
     eval_longest_run,
     eval_resetting_best_prefix_sum,
     eval_stateful,
+    eval_toggle_sum,
 )
 from genfxn.stateful.models import (
     ConditionalLinearSumSpec,
@@ -29,6 +30,7 @@ from genfxn.stateful.models import (
     ResettingBestPrefixSumSpec,
     StatefulAxes,
     TemplateType,
+    ToggleSumSpec,
 )
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stateful.render import render_stateful
@@ -332,3 +334,172 @@ class TestTaskGeneration:
             f = namespace["f"]
             for q in task.queries:
                 assert f(q.input) == q.output, f"Template {template}: mismatch"
+
+
+class TestToggleSumEval:
+    def test_basic(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateLt(value=0),
+            on_transform=TransformIdentity(),
+            off_transform=TransformNegate(),
+            init_value=0,
+        )
+        # Start off: x=1, 1<0? No, off -> acc += -1 = -1
+        # x=-1, -1<0? Yes, toggle on -> acc += -1 = -2
+        # x=2, 2<0? No, on -> acc += 2 = 0
+        # x=-3, -3<0? Yes, toggle off -> acc += 3 = 3
+        # x=4, 4<0? No, off -> acc += -4 = -1
+        assert eval_toggle_sum(spec, [1, -1, 2, -3, 4]) == -1
+
+    def test_empty_list(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateEven(),
+            on_transform=TransformIdentity(),
+            off_transform=TransformIdentity(),
+            init_value=10,
+        )
+        assert eval_toggle_sum(spec, []) == 10
+
+    def test_always_off(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateLt(value=-999),
+            on_transform=TransformIdentity(),
+            off_transform=TransformNegate(),
+            init_value=0,
+        )
+        # Never toggles, stays off -> all negated
+        assert eval_toggle_sum(spec, [1, 2, 3]) == -6
+
+    def test_init_value(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateLt(value=-999),
+            on_transform=TransformIdentity(),
+            off_transform=TransformIdentity(),
+            init_value=100,
+        )
+        assert eval_toggle_sum(spec, [1, 2, 3]) == 106
+
+    def test_with_transforms(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateEven(),
+            on_transform=TransformScale(factor=2),
+            off_transform=TransformShift(offset=10),
+            init_value=0,
+        )
+        # Start off:
+        # x=1 (off): acc += 1+10 = 11
+        # x=2 (toggle on): acc += 2*2 = 15
+        # x=3 (on): acc += 3*2 = 21
+        # x=4 (toggle off): acc += 4+10 = 35
+        assert eval_toggle_sum(spec, [1, 2, 3, 4]) == 35
+
+    def test_via_dispatcher(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateEven(),
+            on_transform=TransformIdentity(),
+            off_transform=TransformNegate(),
+            init_value=0,
+        )
+        assert eval_stateful(spec, [2, 3]) == eval_toggle_sum(spec, [2, 3])
+
+
+class TestResettingValueTransform:
+    def test_with_value_transform(self) -> None:
+        spec = ResettingBestPrefixSumSpec(
+            reset_predicate=PredicateLt(value=0),
+            init_value=0,
+            value_transform=TransformScale(factor=2),
+        )
+        # x=1: current_sum += 2*1 = 2, best=2
+        # x=2: current_sum += 2*2 = 6, best=6
+        # x=-1: reset, best stays 6
+        # x=3: current_sum += 2*3 = 6, best=6
+        assert eval_resetting_best_prefix_sum(spec, [1, 2, -1, 3]) == 6
+
+    def test_value_transform_none(self) -> None:
+        spec = ResettingBestPrefixSumSpec(
+            reset_predicate=PredicateLt(value=0),
+            init_value=0,
+            value_transform=None,
+        )
+        # Without value_transform, same as original behavior
+        assert eval_resetting_best_prefix_sum(spec, [1, 2, -1, 3]) == 3
+
+
+class TestToggleSumRender:
+    def test_render_toggle_sum(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateEven(),
+            on_transform=TransformIdentity(),
+            off_transform=TransformNegate(),
+            init_value=0,
+        )
+        code = render_stateful(spec)
+        assert "on = False" in code
+        assert "on = not on" in code
+        assert "acc" in code
+
+    def test_render_roundtrip(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateGt(value=5),
+            on_transform=TransformShift(offset=1),
+            off_transform=TransformScale(factor=2),
+            init_value=3,
+        )
+        code = render_stateful(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = [[], [1], [6], [1, 6, 2, 8, 3]]
+        for xs in test_inputs:
+            assert f(xs) == eval_stateful(spec, xs), f"Mismatch at xs={xs}"
+
+
+class TestResettingValueTransformRender:
+    def test_render_with_value_transform(self) -> None:
+        spec = ResettingBestPrefixSumSpec(
+            reset_predicate=PredicateLt(value=0),
+            init_value=0,
+            value_transform=TransformScale(factor=2),
+        )
+        code = render_stateful(spec)
+        assert "2 * x" in code or "x * 2" in code
+
+    def test_render_roundtrip(self) -> None:
+        spec = ResettingBestPrefixSumSpec(
+            reset_predicate=PredicateLt(value=0),
+            init_value=0,
+            value_transform=TransformShift(offset=3),
+        )
+        code = render_stateful(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = [[], [1, 2, 3], [1, -1, 2, 3], [-1, -2, -3]]
+        for xs in test_inputs:
+            assert f(xs) == eval_stateful(spec, xs), f"Mismatch at xs={xs}"
+
+
+class TestToggleSumQueries:
+    def test_generates_queries(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateEven(),
+            on_transform=TransformIdentity(),
+            off_transform=TransformNegate(),
+            init_value=0,
+        )
+        axes = StatefulAxes(templates=[TemplateType.TOGGLE_SUM])
+        queries = generate_stateful_queries(spec, axes, random.Random(42))
+        assert len(queries) > 0
+
+    def test_all_queries_valid(self) -> None:
+        spec = ToggleSumSpec(
+            toggle_predicate=PredicateGt(value=0),
+            on_transform=TransformShift(offset=1),
+            off_transform=TransformScale(factor=-1),
+            init_value=5,
+        )
+        axes = StatefulAxes(templates=[TemplateType.TOGGLE_SUM])
+        queries = generate_stateful_queries(spec, axes, random.Random(42))
+        for q in queries:
+            assert q.output == eval_stateful(spec, q.input)

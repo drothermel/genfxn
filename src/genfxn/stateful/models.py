@@ -11,6 +11,7 @@ class TemplateType(str, Enum):
     CONDITIONAL_LINEAR_SUM = "conditional_linear_sum"
     RESETTING_BEST_PREFIX_SUM = "resetting_best_prefix_sum"
     LONGEST_RUN = "longest_run"
+    TOGGLE_SUM = "toggle_sum"
 
 
 # --- Template Specs ---
@@ -28,6 +29,7 @@ class ResettingBestPrefixSumSpec(BaseModel):
     template: Literal["resetting_best_prefix_sum"] = "resetting_best_prefix_sum"
     reset_predicate: Predicate
     init_value: int = 0
+    value_transform: Transform | None = None
 
 
 class LongestRunSpec(BaseModel):
@@ -35,8 +37,19 @@ class LongestRunSpec(BaseModel):
     match_predicate: Predicate
 
 
+class ToggleSumSpec(BaseModel):
+    template: Literal["toggle_sum"] = "toggle_sum"
+    toggle_predicate: Predicate
+    on_transform: Transform
+    off_transform: Transform
+    init_value: int = 0
+
+
 StatefulSpec = Annotated[
-    ConditionalLinearSumSpec | ResettingBestPrefixSumSpec | LongestRunSpec,
+    ConditionalLinearSumSpec
+    | ResettingBestPrefixSumSpec
+    | LongestRunSpec
+    | ToggleSumSpec,
     Field(discriminator="template"),
 ]
 

@@ -178,7 +178,6 @@ PIECEWISE_PRESETS: dict[int, list[DifficultyPreset]] = {
 # =============================================================================
 # Stateful Presets
 # Formula: raw = 0.4 × template + 0.3 × predicate + 0.3 × transform_avg
-# Max achievable: ~3.3 (difficulty 3)
 # =============================================================================
 
 STATEFUL_PRESETS: dict[int, list[DifficultyPreset]] = {
@@ -280,13 +279,61 @@ STATEFUL_PRESETS: dict[int, list[DifficultyPreset]] = {
             },
         ),
     ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "toggle_sum, mod_eq, shift/scale",
+            {
+                "templates": [StatefulTemplateType.TOGGLE_SUM],
+                "predicate_types": [PredicateType.MOD_EQ],
+                "transform_types": [TransformType.SHIFT, TransformType.SCALE],
+            },
+        ),
+        DifficultyPreset(
+            "4B",
+            "resetting, mod_eq, shift value_transform",
+            {
+                "templates": [StatefulTemplateType.RESETTING_BEST_PREFIX_SUM],
+                "predicate_types": [PredicateType.MOD_EQ],
+                "transform_types": [TransformType.SHIFT, TransformType.SCALE],
+            },
+        ),
+        DifficultyPreset(
+            "4C",
+            "conditional, composed NOT, shift/scale",
+            {
+                "templates": [StatefulTemplateType.CONDITIONAL_LINEAR_SUM],
+                "predicate_types": [PredicateType.NOT],
+                "transform_types": [TransformType.SHIFT, TransformType.SCALE],
+            },
+        ),
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "toggle_sum, composed AND, pipeline transform",
+            {
+                "templates": [StatefulTemplateType.TOGGLE_SUM],
+                "predicate_types": [PredicateType.AND],
+                "transform_types": [TransformType.PIPELINE],
+            },
+        ),
+        DifficultyPreset(
+            "5B",
+            "toggle_sum, composed OR, pipeline transform",
+            {
+                "templates": [StatefulTemplateType.TOGGLE_SUM],
+                "predicate_types": [PredicateType.OR],
+                "transform_types": [TransformType.PIPELINE],
+            },
+        ),
+    ],
 }
 
 
 # =============================================================================
 # Simple Algorithms Presets
-# Formula: raw = 0.5 × template + 0.3 × mode + 0.2 × edge
-# Max achievable: ~2.8 (difficulty 3)
+# Formula: raw = 0.5*template + 0.3*mode + 0.2*edge
 # =============================================================================
 
 SIMPLE_ALGORITHMS_PRESETS: dict[int, list[DifficultyPreset]] = {
@@ -343,6 +390,65 @@ SIMPLE_ALGORITHMS_PRESETS: dict[int, list[DifficultyPreset]] = {
             {
                 "templates": [SimpleAlgoTemplateType.COUNT_PAIRS_SUM],
                 "counting_modes": [CountingMode.UNIQUE_VALUES],
+            },
+        ),
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "most_frequent, filter+transform, tie_default",
+            {
+                "templates": [SimpleAlgoTemplateType.MOST_FREQUENT],
+                "tie_break_modes": [TieBreakMode.FIRST_SEEN],
+                "pre_filter_types": [PredicateType.MOD_EQ],
+                "pre_transform_types": [TransformType.SHIFT],
+                "tie_default_range": (-10, 10),
+            },
+        ),
+        DifficultyPreset(
+            "4B",
+            "max_window_sum, filter, empty_default",
+            {
+                "templates": [SimpleAlgoTemplateType.MAX_WINDOW_SUM],
+                "window_size_range": (6, 10),
+                "pre_filter_types": [PredicateType.MOD_EQ],
+                "empty_default_for_empty_range": (-10, 10),
+            },
+        ),
+        DifficultyPreset(
+            "4C",
+            "count_pairs, filter, no_result_default",
+            {
+                "templates": [SimpleAlgoTemplateType.COUNT_PAIRS_SUM],
+                "counting_modes": [CountingMode.UNIQUE_VALUES],
+                "pre_filter_types": [PredicateType.MOD_EQ],
+                "no_result_default_range": (-10, 10),
+            },
+        ),
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "count_pairs, composed filter, pipeline, edge defaults",
+            {
+                "templates": [SimpleAlgoTemplateType.COUNT_PAIRS_SUM],
+                "counting_modes": [CountingMode.UNIQUE_VALUES],
+                "pre_filter_types": [PredicateType.AND],
+                "pre_transform_types": [TransformType.PIPELINE],
+                "no_result_default_range": (-10, 10),
+                "short_list_default_range": (-5, 5),
+            },
+        ),
+        DifficultyPreset(
+            "5B",
+            "max_window_sum, composed filter, pipeline, edge defaults",
+            {
+                "templates": [SimpleAlgoTemplateType.MAX_WINDOW_SUM],
+                "window_size_range": (6, 10),
+                "empty_default_range": (-10, -1),
+                "pre_filter_types": [PredicateType.OR],
+                "pre_transform_types": [TransformType.PIPELINE],
+                "empty_default_for_empty_range": (-10, 10),
             },
         ),
     ],
@@ -527,6 +633,38 @@ STRINGRULES_PRESETS: dict[int, list[DifficultyPreset]] = {
                     StringPredicateType.IS_LOWER,
                 ],
                 "transform_types": [StringTransformType.REPLACE],
+            },
+        ),
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "8 rules, composed AND, pipeline transforms",
+            {
+                "n_rules": 8,
+                "predicate_types": [StringPredicateType.AND],
+                "transform_types": [StringTransformType.PIPELINE],
+            },
+        ),
+        DifficultyPreset(
+            "5B",
+            "10 rules, composed OR, pipeline transforms",
+            {
+                "n_rules": 10,
+                "predicate_types": [StringPredicateType.OR],
+                "transform_types": [StringTransformType.PIPELINE],
+            },
+        ),
+        DifficultyPreset(
+            "5C",
+            "6 rules, composed AND+OR, pipeline transforms",
+            {
+                "n_rules": 6,
+                "predicate_types": [
+                    StringPredicateType.AND,
+                    StringPredicateType.OR,
+                ],
+                "transform_types": [StringTransformType.PIPELINE],
             },
         ),
     ],

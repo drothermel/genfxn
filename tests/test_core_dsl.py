@@ -169,12 +169,26 @@ class TestComposedPredicates:
 
     def test_get_threshold_returns_none(self) -> None:
         assert get_threshold(PredicateNot(operand=PredicateGt(value=5))) is None
-        assert get_threshold(PredicateAnd(operands=[PredicateGt(value=0), PredicateEven()])) is None
-        assert get_threshold(PredicateOr(operands=[PredicateEven(), PredicateOdd()])) is None
+        assert (
+            get_threshold(
+                PredicateAnd(operands=[PredicateGt(value=0), PredicateEven()])
+            )
+            is None
+        )
+        assert (
+            get_threshold(
+                PredicateOr(operands=[PredicateEven(), PredicateOdd()])
+            )
+            is None
+        )
 
     def test_three_operand_and(self) -> None:
         p = PredicateAnd(
-            operands=[PredicateGt(value=0), PredicateLt(value=100), PredicateEven()]
+            operands=[
+                PredicateGt(value=0),
+                PredicateLt(value=100),
+                PredicateEven(),
+            ]
         )
         assert eval_predicate(p, 50) is True
         assert eval_predicate(p, 51) is False
@@ -293,16 +307,24 @@ class TestTransforms:
 
 class TestTransformPipeline:
     def test_pipeline_eval(self) -> None:
-        p = TransformPipeline(steps=[TransformShift(offset=3), TransformScale(factor=2)])
+        p = TransformPipeline(
+            steps=[TransformShift(offset=3), TransformScale(factor=2)]
+        )
         assert eval_transform(p, 5) == 16  # (5 + 3) * 2
 
     def test_pipeline_render(self) -> None:
-        p = TransformPipeline(steps=[TransformShift(offset=3), TransformScale(factor=2)])
+        p = TransformPipeline(
+            steps=[TransformShift(offset=3), TransformScale(factor=2)]
+        )
         assert render_transform(p) == "(x + 3) * 2"
 
     def test_three_step_pipeline(self) -> None:
         p = TransformPipeline(
-            steps=[TransformAbs(), TransformShift(offset=1), TransformScale(factor=3)]
+            steps=[
+                TransformAbs(),
+                TransformShift(offset=1),
+                TransformScale(factor=3),
+            ]
         )
         assert eval_transform(p, -5) == 18  # abs(-5)=5, 5+1=6, 6*3=18
         assert render_transform(p) == "((abs(x)) + 1) * 3"
@@ -323,7 +345,9 @@ class TestTransformPipeline:
             )
 
     def test_serialization_roundtrip(self) -> None:
-        p = TransformPipeline(steps=[TransformShift(offset=3), TransformScale(factor=2)])
+        p = TransformPipeline(
+            steps=[TransformShift(offset=3), TransformScale(factor=2)]
+        )
         data = p.model_dump()
         restored = TransformPipeline.model_validate(data)
         assert restored == p
