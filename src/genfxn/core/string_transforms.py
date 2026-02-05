@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class StringTransformIdentity(BaseModel):
@@ -49,6 +49,34 @@ class StringTransformAppend(BaseModel):
     suffix: str
 
 
+_AtomicStringTransformUnion = (
+    StringTransformIdentity
+    | StringTransformLowercase
+    | StringTransformUppercase
+    | StringTransformCapitalize
+    | StringTransformSwapcase
+    | StringTransformReverse
+    | StringTransformReplace
+    | StringTransformStrip
+    | StringTransformPrepend
+    | StringTransformAppend
+)
+StringTransformAtom = Annotated[
+    _AtomicStringTransformUnion, Field(discriminator="kind")
+]
+
+
+class StringTransformPipeline(BaseModel):
+    kind: Literal["pipeline"] = "pipeline"
+    steps: list[StringTransformAtom]
+
+    @model_validator(mode="after")
+    def validate_step_count(self) -> "StringTransformPipeline":
+        if not (2 <= len(self.steps) <= 3):
+            raise ValueError(f"pipeline requires 2-3 steps, got {len(self.steps)}")
+        return self
+
+
 class StringTransformType(str, Enum):
     IDENTITY = "identity"
     LOWERCASE = "lowercase"
@@ -72,7 +100,8 @@ StringTransform = Annotated[
     | StringTransformReplace
     | StringTransformStrip
     | StringTransformPrepend
-    | StringTransformAppend,
+    | StringTransformAppend
+    | StringTransformPipeline,
     Field(discriminator="kind"),
 ]
 
@@ -99,6 +128,11 @@ def eval_string_transform(t: StringTransform, s: str) -> str:
             return prefix + s
         case StringTransformAppend(suffix=suffix):
             return s + suffix
+        case StringTransformPipeline(steps=steps):
+            result = s
+            for step in steps:
+                result = eval_string_transform(step, result)
+            return result
         case _:
             raise ValueError(f"Unknown string transform: {t}")
 
@@ -127,5 +161,12 @@ def render_string_transform(t: StringTransform, var: str = "s") -> str:
             return f"{prefix!r} + {var}"
         case StringTransformAppend(suffix=suffix):
             return f"{var} + {suffix!r}"
+        case StringTransformPipeline(steps=steps):
+            expr = var
+            for i, step in enumerate(steps):
+                if i > 0:
+                    expr = f"({expr})"
+                expr = render_string_transform(step, expr)
+            return expr
         case _:
             raise ValueError(f"Unknown string transform: {t}")

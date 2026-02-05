@@ -36,12 +36,18 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Name,
         ast.Constant,
         ast.Set,
+        # Boolean ops (composed predicates)
+        ast.BoolOp,
+        ast.And,
+        ast.Or,
+        ast.Not,
         # Comparisons
         ast.Lt,
         ast.LtE,
         ast.Gt,
         ast.GtE,
         ast.Eq,
+        ast.In,
         # Binary ops
         ast.Add,
         ast.Sub,
