@@ -5,6 +5,7 @@ from genfxn.stateful.models import (
     LongestRunSpec,
     ResettingBestPrefixSumSpec,
     StatefulSpec,
+    ToggleSumSpec,
 )
 
 
@@ -32,6 +33,11 @@ def render_resetting_best_prefix_sum(
     spec: ResettingBestPrefixSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     cond = render_predicate(spec.reset_predicate, "x")
+    val_expr = (
+        render_transform(spec.value_transform, "x")
+        if spec.value_transform is not None
+        else "x"
+    )
 
     lines = [
         f"def {func_name}({var}: list[int]) -> int:",
@@ -41,7 +47,7 @@ def render_resetting_best_prefix_sum(
         f"        if {cond}:",
         f"            current_sum = {spec.init_value}",
         "        else:",
-        "            current_sum += x",
+        f"            current_sum += {val_expr}",
         "            best_sum = max(best_sum, current_sum)",
         "    return best_sum",
     ]
@@ -68,6 +74,29 @@ def render_longest_run(
     return "\n".join(lines)
 
 
+def render_toggle_sum(
+    spec: ToggleSumSpec, func_name: str = "f", var: str = "xs"
+) -> str:
+    cond = render_predicate(spec.toggle_predicate, "x")
+    on_expr = render_transform(spec.on_transform, "x")
+    off_expr = render_transform(spec.off_transform, "x")
+
+    lines = [
+        f"def {func_name}({var}: list[int]) -> int:",
+        "    on = False",
+        f"    acc = {spec.init_value}",
+        f"    for x in {var}:",
+        f"        if {cond}:",
+        "            on = not on",
+        "        if on:",
+        f"            acc += {on_expr}",
+        "        else:",
+        f"            acc += {off_expr}",
+        "    return acc",
+    ]
+    return "\n".join(lines)
+
+
 def render_stateful(
     spec: StatefulSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
@@ -78,5 +107,7 @@ def render_stateful(
             return render_resetting_best_prefix_sum(spec, func_name, var)
         case LongestRunSpec():
             return render_longest_run(spec, func_name, var)
+        case ToggleSumSpec():
+            return render_toggle_sum(spec, func_name, var)
         case _:
             raise ValueError(f"Unknown stateful spec: {spec}")

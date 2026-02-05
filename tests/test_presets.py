@@ -33,15 +33,15 @@ class TestGetValidDifficulties:
 
     def test_stateful_range(self) -> None:
         valid = get_valid_difficulties("stateful")
-        assert valid == [1, 2, 3]
+        assert valid == [1, 2, 3, 4, 5]
 
     def test_simple_algorithms_range(self) -> None:
         valid = get_valid_difficulties("simple_algorithms")
-        assert valid == [2, 3]
+        assert valid == [2, 3, 4, 5]
 
     def test_stringrules_range(self) -> None:
         valid = get_valid_difficulties("stringrules")
-        assert valid == [1, 2, 3, 4]
+        assert valid == [1, 2, 3, 4, 5]
 
     def test_unknown_family_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown family"):
@@ -130,9 +130,12 @@ class TestPresetAccuracy:
     WITHIN_ONE_THRESHOLD = 0.90  # >90% should be within ±1
 
     # Edge difficulties at family boundaries may have lower accuracy
-    # due to formula constraints (e.g., stringrules max is ~3.8)
+    # due to formula constraints or sampling variance
     EDGE_DIFFICULTIES = {
-        ("stringrules", 4),  # Max achievable is ~3.8
+        ("stringrules", 4),  # Max achievable with atoms is ~3.8
+        ("stringrules", 5),  # Composed/pipeline sampling variance
+        ("stateful", 5),  # Composed/pipeline sampling variance
+        ("simple_algorithms", 5),  # Preprocess + edge sampling variance
     }
     EDGE_EXACT_THRESHOLD = 0.50  # >50% for edge cases
     EDGE_MEAN_TOLERANCE = 0.75  # ±0.75 for edge cases
@@ -174,19 +177,19 @@ class TestPresetAccuracy:
         difficulties = self._generate_tasks_for_preset("piecewise", difficulty)
         self._verify_accuracy(difficulties, difficulty, "piecewise")
 
-    @pytest.mark.parametrize("difficulty", [1, 2, 3])
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
     def test_stateful_preset_accuracy(self, difficulty: int) -> None:
         difficulties = self._generate_tasks_for_preset("stateful", difficulty)
         self._verify_accuracy(difficulties, difficulty, "stateful")
 
-    @pytest.mark.parametrize("difficulty", [2, 3])
+    @pytest.mark.parametrize("difficulty", [2, 3, 4, 5])
     def test_simple_algorithms_preset_accuracy(self, difficulty: int) -> None:
         difficulties = self._generate_tasks_for_preset(
             "simple_algorithms", difficulty
         )
         self._verify_accuracy(difficulties, difficulty, "simple_algorithms")
 
-    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4])
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
     def test_stringrules_preset_accuracy(self, difficulty: int) -> None:
         difficulties = self._generate_tasks_for_preset(
             "stringrules", difficulty
@@ -298,7 +301,7 @@ class TestPresetCompleteness:
     def test_stateful_presets_structure(self) -> None:
         for difficulty, presets in STATEFUL_PRESETS.items():
             assert isinstance(difficulty, int)
-            assert 1 <= difficulty <= 3
+            assert 1 <= difficulty <= 5
             assert len(presets) >= 1
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
@@ -306,7 +309,7 @@ class TestPresetCompleteness:
     def test_simple_algorithms_presets_structure(self) -> None:
         for difficulty, presets in SIMPLE_ALGORITHMS_PRESETS.items():
             assert isinstance(difficulty, int)
-            assert difficulty in (2, 3)
+            assert difficulty in (2, 3, 4, 5)
             assert len(presets) >= 1
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
@@ -314,7 +317,7 @@ class TestPresetCompleteness:
     def test_stringrules_presets_structure(self) -> None:
         for difficulty, presets in STRINGRULES_PRESETS.items():
             assert isinstance(difficulty, int)
-            assert 1 <= difficulty <= 4
+            assert 1 <= difficulty <= 5
             assert len(presets) >= 1
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")

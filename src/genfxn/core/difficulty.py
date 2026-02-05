@@ -96,6 +96,7 @@ def _stateful_difficulty(spec: dict[str, Any]) -> int:
         "longest_run": 1,
         "conditional_linear_sum": 3,
         "resetting_best_prefix_sum": 4,
+        "toggle_sum": 4,
     }
     template_score = template_scores.get(template, 3)
 
@@ -126,11 +127,13 @@ def _collect_predicates(spec: dict[str, Any]) -> list[dict[str, Any]]:
         predicates.append(spec["reset_predicate"])
     if "match_predicate" in spec:
         predicates.append(spec["match_predicate"])
+    if "toggle_predicate" in spec:
+        predicates.append(spec["toggle_predicate"])
     return predicates
 
 
 def _predicate_score(pred: dict[str, Any]) -> int:
-    """Score predicate: even/odd=1, lt/le/gt/ge=2, mod_eq=4."""
+    """Score predicate complexity."""
     kind = pred.get("kind", "")
     if kind in ("even", "odd"):
         return 1
@@ -140,21 +143,29 @@ def _predicate_score(pred: dict[str, Any]) -> int:
         return 4
     elif kind == "in_set":
         return 3
+    elif kind in ("not", "and", "or"):
+        return 5
     return 2
 
 
 def _collect_transforms(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Collect all transforms from a stateful spec."""
     transforms = []
-    if "true_transform" in spec:
-        transforms.append(spec["true_transform"])
-    if "false_transform" in spec:
-        transforms.append(spec["false_transform"])
+    for key in (
+        "true_transform",
+        "false_transform",
+        "value_transform",
+        "on_transform",
+        "off_transform",
+    ):
+        val = spec.get(key)
+        if val is not None:
+            transforms.append(val)
     return transforms
 
 
 def _transform_score(trans: dict[str, Any]) -> int:
-    """Score transform: identity=1, abs/negate=2, shift/scale=3."""
+    """Score transform complexity."""
     kind = trans.get("kind", "identity")
     if kind == "identity":
         return 1
@@ -162,51 +173,107 @@ def _transform_score(trans: dict[str, Any]) -> int:
         return 2
     elif kind in ("shift", "scale", "clip"):
         return 3
+    elif kind == "pipeline":
+        steps = trans.get("steps", [])
+        param_kinds = {"shift", "scale", "clip"}
+        param_steps = sum(1 for s in steps if s.get("kind") in param_kinds)
+        if len(steps) == 3 or param_steps >= 2:
+            return 5
+        elif param_steps >= 1:
+            return 4
+        else:
+            return 3
     return 1
 
 
 def _simple_algorithms_difficulty(spec: dict[str, Any]) -> int:
     """Compute difficulty for simple_algorithms functions.
 
-    Scoring:
+    Legacy scoring (no preprocess/edge fields):
     - Template (50%): most_frequent=2, count_pairs_sum=3, max_window_sum=3
     - Mode complexity (30%):
       - tie_break: smallest=1, first_seen=2
       - counting_mode: all_indices=2, unique_values=3
       - k: 1-2=1, 3-5=2, 6+=3
     - Edge cases (20%): non-zero defaults = +1
+
+    Extended scoring (with preprocess/edge fields):
+    - Template (50%): base + preprocess bonuses
+    - Mode (30%): max of base mode and preprocess scores
+    - Edge (20%): 1 + count of enabled edge fields
     """
     template = spec.get("template", "")
-    template_scores = {
+    base_template_scores = {
         "most_frequent": 2,
         "count_pairs_sum": 3,
         "max_window_sum": 3,
     }
-    template_score = template_scores.get(template, 2)
+    base_template_score = base_template_scores.get(template, 2)
 
-    mode_score = 1
+    base_mode_score = 1
     if template == "most_frequent":
         tie_break = spec.get("tie_break", "smallest")
-        mode_score = 1 if tie_break == "smallest" else 2
+        base_mode_score = 1 if tie_break == "smallest" else 2
     elif template == "count_pairs_sum":
         counting_mode = spec.get("counting_mode", "all_indices")
-        mode_score = 2 if counting_mode == "all_indices" else 3
+        base_mode_score = 2 if counting_mode == "all_indices" else 3
     elif template == "max_window_sum":
         k = spec.get("k", 1)
         if k <= 2:
-            mode_score = 1
+            base_mode_score = 1
         elif k <= 5:
-            mode_score = 2
+            base_mode_score = 2
         else:
-            mode_score = 3
+            base_mode_score = 3
 
-    edge_score = 1
+    base_edge_score = 1
     if template == "most_frequent":
         if spec.get("empty_default", 0) != 0:
-            edge_score = 2
+            base_edge_score = 2
     elif template == "max_window_sum":
         if spec.get("invalid_k_default", 0) != 0:
-            edge_score = 2
+            base_edge_score = 2
+
+    # Check for extended fields
+    has_pre_filter = spec.get("pre_filter") is not None
+    has_pre_transform = spec.get("pre_transform") is not None
+    new_edge_fields = ["tie_default", "no_result_default", "short_list_default"]
+    if template == "max_window_sum":
+        new_edge_fields.append("empty_default")
+    has_new_edge = any(spec.get(f) is not None for f in new_edge_fields)
+
+    if not has_pre_filter and not has_pre_transform and not has_new_edge:
+        # Legacy scoring — exact same formula
+        raw = (
+            0.5 * base_template_score
+            + 0.3 * base_mode_score
+            + 0.2 * base_edge_score
+        )
+        return max(1, min(5, round(raw)))
+
+    # Extended scoring
+    preprocess_bonus = 0
+    preprocess_scores: list[int] = []
+    if has_pre_filter:
+        pre_filter = spec["pre_filter"]
+        score = _predicate_score(pre_filter)
+        preprocess_scores.append(score)
+        preprocess_bonus += 1
+    if has_pre_transform:
+        pre_transform = spec["pre_transform"]
+        score = _transform_score(pre_transform)
+        preprocess_scores.append(score)
+        preprocess_bonus += 1
+
+    template_score = min(5, base_template_score + preprocess_bonus)
+
+    preprocess_mode = max(preprocess_scores) if preprocess_scores else 0
+    mode_score = max(base_mode_score, preprocess_mode)
+
+    edge_count = sum(1 for f in new_edge_fields if spec.get(f) is not None)
+    if base_edge_score > 1:
+        edge_count += 1
+    edge_score = 1 + edge_count
 
     raw = 0.5 * template_score + 0.3 * mode_score + 0.2 * edge_score
     return max(1, min(5, round(raw)))
@@ -251,7 +318,7 @@ def _stringrules_difficulty(spec: dict[str, Any]) -> int:
 
 
 def _string_predicate_score(pred: dict[str, Any]) -> int:
-    """Score string predicate: simple=1, pattern=2, length_cmp=2-3."""
+    """Score string predicate complexity."""
     kind = pred.get("kind", "")
     if kind in ("is_alpha", "is_digit", "is_upper", "is_lower"):
         return 1
@@ -260,11 +327,16 @@ def _string_predicate_score(pred: dict[str, Any]) -> int:
     elif kind == "length_cmp":
         op = pred.get("op", "eq")
         return 3 if op in ("lt", "gt") else 2
+    elif kind == "not":
+        return 4
+    elif kind in ("and", "or"):
+        operands = pred.get("operands", [])
+        return 5 if len(operands) >= 3 else 4
     return 1
 
 
 def _string_transform_score(trans: dict[str, Any]) -> int:
-    """Score string transform: identity=1, simple=2, parameterized=3."""
+    """Score string transform complexity."""
     kind = trans.get("kind", "identity")
     if kind == "identity":
         return 1
@@ -278,4 +350,14 @@ def _string_transform_score(trans: dict[str, Any]) -> int:
         return 2
     elif kind in ("replace", "strip", "prepend", "append"):
         return 3
+    elif kind == "pipeline":
+        steps = trans.get("steps", [])
+        param_kinds = {"replace", "strip", "prepend", "append"}
+        param_steps = sum(1 for s in steps if s.get("kind") in param_kinds)
+        if len(steps) == 3 or param_steps >= 2:
+            return 5
+        elif param_steps >= 1:
+            return 4
+        else:
+            return 3
     return 1

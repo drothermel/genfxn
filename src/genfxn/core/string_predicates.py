@@ -74,7 +74,9 @@ class StringPredicateAnd(BaseModel):
     @model_validator(mode="after")
     def validate_operand_count(self) -> "StringPredicateAnd":
         if not (2 <= len(self.operands) <= 3):
-            raise ValueError(f"and requires 2-3 operands, got {len(self.operands)}")
+            raise ValueError(
+                f"and requires 2-3 operands, got {len(self.operands)}"
+            )
         return self
 
 
@@ -85,7 +87,9 @@ class StringPredicateOr(BaseModel):
     @model_validator(mode="after")
     def validate_operand_count(self) -> "StringPredicateOr":
         if not (2 <= len(self.operands) <= 3):
-            raise ValueError(f"or requires 2-3 operands, got {len(self.operands)}")
+            raise ValueError(
+                f"or requires 2-3 operands, got {len(self.operands)}"
+            )
         return self
 
 
@@ -98,6 +102,9 @@ class StringPredicateType(str, Enum):
     IS_UPPER = "is_upper"
     IS_LOWER = "is_lower"
     LENGTH_CMP = "length_cmp"
+    NOT = "not"
+    AND = "and"
+    OR = "or"
 
 
 StringPredicate = Annotated[
@@ -179,8 +186,10 @@ def render_string_predicate(pred: StringPredicate, var: str = "s") -> str:
         case StringPredicateNot(operand=op):
             return f"not ({render_string_predicate(op, var)})"
         case StringPredicateAnd(operands=ops):
-            return f"({' and '.join(render_string_predicate(op, var) for op in ops)})"
+            parts = [render_string_predicate(op, var) for op in ops]
+            return f"({' and '.join(parts)})"
         case StringPredicateOr(operands=ops):
-            return f"({' or '.join(render_string_predicate(op, var) for op in ops)})"
+            parts = [render_string_predicate(op, var) for op in ops]
+            return f"({' or '.join(parts)})"
         case _:
             raise ValueError(f"Unknown string predicate: {pred}")
