@@ -3,11 +3,14 @@ import random
 import pytest
 
 from genfxn.core.string_predicates import (
+    StringPredicateAnd,
     StringPredicateContains,
     StringPredicateEndsWith,
     StringPredicateIsAlpha,
     StringPredicateIsDigit,
     StringPredicateLengthCmp,
+    StringPredicateNot,
+    StringPredicateOr,
     StringPredicateStartsWith,
     eval_string_predicate,
     render_string_predicate,
@@ -16,6 +19,7 @@ from genfxn.core.string_transforms import (
     StringTransformAppend,
     StringTransformCapitalize,
     StringTransformLowercase,
+    StringTransformPipeline,
     StringTransformPrepend,
     StringTransformReplace,
     StringTransformReverse,
@@ -141,6 +145,91 @@ class TestStringTransformsRender:
     def test_prepend_render(self) -> None:
         t = StringTransformPrepend(prefix="pre")
         assert render_string_transform(t, "s") == "'pre' + s"
+
+
+class TestComposedStringPredicates:
+    def test_not_eval(self) -> None:
+        p = StringPredicateNot(operand=StringPredicateIsAlpha())
+        assert eval_string_predicate(p, "123") is True
+        assert eval_string_predicate(p, "abc") is False
+
+    def test_not_render(self) -> None:
+        p = StringPredicateNot(operand=StringPredicateIsAlpha())
+        assert render_string_predicate(p) == "not (s.isalpha())"
+
+    def test_and_eval(self) -> None:
+        p = StringPredicateAnd(
+            operands=[
+                StringPredicateIsAlpha(),
+                StringPredicateStartsWith(prefix="a"),
+            ]
+        )
+        assert eval_string_predicate(p, "abc") is True
+        assert eval_string_predicate(p, "xyz") is False
+        assert eval_string_predicate(p, "a123") is False
+
+    def test_and_render(self) -> None:
+        p = StringPredicateAnd(
+            operands=[
+                StringPredicateIsAlpha(),
+                StringPredicateLengthCmp(op="gt", value=3),
+            ]
+        )
+        assert render_string_predicate(p) == "(s.isalpha() and len(s) > 3)"
+
+    def test_or_eval(self) -> None:
+        p = StringPredicateOr(
+            operands=[
+                StringPredicateIsDigit(),
+                StringPredicateStartsWith(prefix="x"),
+            ]
+        )
+        assert eval_string_predicate(p, "123") is True
+        assert eval_string_predicate(p, "xyz") is True
+        assert eval_string_predicate(p, "abc") is False
+
+    def test_or_render(self) -> None:
+        p = StringPredicateOr(
+            operands=[
+                StringPredicateIsDigit(),
+                StringPredicateIsAlpha(),
+            ]
+        )
+        assert render_string_predicate(p) == "(s.isdigit() or s.isalpha())"
+
+
+class TestStringTransformPipeline:
+    def test_pipeline_eval(self) -> None:
+        p = StringTransformPipeline(
+            steps=[StringTransformUppercase(), StringTransformReverse()]
+        )
+        assert eval_string_transform(p, "hello") == "OLLEH"
+
+    def test_pipeline_render(self) -> None:
+        p = StringTransformPipeline(
+            steps=[StringTransformUppercase(), StringTransformReverse()]
+        )
+        assert render_string_transform(p) == "(s.upper())[::-1]"
+
+    def test_three_step_pipeline(self) -> None:
+        p = StringTransformPipeline(
+            steps=[
+                StringTransformStrip(chars="_"),
+                StringTransformLowercase(),
+                StringTransformAppend(suffix="!"),
+            ]
+        )
+        assert eval_string_transform(p, "__Hello__") == "hello!"
+
+    def test_pipeline_render_three_steps(self) -> None:
+        p = StringTransformPipeline(
+            steps=[
+                StringTransformStrip(chars="_"),
+                StringTransformLowercase(),
+                StringTransformAppend(suffix="!"),
+            ]
+        )
+        assert render_string_transform(p) == "((s.strip('_')).lower()) + '!'"
 
 
 class TestStringRulesEval:

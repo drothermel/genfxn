@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PredicateEven(BaseModel):
@@ -51,6 +51,46 @@ class PredicateInSet(BaseModel):
     values: frozenset[int]
 
 
+_AtomicPredUnion = (
+    PredicateEven
+    | PredicateOdd
+    | PredicateLt
+    | PredicateLe
+    | PredicateGt
+    | PredicateGe
+    | PredicateModEq
+    | PredicateInSet
+)
+PredicateAtom = Annotated[_AtomicPredUnion, Field(discriminator="kind")]
+
+
+class PredicateNot(BaseModel):
+    kind: Literal["not"] = "not"
+    operand: PredicateAtom
+
+
+class PredicateAnd(BaseModel):
+    kind: Literal["and"] = "and"
+    operands: list[PredicateAtom]
+
+    @model_validator(mode="after")
+    def validate_operand_count(self) -> "PredicateAnd":
+        if not (2 <= len(self.operands) <= 3):
+            raise ValueError(f"and requires 2-3 operands, got {len(self.operands)}")
+        return self
+
+
+class PredicateOr(BaseModel):
+    kind: Literal["or"] = "or"
+    operands: list[PredicateAtom]
+
+    @model_validator(mode="after")
+    def validate_operand_count(self) -> "PredicateOr":
+        if not (2 <= len(self.operands) <= 3):
+            raise ValueError(f"or requires 2-3 operands, got {len(self.operands)}")
+        return self
+
+
 class PredicateType(str, Enum):
     EVEN = PredicateEven.model_fields["kind"].default
     ODD = PredicateOdd.model_fields["kind"].default
@@ -70,7 +110,10 @@ Predicate = Annotated[
     | PredicateGt
     | PredicateGe
     | PredicateModEq
-    | PredicateInSet,
+    | PredicateInSet
+    | PredicateNot
+    | PredicateAnd
+    | PredicateOr,
     Field(discriminator="kind"),
 ]
 
@@ -93,6 +136,12 @@ def eval_predicate(pred: Predicate, x: int) -> bool:
             return x % d == r
         case PredicateInSet(values=vals):
             return x in vals
+        case PredicateNot(operand=op):
+            return not eval_predicate(op, x)
+        case PredicateAnd(operands=ops):
+            return all(eval_predicate(op, x) for op in ops)
+        case PredicateOr(operands=ops):
+            return any(eval_predicate(op, x) for op in ops)
         case _:
             raise ValueError(f"Unknown predicate: {pred}")
 
@@ -115,6 +164,12 @@ def render_predicate(pred: Predicate, var: str = "x") -> str:
             return f"{var} % {d} == {r}"
         case PredicateInSet(values=vals):
             return f"{var} in {{{', '.join(map(str, sorted(vals)))}}}"
+        case PredicateNot(operand=op):
+            return f"not ({render_predicate(op, var)})"
+        case PredicateAnd(operands=ops):
+            return f"({' and '.join(render_predicate(op, var) for op in ops)})"
+        case PredicateOr(operands=ops):
+            return f"({' or '.join(render_predicate(op, var) for op in ops)})"
         case _:
             raise ValueError(f"Unknown predicate: {pred}")
 

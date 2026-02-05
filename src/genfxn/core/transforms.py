@@ -38,6 +38,28 @@ class TransformScale(BaseModel):
     factor: int
 
 
+_AtomicTransformUnion = (
+    TransformIdentity
+    | TransformAbs
+    | TransformShift
+    | TransformClip
+    | TransformNegate
+    | TransformScale
+)
+TransformAtom = Annotated[_AtomicTransformUnion, Field(discriminator="kind")]
+
+
+class TransformPipeline(BaseModel):
+    kind: Literal["pipeline"] = "pipeline"
+    steps: list[TransformAtom]
+
+    @model_validator(mode="after")
+    def validate_step_count(self) -> "TransformPipeline":
+        if not (2 <= len(self.steps) <= 3):
+            raise ValueError(f"pipeline requires 2-3 steps, got {len(self.steps)}")
+        return self
+
+
 class TransformType(str, Enum):
     IDENTITY = TransformIdentity.model_fields["kind"].default
     ABS = TransformAbs.model_fields["kind"].default
@@ -53,7 +75,8 @@ Transform = Annotated[
     | TransformShift
     | TransformClip
     | TransformNegate
-    | TransformScale,
+    | TransformScale
+    | TransformPipeline,
     Field(discriminator="kind"),
 ]
 
@@ -72,6 +95,11 @@ def eval_transform(t: Transform, x: int) -> int:
             return -x
         case TransformScale(factor=f):
             return x * f
+        case TransformPipeline(steps=steps):
+            result = x
+            for step in steps:
+                result = eval_transform(step, result)
+            return result
         case _:
             raise ValueError(f"Unknown transform: {t}")
 
@@ -92,5 +120,12 @@ def render_transform(t: Transform, var: str = "x") -> str:
             return f"-{var}"
         case TransformScale(factor=f):
             return f"{var} * {f}"
+        case TransformPipeline(steps=steps):
+            expr = var
+            for i, step in enumerate(steps):
+                if i > 0:
+                    expr = f"({expr})"
+                expr = render_transform(step, expr)
+            return expr
         case _:
             raise ValueError(f"Unknown transform: {t}")

@@ -30,6 +30,11 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Subscript,
         ast.Slice,
         ast.Attribute,  # For method calls: s.lower(), s.startswith()
+        # Boolean ops (composed predicates)
+        ast.BoolOp,
+        ast.And,
+        ast.Or,
+        ast.Not,
         # Comparisons
         ast.Lt,
         ast.LtE,
