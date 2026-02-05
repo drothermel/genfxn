@@ -3,13 +3,17 @@ import random
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
     Predicate,
+    PredicateAnd,
     PredicateEven,
     PredicateGe,
     PredicateGt,
     PredicateLe,
     PredicateLt,
     PredicateModEq,
+    PredicateNot,
     PredicateOdd,
+    PredicateOr,
+    eval_predicate,
 )
 from genfxn.stateful.eval import eval_stateful
 from genfxn.stateful.models import (
@@ -18,6 +22,7 @@ from genfxn.stateful.models import (
     ResettingBestPrefixSumSpec,
     StatefulAxes,
     StatefulSpec,
+    ToggleSumSpec,
 )
 
 
@@ -28,6 +33,8 @@ def _get_predicate_info(spec: StatefulSpec) -> Predicate:
         case ResettingBestPrefixSumSpec(reset_predicate=p):
             return p
         case LongestRunSpec(match_predicate=p):
+            return p
+        case ToggleSumSpec(toggle_predicate=p):
             return p
 
 
@@ -61,6 +68,12 @@ def _make_matching_value(
             # Compute smallest value >= lo congruent to r mod d, then clamp
             base = lo + ((r - lo) % d)
             return clamp(base)
+        case PredicateNot() | PredicateAnd() | PredicateOr():
+            for _ in range(100):
+                v = rng.randint(lo, hi)
+                if eval_predicate(pred, v):
+                    return v
+            return rng.randint(lo, hi)
         case _:
             return rng.randint(lo, hi)
 
@@ -95,6 +108,12 @@ def _make_non_matching_value(
             # Compute smallest value >= lo NOT congruent to r mod d, then clamp
             base = lo + ((r + 1 - lo) % d)
             return clamp(base)
+        case PredicateNot() | PredicateAnd() | PredicateOr():
+            for _ in range(100):
+                v = rng.randint(lo, hi)
+                if not eval_predicate(pred, v):
+                    return v
+            return rng.randint(lo, hi)
         case _:
             return rng.randint(lo, hi)
 

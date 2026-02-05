@@ -73,11 +73,12 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
     {
         "xs",  # input param
         "x",  # loop variable
-        "acc",  # conditional_linear_sum
+        "acc",  # conditional_linear_sum, toggle_sum
         "current_sum",  # resetting_best_prefix_sum
         "best_sum",  # resetting_best_prefix_sum
         "current_run",  # longest_run
         "longest_run",  # longest_run
+        "on",  # toggle_sum
     }
 )
 

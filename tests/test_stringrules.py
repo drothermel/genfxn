@@ -12,6 +12,7 @@ from genfxn.core.string_predicates import (
     StringPredicateNot,
     StringPredicateOr,
     StringPredicateStartsWith,
+    StringPredicateType,
     eval_string_predicate,
     render_string_predicate,
 )
@@ -24,6 +25,7 @@ from genfxn.core.string_transforms import (
     StringTransformReplace,
     StringTransformReverse,
     StringTransformStrip,
+    StringTransformType,
     StringTransformUppercase,
     eval_string_transform,
     render_string_transform,
@@ -389,7 +391,7 @@ class TestAxesValidation:
 
     def test_n_rules_too_high(self) -> None:
         with pytest.raises(ValueError):
-            StringRulesAxes(n_rules=10)
+            StringRulesAxes(n_rules=11)
 
     def test_empty_predicate_types(self) -> None:
         with pytest.raises(
@@ -448,3 +450,79 @@ class TestRandomStringUtils:
         s = _random_string(5, "abc", rng)
         assert len(s) == 5
         assert all(c in "abc" for c in s)
+
+
+class TestComposedPredicateSampling:
+    def test_sample_not_predicate(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            predicate_types=[StringPredicateType.NOT],
+        )
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        for rule in spec.rules:
+            assert isinstance(rule.predicate, StringPredicateNot)
+
+    def test_sample_and_predicate(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            predicate_types=[StringPredicateType.AND],
+        )
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        for rule in spec.rules:
+            assert isinstance(rule.predicate, StringPredicateAnd)
+            assert len(rule.predicate.operands) >= 2
+
+    def test_sample_or_predicate(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            predicate_types=[StringPredicateType.OR],
+        )
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        for rule in spec.rules:
+            assert isinstance(rule.predicate, StringPredicateOr)
+            assert len(rule.predicate.operands) >= 2
+
+
+class TestPipelineTransformSampling:
+    def test_sample_pipeline_transform(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            transform_types=[StringTransformType.PIPELINE],
+        )
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        # At least the rule transforms should be pipelines
+        for rule in spec.rules:
+            assert isinstance(rule.transform, StringTransformPipeline)
+            assert len(rule.transform.steps) >= 2
+
+
+class TestComposedRoundtrip:
+    def test_not_predicate_roundtrip(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            predicate_types=[StringPredicateType.NOT],
+        )
+        rng = random.Random(42)
+        spec = sample_stringrules_spec(axes, rng)
+        code = render_stringrules(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        for q in queries:
+            assert f(q.input) == q.output, f"s={q.input!r}"
+
+    def test_pipeline_transform_roundtrip(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            transform_types=[StringTransformType.PIPELINE],
+        )
+        rng = random.Random(42)
+        spec = sample_stringrules_spec(axes, rng)
+        code = render_stringrules(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        for q in queries:
+            assert f(q.input) == q.output, f"s={q.input!r}"

@@ -2,13 +2,16 @@ import random
 
 from genfxn.core.predicates import (
     Predicate,
+    PredicateAnd,
     PredicateEven,
     PredicateGe,
     PredicateGt,
     PredicateLe,
     PredicateLt,
     PredicateModEq,
+    PredicateNot,
     PredicateOdd,
+    PredicateOr,
     PredicateType,
     render_predicate,
 )
@@ -18,6 +21,7 @@ from genfxn.core.transforms import (
     TransformAbs,
     TransformIdentity,
     TransformNegate,
+    TransformPipeline,
     TransformScale,
     TransformShift,
     TransformType,
@@ -30,6 +34,7 @@ from genfxn.stateful.models import (
     StatefulAxes,
     StatefulSpec,
     TemplateType,
+    ToggleSumSpec,
 )
 
 
@@ -56,6 +61,56 @@ def sample_predicate(
             divisor = rng.randint(*divisor_range)
             remainder = rng.randint(0, divisor - 1)
             return PredicateModEq(divisor=divisor, remainder=remainder)
+        case PredicateType.NOT:
+            atom_types = [
+                PredicateType.EVEN,
+                PredicateType.ODD,
+                PredicateType.LT,
+                PredicateType.LE,
+                PredicateType.GT,
+                PredicateType.GE,
+                PredicateType.MOD_EQ,
+            ]
+            operand = sample_predicate(
+                rng.choice(atom_types), threshold_range, divisor_range, rng
+            )
+            return PredicateNot(operand=operand)
+        case PredicateType.AND:
+            atom_types = [
+                PredicateType.EVEN,
+                PredicateType.ODD,
+                PredicateType.LT,
+                PredicateType.LE,
+                PredicateType.GT,
+                PredicateType.GE,
+                PredicateType.MOD_EQ,
+            ]
+            n = rng.choice([2, 3])
+            operands = [
+                sample_predicate(
+                    rng.choice(atom_types), threshold_range, divisor_range, rng
+                )
+                for _ in range(n)
+            ]
+            return PredicateAnd(operands=operands)
+        case PredicateType.OR:
+            atom_types = [
+                PredicateType.EVEN,
+                PredicateType.ODD,
+                PredicateType.LT,
+                PredicateType.LE,
+                PredicateType.GT,
+                PredicateType.GE,
+                PredicateType.MOD_EQ,
+            ]
+            n = rng.choice([2, 3])
+            operands = [
+                sample_predicate(
+                    rng.choice(atom_types), threshold_range, divisor_range, rng
+                )
+                for _ in range(n)
+            ]
+            return PredicateOr(operands=operands)
         case _:
             raise ValueError(f"Unknown predicate type: {pred_type}")
 
@@ -77,6 +132,23 @@ def sample_transform(
             return TransformNegate()
         case TransformType.SCALE:
             return TransformScale(factor=rng.randint(*scale_range))
+        case TransformType.PIPELINE:
+            n = rng.choice([2, 3])
+            param_types = [TransformType.SHIFT, TransformType.SCALE]
+            nonparam_types = [TransformType.ABS, TransformType.NEGATE]
+            # Ensure at least one param step for meaningful pipelines
+            first = sample_transform(
+                rng.choice(param_types), shift_range, scale_range, rng
+            )
+            rest_types = param_types + nonparam_types
+            rest = [
+                sample_transform(
+                    rng.choice(rest_types), shift_range, scale_range, rng
+                )
+                for _ in range(n - 1)
+            ]
+            steps = [first] + rest
+            return TransformPipeline(steps=steps)
         case _:
             raise ValueError(f"Unknown transform type: {trans_type}")
 
@@ -200,9 +272,26 @@ def sample_stateful_spec(
                     )
                 )
 
+            value_transform = None
+            trans_type = rng.choice(axes.transform_types)
+            if trans_type != TransformType.IDENTITY:
+                value_transform = sample_transform(
+                    trans_type, axes.shift_range, axes.scale_range, rng
+                )
+                if trace is not None:
+                    vt_str = render_transform(value_transform)
+                    trace.append(
+                        TraceStep(
+                            step="sample_value_transform",
+                            choice=f"Value: {vt_str}",
+                            value=value_transform.model_dump(),
+                        )
+                    )
+
             return ResettingBestPrefixSumSpec(
                 reset_predicate=reset_predicate,
                 init_value=init_value,
+                value_transform=value_transform,
             )
 
         case TemplateType.LONGEST_RUN:
@@ -229,6 +318,72 @@ def sample_stateful_spec(
                 )
 
             return LongestRunSpec(match_predicate=match_predicate)
+
+        case TemplateType.TOGGLE_SUM:
+            pred_type = rng.choice(axes.predicate_types)
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_predicate_type",
+                        choice=f"Toggle predicate type: {pred_type.value}",
+                        value=pred_type.value,
+                    )
+                )
+
+            toggle_predicate = sample_predicate(
+                pred_type, axes.threshold_range, axes.divisor_range, rng
+            )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_toggle_predicate",
+                        choice=f"Toggle: {render_predicate(toggle_predicate)}",
+                        value=toggle_predicate.model_dump(),
+                    )
+                )
+
+            on_trans_type = rng.choice(axes.transform_types)
+            on_transform = sample_transform(
+                on_trans_type, axes.shift_range, axes.scale_range, rng
+            )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_on_transform",
+                        choice=f"On: {render_transform(on_transform)}",
+                        value=on_transform.model_dump(),
+                    )
+                )
+
+            off_trans_type = rng.choice(axes.transform_types)
+            off_transform = sample_transform(
+                off_trans_type, axes.shift_range, axes.scale_range, rng
+            )
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_off_transform",
+                        choice=f"Off: {render_transform(off_transform)}",
+                        value=off_transform.model_dump(),
+                    )
+                )
+
+            init_value = rng.randint(-10, 10)
+            if trace is not None:
+                trace.append(
+                    TraceStep(
+                        step="sample_init_value",
+                        choice=f"Initial value: {init_value}",
+                        value=init_value,
+                    )
+                )
+
+            return ToggleSumSpec(
+                toggle_predicate=toggle_predicate,
+                on_transform=on_transform,
+                off_transform=off_transform,
+                init_value=init_value,
+            )
 
         case _:
             raise ValueError(f"Unknown template: {template}")

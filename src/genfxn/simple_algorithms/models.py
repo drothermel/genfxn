@@ -3,6 +3,9 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from genfxn.core.predicates import Predicate, PredicateType
+from genfxn.core.transforms import Transform, TransformType
+
 
 class TemplateType(str, Enum):
     MOST_FREQUENT = "most_frequent"
@@ -24,18 +27,28 @@ class MostFrequentSpec(BaseModel):
     template: Literal["most_frequent"] = "most_frequent"
     tie_break: TieBreakMode
     empty_default: int = 0
+    pre_filter: Predicate | None = None
+    pre_transform: Transform | None = None
+    tie_default: int | None = None
 
 
 class CountPairsSumSpec(BaseModel):
     template: Literal["count_pairs_sum"] = "count_pairs_sum"
     target: int
     counting_mode: CountingMode
+    pre_filter: Predicate | None = None
+    pre_transform: Transform | None = None
+    no_result_default: int | None = None
+    short_list_default: int | None = None
 
 
 class MaxWindowSumSpec(BaseModel):
     template: Literal["max_window_sum"] = "max_window_sum"
     k: int
     invalid_k_default: int = 0
+    pre_filter: Predicate | None = None
+    pre_transform: Transform | None = None
+    empty_default: int | None = None
 
     @model_validator(mode="after")
     def validate_k(self) -> "MaxWindowSumSpec":
@@ -65,6 +78,12 @@ class SimpleAlgorithmsAxes(BaseModel):
     target_range: tuple[int, int] = Field(default=(-50, 50))
     window_size_range: tuple[int, int] = Field(default=(1, 10))
     empty_default_range: tuple[int, int] = Field(default=(0, 0))
+    pre_filter_types: list[PredicateType] | None = None
+    pre_transform_types: list[TransformType] | None = None
+    tie_default_range: tuple[int, int] | None = None
+    no_result_default_range: tuple[int, int] | None = None
+    short_list_default_range: tuple[int, int] | None = None
+    empty_default_for_empty_range: tuple[int, int] | None = None
 
     @model_validator(mode="after")
     def validate_axes(self) -> "SimpleAlgorithmsAxes":

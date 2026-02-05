@@ -73,7 +73,9 @@ class StringTransformPipeline(BaseModel):
     @model_validator(mode="after")
     def validate_step_count(self) -> "StringTransformPipeline":
         if not (2 <= len(self.steps) <= 3):
-            raise ValueError(f"pipeline requires 2-3 steps, got {len(self.steps)}")
+            raise ValueError(
+                f"pipeline requires 2-3 steps, got {len(self.steps)}"
+            )
         return self
 
 
@@ -88,6 +90,7 @@ class StringTransformType(str, Enum):
     STRIP = "strip"
     PREPEND = "prepend"
     APPEND = "append"
+    PIPELINE = "pipeline"
 
 
 StringTransform = Annotated[
