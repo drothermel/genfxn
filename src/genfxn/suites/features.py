@@ -1,0 +1,410 @@
+"""Feature extraction for balanced suite generation.
+
+Each function takes a spec dict and returns a
+flat dict[str, str] of categorical features.
+"""
+
+from collections import Counter
+from typing import Any
+
+# ── String predicate / transform scoring (inlined from difficulty.py) ──────
+
+
+def _string_predicate_score(pred: dict[str, Any]) -> int:
+    kind = pred.get("kind", "")
+    if kind in ("is_alpha", "is_digit", "is_upper", "is_lower"):
+        return 1
+    elif kind in ("starts_with", "ends_with", "contains"):
+        return 2
+    elif kind == "length_cmp":
+        op = pred.get("op", "eq")
+        return 3 if op in ("lt", "gt") else 2
+    elif kind == "not":
+        return 4
+    elif kind in ("and", "or"):
+        operands = pred.get("operands", [])
+        return 5 if len(operands) >= 3 else 4
+    return 1
+
+
+def _string_transform_score(trans: dict[str, Any]) -> int:
+    kind = trans.get("kind", "identity")
+    if kind == "identity":
+        return 1
+    elif kind in (
+        "lowercase",
+        "uppercase",
+        "capitalize",
+        "swapcase",
+        "reverse",
+    ):
+        return 2
+    elif kind in ("replace", "strip", "prepend", "append"):
+        return 3
+    elif kind == "pipeline":
+        steps = trans.get("steps", [])
+        param_kinds = {"replace", "strip", "prepend", "append"}
+        param_steps = sum(1 for s in steps if s.get("kind") in param_kinds)
+        if len(steps) == 3 or param_steps >= 2:
+            return 5
+        elif param_steps >= 1:
+            return 4
+        else:
+            return 3
+    return 1
+
+
+# ── Numeric predicate / transform scoring (inlined) ──────────────────────
+
+
+def _predicate_score(pred: dict[str, Any]) -> int:
+    kind = pred.get("kind", "")
+    if kind in ("even", "odd"):
+        return 1
+    elif kind in ("lt", "le", "gt", "ge"):
+        return 2
+    elif kind == "mod_eq":
+        return 4
+    elif kind == "in_set":
+        return 3
+    elif kind in ("not", "and", "or"):
+        return 5
+    return 2
+
+
+def _transform_score(trans: dict[str, Any]) -> int:
+    kind = trans.get("kind", "identity")
+    if kind == "identity":
+        return 1
+    elif kind in ("abs", "negate"):
+        return 2
+    elif kind in ("shift", "scale", "clip"):
+        return 3
+    elif kind == "pipeline":
+        steps = trans.get("steps", [])
+        param_kinds = {"shift", "scale", "clip"}
+        param_steps = sum(1 for s in steps if s.get("kind") in param_kinds)
+        if len(steps) == 3 or param_steps >= 2:
+            return 5
+        elif param_steps >= 1:
+            return 4
+        else:
+            return 3
+    return 1
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────
+
+
+def _is_composed_string_pred(pred: dict[str, Any]) -> bool:
+    return pred.get("kind", "") in ("not", "and", "or")
+
+
+def _is_pipeline_string_trans(trans: dict[str, Any]) -> bool:
+    return trans.get("kind", "") == "pipeline"
+
+
+def _n_rules_bucket(n: int) -> str:
+    if n <= 5:
+        return "4-5"
+    elif n <= 7:
+        return "6-7"
+    else:
+        return "8-10"
+
+
+def _pred_majority_category(pred: dict[str, Any]) -> str:
+    """Classify string predicate (ignoring wrappers)."""
+    kind = pred.get("kind", "")
+    if kind in ("not",):
+        # Look at the operand
+        return _pred_majority_category(pred.get("operand", {}))
+    if kind in ("and", "or"):
+        # Use first operand
+        operands = pred.get("operands", [])
+        if operands:
+            return _pred_majority_category(operands[0])
+    if kind in ("is_alpha", "is_digit", "is_upper", "is_lower"):
+        return "simple"
+    elif kind in ("starts_with", "ends_with", "contains"):
+        return "pattern"
+    elif kind == "length_cmp":
+        return "length"
+    return "simple"
+
+
+def _trans_majority_category(trans: dict[str, Any]) -> str:
+    """Classify string transform (ignoring pipeline)."""
+    kind = trans.get("kind", "")
+    if kind == "pipeline":
+        # Use first step
+        steps = trans.get("steps", [])
+        if steps:
+            return _trans_majority_category(steps[0])
+    if kind == "identity":
+        return "identity"
+    elif kind in (
+        "lowercase",
+        "uppercase",
+        "capitalize",
+        "swapcase",
+        "reverse",
+    ):
+        return "simple"
+    elif kind in ("replace", "strip", "prepend", "append"):
+        return "param"
+    return "identity"
+
+
+def _majority_vote(categories: list[str], tie_order: list[str]) -> str:
+    """Return the most common category, breaking ties by tie_order position."""
+    if not categories:
+        return tie_order[0]
+    counts = Counter(categories)
+    max_count = max(counts.values())
+    # Among those tied at max_count, pick the one earliest in tie_order
+    for cat in tie_order:
+        if counts.get(cat, 0) == max_count:
+            return cat
+    return tie_order[0]
+
+
+# ── Public feature extractors ────────────────────────────────────────────
+
+
+def stringrules_features(spec: dict[str, Any]) -> dict[str, str]:
+    rules = spec.get("rules", [])
+    default_transform = spec.get("default_transform", {})
+    n_rules = len(rules)
+
+    # has_comp / has_pipe
+    has_comp = any(
+        _is_composed_string_pred(r.get("predicate", {})) for r in rules
+    )
+    has_pipe = any(
+        _is_pipeline_string_trans(r.get("transform", {})) for r in rules
+    ) or _is_pipeline_string_trans(default_transform)
+
+    # mode
+    if has_comp and has_pipe:
+        mode = "both"
+    elif has_comp:
+        mode = "comp-only"
+    elif has_pipe:
+        mode = "pipe-only"
+    else:
+        mode = "neither"
+
+    # comp_max_score / pipe_max_score
+    comp_scores = [
+        _string_predicate_score(r.get("predicate", {}))
+        for r in rules
+        if _is_composed_string_pred(r.get("predicate", {}))
+    ]
+    comp_max = max(comp_scores) if comp_scores else 0
+
+    all_transforms = [r.get("transform", {}) for r in rules] + [
+        default_transform
+    ]
+    pipe_scores = [
+        _string_transform_score(t)
+        for t in all_transforms
+        if _is_pipeline_string_trans(t)
+    ]
+    pipe_max = max(pipe_scores) if pipe_scores else 0
+
+    # comp_rate / pipe_rate
+    comp_count = sum(
+        1 for r in rules if _is_composed_string_pred(r.get("predicate", {}))
+    )
+    comp_rate = comp_count / n_rules if n_rules > 0 else 0.0
+
+    pipe_rule_count = sum(
+        1 for r in rules if _is_pipeline_string_trans(r.get("transform", {}))
+    )
+    # pipe_rate counts rules with pipeline transforms (not including default)
+    pipe_rate = pipe_rule_count / n_rules if n_rules > 0 else 0.0
+
+    # pred_majority
+    pred_cats = [_pred_majority_category(r.get("predicate", {})) for r in rules]
+    pred_majority = _majority_vote(pred_cats, ["simple", "pattern", "length"])
+
+    # transform_majority (includes default)
+    trans_cats = [_trans_majority_category(t) for t in all_transforms]
+    transform_majority = _majority_vote(
+        trans_cats, ["identity", "simple", "param"]
+    )
+
+    return {
+        "n_rules_bucket": _n_rules_bucket(n_rules),
+        "has_comp": str(has_comp).lower(),
+        "has_pipe": str(has_pipe).lower(),
+        "mode": mode,
+        "comp_max_score": str(comp_max),
+        "pipe_max_score": str(pipe_max),
+        "comp_rate": str(round(comp_rate, 2)),
+        "pipe_rate": str(round(pipe_rate, 2)),
+        "pred_majority": pred_majority,
+        "transform_majority": transform_majority,
+    }
+
+
+def stateful_features(spec: dict[str, Any]) -> dict[str, str]:
+    template = spec.get("template", "")
+
+    # pred_kind: classify the max-scored predicate
+    predicates = []
+    for key in (
+        "predicate",
+        "reset_predicate",
+        "match_predicate",
+        "toggle_predicate",
+    ):
+        val = spec.get(key)
+        if val is not None:
+            predicates.append(val)
+
+    if predicates:
+        best_pred = max(predicates, key=_predicate_score)
+        kind = best_pred.get("kind", "")
+        if kind in ("not", "and", "or"):
+            pred_kind = "composed"
+        elif kind == "mod_eq":
+            pred_kind = "mod_eq"
+        elif kind in ("lt", "le", "gt", "ge"):
+            pred_kind = "comparison"
+        elif kind in ("even", "odd"):
+            pred_kind = "even_odd"
+        else:
+            pred_kind = "comparison"
+    else:
+        pred_kind = "comparison"
+
+    # transform_bucket
+    transforms = []
+    for key in (
+        "true_transform",
+        "false_transform",
+        "value_transform",
+        "on_transform",
+        "off_transform",
+    ):
+        val = spec.get(key)
+        if val is not None:
+            transforms.append(val)
+
+    if transforms:
+        max_tscore = max(_transform_score(t) for t in transforms)
+        if max_tscore >= 5:
+            transform_bucket = "pipeline5"
+        elif max_tscore >= 4:
+            transform_bucket = "pipeline4"
+        elif max_tscore >= 2:
+            transform_bucket = "atomic_nonidentity"
+        else:
+            transform_bucket = "identity"
+    else:
+        transform_bucket = "identity"
+
+    features: dict[str, str] = {
+        "template": template,
+        "pred_kind": pred_kind,
+        "transform_bucket": transform_bucket,
+    }
+
+    # transform_signature (conditional_linear_sum only)
+    if template == "conditional_linear_sum":
+        true_t = spec.get("true_transform", {})
+        false_t = spec.get("false_transform", {})
+        true_kind = true_t.get("kind", "identity")
+        false_kind = false_t.get("kind", "identity")
+        affine = {"shift", "scale", "clip", "identity"}
+        sign = {"abs", "negate"}
+        if true_kind in affine and false_kind in affine:
+            sig = "both_affine"
+        elif true_kind in sign and false_kind in sign:
+            sig = "both_sign"
+        else:
+            sig = "mixed"
+        features["transform_signature"] = sig
+
+    return features
+
+
+def simple_algorithms_features(spec: dict[str, Any]) -> dict[str, str]:
+    template = spec.get("template", "")
+    has_filter = spec.get("pre_filter") is not None
+    has_transform = spec.get("pre_transform") is not None
+
+    # preprocess_bucket
+    if has_filter and has_transform:
+        preprocess_bucket = "both"
+    elif has_filter:
+        preprocess_bucket = "filter_only"
+    elif has_transform:
+        preprocess_bucket = "transform_only"
+    else:
+        preprocess_bucket = "none"
+
+    # filter_kind
+    if has_filter:
+        filt = spec["pre_filter"]
+        fk = filt.get("kind", "")
+        if fk in ("not", "and", "or"):
+            filter_kind = "composed"
+        elif fk == "mod_eq":
+            filter_kind = "mod_eq"
+        elif fk in ("lt", "le", "gt", "ge", "even", "odd"):
+            filter_kind = "comparison"
+        else:
+            filter_kind = "comparison"
+    else:
+        filter_kind = "none"
+
+    # pre_transform_complexity
+    if has_transform:
+        tscore = _transform_score(spec["pre_transform"])
+        if tscore >= 5:
+            pre_transform_complexity = "pipeline5"
+        elif tscore >= 4:
+            pre_transform_complexity = "pipeline4"
+        else:
+            pre_transform_complexity = "atomic"
+    else:
+        pre_transform_complexity = "none"
+
+    # edge_count: count non-None new edge fields
+    new_edge_fields = ["tie_default", "no_result_default", "short_list_default"]
+    if template == "max_window_sum":
+        new_edge_fields.append("empty_default")
+    edge_count = sum(1 for f in new_edge_fields if spec.get(f) is not None)
+
+    features: dict[str, str] = {
+        "template": template,
+        "preprocess_bucket": preprocess_bucket,
+        "has_filter": str(has_filter).lower(),
+        "has_transform": str(has_transform).lower(),
+        "filter_kind": filter_kind,
+        "pre_transform_complexity": pre_transform_complexity,
+        "edge_count": str(edge_count),
+    }
+
+    # target_sign (count_pairs_sum only)
+    if template == "count_pairs_sum":
+        target = spec.get("target", 0)
+        if target < 0:
+            features["target_sign"] = "neg"
+        elif target == 0:
+            features["target_sign"] = "zero"
+        else:
+            features["target_sign"] = "pos"
+
+    # k_bucket (max_window_sum only)
+    if template == "max_window_sum":
+        k = spec.get("k", 1)
+        if k <= 7:
+            features["k_bucket"] = "6-7"
+        else:
+            features["k_bucket"] = "8-10"
+
+    return features
