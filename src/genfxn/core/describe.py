@@ -85,6 +85,25 @@ def _describe_stateful(spec: dict[str, Any]) -> str:
             f"Return the best sum."
         )
 
+    elif template == "toggle_sum":
+        pred = spec.get("toggle_predicate", {})
+        on_trans = spec.get("on_transform", {})
+        off_trans = spec.get("off_transform", {})
+        init = spec.get("init_value", 0)
+
+        pred_text = _describe_predicate(pred, "element")
+        on_text = _describe_transform(on_trans)
+        off_text = _describe_transform(off_trans)
+        init_text = _format_number(init)
+
+        return (
+            f"Given a list of integers, start with an accumulator of "
+            f"{init_text} and a toggle initially off. For each element: "
+            f"when {pred_text}, flip the toggle; when the toggle is on, "
+            f"add {on_text} to the accumulator; when the toggle is off, "
+            f"add {off_text}. Return the final accumulator value."
+        )
+
     return ""
 
 
@@ -120,6 +139,17 @@ def _describe_predicate(pred: dict[str, Any], var: str) -> str:
             sorted_vals = list(values)
         vals_text = ", ".join(str(v) for v in sorted_vals)
         return f"the {var} is in {{{vals_text}}}"
+    elif kind == "and":
+        operands = pred.get("operands", [])
+        parts = [_describe_predicate(op, var) for op in operands]
+        return " and ".join(parts)
+    elif kind == "or":
+        operands = pred.get("operands", [])
+        parts = [_describe_predicate(op, var) for op in operands]
+        return " or ".join(parts)
+    elif kind == "not":
+        operand = pred.get("operand", {})
+        return f"it is not the case that {_describe_predicate(operand, var)}"
 
     return f"the {var} matches condition"
 
@@ -147,6 +177,31 @@ def _describe_transform(trans: dict[str, Any]) -> str:
         low = trans.get("low", 0)
         high = trans.get("high", 0)
         return f"the element clipped to [{low}, {high}]"
+    elif kind == "pipeline":
+        steps = trans.get("steps", [])
+        if not steps:
+            return "the element"
+        result = "the element"
+        for step in steps:
+            step_kind = step.get("kind", "identity")
+            if step_kind == "abs":
+                result = f"the absolute value of {result}"
+            elif step_kind == "negate":
+                result = f"the negation of {result}"
+            elif step_kind == "scale":
+                factor = step.get("factor", 1)
+                result = f"{_format_number(factor)} times {result}"
+            elif step_kind == "shift":
+                offset = step.get("offset", 0)
+                if offset >= 0:
+                    result = f"{result} plus {offset}"
+                else:
+                    result = f"{result} minus {abs(offset)}"
+            elif step_kind == "clip":
+                low = step.get("low", 0)
+                high = step.get("high", 0)
+                result = f"{result} clipped to [{low}, {high}]"
+        return result
 
     return "the element"
 

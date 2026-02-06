@@ -242,6 +242,161 @@ class TestDescribeStateful:
         assert "Return the best sum" in result
 
 
+    def test_toggle_sum(self) -> None:
+        spec = {
+            "template": "toggle_sum",
+            "toggle_predicate": {"kind": "even"},
+            "on_transform": {"kind": "identity"},
+            "off_transform": {"kind": "negate"},
+            "init_value": 0,
+        }
+        result = _describe_stateful(spec)
+        assert result != ""
+        assert "toggle" in result
+        assert "the element is even" in result
+        assert "add the element" in result
+        assert "add the negation of the element" in result
+
+    def test_toggle_sum_with_compound_predicate(self) -> None:
+        spec = {
+            "template": "toggle_sum",
+            "toggle_predicate": {
+                "kind": "and",
+                "operands": [
+                    {"kind": "even"},
+                    {"kind": "mod_eq", "divisor": 8, "remainder": 0},
+                ],
+            },
+            "on_transform": {
+                "kind": "pipeline",
+                "steps": [{"kind": "scale", "factor": -3}, {"kind": "abs"}],
+            },
+            "off_transform": {"kind": "negate"},
+            "init_value": -5,
+        }
+        result = _describe_stateful(spec)
+        assert result != ""
+        assert "accumulator of negative 5" in result
+        assert "even" in result
+        assert "mod 8 equals 0" in result
+
+    def test_all_templates_produce_nonempty_descriptions(self) -> None:
+        """Guard against new templates being added without describe support."""
+        from genfxn.stateful.models import TemplateType
+
+        minimal_specs: dict[str, dict] = {
+            "conditional_linear_sum": {
+                "template": "conditional_linear_sum",
+                "predicate": {"kind": "even"},
+                "true_transform": {"kind": "identity"},
+                "false_transform": {"kind": "identity"},
+                "init_value": 0,
+            },
+            "resetting_best_prefix_sum": {
+                "template": "resetting_best_prefix_sum",
+                "reset_predicate": {"kind": "even"},
+                "init_value": 0,
+            },
+            "longest_run": {
+                "template": "longest_run",
+                "match_predicate": {"kind": "even"},
+            },
+            "toggle_sum": {
+                "template": "toggle_sum",
+                "toggle_predicate": {"kind": "even"},
+                "on_transform": {"kind": "identity"},
+                "off_transform": {"kind": "identity"},
+                "init_value": 0,
+            },
+        }
+        for template_type in TemplateType:
+            assert template_type.value in minimal_specs, (
+                f"Template {template_type.value} has no minimal spec in test — "
+                f"add one and ensure _describe_stateful handles it"
+            )
+            result = _describe_stateful(minimal_specs[template_type.value])
+            assert result != "", (
+                f"_describe_stateful returned empty string for template "
+                f"{template_type.value}"
+            )
+
+
+class TestDescribePredicate_Compound:
+    def test_and(self) -> None:
+        pred = {
+            "kind": "and",
+            "operands": [
+                {"kind": "even"},
+                {"kind": "gt", "value": 5},
+            ],
+        }
+        result = _describe_predicate(pred, "x")
+        assert "the x is even" in result
+        assert "the x is greater than 5" in result
+        assert " and " in result
+
+    def test_or(self) -> None:
+        pred = {
+            "kind": "or",
+            "operands": [
+                {"kind": "lt", "value": 0},
+                {"kind": "mod_eq", "divisor": 3, "remainder": 0},
+            ],
+        }
+        result = _describe_predicate(pred, "element")
+        assert "less than 0" in result
+        assert "mod 3 equals 0" in result
+        assert " or " in result
+
+    def test_not(self) -> None:
+        pred = {"kind": "not", "operand": {"kind": "odd"}}
+        result = _describe_predicate(pred, "x")
+        assert "not" in result
+        assert "the x is odd" in result
+
+    def test_and_three_operands(self) -> None:
+        pred = {
+            "kind": "and",
+            "operands": [
+                {"kind": "even"},
+                {"kind": "gt", "value": 0},
+                {"kind": "lt", "value": 100},
+            ],
+        }
+        result = _describe_predicate(pred, "x")
+        assert result.count(" and ") == 2
+
+
+class TestDescribeTransform_Pipeline:
+    def test_pipeline_single_step(self) -> None:
+        trans = {"kind": "pipeline", "steps": [{"kind": "abs"}]}
+        result = _describe_transform(trans)
+        assert "absolute value" in result
+
+    def test_pipeline_scale_then_abs(self) -> None:
+        trans = {
+            "kind": "pipeline",
+            "steps": [{"kind": "scale", "factor": -3}, {"kind": "abs"}],
+        }
+        result = _describe_transform(trans)
+        assert "absolute value" in result
+        assert "negative 3" in result
+
+    def test_pipeline_empty_steps(self) -> None:
+        trans = {"kind": "pipeline", "steps": []}
+        result = _describe_transform(trans)
+        assert result == "the element"
+
+    def test_pipeline_shift_then_negate(self) -> None:
+        trans = {
+            "kind": "pipeline",
+            "steps": [{"kind": "shift", "offset": 5}, {"kind": "negate"}],
+        }
+        result = _describe_transform(trans)
+        assert "plus 5" in result
+        assert "negation" in result
+
+
 class TestDescribeStringPredicate:
     def test_starts_with(self) -> None:
         result = _describe_string_predicate(
