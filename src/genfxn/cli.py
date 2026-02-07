@@ -5,6 +5,7 @@ from typing import Annotated, cast
 import srsly
 import typer
 
+from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
@@ -275,7 +276,7 @@ def generate(
     # Type filters - stringrules
     n_rules: Annotated[
         int | None,
-        typer.Option("--n-rules", help="Number of string rules (1-8)"),
+        typer.Option("--n-rules", help="Number of string rules (1-10)"),
     ] = None,
     string_predicate_types: Annotated[
         str | None,
@@ -362,6 +363,41 @@ def generate(
             err=True,
         )
         raise typer.Exit(1)
+
+    # Reject combining --difficulty presets with manual axes options
+    if difficulty is not None:
+        manual_axes = {
+            "templates": templates,
+            "predicate-types": predicate_types,
+            "transform-types": transform_types,
+            "value-range": value_range,
+            "threshold-range": threshold_range,
+            "divisor-range": divisor_range,
+            "list-length-range": list_length_range,
+            "shift-range": shift_range,
+            "scale-range": scale_range,
+            "expr-types": expr_types,
+            "coeff-range": coeff_range,
+            "n-branches": n_branches,
+            "target-range": target_range,
+            "window-size-range": window_size_range,
+            "n-rules": n_rules,
+            "string-predicate-types": string_predicate_types,
+            "string-transform-types": string_transform_types,
+            "overlap-level": overlap_level,
+            "string-length-range": string_length_range,
+            "algorithm-types": algorithm_types,
+            "tie-break-modes": tie_break_modes,
+            "counting-modes": counting_modes,
+        }
+        provided = [f"--{k}" for k, v in manual_axes.items() if v is not None]
+        if provided:
+            typer.echo(
+                f"Error: --difficulty uses presets and cannot be combined "
+                f"with manual axes options: {', '.join(provided)}",
+                err=True,
+            )
+            raise typer.Exit(1)
 
     # Build axes for all families (or use preset if difficulty specified)
     if difficulty is not None:
@@ -551,6 +587,18 @@ def split(
             )
         ]
         result = split_tasks(tasks, holdouts)
+
+    if result.holdouts and len(result.test) == 0 and tasks:
+        typer.echo(
+            f"Warning: holdout matched 0 of {len(tasks)} tasks. "
+            f"Check --holdout-axis spelling (got '{holdout_axis}').",
+            err=True,
+        )
+        sample_val = get_spec_value(tasks[0].spec, holdout_axis)
+        typer.echo(
+            f"  First task's value at '{holdout_axis}': {sample_val!r}",
+            err=True,
+        )
 
     srsly.write_jsonl(train, [t.model_dump() for t in result.train])
     srsly.write_jsonl(test, [t.model_dump() for t in result.test])

@@ -41,8 +41,9 @@ def _generate_matching_string(
             return prefix + suffix
 
         case StringPredicateContains(substring=sub):
-            before_len = rng.randint(0, (hi - len(sub)) // 2)
-            after_len = rng.randint(0, (hi - len(sub)) // 2)
+            slack = max(0, hi - len(sub))
+            before_len = rng.randint(0, slack // 2)
+            after_len = rng.randint(0, slack // 2)
             before = _random_string(before_len, charset, rng)
             after = _random_string(after_len, charset, rng)
             return before + sub + after

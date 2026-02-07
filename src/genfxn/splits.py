@@ -39,9 +39,13 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
             return value == holdout.holdout_value
         case HoldoutType.RANGE:
             lo, hi = holdout.holdout_value
+            if not isinstance(value, (int, float)):
+                return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:
             return holdout.holdout_value in value
+        case _:
+            raise ValueError(f"Unknown holdout type: {holdout.holdout_type}")
 
 
 def split_tasks(tasks: list[Task], holdouts: list[AxisHoldout]) -> SplitResult:
