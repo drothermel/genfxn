@@ -330,6 +330,16 @@ class TestSimpleAlgorithmsFeatures:
         assert f["pre_transform_complexity"] == "atomic"
         assert f["edge_count"] == "1"  # empty_default
 
+    def test_max_window_sum_k_bucket_out_of_range(self) -> None:
+        spec = {
+            "template": "max_window_sum",
+            "k": 5,
+            "pre_filter": None,
+            "pre_transform": None,
+        }
+        f = simple_algorithms_features(spec)
+        assert f["k_bucket"] == "out_of_range"
+
     def test_target_sign_zero(self) -> None:
         spec = {
             "template": "count_pairs_sum",
@@ -518,6 +528,19 @@ class TestPoolGeneration:
 
             assert compute_difficulty(family, spec_dict) == difficulty
 
+    def test_pool_raises_after_too_many_sampling_failures(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        def always_fail(_family: str, _axes: object, _rng: random.Random) -> object:
+            raise ValueError("forced sampler failure")
+
+        monkeypatch.setattr(suite_generate, "_sample_spec", always_fail)
+
+        with pytest.raises(RuntimeError, match="Sampling failed"):
+            generate_pool("stateful", 3, seed=42, pool_size=50)
+
 
 # ── Determinism test ─────────────────────────────────────────────────────
 
@@ -534,6 +557,18 @@ class TestDeterminism:
         for ta, tb in zip(a, b):
             assert ta.task_id == tb.task_id
             assert ta.queries == tb.queries
+
+    def test_generate_suite_raises_when_quota_unfilled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        monkeypatch.setattr(suite_generate, "generate_pool", lambda *_: [])
+
+        with pytest.raises(RuntimeError, match="Could not fill suite"):
+            suite_generate.generate_suite(
+                "stringrules", 3, seed=7, pool_size=20, max_retries=1
+            )
 
 
 # ── Integration test (marked slow) ──────────────────────────────────────
