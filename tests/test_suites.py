@@ -9,7 +9,7 @@ from genfxn.suites.features import (
     stateful_features,
     stringrules_features,
 )
-from genfxn.suites.generate import generate_pool, greedy_select
+from genfxn.suites.generate import Candidate, PoolStats, generate_pool, greedy_select
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
 
 # ── Feature extraction tests ─────────────────────────────────────────────
@@ -420,6 +420,9 @@ class TestHardConstraints:
 
 
 class TestGreedySelect:
+    def _make_candidate(self, task_id: str, features: dict[str, str]) -> Candidate:
+        return Candidate(spec=None, spec_dict={}, task_id=task_id, features=features)
+
     def test_simple_selection(self) -> None:
         """Small synthetic pool, verify greedy fills buckets."""
         quota = QuotaSpec(
@@ -434,15 +437,14 @@ class TestGreedySelect:
         candidates = []
         for i in range(10):
             color = "red" if i % 3 == 0 else "blue"
-            features = {"color": color}
-            candidates.append((None, {}, f"id_{i}", features))
+            candidates.append(self._make_candidate(f"id_{i}", {"color": color}))
 
         rng = random.Random(42)
         selected = greedy_select(candidates, quota, rng)
         assert len(selected) == 5
 
-        red_count = sum(1 for c in selected if c[3]["color"] == "red")
-        blue_count = sum(1 for c in selected if c[3]["color"] == "blue")
+        red_count = sum(1 for c in selected if c.features["color"] == "red")
+        blue_count = sum(1 for c in selected if c.features["color"] == "blue")
         assert red_count >= 3
         assert blue_count >= 2
 
@@ -455,16 +457,16 @@ class TestGreedySelect:
         )
 
         candidates = [
-            (None, {}, "id_0", {"shape": "circle", "color": "red"}),
-            (None, {}, "id_1", {"shape": "square", "color": "red"}),
-            (None, {}, "id_2", {"shape": "circle", "color": "blue"}),
-            (None, {}, "id_3", {"shape": "circle", "color": "red"}),
+            self._make_candidate("id_0", {"shape": "circle", "color": "red"}),
+            self._make_candidate("id_1", {"shape": "square", "color": "red"}),
+            self._make_candidate("id_2", {"shape": "circle", "color": "blue"}),
+            self._make_candidate("id_3", {"shape": "circle", "color": "red"}),
         ]
 
         rng = random.Random(42)
         selected = greedy_select(candidates, quota, rng)
         # Only circles should be selected
-        assert all(c[3]["shape"] == "circle" for c in selected)
+        assert all(c.features["shape"] == "circle" for c in selected)
         assert len(selected) == 3
 
     def test_conditional_buckets(self) -> None:
@@ -481,19 +483,19 @@ class TestGreedySelect:
         )
 
         candidates = [
-            (None, {}, "id_0", {"shape": "circle", "color": "red"}),
-            (None, {}, "id_1", {"shape": "circle", "color": "blue"}),
-            (None, {}, "id_2", {"shape": "circle", "color": "red"}),
-            (None, {}, "id_3", {"shape": "square", "color": "red"}),
-            (None, {}, "id_4", {"shape": "square", "color": "blue"}),
+            self._make_candidate("id_0", {"shape": "circle", "color": "red"}),
+            self._make_candidate("id_1", {"shape": "circle", "color": "blue"}),
+            self._make_candidate("id_2", {"shape": "circle", "color": "red"}),
+            self._make_candidate("id_3", {"shape": "square", "color": "red"}),
+            self._make_candidate("id_4", {"shape": "square", "color": "blue"}),
         ]
 
         rng = random.Random(42)
         selected = greedy_select(candidates, quota, rng)
         assert len(selected) == 4
 
-        circles = [c for c in selected if c[3]["shape"] == "circle"]
-        squares = [c for c in selected if c[3]["shape"] == "square"]
+        circles = [c for c in selected if c.features["shape"] == "circle"]
+        squares = [c for c in selected if c.features["shape"] == "square"]
         assert len(circles) >= 2
         assert len(squares) >= 2
 
@@ -520,20 +522,24 @@ class TestPoolGeneration:
         self, family: str, difficulty: int
     ) -> None:
         """Pool produces candidates at correct difficulty."""
-        candidates = generate_pool(family, difficulty, seed=42, pool_size=200)
+        candidates, stats = generate_pool(family, difficulty, seed=42, pool_size=200)
         assert len(candidates) > 0, f"No candidates for {family} D{difficulty}"
+        assert stats.candidates == len(candidates)
+        assert stats.total_sampled == 200
         # All should have the right difficulty
-        for _, spec_dict, _, _ in candidates:
+        for cand in candidates:
             from genfxn.core.difficulty import compute_difficulty
 
-            assert compute_difficulty(family, spec_dict) == difficulty
+            assert compute_difficulty(family, cand.spec_dict) == difficulty
 
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import genfxn.suites.generate as suite_generate
 
-        def always_fail(_family: str, _axes: object, _rng: random.Random) -> object:
+        def always_fail(
+            _family: str, _axes: object, _rng: random.Random, trace: object = None,
+        ) -> object:
             raise ValueError("forced sampler failure")
 
         monkeypatch.setattr(suite_generate, "_sample_spec", always_fail)
@@ -563,7 +569,9 @@ class TestDeterminism:
     ) -> None:
         import genfxn.suites.generate as suite_generate
 
-        monkeypatch.setattr(suite_generate, "generate_pool", lambda *_: [])
+        monkeypatch.setattr(
+            suite_generate, "generate_pool", lambda *_: ([], PoolStats())
+        )
 
         with pytest.raises(RuntimeError, match="Could not fill suite"):
             suite_generate.generate_suite(

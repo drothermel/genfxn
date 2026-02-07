@@ -300,31 +300,43 @@ STATEFUL_PRESETS: dict[int, list[DifficultyPreset]] = {
         ),
         DifficultyPreset(
             "4C",
-            "conditional, composed NOT, shift/scale",
+            "toggle_sum, composed NOT, pipeline transform",
             {
-                "templates": [StatefulTemplateType.CONDITIONAL_LINEAR_SUM],
+                "templates": [StatefulTemplateType.TOGGLE_SUM],
                 "predicate_types": [PredicateType.NOT],
-                "transform_types": [TransformType.SHIFT, TransformType.SCALE],
+                "transform_types": [TransformType.PIPELINE],
             },
         ),
     ],
     5: [
         DifficultyPreset(
             "5A",
-            "toggle_sum, composed AND, pipeline transform",
+            "toggle_sum, composed AND (3+), pipeline transform",
             {
                 "templates": [StatefulTemplateType.TOGGLE_SUM],
                 "predicate_types": [PredicateType.AND],
                 "transform_types": [TransformType.PIPELINE],
+                "min_composed_operands": 3,
             },
         ),
         DifficultyPreset(
             "5B",
-            "toggle_sum, composed OR, pipeline transform",
+            "resetting, composed AND (3+), pipeline transform",
+            {
+                "templates": [StatefulTemplateType.RESETTING_BEST_PREFIX_SUM],
+                "predicate_types": [PredicateType.AND],
+                "transform_types": [TransformType.PIPELINE],
+                "min_composed_operands": 3,
+            },
+        ),
+        DifficultyPreset(
+            "5C",
+            "toggle_sum, composed OR (3+), pipeline transform",
             {
                 "templates": [StatefulTemplateType.TOGGLE_SUM],
                 "predicate_types": [PredicateType.OR],
                 "transform_types": [TransformType.PIPELINE],
+                "min_composed_operands": 3,
             },
         ),
     ],

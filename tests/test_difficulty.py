@@ -407,13 +407,19 @@ class TestStringrulesDifficulty:
 
 class TestComposedPredicateScore:
     def test_not_predicate(self) -> None:
-        assert _predicate_score({"kind": "not"}) == 5
+        assert _predicate_score({"kind": "not"}) == 4
 
-    def test_and_predicate(self) -> None:
-        assert _predicate_score({"kind": "and"}) == 5
+    def test_and_two_operands(self) -> None:
+        assert _predicate_score({"kind": "and", "operands": [{}, {}]}) == 4
 
-    def test_or_predicate(self) -> None:
-        assert _predicate_score({"kind": "or"}) == 5
+    def test_and_three_operands(self) -> None:
+        assert _predicate_score({"kind": "and", "operands": [{}, {}, {}]}) == 5
+
+    def test_or_two_operands(self) -> None:
+        assert _predicate_score({"kind": "or", "operands": [{}, {}]}) == 4
+
+    def test_or_three_operands(self) -> None:
+        assert _predicate_score({"kind": "or", "operands": [{}, {}, {}]}) == 5
 
 
 class TestPipelineTransformScore:
@@ -529,15 +535,27 @@ class TestToggleSumDifficulty:
         # 0.4*4 + 0.3*1 + 0.3*1 = 1.6+0.3+0.3 = 2.2 -> 2
         assert _stateful_difficulty(spec) == 2
 
-    def test_toggle_sum_with_composed_pred(self) -> None:
+    def test_toggle_sum_with_composed_pred_two_operands(self) -> None:
         spec = {
             "template": "toggle_sum",
-            "toggle_predicate": {"kind": "and"},
+            "toggle_predicate": {"kind": "and", "operands": [{}, {}]},
             "on_transform": {"kind": "shift", "offset": 1},
             "off_transform": {"kind": "scale", "factor": 2},
             "init_value": 0,
         }
-        # toggle_sum=4, and=5, shift+scale avg=3
+        # toggle_sum=4, and(2 ops)=4, shift+scale avg=3
+        # 0.4*4 + 0.3*4 + 0.3*3 = 1.6+1.2+0.9 = 3.7 -> 4
+        assert _stateful_difficulty(spec) == 4
+
+    def test_toggle_sum_with_composed_pred_three_operands(self) -> None:
+        spec = {
+            "template": "toggle_sum",
+            "toggle_predicate": {"kind": "and", "operands": [{}, {}, {}]},
+            "on_transform": {"kind": "shift", "offset": 1},
+            "off_transform": {"kind": "scale", "factor": 2},
+            "init_value": 0,
+        }
+        # toggle_sum=4, and(3 ops)=5, shift+scale avg=3
         # 0.4*4 + 0.3*5 + 0.3*3 = 1.6+1.5+0.9 = 4.0 -> 4
         assert _stateful_difficulty(spec) == 4
 
