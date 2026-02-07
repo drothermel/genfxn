@@ -510,6 +510,9 @@ def generate_pool(
     feature_fn = _FEATURE_FNS[family]
     candidates: list[Candidate] = []
     seen_ids: set[str] = set()
+    # Surface systemic sampling failures instead of silently degrading pools.
+    max_failures = max(10, pool_size // 5)
+    sample_failures = 0
 
     for i in range(pool_size):
         sub_seed = _stable_seed(seed, family, difficulty, i)
@@ -518,7 +521,14 @@ def generate_pool(
         axes = axes_fn(rng)
         try:
             spec = _sample_spec(family, axes, rng)
-        except Exception:
+        except Exception as exc:
+            sample_failures += 1
+            if sample_failures >= max_failures:
+                raise RuntimeError(
+                    f"Sampling failed {sample_failures} times while generating "
+                    f"{family} D{difficulty} pool (size={pool_size}). "
+                    f"Last error: {type(exc).__name__}: {exc}"
+                ) from exc
             continue
 
         spec_dict = spec.model_dump()
@@ -684,6 +694,13 @@ def generate_suite(
 
         if len(selected) >= quota.total:
             break
+
+    if len(selected) < quota.total:
+        raise RuntimeError(
+            f"Could not fill suite for {family} D{difficulty}: "
+            f"selected {len(selected)}/{quota.total} after "
+            f"{max_retries + 1} attempt(s), final pool_size={current_pool_size}"
+        )
 
     # Generate full tasks for selected candidates
     tasks: list[Task] = []

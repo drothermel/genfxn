@@ -402,9 +402,11 @@ def simple_algorithms_features(spec: dict[str, Any]) -> dict[str, str]:
     # k_bucket (max_window_sum only)
     if template == "max_window_sum":
         k = spec.get("k", 1)
-        if k <= 7:
+        if 6 <= k <= 7:
             features["k_bucket"] = "6-7"
-        else:
+        elif 8 <= k <= 10:
             features["k_bucket"] = "8-10"
+        else:
+            features["k_bucket"] = "out_of_range"
 
     return features
