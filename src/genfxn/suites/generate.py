@@ -1,8 +1,11 @@
 """Pool generation, greedy selection, and suite generation pipeline."""
 
+import logging
 import random
 import zlib
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
@@ -11,8 +14,10 @@ from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
-from genfxn.core.trace import GenerationTrace
+from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.core.transforms import TransformType
+
+logger = logging.getLogger(__name__)
 from genfxn.simple_algorithms.models import (
     SimpleAlgorithmsAxes,
 )
@@ -36,10 +41,26 @@ from genfxn.suites.features import (
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
 
-# ── Candidate type ───────────────────────────────────────────────────────
+# ── Candidate + PoolStats ────────────────────────────────────────────────
 
-# (spec_model, spec_dict, task_id, features)
-Candidate = tuple[Any, dict[str, Any], str, dict[str, str]]
+
+class Candidate(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    spec: Any
+    spec_dict: dict[str, Any]
+    task_id: str
+    features: dict[str, str]
+    trace_steps: list[TraceStep] = Field(default_factory=list)
+    axes: Any = None
+
+
+class PoolStats(BaseModel):
+    total_sampled: int = 0
+    duplicates: int = 0
+    wrong_difficulty: int = 0
+    errors: int = 0
+    candidates: int = 0
+
 
 # ── Stable seeding ───────────────────────────────────────────────────────
 
@@ -321,6 +342,7 @@ def _pool_axes_stateful_d5(rng: random.Random) -> StatefulAxes:
         templates=[template],
         predicate_types=_COMPOSED_PREDS,
         transform_types=[TransformType.PIPELINE],
+        min_composed_operands=3,
     )
 
 
@@ -486,13 +508,18 @@ _FEATURE_FNS = {
 }
 
 
-def _sample_spec(family: str, axes: Any, rng: random.Random) -> Any:
+def _sample_spec(
+    family: str,
+    axes: Any,
+    rng: random.Random,
+    trace: list[TraceStep] | None = None,
+) -> Any:
     if family == "stringrules":
-        return sample_stringrules_spec(axes, rng)
+        return sample_stringrules_spec(axes, rng, trace=trace)
     elif family == "stateful":
-        return sample_stateful_spec(axes, rng)
+        return sample_stateful_spec(axes, rng, trace=trace)
     elif family == "simple_algorithms":
-        return sample_simple_algorithms_spec(axes, rng)
+        return sample_simple_algorithms_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -504,28 +531,30 @@ def generate_pool(
     difficulty: int,
     seed: int,
     pool_size: int,
-) -> list[Candidate]:
+) -> tuple[list[Candidate], PoolStats]:
     """Generate a candidate pool of specs at the target difficulty."""
     axes_fn = _POOL_AXES_FNS[family][difficulty]
     feature_fn = _FEATURE_FNS[family]
     candidates: list[Candidate] = []
     seen_ids: set[str] = set()
+    stats = PoolStats()
     # Surface systemic sampling failures instead of silently degrading pools.
     max_failures = max(10, pool_size // 5)
-    sample_failures = 0
 
     for i in range(pool_size):
+        stats.total_sampled += 1
         sub_seed = _stable_seed(seed, family, difficulty, i)
         rng = random.Random(sub_seed)
 
         axes = axes_fn(rng)
+        trace_steps: list[TraceStep] = []
         try:
-            spec = _sample_spec(family, axes, rng)
+            spec = _sample_spec(family, axes, rng, trace=trace_steps)
         except Exception as exc:
-            sample_failures += 1
-            if sample_failures >= max_failures:
+            stats.errors += 1
+            if stats.errors >= max_failures:
                 raise RuntimeError(
-                    f"Sampling failed {sample_failures} times while generating "
+                    f"Sampling failed {stats.errors} times while generating "
                     f"{family} D{difficulty} pool (size={pool_size}). "
                     f"Last error: {type(exc).__name__}: {exc}"
                 ) from exc
@@ -535,17 +564,32 @@ def generate_pool(
         task_id = task_id_from_spec(family, spec_dict)
 
         if task_id in seen_ids:
+            stats.duplicates += 1
             continue
         seen_ids.add(task_id)
 
         actual_difficulty = compute_difficulty(family, spec_dict)
         if actual_difficulty != difficulty:
+            stats.wrong_difficulty += 1
             continue
 
         features = feature_fn(spec_dict)
-        candidates.append((spec, spec_dict, task_id, features))
+        stats.candidates += 1
+        candidates.append(Candidate(
+            spec=spec,
+            spec_dict=spec_dict,
+            task_id=task_id,
+            features=features,
+            trace_steps=trace_steps,
+            axes=axes,
+        ))
 
-    return candidates
+    logger.debug(
+        "%s D%d pool: %d sampled, %d candidates, %d dupes, %d wrong-diff, %d errors",
+        family, difficulty, stats.total_sampled, stats.candidates,
+        stats.duplicates, stats.wrong_difficulty, stats.errors,
+    )
+    return candidates, stats
 
 
 # ── Greedy selection ─────────────────────────────────────────────────────
@@ -578,10 +622,9 @@ def greedy_select(
     # Filter by hard constraints
     filtered = []
     for cand in candidates:
-        features = cand[3]
         match = True
         for key, val in quota.hard_constraints.items():
-            if features.get(key) != val:
+            if cand.features.get(key) != val:
                 match = False
                 break
         if match:
@@ -598,16 +641,15 @@ def greedy_select(
         best_cand = None
         best_score = -1.0
 
-        for ci, cand in enumerate(filtered):
-            if cand[2] in used_ids:
+        for cand in filtered:
+            if cand.task_id in used_ids:
                 continue
-            features = cand[3]
 
             # Weight by deficit fraction: larger deficits are more urgent
             score = 0.0
             for bi, bucket in enumerate(quota.buckets):
                 deficit = max(0, bucket.target - filled[bi])
-                if deficit > 0 and _bucket_applies(bucket, features):
+                if deficit > 0 and _bucket_applies(bucket, cand.features):
                     score += deficit / bucket.target
 
             if score > best_score:
@@ -618,10 +660,9 @@ def greedy_select(
             break
 
         selected.append(best_cand)
-        used_ids.add(best_cand[2])
-        features = best_cand[3]
+        used_ids.add(best_cand.task_id)
         for bi, bucket in enumerate(quota.buckets):
-            if _bucket_applies(bucket, features):
+            if _bucket_applies(bucket, best_cand.features):
                 filled[bi] += 1
 
     return selected
@@ -630,24 +671,29 @@ def greedy_select(
 # ── Full task generation from spec ───────────────────────────────────────
 
 
-def _generate_task_from_spec(
+def _generate_task_from_candidate(
     family: str,
-    spec: Any,
-    spec_dict: dict[str, Any],
-    task_id: str,
+    candidate: Candidate,
     rng: random.Random,
 ) -> Task:
-    """Generate a full Task from an already-sampled spec."""
+    """Generate a full Task from a Candidate."""
+    spec = candidate.spec
+    spec_dict = candidate.spec_dict
+    axes = candidate.axes
+
     if family == "stringrules":
-        axes = StringRulesAxes()
+        if axes is None:
+            axes = StringRulesAxes()
         code = render_stringrules(spec)
         queries = generate_stringrules_queries(spec, axes, rng)
     elif family == "stateful":
-        axes = StatefulAxes()
+        if axes is None:
+            axes = StatefulAxes()
         code = render_stateful(spec)
         queries = generate_stateful_queries(spec, axes, rng)
     elif family == "simple_algorithms":
-        axes = SimpleAlgorithmsAxes()
+        if axes is None:
+            axes = SimpleAlgorithmsAxes()
         code = render_simple_algorithms(spec)
         queries = generate_simple_algorithms_queries(spec, axes, rng)
     else:
@@ -655,10 +701,10 @@ def _generate_task_from_spec(
 
     difficulty = compute_difficulty(family, spec_dict)
     description = describe_task(family, spec_dict)
-    trace = GenerationTrace(family=family, steps=[])
+    trace = GenerationTrace(family=family, steps=candidate.trace_steps)
 
     return Task(
-        task_id=task_id,
+        task_id=candidate.task_id,
         family=family,
         spec=spec_dict,
         code=code,
@@ -685,7 +731,7 @@ def generate_suite(
 
     for attempt in range(max_retries + 1):
         current_pool_size = pool_size * (2**attempt)
-        candidates = generate_pool(family, difficulty, seed, current_pool_size)
+        candidates, stats = generate_pool(family, difficulty, seed, current_pool_size)
 
         select_rng = random.Random(
             _stable_seed(seed, family, difficulty, 999999)
@@ -694,6 +740,11 @@ def generate_suite(
 
         if len(selected) >= quota.total:
             break
+        logger.debug(
+            "%s D%d attempt %d: %d/%d selected (pool=%d, candidates=%d)",
+            family, difficulty, attempt, len(selected), quota.total,
+            current_pool_size, stats.candidates,
+        )
 
     if len(selected) < quota.total:
         raise RuntimeError(
@@ -704,13 +755,11 @@ def generate_suite(
 
     # Generate full tasks for selected candidates
     tasks: list[Task] = []
-    for spec, spec_dict, task_id, _features in selected[: quota.total]:
+    for candidate in selected[: quota.total]:
         task_rng = random.Random(
-            _stable_seed(seed, family, difficulty, zlib.crc32(task_id.encode()) & 0xFFFFFFFF)
+            _stable_seed(seed, family, difficulty, zlib.crc32(candidate.task_id.encode()) & 0xFFFFFFFF)
         )
-        task = _generate_task_from_spec(
-            family, spec, spec_dict, task_id, task_rng
-        )
+        task = _generate_task_from_candidate(family, candidate, task_rng)
         tasks.append(task)
 
     return tasks

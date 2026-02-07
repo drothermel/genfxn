@@ -150,8 +150,11 @@ def _predicate_score(pred: dict[str, Any]) -> int:
         return 4
     elif kind == "in_set":
         return 3
-    elif kind in ("not", "and", "or"):
-        return 5
+    elif kind == "not":
+        return 4
+    elif kind in ("and", "or"):
+        operands = pred.get("operands", [])
+        return 5 if len(operands) >= 3 else 4
     return 2
 
 

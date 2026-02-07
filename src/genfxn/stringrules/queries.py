@@ -2,6 +2,7 @@ import random
 import string
 
 from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.query_utils import find_satisfying
 from genfxn.core.string_predicates import (
     StringPredicate,
     StringPredicateAnd,
@@ -116,13 +117,11 @@ def _generate_matching_string(
             return _random_string(length, charset, rng)
 
         case StringPredicateNot() | StringPredicateAnd() | StringPredicateOr():
-            for _ in range(50):
-                s = _random_string(rng.randint(lo, hi), charset, rng)
-                if eval_string_predicate(pred, s):
-                    return s
-            # Fallback: verify before returning
-            s = _random_string(rng.randint(lo, hi), charset, rng)
-            return s if eval_string_predicate(pred, s) else None
+            return find_satisfying(
+                lambda: _random_string(rng.randint(lo, hi), charset, rng),
+                lambda s: eval_string_predicate(pred, s),
+                max_attempts=50,
+            )
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)
@@ -227,13 +226,11 @@ def _generate_non_matching_string(
             return _random_string(length, charset, rng)
 
         case StringPredicateNot() | StringPredicateAnd() | StringPredicateOr():
-            for _ in range(50):
-                s = _random_string(rng.randint(lo, hi), charset, rng)
-                if not eval_string_predicate(pred, s):
-                    return s
-            # Fallback: verify before returning
-            s = _random_string(rng.randint(lo, hi), charset, rng)
-            return s if not eval_string_predicate(pred, s) else None
+            return find_satisfying(
+                lambda: _random_string(rng.randint(lo, hi), charset, rng),
+                lambda s: not eval_string_predicate(pred, s),
+                max_attempts=50,
+            )
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)

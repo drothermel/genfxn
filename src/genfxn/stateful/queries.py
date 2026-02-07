@@ -1,6 +1,7 @@
 import random
 
 from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.query_utils import find_satisfying
 from genfxn.core.predicates import (
     Predicate,
     PredicateAnd,
@@ -69,13 +70,10 @@ def _make_matching_value(
             base = lo + ((r - lo) % d)
             return clamp(base)
         case PredicateNot() | PredicateAnd() | PredicateOr():
-            for _ in range(100):
-                v = rng.randint(lo, hi)
-                if eval_predicate(pred, v):
-                    return v
-            # Fallback: verify before returning
-            v = rng.randint(lo, hi)
-            return v if eval_predicate(pred, v) else None
+            return find_satisfying(
+                lambda: rng.randint(lo, hi),
+                lambda v: eval_predicate(pred, v),
+            )
         case _:
             return rng.randint(lo, hi)
 
@@ -111,13 +109,10 @@ def _make_non_matching_value(
             base = lo + ((r + 1 - lo) % d)
             return clamp(base)
         case PredicateNot() | PredicateAnd() | PredicateOr():
-            for _ in range(100):
-                v = rng.randint(lo, hi)
-                if not eval_predicate(pred, v):
-                    return v
-            # Fallback: verify before returning
-            v = rng.randint(lo, hi)
-            return v if not eval_predicate(pred, v) else None
+            return find_satisfying(
+                lambda: rng.randint(lo, hi),
+                lambda v: not eval_predicate(pred, v),
+            )
         case _:
             return rng.randint(lo, hi)
 

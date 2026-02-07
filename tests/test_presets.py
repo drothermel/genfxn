@@ -134,6 +134,7 @@ class TestPresetAccuracy:
     EDGE_DIFFICULTIES = {
         ("stringrules", 4),  # Max achievable with atoms is ~3.8
         ("stringrules", 5),  # Composed/pipeline sampling variance
+        ("stateful", 4),  # Composed NOT + pipeline sampling variance
         ("stateful", 5),  # Composed/pipeline sampling variance
         ("simple_algorithms", 5),  # Preprocess + edge sampling variance
     }

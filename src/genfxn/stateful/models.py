@@ -89,6 +89,9 @@ class StatefulAxes(BaseModel):
     divisor_range: tuple[int, int] = Field(default=(2, 10))
     shift_range: tuple[int, int] = Field(default=(-10, 10))
     scale_range: tuple[int, int] = Field(default=(-5, 5))
+    min_composed_operands: int = Field(
+        default=2, ge=2, le=5, description="Min operands for AND/OR predicates"
+    )
 
     @model_validator(mode="after")
     def validate_axes(self) -> "StatefulAxes":
