@@ -13,6 +13,7 @@ def _make_task(task_id: str, spec: dict) -> Task:
         spec=spec,
         code="def f(): pass",
         queries=[Query(input=0, output=0, tag=QueryTag.TYPICAL)],
+        description="test task",
     )
 
 

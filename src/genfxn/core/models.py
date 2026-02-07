@@ -19,6 +19,18 @@ class Query(BaseModel):
     tag: QueryTag = Field(description="Query category for analysis")
 
 
+def dedupe_queries(queries: list[Query]) -> list[Query]:
+    """Deduplicate queries by input, keeping first occurrence."""
+    seen: set[Any] = set()
+    result: list[Query] = []
+    for q in queries:
+        key = tuple(q.input) if isinstance(q.input, list) else q.input
+        if key not in seen:
+            seen.add(key)
+            result.append(q)
+    return result
+
+
 class Task(BaseModel):
     task_id: str = Field(description="Deterministic hash of spec")
     family: str = Field(description="Function family (piecewise, stateful)")
@@ -37,6 +49,4 @@ class Task(BaseModel):
         le=5,
         description="Difficulty score (1-5)",
     )
-    description: str | None = Field(
-        default=None, description="Natural language description of the task"
-    )
+    description: str = Field(description="Natural language description of the task")

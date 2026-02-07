@@ -20,6 +20,12 @@ from typing import Any, cast
 
 import typer
 
+from genfxn.core.difficulty import (
+    PIECEWISE_WEIGHTS,
+    SIMPLE_ALGORITHMS_WEIGHTS,
+    STATEFUL_WEIGHTS,
+    STRINGRULES_WEIGHTS,
+)
 from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.piecewise.models import PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
@@ -56,21 +62,14 @@ class FamilyAnalysis:
     achievable_difficulties: list[int]
 
 
-# =============================================================================
-# Scoring formulas (mirrored from difficulty.py for analysis)
-# NOTE: Keep these in sync with the actual difficulty calculation logic.
-# Consider importing from the source if refactoring to avoid duplication.
-# =============================================================================
-
-PIECEWISE_WEIGHTS = {"branches": 0.4, "expr_type": 0.4, "coeff": 0.2}
+# Weights are imported from genfxn.core.difficulty.
+# Axes tables below map human-readable labels to scores for display only.
 
 PIECEWISE_AXES = {
     "branches": [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5)],
     "expr_type": [("AFFINE", 1), ("ABS", 2), ("MOD", 3), ("QUADRATIC", 4)],
     "coeff": [("≤1", 1), ("~2", 2), ("~3", 3), ("~4", 4), ("≥5", 5)],
 }
-
-STATEFUL_WEIGHTS = {"template": 0.4, "predicate": 0.3, "transform": 0.3}
 
 STATEFUL_AXES = {
     "template": [
@@ -86,8 +85,6 @@ STATEFUL_AXES = {
     ],
     "transform": [("IDENTITY", 1), ("ABS/NEGATE", 2), ("SHIFT/SCALE", 3)],
 }
-
-SIMPLE_ALGORITHMS_WEIGHTS = {"template": 0.5, "mode": 0.3, "edge": 0.2}
 
 SIMPLE_ALGORITHMS_AXES = {
     "template": [
@@ -106,8 +103,6 @@ SIMPLE_ALGORITHMS_AXES = {
     ],
     "edge": [("zero default", 1), ("non-zero default", 2)],
 }
-
-STRINGRULES_WEIGHTS = {"rules": 0.4, "predicate": 0.3, "transform": 0.3}
 
 STRINGRULES_AXES = {
     "rules": [(1, 1), (2, 2), (3, 3), (4, 4), ("5+", 5)],

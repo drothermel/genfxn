@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.simple_algorithms.eval import eval_simple_algorithms
 from genfxn.simple_algorithms.models import (
     CountPairsSumSpec,
@@ -416,15 +416,4 @@ def generate_simple_algorithms_queries(
         case _:
             raise ValueError(f"Unknown spec: {spec}")
 
-    return _dedupe_queries(queries)
-
-
-def _dedupe_queries(queries: list[Query]) -> list[Query]:
-    seen: set[tuple[int, ...]] = set()
-    result: list[Query] = []
-    for q in queries:
-        key = tuple(q.input)
-        if key not in seen:
-            seen.add(key)
-            result.append(q)
-    return result
+    return dedupe_queries(queries)

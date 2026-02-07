@@ -39,6 +39,12 @@ from genfxn.stringrules.models import (
 )
 from genfxn.stringrules.utils import _get_charset, _random_string
 
+_COMPOSED_PREDICATE_TYPES = {
+    StringPredicateType.NOT,
+    StringPredicateType.AND,
+    StringPredicateType.OR,
+}
+
 
 def sample_string_predicate(
     pred_type: StringPredicateType,
@@ -81,24 +87,18 @@ def sample_string_predicate(
             return StringPredicateLengthCmp(op=op, value=value)
 
         case StringPredicateType.NOT:
-            composed = {
-                StringPredicateType.NOT,
-                StringPredicateType.AND,
-                StringPredicateType.OR,
-            }
-            atom_types = [t for t in axes.predicate_types if t not in composed]
+            atom_types = [
+                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+            ]
             if not atom_types:
                 atom_types = [StringPredicateType.IS_ALPHA]
             operand = sample_string_predicate(rng.choice(atom_types), axes, rng)
             return StringPredicateNot(operand=operand)
 
         case StringPredicateType.AND:
-            composed = {
-                StringPredicateType.NOT,
-                StringPredicateType.AND,
-                StringPredicateType.OR,
-            }
-            atom_types = [t for t in axes.predicate_types if t not in composed]
+            atom_types = [
+                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+            ]
             if not atom_types:
                 atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
@@ -109,12 +109,9 @@ def sample_string_predicate(
             return StringPredicateAnd(operands=operands)
 
         case StringPredicateType.OR:
-            composed = {
-                StringPredicateType.NOT,
-                StringPredicateType.AND,
-                StringPredicateType.OR,
-            }
-            atom_types = [t for t in axes.predicate_types if t not in composed]
+            atom_types = [
+                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+            ]
             if not atom_types:
                 atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
