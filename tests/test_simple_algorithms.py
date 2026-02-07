@@ -2,8 +2,12 @@ import random
 
 import pytest
 
-from genfxn.core.predicates import PredicateGt, PredicateModEq
-from genfxn.core.transforms import TransformNegate, TransformShift
+from genfxn.core.predicates import PredicateGt, PredicateModEq, PredicateType
+from genfxn.core.transforms import (
+    TransformNegate,
+    TransformShift,
+    TransformType,
+)
 from genfxn.simple_algorithms.eval import (
     eval_count_pairs_sum,
     eval_max_window_sum,
@@ -295,6 +299,26 @@ class TestAxesValidation:
     def test_empty_templates(self) -> None:
         with pytest.raises(ValueError, match="templates must not be empty"):
             SimpleAlgorithmsAxes(templates=[])
+
+    def test_empty_pre_filter_types(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_filter_types must not be empty"
+        ):
+            SimpleAlgorithmsAxes(pre_filter_types=[])
+
+    def test_empty_pre_transform_types(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_transform_types must not be empty"
+        ):
+            SimpleAlgorithmsAxes(pre_transform_types=[])
+
+    def test_non_empty_preprocess_type_lists(self) -> None:
+        axes = SimpleAlgorithmsAxes(
+            pre_filter_types=[PredicateType.MOD_EQ],
+            pre_transform_types=[TransformType.SHIFT],
+        )
+        assert axes.pre_filter_types == [PredicateType.MOD_EQ]
+        assert axes.pre_transform_types == [TransformType.SHIFT]
 
 
 class TestTaskGeneration:

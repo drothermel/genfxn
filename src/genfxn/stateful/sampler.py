@@ -81,7 +81,13 @@ def sample_predicate(
             )
             return PredicateNot(operand=operand)
         case PredicateType.AND:
-            n = rng.randint(min_operands, 3)
+            max_operands = 3
+            if min_operands > max_operands:
+                raise ValueError(
+                    f"AND requires min_operands <= {max_operands}, got "
+                    f"{min_operands}"
+                )
+            n = rng.randint(min_operands, max_operands)
             operands = [
                 sample_predicate(
                     rng.choice(_ATOM_PREDICATE_TYPES),
@@ -93,7 +99,13 @@ def sample_predicate(
             ]
             return PredicateAnd(operands=operands)
         case PredicateType.OR:
-            n = rng.randint(min_operands, 3)
+            max_operands = 3
+            if min_operands > max_operands:
+                raise ValueError(
+                    f"OR requires min_operands <= {max_operands}, got "
+                    f"{min_operands}"
+                )
+            n = rng.randint(min_operands, max_operands)
             operands = [
                 sample_predicate(
                     rng.choice(_ATOM_PREDICATE_TYPES),

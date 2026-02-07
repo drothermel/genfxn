@@ -113,4 +113,16 @@ class SimpleAlgorithmsAxes(BaseModel):
         if lo < 1:
             raise ValueError(f"window_size_range: low ({lo}) must be >= 1")
 
+        if self.pre_filter_types is not None and not self.pre_filter_types:
+            raise ValueError(
+                "pre_filter_types must not be empty when provided"
+            )
+        if (
+            self.pre_transform_types is not None
+            and not self.pre_transform_types
+        ):
+            raise ValueError(
+                "pre_transform_types must not be empty when provided"
+            )
+
         return self

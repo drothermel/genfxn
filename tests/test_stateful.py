@@ -34,7 +34,7 @@ from genfxn.stateful.models import (
 )
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stateful.render import render_stateful
-from genfxn.stateful.sampler import sample_stateful_spec
+from genfxn.stateful.sampler import sample_predicate, sample_stateful_spec
 from genfxn.stateful.task import generate_stateful_task
 
 
@@ -303,6 +303,42 @@ class TestAxesValidation:
     def test_negative_divisor(self) -> None:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(-1, 5))
+
+    def test_min_composed_operands_rejected_for_and_or(self) -> None:
+        with pytest.raises(ValueError, match=r"min_composed_operands.*<= 3"):
+            StatefulAxes(
+                predicate_types=[PredicateType.AND],
+                min_composed_operands=4,
+            )
+
+    def test_min_composed_operands_allowed_when_not_used(self) -> None:
+        axes = StatefulAxes(
+            predicate_types=[PredicateType.EVEN],
+            min_composed_operands=5,
+        )
+        assert axes.min_composed_operands == 5
+
+
+class TestSamplerGuards:
+    def test_and_rejects_unsupported_min_operands(self) -> None:
+        with pytest.raises(ValueError, match=r"AND requires min_operands <= 3"):
+            sample_predicate(
+                PredicateType.AND,
+                threshold_range=(-5, 5),
+                divisor_range=(2, 5),
+                rng=random.Random(42),
+                min_operands=4,
+            )
+
+    def test_or_rejects_unsupported_min_operands(self) -> None:
+        with pytest.raises(ValueError, match=r"OR requires min_operands <= 3"):
+            sample_predicate(
+                PredicateType.OR,
+                threshold_range=(-5, 5),
+                divisor_range=(2, 5),
+                rng=random.Random(42),
+                min_operands=4,
+            )
 
 
 class TestTaskGeneration:
