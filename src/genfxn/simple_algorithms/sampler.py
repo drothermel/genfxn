@@ -1,7 +1,7 @@
 import random
 
 from genfxn.core.predicates import Predicate
-from genfxn.core.trace import TraceStep
+from genfxn.core.trace import TraceStep, trace_step
 from genfxn.core.transforms import Transform
 from genfxn.simple_algorithms.models import (
     CountPairsSumSpec,
@@ -49,39 +49,17 @@ def sample_simple_algorithms_spec(
         rng = random.Random()
 
     template = rng.choice(axes.templates)
-
-    if trace is not None:
-        trace.append(
-            TraceStep(
-                step="sample_template",
-                choice=f"Selected template: {template.value}",
-                value=template.value,
-            )
-        )
+    trace_step(trace, "sample_template", f"Selected template: {template.value}", template.value)
 
     pre_filter, pre_transform = _sample_preprocess(axes, rng)
 
     match template:
         case TemplateType.MOST_FREQUENT:
             tie_break = rng.choice(axes.tie_break_modes)
-            if trace is not None:
-                trace.append(
-                    TraceStep(
-                        step="sample_tie_break",
-                        choice=f"Tie break mode: {tie_break.value}",
-                        value=tie_break.value,
-                    )
-                )
+            trace_step(trace, "sample_tie_break", f"Tie break mode: {tie_break.value}", tie_break.value)
 
             empty_default = rng.randint(*axes.empty_default_range)
-            if trace is not None:
-                trace.append(
-                    TraceStep(
-                        step="sample_empty_default",
-                        choice=f"Empty default: {empty_default}",
-                        value=empty_default,
-                    )
-                )
+            trace_step(trace, "sample_empty_default", f"Empty default: {empty_default}", empty_default)
 
             tie_default = None
             if axes.tie_default_range is not None:
@@ -97,24 +75,10 @@ def sample_simple_algorithms_spec(
 
         case TemplateType.COUNT_PAIRS_SUM:
             target = rng.randint(*axes.target_range)
-            if trace is not None:
-                trace.append(
-                    TraceStep(
-                        step="sample_target",
-                        choice=f"Target sum: {target}",
-                        value=target,
-                    )
-                )
+            trace_step(trace, "sample_target", f"Target sum: {target}", target)
 
             counting_mode = rng.choice(axes.counting_modes)
-            if trace is not None:
-                trace.append(
-                    TraceStep(
-                        step="sample_counting_mode",
-                        choice=f"Counting mode: {counting_mode.value}",
-                        value=counting_mode.value,
-                    )
-                )
+            trace_step(trace, "sample_counting_mode", f"Counting mode: {counting_mode.value}", counting_mode.value)
 
             no_result_default = None
             if axes.no_result_default_range is not None:
@@ -135,24 +99,10 @@ def sample_simple_algorithms_spec(
 
         case TemplateType.MAX_WINDOW_SUM:
             k = rng.randint(*axes.window_size_range)
-            if trace is not None:
-                trace.append(
-                    TraceStep(
-                        step="sample_window_size",
-                        choice=f"Window size k: {k}",
-                        value=k,
-                    )
-                )
+            trace_step(trace, "sample_window_size", f"Window size k: {k}", k)
 
             invalid_k_default = rng.randint(*axes.empty_default_range)
-            if trace is not None:
-                trace.append(
-                    TraceStep(
-                        step="sample_invalid_k_default",
-                        choice=f"Invalid k default: {invalid_k_default}",
-                        value=invalid_k_default,
-                    )
-                )
+            trace_step(trace, "sample_invalid_k_default", f"Invalid k default: {invalid_k_default}", invalid_k_default)
 
             empty_default = None
             if axes.empty_default_for_empty_range is not None:

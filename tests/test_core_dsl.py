@@ -1,3 +1,5 @@
+import random
+
 import pytest
 
 from genfxn.core.codegen import render_tests, task_id_from_spec
@@ -399,3 +401,58 @@ class TestRenderTests:
     def test_render_tests_empty(self) -> None:
         result = render_tests("f", [])
         assert result == ""
+
+
+class TestCorpusIdUniqueness:
+    def test_no_cross_family_collisions(self) -> None:
+        """IDs from different families never collide (family is part of hash)."""
+        from genfxn.piecewise.task import generate_piecewise_task
+        from genfxn.stateful.task import generate_stateful_task
+        from genfxn.simple_algorithms.task import generate_simple_algorithms_task
+        from genfxn.stringrules.task import generate_stringrules_task
+
+        n = 50
+        family_ids: dict[str, set[str]] = {}
+        generators = {
+            "piecewise": generate_piecewise_task,
+            "stateful": generate_stateful_task,
+            "simple_algorithms": generate_simple_algorithms_task,
+            "stringrules": generate_stringrules_task,
+        }
+
+        for name, gen_fn in generators.items():
+            ids: set[str] = set()
+            for i in range(n):
+                task = gen_fn(rng=random.Random(i))
+                assert task.task_id.startswith(f"{name}_")
+                ids.add(task.task_id)
+            family_ids[name] = ids
+
+        # No overlap between any two families
+        families = list(family_ids.keys())
+        for i, f1 in enumerate(families):
+            for f2 in families[i + 1 :]:
+                overlap = family_ids[f1] & family_ids[f2]
+                assert not overlap, f"Cross-family collision between {f1} and {f2}: {overlap}"
+
+    def test_unique_specs_produce_unique_ids(self) -> None:
+        """Distinct specs within a family produce distinct task_ids."""
+        from genfxn.piecewise.sampler import sample_piecewise_spec
+        from genfxn.piecewise.models import PiecewiseAxes
+
+        rng = random.Random(42)
+        specs: list[dict] = []
+        ids: list[str] = []
+        for _ in range(100):
+            spec = sample_piecewise_spec(PiecewiseAxes(), rng)
+            spec_dict = spec.model_dump()
+            tid = task_id_from_spec("piecewise", spec_dict)
+            specs.append(spec_dict)
+            ids.append(tid)
+
+        # Every unique spec should map to a unique ID
+        unique_specs = {str(sorted(s.items())) for s in specs}
+        unique_ids = set(ids)
+        assert len(unique_ids) == len(unique_specs), (
+            f"Hash collision: {len(unique_specs)} unique specs but {len(unique_ids)} unique IDs"
+        )

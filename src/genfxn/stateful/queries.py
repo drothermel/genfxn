@@ -1,6 +1,7 @@
 import random
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.query_utils import find_satisfying
 from genfxn.core.predicates import (
     Predicate,
     PredicateAnd,
@@ -40,7 +41,7 @@ def _get_predicate_info(spec: StatefulSpec) -> Predicate:
 
 def _make_matching_value(
     pred, value_range: tuple[int, int], rng: random.Random
-) -> int:
+) -> int | None:
     lo, hi = value_range
 
     def clamp(x: int) -> int:
@@ -69,18 +70,17 @@ def _make_matching_value(
             base = lo + ((r - lo) % d)
             return clamp(base)
         case PredicateNot() | PredicateAnd() | PredicateOr():
-            for _ in range(100):
-                v = rng.randint(lo, hi)
-                if eval_predicate(pred, v):
-                    return v
-            return rng.randint(lo, hi)
+            return find_satisfying(
+                lambda: rng.randint(lo, hi),
+                lambda v: eval_predicate(pred, v),
+            )
         case _:
             return rng.randint(lo, hi)
 
 
 def _make_non_matching_value(
     pred, value_range: tuple[int, int], rng: random.Random
-) -> int:
+) -> int | None:
     lo, hi = value_range
 
     def clamp(x: int) -> int:
@@ -109,11 +109,10 @@ def _make_non_matching_value(
             base = lo + ((r + 1 - lo) % d)
             return clamp(base)
         case PredicateNot() | PredicateAnd() | PredicateOr():
-            for _ in range(100):
-                v = rng.randint(lo, hi)
-                if not eval_predicate(pred, v):
-                    return v
-            return rng.randint(lo, hi)
+            return find_satisfying(
+                lambda: rng.randint(lo, hi),
+                lambda v: not eval_predicate(pred, v),
+            )
         case _:
             return rng.randint(lo, hi)
 
@@ -166,6 +165,10 @@ def _generate_boundary_queries(
     non_match_val = _make_non_matching_value(pred, (lo, hi), rng)
 
     queries: list[Query] = []
+    # Skip boundary queries if we couldn't find valid match/non-match values
+    if match_val is None or non_match_val is None:
+        return queries
+
     # Matching then non-matching
     transition_tf = [match_val, match_val, non_match_val, non_match_val]
     queries.append(
@@ -231,29 +234,33 @@ def _generate_adversarial_queries(
     pred = _get_predicate_info(spec)
 
     queries: list[Query] = []
-    # All matching
-    all_match = [
+    # All matching (skip individual None values)
+    match_vals = [
         _make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)
     ]
-    queries.append(
-        Query(
-            input=all_match,
-            output=eval_stateful(spec, all_match),
-            tag=QueryTag.ADVERSARIAL,
+    all_match = [v for v in match_vals if v is not None]
+    if all_match:
+        queries.append(
+            Query(
+                input=all_match,
+                output=eval_stateful(spec, all_match),
+                tag=QueryTag.ADVERSARIAL,
+            )
         )
-    )
-    # All non-matching
-    all_non_match = [
+    # All non-matching (skip individual None values)
+    non_match_vals = [
         _make_non_matching_value(pred, (lo, hi), rng)
         for _ in range(typical_len)
     ]
-    queries.append(
-        Query(
-            input=all_non_match,
-            output=eval_stateful(spec, all_non_match),
-            tag=QueryTag.ADVERSARIAL,
+    all_non_match = [v for v in non_match_vals if v is not None]
+    if all_non_match:
+        queries.append(
+            Query(
+                input=all_non_match,
+                output=eval_stateful(spec, all_non_match),
+                tag=QueryTag.ADVERSARIAL,
+            )
         )
-    )
     # Extremes
     extremes = [lo, hi, 0, -1, 1, lo, hi]
     extremes = [x for x in extremes if lo <= x <= hi]
@@ -281,15 +288,4 @@ def generate_stateful_queries(
         *_generate_typical_queries(spec, axes, rng),
         *_generate_adversarial_queries(spec, axes, rng),
     ]
-    return _dedupe_queries(queries)
-
-
-def _dedupe_queries(queries: list[Query]) -> list[Query]:
-    seen: set[tuple[int, ...]] = set()
-    result: list[Query] = []
-    for q in queries:
-        key = tuple(q.input)
-        if key not in seen:
-            seen.add(key)
-            result.append(q)
-    return result
+    return dedupe_queries(queries)

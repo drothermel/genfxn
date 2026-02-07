@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import get_threshold
 from genfxn.piecewise.eval import eval_piecewise
 from genfxn.piecewise.models import Branch, PiecewiseSpec
@@ -80,7 +80,7 @@ def generate_piecewise_queries(
                 )
             )
 
-    return _dedupe_queries(queries)
+    return dedupe_queries(queries)
 
 
 def _get_coverage_points(spec: PiecewiseSpec, lo: int, hi: int) -> list[int]:
@@ -106,11 +106,3 @@ def _get_coverage_points(spec: PiecewiseSpec, lo: int, hi: int) -> list[int]:
     return [p for p in points if lo <= p <= hi]
 
 
-def _dedupe_queries(queries: list[Query]) -> list[Query]:
-    seen: set[int] = set()
-    result: list[Query] = []
-    for q in queries:
-        if q.input not in seen:
-            seen.add(q.input)
-            result.append(q)
-    return result

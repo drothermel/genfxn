@@ -239,7 +239,175 @@ class TestDescribeStateful:
         assert "running sum and the best sum" in result
         assert "the element is less than 0" in result
         assert "reset the running sum" in result
+        assert "otherwise, add the element to the running sum" in result
         assert "Return the best sum" in result
+
+    def test_resetting_best_prefix_sum_with_value_transform(self) -> None:
+        spec = {
+            "template": "resetting_best_prefix_sum",
+            "reset_predicate": {"kind": "lt", "value": 0},
+            "init_value": 0,
+            "value_transform": {"kind": "scale", "factor": 2},
+        }
+        result = _describe_stateful(spec)
+        assert "the element is less than 0" in result
+        assert "otherwise, add 2 times the element to the running sum" in result
+        assert "update best sum if running sum is larger" in result
+
+
+    def test_toggle_sum(self) -> None:
+        spec = {
+            "template": "toggle_sum",
+            "toggle_predicate": {"kind": "even"},
+            "on_transform": {"kind": "identity"},
+            "off_transform": {"kind": "negate"},
+            "init_value": 0,
+        }
+        result = _describe_stateful(spec)
+        assert result != ""
+        assert "toggle" in result
+        assert "the element is even" in result
+        assert "add the element" in result
+        assert "add the negation of the element" in result
+
+    def test_toggle_sum_with_compound_predicate(self) -> None:
+        spec = {
+            "template": "toggle_sum",
+            "toggle_predicate": {
+                "kind": "and",
+                "operands": [
+                    {"kind": "even"},
+                    {"kind": "mod_eq", "divisor": 8, "remainder": 0},
+                ],
+            },
+            "on_transform": {
+                "kind": "pipeline",
+                "steps": [{"kind": "scale", "factor": -3}, {"kind": "abs"}],
+            },
+            "off_transform": {"kind": "negate"},
+            "init_value": -5,
+        }
+        result = _describe_stateful(spec)
+        assert result != ""
+        assert "accumulator of negative 5" in result
+        assert "even" in result
+        assert "mod 8 equals 0" in result
+
+    def test_all_templates_produce_nonempty_descriptions(self) -> None:
+        """Guard against new templates being added without describe support."""
+        from genfxn.stateful.models import TemplateType
+
+        minimal_specs: dict[str, dict] = {
+            "conditional_linear_sum": {
+                "template": "conditional_linear_sum",
+                "predicate": {"kind": "even"},
+                "true_transform": {"kind": "identity"},
+                "false_transform": {"kind": "identity"},
+                "init_value": 0,
+            },
+            "resetting_best_prefix_sum": {
+                "template": "resetting_best_prefix_sum",
+                "reset_predicate": {"kind": "even"},
+                "init_value": 0,
+            },
+            "longest_run": {
+                "template": "longest_run",
+                "match_predicate": {"kind": "even"},
+            },
+            "toggle_sum": {
+                "template": "toggle_sum",
+                "toggle_predicate": {"kind": "even"},
+                "on_transform": {"kind": "identity"},
+                "off_transform": {"kind": "identity"},
+                "init_value": 0,
+            },
+        }
+        for template_type in TemplateType:
+            assert template_type.value in minimal_specs, (
+                f"Template {template_type.value} has no minimal spec in test — "
+                f"add one and ensure _describe_stateful handles it"
+            )
+            result = _describe_stateful(minimal_specs[template_type.value])
+            assert result != "", (
+                f"_describe_stateful returned empty string for template "
+                f"{template_type.value}"
+            )
+
+
+class TestDescribePredicate_Compound:
+    def test_and(self) -> None:
+        pred = {
+            "kind": "and",
+            "operands": [
+                {"kind": "even"},
+                {"kind": "gt", "value": 5},
+            ],
+        }
+        result = _describe_predicate(pred, "x")
+        assert "the x is even" in result
+        assert "the x is greater than 5" in result
+        assert " and " in result
+
+    def test_or(self) -> None:
+        pred = {
+            "kind": "or",
+            "operands": [
+                {"kind": "lt", "value": 0},
+                {"kind": "mod_eq", "divisor": 3, "remainder": 0},
+            ],
+        }
+        result = _describe_predicate(pred, "element")
+        assert "less than 0" in result
+        assert "mod 3 equals 0" in result
+        assert " or " in result
+
+    def test_not(self) -> None:
+        pred = {"kind": "not", "operand": {"kind": "odd"}}
+        result = _describe_predicate(pred, "x")
+        assert "not" in result
+        assert "the x is odd" in result
+
+    def test_and_three_operands(self) -> None:
+        pred = {
+            "kind": "and",
+            "operands": [
+                {"kind": "even"},
+                {"kind": "gt", "value": 0},
+                {"kind": "lt", "value": 100},
+            ],
+        }
+        result = _describe_predicate(pred, "x")
+        assert result.count(" and ") == 2
+
+
+class TestDescribeTransform_Pipeline:
+    def test_pipeline_single_step(self) -> None:
+        trans = {"kind": "pipeline", "steps": [{"kind": "abs"}]}
+        result = _describe_transform(trans)
+        assert "absolute value" in result
+
+    def test_pipeline_scale_then_abs(self) -> None:
+        trans = {
+            "kind": "pipeline",
+            "steps": [{"kind": "scale", "factor": -3}, {"kind": "abs"}],
+        }
+        result = _describe_transform(trans)
+        assert "absolute value" in result
+        assert "negative 3" in result
+
+    def test_pipeline_empty_steps(self) -> None:
+        trans = {"kind": "pipeline", "steps": []}
+        result = _describe_transform(trans)
+        assert result == "the element"
+
+    def test_pipeline_shift_then_negate(self) -> None:
+        trans = {
+            "kind": "pipeline",
+            "steps": [{"kind": "shift", "offset": 5}, {"kind": "negate"}],
+        }
+        result = _describe_transform(trans)
+        assert "plus 5" in result
+        assert "negation" in result
 
 
 class TestDescribeStringPredicate:
@@ -307,6 +475,46 @@ class TestDescribeStringPredicate:
         )
         assert result == "the string has exactly 4 characters"
 
+    def test_not(self) -> None:
+        result = _describe_string_predicate(
+            {
+                "kind": "not",
+                "operand": {"kind": "contains", "substring": "x"},
+            }
+        )
+        assert result == "it is not the case that (the string contains 'x')"
+
+    def test_and(self) -> None:
+        result = _describe_string_predicate(
+            {
+                "kind": "and",
+                "operands": [
+                    {"kind": "starts_with", "prefix": "a"},
+                    {"kind": "is_lower"},
+                ],
+            }
+        )
+        assert (
+            result
+            == "(the string starts with 'a') and (the string is all lowercase)"
+        )
+
+    def test_or(self) -> None:
+        result = _describe_string_predicate(
+            {
+                "kind": "or",
+                "operands": [
+                    {"kind": "ends_with", "suffix": "z"},
+                    {"kind": "is_digit"},
+                ],
+            }
+        )
+        assert (
+            result
+            == "(the string ends with 'z') or "
+            "(the string contains only digits)"
+        )
+
 
 class TestDescribeStringTransform:
     def test_identity(self) -> None:
@@ -371,6 +579,22 @@ class TestDescribeStringTransform:
         )
         assert result == "append '_end'"
 
+    def test_pipeline(self) -> None:
+        result = _describe_string_transform(
+            {
+                "kind": "pipeline",
+                "steps": [
+                    {"kind": "strip", "chars": None},
+                    {"kind": "lowercase"},
+                    {"kind": "append", "suffix": "!"},
+                ],
+            }
+        )
+        assert result == (
+            "apply in order: strip whitespace, then convert to lowercase, "
+            "then append '!'"
+        )
+
 
 class TestDescribeSimpleAlgorithms:
     def test_most_frequent_smallest(self) -> None:
@@ -382,7 +606,7 @@ class TestDescribeSimpleAlgorithms:
         result = _describe_simple_algorithms(spec)
         assert "most frequently occurring value" in result
         assert "the smallest value" in result
-        assert "Return 0 for an empty list" in result
+        assert "empty after preprocessing, return 0" in result
 
     def test_most_frequent_first_seen(self) -> None:
         spec = {
@@ -392,7 +616,26 @@ class TestDescribeSimpleAlgorithms:
         }
         result = _describe_simple_algorithms(spec)
         assert "the first value seen" in result
-        assert "Return negative 1 for an empty list" in result
+        assert "empty after preprocessing, return negative 1" in result
+
+    def test_most_frequent_with_preprocess_and_tie_default(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": -7,
+            "pre_filter": {"kind": "gt", "value": 0},
+            "pre_transform": {"kind": "shift", "offset": 2},
+            "tie_default": 99,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert (
+            "keep only elements where the element is greater than 0" in result
+        )
+        assert (
+            "replace each remaining element with the element plus 2" in result
+        )
+        assert "tie for highest frequency, return 99" in result
+        assert "empty after preprocessing, return negative 7" in result
 
     def test_count_pairs_sum_all_indices(self) -> None:
         spec = {
@@ -403,6 +646,27 @@ class TestDescribeSimpleAlgorithms:
         result = _describe_simple_algorithms(spec)
         assert "pairs that sum to 10" in result
         assert "all index pairs (i, j) where i < j" in result
+
+    def test_count_pairs_sum_with_preprocess_and_defaults(self) -> None:
+        spec = {
+            "template": "count_pairs_sum",
+            "target": 10,
+            "counting_mode": "unique_values",
+            "pre_filter": {"kind": "mod_eq", "divisor": 2, "remainder": 0},
+            "pre_transform": {"kind": "abs"},
+            "short_list_default": -5,
+            "no_result_default": -1,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "keep only elements where the element mod 2 equals 0" in result
+        assert (
+            "replace each remaining element with the absolute value of the "
+            "element" in result
+        )
+        assert "unique value pairs only" in result
+        assert "fewer than 2 elements remain after preprocessing" in result
+        assert "return negative 5" in result
+        assert "Otherwise, if no pairs match, return negative 1." in result
 
     def test_count_pairs_sum_unique_values(self) -> None:
         spec = {
@@ -422,7 +686,31 @@ class TestDescribeSimpleAlgorithms:
         }
         result = _describe_simple_algorithms(spec)
         assert "maximum sum of any 3 consecutive elements" in result
-        assert "fewer than 3 elements, return 0" in result
+        assert (
+            "fewer than 3 elements remain after preprocessing, return 0"
+            in result
+        )
+
+    def test_max_window_sum_with_preprocess_and_empty_default(self) -> None:
+        spec = {
+            "template": "max_window_sum",
+            "k": 3,
+            "invalid_k_default": -4,
+            "pre_filter": {"kind": "even"},
+            "pre_transform": {"kind": "negate"},
+            "empty_default": 10,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "keep only elements where the element is even" in result
+        assert (
+            "replace each remaining element with the negation of the element"
+            in result
+        )
+        assert "If no elements remain after preprocessing, return 10." in result
+        assert (
+            "Otherwise, if fewer than 3 elements remain after preprocessing, "
+            "return negative 4." in result
+        )
 
 
 class TestDescribeStringrules:
@@ -462,6 +750,36 @@ class TestDescribeStringrules:
         assert "ends with 'z'" in result
         assert "reverse the string" in result
         assert "capitalize the first letter" in result
+
+    def test_composed_predicate_and_pipeline_transform(self) -> None:
+        spec = {
+            "rules": [
+                {
+                    "predicate": {
+                        "kind": "and",
+                        "operands": [
+                            {"kind": "starts_with", "prefix": "A"},
+                            {"kind": "not", "operand": {"kind": "is_lower"}},
+                        ],
+                    },
+                    "transform": {
+                        "kind": "pipeline",
+                        "steps": [
+                            {"kind": "strip", "chars": None},
+                            {"kind": "lowercase"},
+                        ],
+                    },
+                }
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        result = _describe_stringrules(spec)
+        assert "(the string starts with 'A')" in result
+        assert "it is not the case that (the string is all lowercase)" in result
+        assert (
+            "apply in order: strip whitespace, then convert to lowercase"
+            in result
+        )
 
 
 class TestDescribeTask:

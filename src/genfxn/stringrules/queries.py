@@ -1,7 +1,8 @@
 import random
 import string
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.query_utils import find_satisfying
 from genfxn.core.string_predicates import (
     StringPredicate,
     StringPredicateAnd,
@@ -24,7 +25,7 @@ from genfxn.stringrules.utils import _get_charset, _random_string
 
 def _generate_matching_string(
     pred: StringPredicate, axes: StringRulesAxes, rng: random.Random
-) -> str:
+) -> str | None:
     """Generate a string that matches the given predicate."""
     charset = _get_charset(axes.charset)
     lo, hi = axes.string_length_range
@@ -41,8 +42,9 @@ def _generate_matching_string(
             return prefix + suffix
 
         case StringPredicateContains(substring=sub):
-            before_len = rng.randint(0, (hi - len(sub)) // 2)
-            after_len = rng.randint(0, (hi - len(sub)) // 2)
+            slack = max(0, hi - len(sub))
+            before_len = rng.randint(0, slack // 2)
+            after_len = rng.randint(0, slack // 2)
             before = _random_string(before_len, charset, rng)
             after = _random_string(after_len, charset, rng)
             return before + sub + after
@@ -115,11 +117,11 @@ def _generate_matching_string(
             return _random_string(length, charset, rng)
 
         case StringPredicateNot() | StringPredicateAnd() | StringPredicateOr():
-            for _ in range(50):
-                s = _random_string(rng.randint(lo, hi), charset, rng)
-                if eval_string_predicate(pred, s):
-                    return s
-            return _random_string(rng.randint(lo, hi), charset, rng)
+            return find_satisfying(
+                lambda: _random_string(rng.randint(lo, hi), charset, rng),
+                lambda s: eval_string_predicate(pred, s),
+                max_attempts=50,
+            )
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)
@@ -127,7 +129,7 @@ def _generate_matching_string(
 
 def _generate_non_matching_string(
     pred: StringPredicate, axes: StringRulesAxes, rng: random.Random
-) -> str:
+) -> str | None:
     """Generate a string that doesn't match the given predicate."""
     charset = _get_charset(axes.charset)
     lo, hi = axes.string_length_range
@@ -224,11 +226,11 @@ def _generate_non_matching_string(
             return _random_string(length, charset, rng)
 
         case StringPredicateNot() | StringPredicateAnd() | StringPredicateOr():
-            for _ in range(50):
-                s = _random_string(rng.randint(lo, hi), charset, rng)
-                if not eval_string_predicate(pred, s):
-                    return s
-            return _random_string(rng.randint(lo, hi), charset, rng)
+            return find_satisfying(
+                lambda: _random_string(rng.randint(lo, hi), charset, rng),
+                lambda s: not eval_string_predicate(pred, s),
+                max_attempts=50,
+            )
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)
@@ -245,6 +247,8 @@ def _generate_coverage_queries(
         attempts = 0
         while attempts < 20:
             s = _generate_matching_string(rule.predicate, axes, rng)
+            if s is None:
+                break  # Can't generate matching string for this predicate
             # Check it doesn't match earlier rules
             matches_earlier = False
             for earlier_rule in spec.rules[:i]:
@@ -262,15 +266,16 @@ def _generate_coverage_queries(
                 break
             attempts += 1
         else:
-            # Fallback: just use a matching string
+            # Fallback: just use a matching string (skip if None)
             s = _generate_matching_string(rule.predicate, axes, rng)
-            queries.append(
-                Query(
-                    input=s,
-                    output=eval_stringrules(spec, s),
-                    tag=QueryTag.COVERAGE,
+            if s is not None:
+                queries.append(
+                    Query(
+                        input=s,
+                        output=eval_stringrules(spec, s),
+                        tag=QueryTag.COVERAGE,
+                    )
                 )
-            )
 
     return queries
 
@@ -453,15 +458,4 @@ def generate_stringrules_queries(
         *_generate_typical_queries(spec, axes, rng),
         *_generate_adversarial_queries(spec, axes, rng),
     ]
-    return _dedupe_queries(queries)
-
-
-def _dedupe_queries(queries: list[Query]) -> list[Query]:
-    seen: set[str] = set()
-    result: list[Query] = []
-    for q in queries:
-        key = q.input
-        if key not in seen:
-            seen.add(key)
-            result.append(q)
-    return result
+    return dedupe_queries(queries)
