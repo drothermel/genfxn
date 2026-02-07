@@ -16,6 +16,7 @@ Usage:
 import random
 from collections import Counter
 from dataclasses import dataclass
+from itertools import product
 from typing import Any, cast
 
 import typer
@@ -63,7 +64,7 @@ class FamilyAnalysis:
 
 
 # Weights are imported from genfxn.core.difficulty.
-# Axes tables below map human-readable labels to scores for display only.
+# Axis tables below must stay in sync with score buckets in that module.
 
 PIECEWISE_AXES = {
     "branches": [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5)],
@@ -76,32 +77,47 @@ STATEFUL_AXES = {
         ("LONGEST_RUN", 1),
         ("CONDITIONAL_LINEAR_SUM", 3),
         ("RESETTING_BEST_PREFIX_SUM", 4),
+        ("TOGGLE_SUM", 4),
     ],
     "predicate": [
         ("EVEN/ODD", 1),
         ("LT/LE/GT/GE", 2),
         ("IN_SET", 3),
         ("MOD_EQ", 4),
+        ("NOT / AND(2) / OR(2)", 4),
+        ("AND(3+) / OR(3+)", 5),
     ],
-    "transform": [("IDENTITY", 1), ("ABS/NEGATE", 2), ("SHIFT/SCALE", 3)],
+    "transform": [
+        ("IDENTITY", 1),
+        ("ABS/NEGATE", 2),
+        ("SHIFT/SCALE/CLIP", 3),
+        ("PIPELINE (1 param step)", 4),
+        ("PIPELINE (2+ param or 3 steps)", 5),
+    ],
 }
 
 SIMPLE_ALGORITHMS_AXES = {
     "template": [
-        ("MOST_FREQUENT", 2),
-        ("COUNT_PAIRS_SUM", 3),
-        ("MAX_WINDOW_SUM", 3),
+        ("base=2 (MOST_FREQUENT)", 2),
+        ("base=3 (COUNT_PAIRS_SUM/MAX_WINDOW_SUM)", 3),
+        ("base + one preprocess field", 4),
+        ("base + both preprocess fields (cap=5)", 5),
     ],
     "mode": [
-        ("tie_break=SMALLEST", 1),
-        ("tie_break=FIRST_SEEN", 2),
-        ("counting=ALL_INDICES", 2),
-        ("counting=UNIQUE_VALUES", 3),
-        ("k≤2", 1),
-        ("k=3-5", 2),
-        ("k≥6", 3),
+        ("base mode score=1", 1),
+        ("base mode score=2", 2),
+        ("base mode score=3", 3),
+        ("preprocess score=4", 4),
+        ("preprocess score=5", 5),
     ],
-    "edge": [("zero default", 1), ("non-zero default", 2)],
+    "edge": [
+        ("no edge defaults", 1),
+        ("1 edge default", 2),
+        ("2 edge defaults", 3),
+        ("3 edge defaults", 4),
+        ("4 edge defaults", 5),
+        ("5 edge defaults", 6),
+    ],
 }
 
 STRINGRULES_AXES = {
@@ -111,11 +127,15 @@ STRINGRULES_AXES = {
         ("STARTS/ENDS/CONTAINS", 2),
         ("LENGTH_CMP eq/ne", 2),
         ("LENGTH_CMP lt/gt", 3),
+        ("NOT / AND(2) / OR(2)", 4),
+        ("AND(3+) / OR(3+)", 5),
     ],
     "transform": [
         ("IDENTITY", 1),
         ("LOWER/UPPER/REVERSE/...", 2),
         ("REPLACE/STRIP/...", 3),
+        ("PIPELINE (1 param step)", 4),
+        ("PIPELINE (2+ param or 3 steps)", 5),
     ],
 }
 
@@ -131,15 +151,24 @@ def analyze_family(family: str) -> FamilyAnalysis:
     elif family == "stateful":
         weights = STATEFUL_WEIGHTS
         axes = STATEFUL_AXES
-        formula = "raw = 0.4 × template + 0.3 × predicate + 0.3 × transform_avg"
+        formula = (
+            "raw = 0.4 × template + 0.3 × predicate_max + "
+            "0.3 × transform_avg"
+        )
     elif family == "simple_algorithms":
         weights = SIMPLE_ALGORITHMS_WEIGHTS
         axes = SIMPLE_ALGORITHMS_AXES
-        formula = "raw = 0.5 × template + 0.3 × mode + 0.2 × edge"
+        formula = (
+            "raw = 0.5 × template + 0.3 × mode(max base/preprocess) + "
+            "0.2 × edge"
+        )
     elif family == "stringrules":
         weights = STRINGRULES_WEIGHTS
         axes = STRINGRULES_AXES
-        formula = "raw = 0.4 × rule_count + 0.3 × pred_avg + 0.3 × trans_avg"
+        formula = (
+            "raw = 0.4 × rule_count + 0.3 × predicate_avg + "
+            "0.3 × transform_avg"
+        )
     else:
         raise ValueError(f"Unknown family: {family}")
 
@@ -158,22 +187,25 @@ def analyze_family(family: str) -> FamilyAnalysis:
                 )
             )
 
-    # Calculate min/max raw scores
-    min_scores = {k: min(s for _, s in v) for k, v in axes.items()}
-    max_scores = {k: max(s for _, s in v) for k, v in axes.items()}
+    axis_keys = list(weights)
+    axis_score_lists = [[score for _, score in axes[k]] for k in axis_keys]
+    raw_scores = [
+        sum(
+            weights[k] * score
+            for k, score in zip(axis_keys, combo, strict=True)
+        )
+        for combo in product(*axis_score_lists)
+    ]
+    min_raw = min(raw_scores)
+    max_raw = max(raw_scores)
 
-    min_raw = sum(weights[k] * min_scores[k] for k in weights)
-    max_raw = sum(weights[k] * max_scores[k] for k in weights)
-
-    # Determine achievable difficulties
-    achievable = []
-    for d in range(1, 6):
-        # Difficulty d is achievable if there's a raw score that rounds to d
-        # Rounding: 0.5-1.49 → 1, 1.5-2.49 → 2, etc.
-        low_bound = d - 0.5 if d > 1 else 0
-        high_bound = d + 0.5
-        if min_raw <= high_bound and max_raw >= low_bound:
-            achievable.append(d)
+    # Match runtime difficulty behavior exactly: round(raw), then clamp to 1..5.
+    achievable = sorted(
+        {
+            max(1, min(5, round(raw)))
+            for raw in raw_scores
+        }
+    )
 
     return FamilyAnalysis(
         family=family,
