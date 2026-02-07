@@ -1,7 +1,7 @@
 import random
 import string
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.string_predicates import (
     StringPredicate,
     StringPredicateAnd,
@@ -454,15 +454,4 @@ def generate_stringrules_queries(
         *_generate_typical_queries(spec, axes, rng),
         *_generate_adversarial_queries(spec, axes, rng),
     ]
-    return _dedupe_queries(queries)
-
-
-def _dedupe_queries(queries: list[Query]) -> list[Query]:
-    seen: set[str] = set()
-    result: list[Query] = []
-    for q in queries:
-        key = q.input
-        if key not in seen:
-            seen.add(key)
-            result.append(q)
-    return result
+    return dedupe_queries(queries)

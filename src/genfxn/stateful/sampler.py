@@ -37,6 +37,16 @@ from genfxn.stateful.models import (
     ToggleSumSpec,
 )
 
+_ATOM_PREDICATE_TYPES = [
+    PredicateType.EVEN,
+    PredicateType.ODD,
+    PredicateType.LT,
+    PredicateType.LE,
+    PredicateType.GT,
+    PredicateType.GE,
+    PredicateType.MOD_EQ,
+]
+
 
 def sample_predicate(
     pred_type: PredicateType,
@@ -62,51 +72,33 @@ def sample_predicate(
             remainder = rng.randint(0, divisor - 1)
             return PredicateModEq(divisor=divisor, remainder=remainder)
         case PredicateType.NOT:
-            atom_types = [
-                PredicateType.EVEN,
-                PredicateType.ODD,
-                PredicateType.LT,
-                PredicateType.LE,
-                PredicateType.GT,
-                PredicateType.GE,
-                PredicateType.MOD_EQ,
-            ]
             operand = sample_predicate(
-                rng.choice(atom_types), threshold_range, divisor_range, rng
+                rng.choice(_ATOM_PREDICATE_TYPES),
+                threshold_range,
+                divisor_range,
+                rng,
             )
             return PredicateNot(operand=operand)
         case PredicateType.AND:
-            atom_types = [
-                PredicateType.EVEN,
-                PredicateType.ODD,
-                PredicateType.LT,
-                PredicateType.LE,
-                PredicateType.GT,
-                PredicateType.GE,
-                PredicateType.MOD_EQ,
-            ]
             n = rng.choice([2, 3])
             operands = [
                 sample_predicate(
-                    rng.choice(atom_types), threshold_range, divisor_range, rng
+                    rng.choice(_ATOM_PREDICATE_TYPES),
+                    threshold_range,
+                    divisor_range,
+                    rng,
                 )
                 for _ in range(n)
             ]
             return PredicateAnd(operands=operands)
         case PredicateType.OR:
-            atom_types = [
-                PredicateType.EVEN,
-                PredicateType.ODD,
-                PredicateType.LT,
-                PredicateType.LE,
-                PredicateType.GT,
-                PredicateType.GE,
-                PredicateType.MOD_EQ,
-            ]
             n = rng.choice([2, 3])
             operands = [
                 sample_predicate(
-                    rng.choice(atom_types), threshold_range, divisor_range, rng
+                    rng.choice(_ATOM_PREDICATE_TYPES),
+                    threshold_range,
+                    divisor_range,
+                    rng,
                 )
                 for _ in range(n)
             ]

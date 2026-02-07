@@ -1,5 +1,10 @@
 from typing import Any
 
+PIECEWISE_WEIGHTS = {"branches": 0.4, "expr_type": 0.4, "coeff": 0.2}
+STATEFUL_WEIGHTS = {"template": 0.4, "predicate": 0.3, "transform": 0.3}
+SIMPLE_ALGORITHMS_WEIGHTS = {"template": 0.5, "mode": 0.3, "edge": 0.2}
+STRINGRULES_WEIGHTS = {"rules": 0.4, "predicate": 0.3, "transform": 0.3}
+
 
 def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
     """Compute difficulty score (1-5) for a task based on its spec."""
@@ -43,7 +48,8 @@ def _piecewise_difficulty(spec: dict[str, Any]) -> int:
     else:
         coeff_score = 1
 
-    raw = 0.4 * branch_score + 0.4 * expr_score + 0.2 * coeff_score
+    w = PIECEWISE_WEIGHTS
+    raw = w["branches"] * branch_score + w["expr_type"] * expr_score + w["coeff"] * coeff_score
     return max(1, min(5, round(raw)))
 
 
@@ -114,7 +120,8 @@ def _stateful_difficulty(spec: dict[str, Any]) -> int:
     else:
         transform_score = 1
 
-    raw = 0.4 * template_score + 0.3 * pred_score + 0.3 * transform_score
+    w = STATEFUL_WEIGHTS
+    raw = w["template"] * template_score + w["predicate"] * pred_score + w["transform"] * transform_score
     return max(1, min(5, round(raw)))
 
 
@@ -244,10 +251,11 @@ def _simple_algorithms_difficulty(spec: dict[str, Any]) -> int:
 
     if not has_pre_filter and not has_pre_transform and not has_new_edge:
         # Legacy scoring — exact same formula
+        w = SIMPLE_ALGORITHMS_WEIGHTS
         raw = (
-            0.5 * base_template_score
-            + 0.3 * base_mode_score
-            + 0.2 * base_edge_score
+            w["template"] * base_template_score
+            + w["mode"] * base_mode_score
+            + w["edge"] * base_edge_score
         )
         return max(1, min(5, round(raw)))
 
@@ -275,7 +283,8 @@ def _simple_algorithms_difficulty(spec: dict[str, Any]) -> int:
         edge_count += 1
     edge_score = 1 + edge_count
 
-    raw = 0.5 * template_score + 0.3 * mode_score + 0.2 * edge_score
+    w = SIMPLE_ALGORITHMS_WEIGHTS
+    raw = w["template"] * template_score + w["mode"] * mode_score + w["edge"] * edge_score
     return max(1, min(5, round(raw)))
 
 
@@ -313,7 +322,8 @@ def _stringrules_difficulty(spec: dict[str, Any]) -> int:
     trans_scores = [_string_transform_score(t) for t in all_transforms]
     trans_score = sum(trans_scores) / len(trans_scores) if trans_scores else 1
 
-    raw = 0.4 * rule_score + 0.3 * pred_score + 0.3 * trans_score
+    w = STRINGRULES_WEIGHTS
+    raw = w["rules"] * rule_score + w["predicate"] * pred_score + w["transform"] * trans_score
     return max(1, min(5, round(raw)))
 
 

@@ -40,17 +40,17 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
         parts = value.split(",")
         if len(parts) != 2:
             raise typer.BadParameter(
-                "Invalid range: expected 'LO,HI' with integers"
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
             )
         lo_s, hi_s = parts[0].strip(), parts[1].strip()
         if not lo_s or not hi_s:
             raise typer.BadParameter(
-                "Invalid range: expected 'LO,HI' with integers"
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
             )
         return (int(lo_s), int(hi_s))
     except (ValueError, IndexError) as err:
         raise typer.BadParameter(
-            "Invalid range: expected 'LO,HI' with integers"
+            f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
         ) from err
 
 

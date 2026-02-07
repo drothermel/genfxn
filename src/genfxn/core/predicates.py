@@ -96,17 +96,17 @@ class PredicateOr(BaseModel):
 
 
 class PredicateType(str, Enum):
-    EVEN = PredicateEven.model_fields["kind"].default
-    ODD = PredicateOdd.model_fields["kind"].default
-    LT = PredicateLt.model_fields["kind"].default
-    LE = PredicateLe.model_fields["kind"].default
-    GT = PredicateGt.model_fields["kind"].default
-    GE = PredicateGe.model_fields["kind"].default
-    MOD_EQ = PredicateModEq.model_fields["kind"].default
-    IN_SET = PredicateInSet.model_fields["kind"].default
-    NOT = PredicateNot.model_fields["kind"].default
-    AND = PredicateAnd.model_fields["kind"].default
-    OR = PredicateOr.model_fields["kind"].default
+    EVEN = "even"
+    ODD = "odd"
+    LT = "lt"
+    LE = "le"
+    GT = "gt"
+    GE = "ge"
+    MOD_EQ = "mod_eq"
+    IN_SET = "in_set"
+    NOT = "not"
+    AND = "and"
+    OR = "or"
 
 
 Predicate = Annotated[
