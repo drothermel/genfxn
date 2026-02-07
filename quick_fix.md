@@ -39,74 +39,27 @@ negative values being passed to `rng.randint`.
 
 ---
 
-## QF-5: Repeated `atom_types` list defined 3 times in stateful sampler
+## ~~QF-5: Repeated `atom_types` list defined 3 times in stateful sampler~~ FIXED
 
-**File:** `src/genfxn/stateful/sampler.py:65-113`
+**File:** `src/genfxn/stateful/sampler.py`, `src/genfxn/stringrules/sampler.py`
 
-**Problem:** The identical 7-element `atom_types` list is copy-pasted into the NOT,
-AND, and OR branches of `sample_predicate`.
-
-**Fix:** Define once at module level (after the imports, before `sample_predicate`):
-```python
-_ATOM_PREDICATE_TYPES = [
-    PredicateType.EVEN,
-    PredicateType.ODD,
-    PredicateType.LT,
-    PredicateType.LE,
-    PredicateType.GT,
-    PredicateType.GE,
-    PredicateType.MOD_EQ,
-]
-```
-
-Then replace all three inline lists with `_ATOM_PREDICATE_TYPES`.
-Same list is used in `stringrules/sampler.py` for string predicates — apply
-the same pattern there with `_ATOM_STRING_PREDICATE_TYPES`.
+Extracted `_ATOM_PREDICATE_TYPES` and `_COMPOSED_PREDICATE_TYPES` as module-level
+constants in both files, replacing 3 inline copies each.
 
 ---
 
-## QF-6: `PredicateType` enum reads from `model_fields` (fragile)
+## ~~QF-6: `PredicateType` enum reads from `model_fields` (fragile)~~ FIXED
 
-**File:** `src/genfxn/core/predicates.py:98-109`
+**File:** `src/genfxn/core/predicates.py`
 
-**Problem:** Enum values are derived via `PredicateEven.model_fields["kind"].default`.
-If a Literal type annotation ever changes, the enum silently drifts.
-Compare with `core/string_predicates.py:96-107` which uses direct string literals — more robust.
-
-**Current:**
-```python
-class PredicateType(str, Enum):
-    EVEN = PredicateEven.model_fields["kind"].default
-    ODD = PredicateOdd.model_fields["kind"].default
-    ...
-```
-
-**Fix:** Use direct string values (matching the pattern in `string_predicates.py`):
-```python
-class PredicateType(str, Enum):
-    EVEN = "even"
-    ODD = "odd"
-    LT = "lt"
-    LE = "le"
-    GT = "gt"
-    GE = "ge"
-    MOD_EQ = "mod_eq"
-    IN_SET = "in_set"
-    NOT = "not"
-    AND = "and"
-    OR = "or"
-```
+Changed enum values from `model_fields["kind"].default` to direct string literals,
+matching the pattern already used in `string_predicates.py`.
 
 ---
 
-## QF-7: `_parse_range` error message doesn't show expected format
+## ~~QF-7: `_parse_range` error message doesn't show expected format~~ FIXED
 
-**File:** `src/genfxn/cli.py` — the `_parse_range` function
+**File:** `src/genfxn/cli.py`
 
-**Problem:** When range parsing fails, the error says "Invalid range" but doesn't
-show the expected format. Users may try `5-10` instead of `5,10`.
-
-**Fix:** Update the BadParameter message to include an example:
-```python
-raise typer.BadParameter(f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')")
-```
+Updated all three `_parse_range` error messages to include the expected format
+and an example: `"Invalid range '...': expected 'LO,HI' (e.g., '5,10')"`.
