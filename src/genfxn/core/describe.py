@@ -73,15 +73,22 @@ def _describe_stateful(spec: dict[str, Any]) -> str:
     elif template == "resetting_best_prefix_sum":
         pred = spec.get("reset_predicate", {})
         init = spec.get("init_value", 0)
+        value_transform = spec.get("value_transform")
 
         pred_text = _describe_predicate(pred, "element")
         init_text = _format_number(init)
+        value_text = (
+            _describe_transform(value_transform)
+            if isinstance(value_transform, dict)
+            else "the element"
+        )
 
         return (
             f"Given a list of integers, track a running sum and the best sum "
-            f"seen. Start both at {init_text}. For each element: add it to the "
-            f"running sum; when {pred_text}, reset the running sum to "
-            f"{init_text}; update best sum if running sum is larger. "
+            f"seen. Start both at {init_text}. For each element: when "
+            f"{pred_text}, reset the running sum to {init_text}; otherwise, "
+            f"add {value_text} to the running sum and update best sum if "
+            f"running sum is larger. "
             f"Return the best sum."
         )
 
@@ -368,46 +375,144 @@ def _format_number(n: int) -> str:
     return str(n)
 
 
+def _describe_preprocess_steps(spec: dict[str, Any]) -> str:
+    """Describe optional pre-filter and pre-transform steps."""
+    pre_filter = spec.get("pre_filter")
+    pre_transform = spec.get("pre_transform")
+    steps: list[str] = []
+
+    if isinstance(pre_filter, dict):
+        pred_text = _describe_predicate(pre_filter, "element")
+        steps.append(f"keep only elements where {pred_text}")
+
+    if isinstance(pre_transform, dict):
+        trans_text = _describe_transform(pre_transform)
+        target = "remaining element" if steps else "element"
+        steps.append(f"replace each {target} with {trans_text}")
+
+    if not steps:
+        return ""
+    if len(steps) == 1:
+        return f"First, {steps[0]}."
+    return f"First, {steps[0]}; then {steps[1]}."
+
+
+def _join_description_parts(*parts: str) -> str:
+    """Join non-empty description fragments with spaces."""
+    return " ".join(part for part in parts if part)
+
+
 def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
     """Generate natural language description for simple_algorithms functions."""
     template = spec.get("template", "")
+    preprocess = _describe_preprocess_steps(spec)
 
     if template == "most_frequent":
         tie_break = spec.get("tie_break", "smallest")
         empty_default = spec.get("empty_default", 0)
-        tie_text = (
-            "the smallest value"
-            if tie_break == "smallest"
-            else "the first value seen"
-        )
+        tie_default = spec.get("tie_default")
         default_text = _format_number(empty_default)
-        return (
-            f"Given a list of integers, find the most frequently occurring "
-            f"value. When there's a tie, return {tie_text}. "
-            f"Return {default_text} for an empty list."
+        if tie_default is not None:
+            tie_text = _format_number(tie_default)
+            tie_clause = (
+                f"If multiple values tie for highest frequency, return "
+                f"{tie_text}."
+            )
+        else:
+            tie_break_text = (
+                "the smallest value"
+                if tie_break == "smallest"
+                else "the first value seen"
+            )
+            tie_clause = f"When there's a tie, return {tie_break_text}."
+
+        intro = (
+            "Given a list of integers, find the most frequently occurring "
+            "value."
+        )
+        empty_clause = (
+            f"If the list is empty after preprocessing, return "
+            f"{default_text}."
+        )
+        return _join_description_parts(
+            intro,
+            preprocess,
+            tie_clause,
+            empty_clause,
         )
 
     elif template == "count_pairs_sum":
         target = spec.get("target", 0)
         counting_mode = spec.get("counting_mode", "all_indices")
+        short_list_default = spec.get("short_list_default")
+        no_result_default = spec.get("no_result_default")
         target_text = _format_number(target)
         if counting_mode == "all_indices":
             mode_text = "all index pairs (i, j) where i < j"
         else:
             mode_text = "unique value pairs only"
-        return (
+
+        default_clause = ""
+        if short_list_default is not None:
+            short_text = _format_number(short_list_default)
+            default_clause = (
+                f"If fewer than 2 elements remain after preprocessing, "
+                f"return {short_text}."
+            )
+        if no_result_default is not None:
+            no_result_text = _format_number(no_result_default)
+            if short_list_default is not None:
+                default_clause += (
+                    " "
+                    f"Otherwise, if no pairs match, return {no_result_text}."
+                )
+            else:
+                default_clause = (
+                    f"If no pairs match, return {no_result_text}."
+                )
+
+        intro = (
             f"Given a list of integers, count the number of pairs that sum to "
-            f"{target_text}. Count {mode_text}."
+            f"{target_text}."
+        )
+        mode_clause = f"Count {mode_text}."
+        return _join_description_parts(
+            intro,
+            preprocess,
+            mode_clause,
+            default_clause,
         )
 
     elif template == "max_window_sum":
         k = spec.get("k", 1)
         invalid_default = spec.get("invalid_k_default", 0)
+        empty_default = spec.get("empty_default")
         default_text = _format_number(invalid_default)
-        return (
+        intro = (
             f"Given a list of integers, find the maximum sum of any {k} "
-            f"consecutive elements. If the list has fewer than {k} elements, "
-            f"return {default_text}."
+            f"consecutive elements."
+        )
+        if empty_default is not None:
+            empty_text = _format_number(empty_default)
+            empty_clause = (
+                f"If no elements remain after preprocessing, return "
+                f"{empty_text}."
+            )
+            short_clause = (
+                f"Otherwise, if fewer than {k} elements remain after "
+                f"preprocessing, return {default_text}."
+            )
+        else:
+            empty_clause = ""
+            short_clause = (
+                f"If fewer than {k} elements remain after preprocessing, "
+                f"return {default_text}."
+            )
+        return _join_description_parts(
+            intro,
+            preprocess,
+            empty_clause,
+            short_clause,
         )
 
     return ""
@@ -469,6 +574,31 @@ def _describe_string_predicate(pred: dict[str, Any]) -> str:
             "eq": "exactly",
         }
         return f"the string has {op_map.get(op, 'exactly')} {value} characters"
+    elif kind == "not":
+        operand = pred.get("operand")
+        if isinstance(operand, dict):
+            operand_text = _describe_string_predicate(operand)
+            return f"it is not the case that ({operand_text})"
+    elif kind == "and":
+        operands = pred.get("operands")
+        if isinstance(operands, list):
+            parts = [
+                f"({_describe_string_predicate(op)})"
+                for op in operands
+                if isinstance(op, dict)
+            ]
+            if parts:
+                return " and ".join(parts)
+    elif kind == "or":
+        operands = pred.get("operands")
+        if isinstance(operands, list):
+            parts = [
+                f"({_describe_string_predicate(op)})"
+                for op in operands
+                if isinstance(op, dict)
+            ]
+            if parts:
+                return " or ".join(parts)
 
     return "the string matches condition"
 
@@ -504,5 +634,15 @@ def _describe_string_transform(trans: dict[str, Any]) -> str:
     elif kind == "append":
         suffix = trans.get("suffix", "")
         return f"append '{suffix}'"
+    elif kind == "pipeline":
+        steps = trans.get("steps")
+        if isinstance(steps, list):
+            step_texts = [
+                _describe_string_transform(step)
+                for step in steps
+                if isinstance(step, dict)
+            ]
+            if step_texts:
+                return f"apply in order: {', then '.join(step_texts)}"
 
     return "return it unchanged"

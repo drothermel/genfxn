@@ -239,7 +239,20 @@ class TestDescribeStateful:
         assert "running sum and the best sum" in result
         assert "the element is less than 0" in result
         assert "reset the running sum" in result
+        assert "otherwise, add the element to the running sum" in result
         assert "Return the best sum" in result
+
+    def test_resetting_best_prefix_sum_with_value_transform(self) -> None:
+        spec = {
+            "template": "resetting_best_prefix_sum",
+            "reset_predicate": {"kind": "lt", "value": 0},
+            "init_value": 0,
+            "value_transform": {"kind": "scale", "factor": 2},
+        }
+        result = _describe_stateful(spec)
+        assert "the element is less than 0" in result
+        assert "otherwise, add 2 times the element to the running sum" in result
+        assert "update best sum if running sum is larger" in result
 
 
     def test_toggle_sum(self) -> None:
@@ -462,6 +475,46 @@ class TestDescribeStringPredicate:
         )
         assert result == "the string has exactly 4 characters"
 
+    def test_not(self) -> None:
+        result = _describe_string_predicate(
+            {
+                "kind": "not",
+                "operand": {"kind": "contains", "substring": "x"},
+            }
+        )
+        assert result == "it is not the case that (the string contains 'x')"
+
+    def test_and(self) -> None:
+        result = _describe_string_predicate(
+            {
+                "kind": "and",
+                "operands": [
+                    {"kind": "starts_with", "prefix": "a"},
+                    {"kind": "is_lower"},
+                ],
+            }
+        )
+        assert (
+            result
+            == "(the string starts with 'a') and (the string is all lowercase)"
+        )
+
+    def test_or(self) -> None:
+        result = _describe_string_predicate(
+            {
+                "kind": "or",
+                "operands": [
+                    {"kind": "ends_with", "suffix": "z"},
+                    {"kind": "is_digit"},
+                ],
+            }
+        )
+        assert (
+            result
+            == "(the string ends with 'z') or "
+            "(the string contains only digits)"
+        )
+
 
 class TestDescribeStringTransform:
     def test_identity(self) -> None:
@@ -526,6 +579,22 @@ class TestDescribeStringTransform:
         )
         assert result == "append '_end'"
 
+    def test_pipeline(self) -> None:
+        result = _describe_string_transform(
+            {
+                "kind": "pipeline",
+                "steps": [
+                    {"kind": "strip", "chars": None},
+                    {"kind": "lowercase"},
+                    {"kind": "append", "suffix": "!"},
+                ],
+            }
+        )
+        assert result == (
+            "apply in order: strip whitespace, then convert to lowercase, "
+            "then append '!'"
+        )
+
 
 class TestDescribeSimpleAlgorithms:
     def test_most_frequent_smallest(self) -> None:
@@ -537,7 +606,7 @@ class TestDescribeSimpleAlgorithms:
         result = _describe_simple_algorithms(spec)
         assert "most frequently occurring value" in result
         assert "the smallest value" in result
-        assert "Return 0 for an empty list" in result
+        assert "empty after preprocessing, return 0" in result
 
     def test_most_frequent_first_seen(self) -> None:
         spec = {
@@ -547,7 +616,26 @@ class TestDescribeSimpleAlgorithms:
         }
         result = _describe_simple_algorithms(spec)
         assert "the first value seen" in result
-        assert "Return negative 1 for an empty list" in result
+        assert "empty after preprocessing, return negative 1" in result
+
+    def test_most_frequent_with_preprocess_and_tie_default(self) -> None:
+        spec = {
+            "template": "most_frequent",
+            "tie_break": "smallest",
+            "empty_default": -7,
+            "pre_filter": {"kind": "gt", "value": 0},
+            "pre_transform": {"kind": "shift", "offset": 2},
+            "tie_default": 99,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert (
+            "keep only elements where the element is greater than 0" in result
+        )
+        assert (
+            "replace each remaining element with the element plus 2" in result
+        )
+        assert "tie for highest frequency, return 99" in result
+        assert "empty after preprocessing, return negative 7" in result
 
     def test_count_pairs_sum_all_indices(self) -> None:
         spec = {
@@ -558,6 +646,27 @@ class TestDescribeSimpleAlgorithms:
         result = _describe_simple_algorithms(spec)
         assert "pairs that sum to 10" in result
         assert "all index pairs (i, j) where i < j" in result
+
+    def test_count_pairs_sum_with_preprocess_and_defaults(self) -> None:
+        spec = {
+            "template": "count_pairs_sum",
+            "target": 10,
+            "counting_mode": "unique_values",
+            "pre_filter": {"kind": "mod_eq", "divisor": 2, "remainder": 0},
+            "pre_transform": {"kind": "abs"},
+            "short_list_default": -5,
+            "no_result_default": -1,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "keep only elements where the element mod 2 equals 0" in result
+        assert (
+            "replace each remaining element with the absolute value of the "
+            "element" in result
+        )
+        assert "unique value pairs only" in result
+        assert "fewer than 2 elements remain after preprocessing" in result
+        assert "return negative 5" in result
+        assert "Otherwise, if no pairs match, return negative 1." in result
 
     def test_count_pairs_sum_unique_values(self) -> None:
         spec = {
@@ -577,7 +686,31 @@ class TestDescribeSimpleAlgorithms:
         }
         result = _describe_simple_algorithms(spec)
         assert "maximum sum of any 3 consecutive elements" in result
-        assert "fewer than 3 elements, return 0" in result
+        assert (
+            "fewer than 3 elements remain after preprocessing, return 0"
+            in result
+        )
+
+    def test_max_window_sum_with_preprocess_and_empty_default(self) -> None:
+        spec = {
+            "template": "max_window_sum",
+            "k": 3,
+            "invalid_k_default": -4,
+            "pre_filter": {"kind": "even"},
+            "pre_transform": {"kind": "negate"},
+            "empty_default": 10,
+        }
+        result = _describe_simple_algorithms(spec)
+        assert "keep only elements where the element is even" in result
+        assert (
+            "replace each remaining element with the negation of the element"
+            in result
+        )
+        assert "If no elements remain after preprocessing, return 10." in result
+        assert (
+            "Otherwise, if fewer than 3 elements remain after preprocessing, "
+            "return negative 4." in result
+        )
 
 
 class TestDescribeStringrules:
@@ -617,6 +750,36 @@ class TestDescribeStringrules:
         assert "ends with 'z'" in result
         assert "reverse the string" in result
         assert "capitalize the first letter" in result
+
+    def test_composed_predicate_and_pipeline_transform(self) -> None:
+        spec = {
+            "rules": [
+                {
+                    "predicate": {
+                        "kind": "and",
+                        "operands": [
+                            {"kind": "starts_with", "prefix": "A"},
+                            {"kind": "not", "operand": {"kind": "is_lower"}},
+                        ],
+                    },
+                    "transform": {
+                        "kind": "pipeline",
+                        "steps": [
+                            {"kind": "strip", "chars": None},
+                            {"kind": "lowercase"},
+                        ],
+                    },
+                }
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        result = _describe_stringrules(spec)
+        assert "(the string starts with 'A')" in result
+        assert "it is not the case that (the string is all lowercase)" in result
+        assert (
+            "apply in order: strip whitespace, then convert to lowercase"
+            in result
+        )
 
 
 class TestDescribeTask:
