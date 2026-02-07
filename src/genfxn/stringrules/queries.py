@@ -24,7 +24,7 @@ from genfxn.stringrules.utils import _get_charset, _random_string
 
 def _generate_matching_string(
     pred: StringPredicate, axes: StringRulesAxes, rng: random.Random
-) -> str:
+) -> str | None:
     """Generate a string that matches the given predicate."""
     charset = _get_charset(axes.charset)
     lo, hi = axes.string_length_range
@@ -120,7 +120,9 @@ def _generate_matching_string(
                 s = _random_string(rng.randint(lo, hi), charset, rng)
                 if eval_string_predicate(pred, s):
                     return s
-            return _random_string(rng.randint(lo, hi), charset, rng)
+            # Fallback: verify before returning
+            s = _random_string(rng.randint(lo, hi), charset, rng)
+            return s if eval_string_predicate(pred, s) else None
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)
@@ -128,7 +130,7 @@ def _generate_matching_string(
 
 def _generate_non_matching_string(
     pred: StringPredicate, axes: StringRulesAxes, rng: random.Random
-) -> str:
+) -> str | None:
     """Generate a string that doesn't match the given predicate."""
     charset = _get_charset(axes.charset)
     lo, hi = axes.string_length_range
@@ -229,7 +231,9 @@ def _generate_non_matching_string(
                 s = _random_string(rng.randint(lo, hi), charset, rng)
                 if not eval_string_predicate(pred, s):
                     return s
-            return _random_string(rng.randint(lo, hi), charset, rng)
+            # Fallback: verify before returning
+            s = _random_string(rng.randint(lo, hi), charset, rng)
+            return s if not eval_string_predicate(pred, s) else None
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)
@@ -246,6 +250,8 @@ def _generate_coverage_queries(
         attempts = 0
         while attempts < 20:
             s = _generate_matching_string(rule.predicate, axes, rng)
+            if s is None:
+                break  # Can't generate matching string for this predicate
             # Check it doesn't match earlier rules
             matches_earlier = False
             for earlier_rule in spec.rules[:i]:
@@ -263,15 +269,16 @@ def _generate_coverage_queries(
                 break
             attempts += 1
         else:
-            # Fallback: just use a matching string
+            # Fallback: just use a matching string (skip if None)
             s = _generate_matching_string(rule.predicate, axes, rng)
-            queries.append(
-                Query(
-                    input=s,
-                    output=eval_stringrules(spec, s),
-                    tag=QueryTag.COVERAGE,
+            if s is not None:
+                queries.append(
+                    Query(
+                        input=s,
+                        output=eval_stringrules(spec, s),
+                        tag=QueryTag.COVERAGE,
+                    )
                 )
-            )
 
     return queries
 
