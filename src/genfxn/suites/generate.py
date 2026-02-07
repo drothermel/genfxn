@@ -418,20 +418,20 @@ def _pool_axes_simple_algorithms_d4(rng: random.Random) -> SimpleAlgorithmsAxes:
         else:
             axes_kwargs["pre_transform_types"] = [TransformType.PIPELINE]
 
-    # Edge defaults: 1 or 2
-    edge_count = rng.choice([1, 1, 1, 2])  # weighted toward 1
+    # Edge defaults:
+    # - most_frequent contributes tie_default only
+    # - max_window_sum contributes empty_default only
+    # - count_pairs_sum can contribute 1 or 2 edge fields
+    edge_count = 1
     if template == SATemplateType.MOST_FREQUENT:
         axes_kwargs["tie_default_range"] = (-10, 10)
-        if edge_count >= 2:
-            axes_kwargs["empty_default_range"] = (-5, 5)
     elif template == SATemplateType.COUNT_PAIRS_SUM:
+        edge_count = rng.choice([1, 1, 1, 2])  # weighted toward 1
         axes_kwargs["no_result_default_range"] = (-10, 10)
         if edge_count >= 2:
             axes_kwargs["short_list_default_range"] = (-5, 5)
     else:
         axes_kwargs["empty_default_for_empty_range"] = (-10, 10)
-        if edge_count >= 2:
-            axes_kwargs["window_size_range"] = (6, 10)
 
     return SimpleAlgorithmsAxes(**axes_kwargs)
 

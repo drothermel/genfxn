@@ -4,12 +4,19 @@ import random
 
 import pytest
 
+from genfxn.simple_algorithms.models import TemplateType as SATemplateType
 from genfxn.suites.features import (
     simple_algorithms_features,
     stateful_features,
     stringrules_features,
 )
-from genfxn.suites.generate import Candidate, PoolStats, generate_pool, greedy_select
+from genfxn.suites.generate import (
+    Candidate,
+    PoolStats,
+    _pool_axes_simple_algorithms_d4,
+    generate_pool,
+    greedy_select,
+)
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
 
 # ── Feature extraction tests ─────────────────────────────────────────────
@@ -376,6 +383,73 @@ class TestSimpleAlgorithmsFeatures:
         assert f["preprocess_bucket"] == "filter_only"
         assert f["filter_kind"] == "composed"
         assert f["edge_count"] == "1"
+
+
+class _FixedChoiceRng:
+    def __init__(self, choices: list[object]) -> None:
+        self._choices = choices
+        self._idx = 0
+
+    def choice(self, options: list[object]) -> object:
+        if self._idx >= len(self._choices):
+            raise AssertionError(f"Unexpected choice call: {options!r}")
+
+        picked = self._choices[self._idx]
+        self._idx += 1
+        assert picked in options, f"{picked!r} not in {options!r}"
+        return picked
+
+
+class TestSimpleAlgorithmsD4PoolAxes:
+    def test_most_frequent_uses_only_tie_default_edge(self) -> None:
+        rng = _FixedChoiceRng(
+            [
+                SATemplateType.MOST_FREQUENT,
+                "comparison",
+                "atomic",
+            ]
+        )
+
+        axes = _pool_axes_simple_algorithms_d4(rng)
+
+        assert axes.templates == [SATemplateType.MOST_FREQUENT]
+        assert axes.tie_default_range == (-10, 10)
+        assert axes.empty_default_range == (0, 0)
+        assert axes.no_result_default_range is None
+        assert axes.short_list_default_range is None
+
+    def test_max_window_sum_uses_only_empty_default_edge(self) -> None:
+        rng = _FixedChoiceRng(
+            [
+                SATemplateType.MAX_WINDOW_SUM,
+                "filter_only",
+                "comparison",
+            ]
+        )
+
+        axes = _pool_axes_simple_algorithms_d4(rng)
+
+        assert axes.templates == [SATemplateType.MAX_WINDOW_SUM]
+        assert axes.empty_default_for_empty_range == (-10, 10)
+        assert axes.window_size_range == (1, 10)
+        assert axes.no_result_default_range is None
+        assert axes.short_list_default_range is None
+
+    def test_count_pairs_sum_can_enable_second_edge(self) -> None:
+        rng = _FixedChoiceRng(
+            [
+                SATemplateType.COUNT_PAIRS_SUM,
+                "filter_only",
+                "comparison",
+                2,
+            ]
+        )
+
+        axes = _pool_axes_simple_algorithms_d4(rng)
+
+        assert axes.templates == [SATemplateType.COUNT_PAIRS_SUM]
+        assert axes.no_result_default_range == (-10, 10)
+        assert axes.short_list_default_range == (-5, 5)
 
 
 # ── Hard constraint filtering tests ──────────────────────────────────────
