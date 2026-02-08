@@ -16,6 +16,12 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "simple_algorithms": "genfxn.langs.java.simple_algorithms",
         "stringrules": "genfxn.langs.java.stringrules",
     },
+    Language.RUST: {
+        "piecewise": "genfxn.langs.rust.piecewise",
+        "stateful": "genfxn.langs.rust.stateful",
+        "simple_algorithms": "genfxn.langs.rust.simple_algorithms",
+        "stringrules": "genfxn.langs.rust.stringrules",
+    },
 }
 
 _RENDER_FUNCTIONS: dict[str, str] = {
