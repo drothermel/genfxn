@@ -10,6 +10,7 @@ from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
+from genfxn.langs.types import Language
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
@@ -256,6 +257,14 @@ def generate(
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
     ] = None,
+    language: Annotated[
+        str,
+        typer.Option(
+            "--language",
+            "-l",
+            help="Languages to render: 'all' or comma-separated (python,java,rust)",
+        ),
+    ] = "all",
     # Difficulty presets
     difficulty: Annotated[
         int | None,
