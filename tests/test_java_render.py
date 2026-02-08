@@ -143,7 +143,7 @@ class TestPredicateJava:
         result = render_predicate_java(
             PredicateInSet(values=frozenset({3, 1, 2}))
         )
-        assert result == "java.util.Set.of(1, 2, 3).contains(x)"
+        assert result == "(x == 1 || x == 2 || x == 3)"
 
     def test_not(self) -> None:
         result = render_predicate_java(PredicateNot(operand=PredicateEven()))
@@ -270,21 +270,31 @@ class TestStringPredicateJava:
         result = render_string_predicate_java(StringPredicateIsUpper())
         assert result == (
             "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
-            "s.equals(s.toUpperCase())"
+            "s.equals(s.toUpperCase(java.util.Locale.ROOT))"
         )
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_java(StringPredicateIsLower())
         assert result == (
             "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
-            "s.equals(s.toLowerCase())"
+            "s.equals(s.toLowerCase(java.util.Locale.ROOT))"
         )
 
-    def test_length_cmp(self) -> None:
+    @pytest.mark.parametrize(
+        ("op", "expected_op"),
+        [
+            ("lt", "<"),
+            ("le", "<="),
+            ("gt", ">"),
+            ("ge", ">="),
+            ("eq", "=="),
+        ],
+    )
+    def test_length_cmp(self, op: str, expected_op: str) -> None:
         result = render_string_predicate_java(
-            StringPredicateLengthCmp(op="lt", value=5)
+            StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == "s.length() < 5"
+        assert result == f"s.length() {expected_op} 5"
 
     def test_not(self) -> None:
         result = render_string_predicate_java(
@@ -325,18 +335,18 @@ class TestStringTransformJava:
     def test_lowercase(self) -> None:
         assert (
             render_string_transform_java(StringTransformLowercase())
-            == "s.toLowerCase()"
+            == "s.toLowerCase(java.util.Locale.ROOT)"
         )
 
     def test_uppercase(self) -> None:
         assert (
             render_string_transform_java(StringTransformUppercase())
-            == "s.toUpperCase()"
+            == "s.toUpperCase(java.util.Locale.ROOT)"
         )
 
     def test_capitalize(self) -> None:
         result = render_string_transform_java(StringTransformCapitalize())
-        assert "substring(0, 1).toUpperCase()" in result
+        assert "substring(0, 1).toUpperCase(java.util.Locale.ROOT)" in result
         assert "isEmpty()" in result
 
     def test_swapcase(self) -> None:
@@ -360,7 +370,7 @@ class TestStringTransformJava:
 
     def test_strip_empty_chars(self) -> None:
         result = render_string_transform_java(StringTransformStrip(chars=""))
-        assert result == "s.strip()"
+        assert result == "s"
 
     def test_strip_chars(self) -> None:
         result = render_string_transform_java(StringTransformStrip(chars="xy"))
@@ -394,7 +404,7 @@ class TestStringTransformJava:
             ]
         )
         result = render_string_transform_java(pipe)
-        assert "toLowerCase()" in result
+        assert "toLowerCase(java.util.Locale.ROOT)" in result
         assert "StringBuilder" in result
 
 
@@ -452,7 +462,7 @@ class TestPiecewiseJava:
         assert "} else if (x > 5)" in code
         assert "} else {" in code
 
-    def test_in_set_condition_uses_fully_qualified_set(self) -> None:
+    def test_in_set_condition_uses_or_comparisons(self) -> None:
         from genfxn.langs.java.piecewise import render_piecewise
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 
@@ -466,7 +476,7 @@ class TestPiecewiseJava:
             default_expr=ExprAffine(a=0, b=0),
         )
         code = render_piecewise(spec)
-        assert "java.util.Set.of(1, 2).contains(x)" in code
+        assert "(x == 1 || x == 2)" in code
 
 
 class TestStatefulJava:
@@ -541,7 +551,7 @@ class TestStringrulesJava:
         code = render_stringrules(spec)
         assert "public static String f(String s)" in code
         assert 's.startsWith("a")' in code
-        assert "s.toUpperCase()" in code
+        assert "s.toUpperCase(java.util.Locale.ROOT)" in code
         assert "} else {" in code
 
     def test_no_rules(self) -> None:
@@ -553,7 +563,7 @@ class TestStringrulesJava:
             default_transform=StringTransformLowercase(),
         )
         code = render_stringrules(spec)
-        assert "return s.toLowerCase();" in code
+        assert "return s.toLowerCase(java.util.Locale.ROOT);" in code
         assert "if" not in code
 
 
@@ -867,3 +877,25 @@ class TestLangsInfra:
         assert "java" in result
         assert "def f(" in result["python"]
         assert "public static" in result["java"]
+
+    def test_render_all_languages_custom_selection_and_func_name(self) -> None:
+        from genfxn.langs.render import render_all_languages
+        from genfxn.piecewise.models import Branch, PiecewiseSpec
+
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=1, b=0),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=0),
+        )
+        result = render_all_languages(
+            "piecewise",
+            spec,
+            languages=[Language.JAVA],
+            func_name="g",
+        )
+        assert list(result.keys()) == ["java"]
+        assert "public static int g(int x)" in result["java"]

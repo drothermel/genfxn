@@ -243,8 +243,12 @@ class TestStringPredicateRust:
     def test_is_digit(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsDigit())
         assert result == (
-            "!s.is_empty() && s.chars().all(|c| c.is_ascii_digit())"
+            "!s.is_empty() && s.chars().all(|c| c.is_numeric())"
         )
+
+    def test_is_digit_uses_unicode_aware_numeric_check(self) -> None:
+        result = render_string_predicate_rust(StringPredicateIsDigit())
+        assert "is_numeric()" in result
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsUpper())
@@ -260,11 +264,21 @@ class TestStringPredicateRust:
             "s.to_lowercase() == s"
         )
 
-    def test_length_cmp(self) -> None:
+    @pytest.mark.parametrize(
+        ("op", "expected_op"),
+        [
+            ("lt", "<"),
+            ("le", "<="),
+            ("gt", ">"),
+            ("ge", ">="),
+            ("eq", "=="),
+        ],
+    )
+    def test_length_cmp(self, op: str, expected_op: str) -> None:
         result = render_string_predicate_rust(
-            StringPredicateLengthCmp(op="lt", value=5)
+            StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == "s.len() < 5"
+        assert result == f"s.len() {expected_op} 5"
 
     def test_not(self) -> None:
         result = render_string_predicate_rust(
@@ -834,3 +848,25 @@ class TestRustRegistry:
         assert "java" in result
         assert "rust" in result
         assert "fn f(" in result["rust"]
+
+    def test_render_all_languages_custom_selection_and_func_name(self) -> None:
+        from genfxn.langs.render import render_all_languages
+        from genfxn.piecewise.models import Branch, PiecewiseSpec
+
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=1, b=0),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=0),
+        )
+        result = render_all_languages(
+            "piecewise",
+            spec,
+            languages=[Language.RUST],
+            func_name="g",
+        )
+        assert list(result.keys()) == ["rust"]
+        assert "fn g(x: i64) -> i64" in result["rust"]

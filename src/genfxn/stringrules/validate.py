@@ -180,6 +180,32 @@ def _validate_ast_whitelist(
         # Name check: only Load-context names (runtime use). Names in type
         # annotations (e.g. def f(s: str) -> str:) are allowed if in
         # ALLOWED_ANNOTATION_NAMES.
+        elif isinstance(node, ast.Attribute):
+            attr = node.attr
+            if attr.startswith("__") and attr.endswith("__"):
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
+            elif attr not in ALLOWED_METHOD_NAMES:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             in_annotation = (
                 node.lineno,

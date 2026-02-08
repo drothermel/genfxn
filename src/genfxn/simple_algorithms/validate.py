@@ -13,6 +13,7 @@ from genfxn.core.safe_exec import (
 )
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.simple_algorithms.ast_safety import (
+    ALLOWED_ANNOTATION_NAMES,
     ALLOWED_AST_NODES,
     ALLOWED_CALL_NAMES,
     ALLOWED_METHOD_NAMES,
@@ -46,6 +47,7 @@ CODE_TIE_BREAK_MISMATCH = "TIE_BREAK_MISMATCH"
 CODE_COUNTING_MODE_MISMATCH = "COUNTING_MODE_MISMATCH"
 CODE_EDGE_CASE_FAILURE = "EDGE_CASE_FAILURE"
 CURRENT_FAMILY = "simple_algorithms"
+PYTHON_CODE_KEY = "python"
 
 _spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 _ALLOWED_BUILTINS = {
@@ -90,6 +92,19 @@ def _validate_ast_whitelist(
             )
         )
         return issues, None
+
+    annotation_positions: set[tuple[int, int]] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            for arg in node.args.args:
+                if arg.annotation is not None:
+                    for n in ast.walk(arg.annotation):
+                        if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                            annotation_positions.add((n.lineno, n.col_offset))
+            if node.returns is not None:
+                for n in ast.walk(node.returns):
+                    if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                        annotation_positions.add((n.lineno, n.col_offset))
 
     for node in ast.walk(tree):
         node_type = type(node)
@@ -146,8 +161,43 @@ def _validate_ast_whitelist(
                     )
                 )
 
+        # Attribute check: disallow unknown/dunder attributes even when not
+        # invoked as calls.
+        elif isinstance(node, ast.Attribute):
+            attr = node.attr
+            if attr.startswith("__") and attr.endswith("__"):
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
+            elif attr not in ALLOWED_METHOD_NAMES:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
+
         # Name check
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            in_annotation = (
+                node.lineno,
+                node.col_offset,
+            ) in annotation_positions
+            if in_annotation and node.id in ALLOWED_ANNOTATION_NAMES:
+                continue
             if node.id not in allowed_names:
                 issues.append(
                     Issue(
@@ -199,26 +249,24 @@ def _validate_spec_deserialize(
 
 def _validate_code_compile(
     task: Task,
+    code: str | None = None,
     parsed_tree: ast.Module | None = None,
     execute_untrusted_code: bool = True,
 ) -> tuple[list[Issue], Callable[[list[int]], int] | None]:
-    if not isinstance(task.code, str):
-        return [
-            Issue(
-                code=CODE_CODE_PARSE_ERROR,
-                severity=Severity.ERROR,
-                message=(
-                    "Task code must be a Python string for this validator, "
-                    f"got {type(task.code).__name__}"
-                ),
-                location="code",
-                task_id=task.task_id,
-            )
-        ], None
+    if code is None:
+        if isinstance(task.code, str):
+            code = task.code
+        elif isinstance(task.code, dict):
+            code = task.code.get(PYTHON_CODE_KEY)
+
+    # Multi-language maps without Python source are valid inputs for this
+    # validator; skip code compile/exec validation in that case.
+    if code is None:
+        return [], None
 
     if parsed_tree is None:
         try:
-            parsed_tree = ast.parse(task.code)
+            parsed_tree = ast.parse(code)
         except SyntaxError as e:
             return [
                 Issue(
@@ -237,7 +285,7 @@ def _validate_code_compile(
     namespace: dict[str, object]
     try:
         namespace = execute_code_restricted(
-            task.code,
+            code,
             _ALLOWED_BUILTINS,
             trust_untrusted_code=True,
         )
@@ -613,14 +661,21 @@ def validate_simple_algorithms_task(
     issues.extend(spec_issues)
 
     tree: ast.Module | None = None
+    code_to_validate: str | None = None
     if isinstance(task.code, str):
-        ast_issues, tree = _validate_ast_whitelist(task.code)
+        code_to_validate = task.code
+    elif isinstance(task.code, dict):
+        code_to_validate = task.code.get(PYTHON_CODE_KEY)
+
+    if code_to_validate is not None:
+        ast_issues, tree = _validate_ast_whitelist(code_to_validate)
         if ast_issues:
             issues.extend(ast_issues)
             return issues
 
     code_issues, func = _validate_code_compile(
         task,
+        code=code_to_validate,
         parsed_tree=tree,
         execute_untrusted_code=execute_untrusted_code,
     )

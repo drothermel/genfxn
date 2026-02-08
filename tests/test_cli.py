@@ -152,6 +152,71 @@ class TestGenerate:
         assert tasks[0]["code"].startswith("fn f(")
         assert "def f(" not in tasks[0]["code"]
 
+    def test_generate_java_language(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+                "--language",
+                "java",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 1
+        assert "public static int f(int x)" in tasks[0]["code"]
+        assert "def f(" not in tasks[0]["code"]
+
+    def test_generate_python_language(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+                "--language",
+                "python",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 1
+        assert tasks[0]["code"].startswith("def f(")
+
+    def test_generate_unknown_language(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+                "--language",
+                "go",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "Unknown language 'go'" in result.output
+
     def test_generate_rejects_multiple_languages(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(

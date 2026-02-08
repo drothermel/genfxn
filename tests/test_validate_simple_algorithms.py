@@ -113,6 +113,38 @@ class TestCodeCompilation:
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
+    def test_python_code_map_validates_python_entry(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        assert isinstance(task.code, str)
+        mapped = task.model_copy(
+            update={
+                "code": {
+                    "python": task.code,
+                    "java": "public static int f(int[] xs) { return 0; }",
+                }
+            }
+        )
+        issues = validate_simple_algorithms_task(mapped)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
+    def test_non_python_code_map_skips_python_validation(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        mapped = task.model_copy(
+            update={
+                "code": {
+                    "java": "public static int f(int[] xs) { return 0; }"
+                }
+            }
+        )
+        issues = validate_simple_algorithms_task(mapped)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+        assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert not any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
+
 
 class TestCodeRuntime:
     def test_runtime_error_caught(self, baseline_task) -> None:
@@ -198,6 +230,16 @@ class TestHelperLevelValidation:
 
     def test_ast_whitelist_helper_without_execution(self) -> None:
         issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_allows_annotation_names(self) -> None:
+        code = "def f(xs: list[int]) -> int:\n    return 0"
+        issues, _ = _validate_ast_whitelist(code)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_rejects_dunder_attribute_read(self) -> None:
+        code = "def f(xs):\n    return xs.__class__"
+        issues, _ = _validate_ast_whitelist(code)
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
 

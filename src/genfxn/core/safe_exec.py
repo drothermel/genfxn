@@ -7,6 +7,7 @@ import multiprocessing as mp
 import os
 import pickle
 import signal
+import time
 from dataclasses import dataclass
 from queue import Empty
 from typing import Any, cast
@@ -216,6 +217,8 @@ def _set_memory_limit(memory_limit_mb: int | None) -> None:
 
 _SAFE_EXEC_START_METHOD_ENV = "GENFXN_SAFE_EXEC_START_METHOD"
 _DEFAULT_MAX_RESULT_BYTES = 1_000_000
+_RESULT_QUEUE_GRACE_SEC = 0.25
+_RESULT_QUEUE_POLL_SEC = 0.05
 
 
 def _is_spawn_bootstrap_error(exc: BaseException) -> bool:
@@ -251,12 +254,13 @@ def _get_mp_context() -> mp.context.BaseContext:
             )
         return mp.get_context(configured)
 
-    # Avoid spawn bootstrap fragility in normal POSIX script usage.
+    # Default to spawn/forkserver to avoid fork-safety issues in
+    # multi-threaded hosts.
     if os.name == "posix":
-        if "fork" in allowed:
-            return mp.get_context("fork")
         if "forkserver" in allowed:
             return mp.get_context("forkserver")
+        if "spawn" in allowed:
+            return mp.get_context("spawn")
     return mp.get_context("spawn")
 
 
@@ -380,9 +384,18 @@ def _run_isolated(
             f"Code execution timed out after {timeout_sec} seconds"
         )
 
-    try:
-        result: _WorkerResult = queue.get(timeout=0.1)
-    except Empty:
+    deadline = time.monotonic() + _RESULT_QUEUE_GRACE_SEC
+    result: _WorkerResult | None = None
+    while result is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        timeout = min(_RESULT_QUEUE_POLL_SEC, remaining)
+        try:
+            result = queue.get(timeout=timeout)
+        except Empty:
+            continue
+    if result is None:
         if process.exitcode not in (None, 0):
             raise RuntimeError(
                 f"Execution worker crashed with exit code {process.exitcode}"

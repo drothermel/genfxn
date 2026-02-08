@@ -32,8 +32,10 @@ def render_predicate_java(pred: Predicate, var: str = "x") -> str:
         case PredicateModEq(divisor=d, remainder=r):
             return f"Math.floorMod({var}, {d}) == {r}"
         case PredicateInSet(values=vals):
-            items = ", ".join(str(v) for v in sorted(vals))
-            return f"java.util.Set.of({items}).contains({var})"
+            if not vals:
+                return "false"
+            items = [f"{var} == {v}" for v in sorted(vals)]
+            return f"({' || '.join(items)})"
         case PredicateNot(operand=op):
             return f"!({render_predicate_java(op, var)})"
         case PredicateAnd(operands=ops):

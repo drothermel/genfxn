@@ -38,13 +38,13 @@ def render_string_predicate_java(pred: StringPredicate, var: str = "s") -> str:
             return (
                 f"!{var}.isEmpty() && "
                 f"{var}.chars().anyMatch(Character::isLetter) && "
-                f"{var}.equals({var}.toUpperCase())"
+                f"{var}.equals({var}.toUpperCase(java.util.Locale.ROOT))"
             )
         case StringPredicateIsLower():
             return (
                 f"!{var}.isEmpty() && "
                 f"{var}.chars().anyMatch(Character::isLetter) && "
-                f"{var}.equals({var}.toLowerCase())"
+                f"{var}.equals({var}.toLowerCase(java.util.Locale.ROOT))"
             )
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}

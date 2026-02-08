@@ -204,6 +204,10 @@ class TestHelperLevelValidation:
         issues, _ = _validate_ast_whitelist("import os\ndef f(s): return s")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
+    def test_ast_whitelist_rejects_dunder_attribute_read(self) -> None:
+        issues, _ = _validate_ast_whitelist("def f(s):\n    return s.__class__")
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
 
 class TestQueryOutputValidation:
     def test_wrong_output_caught(self, baseline_task) -> None:

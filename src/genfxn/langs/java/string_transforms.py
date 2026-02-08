@@ -24,14 +24,14 @@ def render_string_transform_java(t: StringTransform, var: str = "s") -> str:
         case StringTransformIdentity():
             return var
         case StringTransformLowercase():
-            return f"{var}.toLowerCase()"
+            return f"{var}.toLowerCase(java.util.Locale.ROOT)"
         case StringTransformUppercase():
-            return f"{var}.toUpperCase()"
+            return f"{var}.toUpperCase(java.util.Locale.ROOT)"
         case StringTransformCapitalize():
             return (
                 f"{var}.isEmpty() ? {var} : "
-                f"{var}.substring(0, 1).toUpperCase() + "
-                f"{var}.substring(1).toLowerCase()"
+                f"{var}.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + "
+                f"{var}.substring(1).toLowerCase(java.util.Locale.ROOT)"
             )
         case StringTransformSwapcase():
             return (
@@ -51,8 +51,10 @@ def render_string_transform_java(t: StringTransform, var: str = "s") -> str:
                 f"{java_string_literal(new)})"
             )
         case StringTransformStrip(chars=chars):
-            if not chars:
+            if chars is None:
                 return f"{var}.strip()"
+            if chars == "":
+                return var
             escaped = _regex_char_class_escape(chars)
             pattern = f"^[{escaped}]+|[{escaped}]+$"
             return f'{var}.replaceAll({java_string_literal(pattern)}, "")'

@@ -35,6 +35,7 @@ CODE_SEMANTIC_ISSUES_CAPPED = "SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "UNSAFE_AST"
 CURRENT_FAMILY = "stateful"
+PYTHON_CODE_KEY = "python"
 
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
 _ALLOWED_BUILTINS = {
@@ -165,26 +166,24 @@ def _validate_spec_deserialize(
 
 def _validate_code_compile(
     task: Task,
+    code: str | None = None,
     parsed_tree: ast.Module | None = None,
     execute_untrusted_code: bool = True,
 ) -> tuple[list[Issue], Callable[[list[int]], int] | None]:
-    if not isinstance(task.code, str):
-        return [
-            Issue(
-                code=CODE_CODE_PARSE_ERROR,
-                severity=Severity.ERROR,
-                message=(
-                    "Task code must be a Python string for this validator, "
-                    f"got {type(task.code).__name__}"
-                ),
-                location="code",
-                task_id=task.task_id,
-            )
-        ], None
+    if code is None:
+        if isinstance(task.code, str):
+            code = task.code
+        elif isinstance(task.code, dict):
+            code = task.code.get(PYTHON_CODE_KEY)
+
+    # Multi-language maps without Python source are valid inputs for this
+    # validator; skip code compile/exec validation in that case.
+    if code is None:
+        return [], None
 
     if parsed_tree is None:
         try:
-            parsed_tree = ast.parse(task.code)
+            parsed_tree = ast.parse(code)
         except SyntaxError as e:
             return [
                 Issue(
@@ -203,7 +202,7 @@ def _validate_code_compile(
     namespace: dict[str, object]
     try:
         namespace = execute_code_restricted(
-            task.code,
+            code,
             _ALLOWED_BUILTINS,
             trust_untrusted_code=True,
         )
@@ -458,14 +457,21 @@ def validate_stateful_task(
     issues.extend(spec_issues)
 
     tree: ast.Module | None = None
+    code_to_validate: str | None = None
     if isinstance(task.code, str):
-        ast_issues, tree = _validate_ast_whitelist(task.code)
+        code_to_validate = task.code
+    elif isinstance(task.code, dict):
+        code_to_validate = task.code.get(PYTHON_CODE_KEY)
+
+    if code_to_validate is not None:
+        ast_issues, tree = _validate_ast_whitelist(code_to_validate)
         if ast_issues:
             issues.extend(ast_issues)
             return issues  # Bail early, don't exec unsafe code
 
     code_issues, func = _validate_code_compile(
         task,
+        code=code_to_validate,
         parsed_tree=tree,
         execute_untrusted_code=execute_untrusted_code,
     )

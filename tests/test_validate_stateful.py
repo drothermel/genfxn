@@ -139,6 +139,38 @@ class TestCodeCompilation:
             for i in issues
         )
 
+    def test_python_code_map_validates_python_entry(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        assert isinstance(task.code, str)
+        mapped = task.model_copy(
+            update={
+                "code": {
+                    "python": task.code,
+                    "java": "public static int f(int[] xs) { return 0; }",
+                }
+            }
+        )
+        issues = validate_stateful_task(mapped)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
+    def test_non_python_code_map_skips_python_validation(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        mapped = task.model_copy(
+            update={
+                "code": {
+                    "java": "public static int f(int[] xs) { return 0; }"
+                }
+            }
+        )
+        issues = validate_stateful_task(mapped)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+        assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert not any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
+
 
 class TestCodeRuntime:
     def test_runtime_error_caught(self, baseline_task) -> None:

@@ -128,6 +128,9 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
     }
 )
 
+# Names allowed only in type annotations (arg.annotation, returns).
+ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset({"int", "list"})
+
 # Call arity requirements: function name -> allowed arg counts
 CALL_ARITIES: dict[str, set[int]] = {
     "abs": {1},

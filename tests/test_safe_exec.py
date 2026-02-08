@@ -135,6 +135,53 @@ def test_run_isolated_reports_missing_result_without_crash(monkeypatch) -> None:
         safe_exec._run_isolated("def f(x):\n    return x", {}, (), 1.0, None)
 
 
+def test_run_isolated_retries_queue_reads_before_failing(monkeypatch) -> None:
+    class _FakeQueue:
+        def __init__(self) -> None:
+            self._calls = 0
+
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            self._calls += 1
+            if self._calls < 3:
+                raise safe_exec.Empty
+            return safe_exec._WorkerResult(ok=True, value=123)
+
+    class _FakeProcess:
+        exitcode = 0
+
+        def start(self) -> None:
+            return
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def is_alive(self) -> bool:
+            return False
+
+    class _FakeCtx:
+        def __init__(self) -> None:
+            self._queue = _FakeQueue()
+
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return self._queue
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_validate_untrusted_code", lambda _: None)
+    monkeypatch.setattr(safe_exec.mp, "get_context", lambda _: _FakeCtx())
+    monkeypatch.setattr(safe_exec, "_RESULT_QUEUE_GRACE_SEC", 0.2)
+    monkeypatch.setattr(safe_exec, "_RESULT_QUEUE_POLL_SEC", 0.01)
+
+    result = safe_exec._run_isolated(
+        "def f(x):\n    return x", {}, (), 1.0, None
+    )
+    assert result == 123
+
+
 def test_persistent_worker_raises_bootstrap_error(monkeypatch) -> None:
     class _FakeProcess:
         def start(self) -> None:
@@ -175,7 +222,7 @@ def test_persistent_worker_raises_bootstrap_error(monkeypatch) -> None:
     os.name != "posix",
     reason="POSIX start-method preference is only relevant on POSIX",
 )
-def test_execute_code_restricted_works_in_script_without_main_guard(
+def test_execute_code_restricted_works_in_script_without_main_guard_with_fork(
     tmp_path: Path,
 ) -> None:
     script = tmp_path / "script.py"
@@ -188,6 +235,7 @@ def test_execute_code_restricted_works_in_script_without_main_guard(
     )
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    env["GENFXN_SAFE_EXEC_START_METHOD"] = "fork"
     proc = subprocess.run(  # noqa: S603
         [sys.executable, str(script)],  # noqa: S607
         capture_output=True,
@@ -324,3 +372,26 @@ def test_get_mp_context_invalid_override_raises(monkeypatch) -> None:
     monkeypatch.setenv("GENFXN_SAFE_EXEC_START_METHOD", "bogus")
     with pytest.raises(ValueError, match="Valid values"):
         safe_exec._get_mp_context()
+
+
+def test_get_mp_context_prefers_non_fork_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("GENFXN_SAFE_EXEC_START_METHOD", raising=False)
+    monkeypatch.setattr(safe_exec.os, "name", "posix")
+    monkeypatch.setattr(
+        safe_exec.mp,
+        "get_all_start_methods",
+        lambda: ["fork", "forkserver", "spawn"],
+    )
+    seen: list[str] = []
+
+    class _Ctx:
+        def get_start_method(self) -> str:
+            return seen[-1]
+
+    def _fake_get_context(method: str) -> _Ctx:
+        seen.append(method)
+        return _Ctx()
+
+    monkeypatch.setattr(safe_exec.mp, "get_context", _fake_get_context)
+    ctx = safe_exec._get_mp_context()
+    assert ctx.get_start_method() == "forkserver"
