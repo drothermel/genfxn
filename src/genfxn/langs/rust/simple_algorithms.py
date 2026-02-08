@@ -1,0 +1,203 @@
+from genfxn.langs.rust.predicates import render_predicate_rust
+from genfxn.langs.rust.transforms import render_transform_rust
+from genfxn.simple_algorithms.models import (
+    CountingMode,
+    CountPairsSumSpec,
+    MaxWindowSumSpec,
+    MostFrequentSpec,
+    SimpleAlgorithmsSpec,
+    TieBreakMode,
+)
+
+
+def _render_preprocess_rust(
+    spec: MostFrequentSpec | CountPairsSumSpec | MaxWindowSumSpec, var: str
+) -> list[str]:
+    lines: list[str] = []
+    if spec.pre_filter is not None:
+        cond = render_predicate_rust(spec.pre_filter, "x")
+        lines.extend([
+            f"    let _filtered: Vec<i64> = {var}.iter().copied().filter(|&x| {cond}).collect();",
+            "    let xs = _filtered.as_slice();",
+        ])
+    if spec.pre_transform is not None:
+        expr = render_transform_rust(spec.pre_transform, "x")
+        lines.extend([
+            f"    let _mapped: Vec<i64> = {var}.iter().copied().map(|x| {expr}).collect();",
+            "    let xs = _mapped.as_slice();",
+        ])
+    return lines
+
+
+def _render_most_frequent(
+    spec: MostFrequentSpec, func_name: str = "f", var: str = "xs"
+) -> str:
+    preprocess = _render_preprocess_rust(spec, var)
+
+    if spec.tie_break == TieBreakMode.SMALLEST:
+        lines = [
+            f"fn {func_name}({var}: &[i64]) -> i64 {{",
+            "    use std::collections::HashMap;",
+            *preprocess,
+            f"    if {var}.is_empty() {{",
+            f"        return {spec.empty_default};",
+            "    }",
+            f"    let mut counts: HashMap<i64, i64> = HashMap::new();",
+            f"    for &x in {var} {{",
+            "        *counts.entry(x).or_insert(0) += 1;",
+            "    }",
+            "    let max_count = *counts.values().max().unwrap();",
+            "    let mut candidates: Vec<i64> = Vec::new();",
+            "    for (&k, &v) in &counts {",
+            "        if v == max_count {",
+            "            candidates.push(k);",
+            "        }",
+            "    }",
+        ]
+        if spec.tie_default is not None:
+            lines.append("    if candidates.len() > 1 {")
+            lines.append(f"        return {spec.tie_default};")
+            lines.append("    }")
+        lines.append("    *candidates.iter().min().unwrap()")
+        lines.append("}")
+    else:
+        lines = [
+            f"fn {func_name}({var}: &[i64]) -> i64 {{",
+            "    use std::collections::HashMap;",
+            "    use std::collections::HashSet;",
+            *preprocess,
+            f"    if {var}.is_empty() {{",
+            f"        return {spec.empty_default};",
+            "    }",
+            f"    let mut counts: HashMap<i64, i64> = HashMap::new();",
+            f"    for &x in {var} {{",
+            "        *counts.entry(x).or_insert(0) += 1;",
+            "    }",
+            "    let max_count = *counts.values().max().unwrap();",
+            "    let mut candidates: HashSet<i64> = HashSet::new();",
+            "    for (&k, &v) in &counts {",
+            "        if v == max_count {",
+            "            candidates.insert(k);",
+            "        }",
+            "    }",
+        ]
+        if spec.tie_default is not None:
+            lines.append("    if candidates.len() > 1 {")
+            lines.append(f"        return {spec.tie_default};")
+            lines.append("    }")
+        lines.extend([
+            f"    for &x in {var} {{",
+            "        if candidates.contains(&x) {",
+            "            return x;",
+            "        }",
+            "    }",
+            f"    {spec.empty_default}",
+            "}",
+        ])
+    return "\n".join(lines)
+
+
+def _render_count_pairs_sum(
+    spec: CountPairsSumSpec, func_name: str = "f", var: str = "xs"
+) -> str:
+    preprocess = _render_preprocess_rust(spec, var)
+
+    if spec.counting_mode == CountingMode.ALL_INDICES:
+        lines = [
+            f"fn {func_name}({var}: &[i64]) -> i64 {{",
+            *preprocess,
+        ]
+        if spec.short_list_default is not None:
+            lines.append(f"    if {var}.len() < 2 {{")
+            lines.append(f"        return {spec.short_list_default};")
+            lines.append("    }")
+        lines.extend([
+            "    let mut count: i64 = 0;",
+            f"    for i in 0..{var}.len() {{",
+            f"        for j in (i + 1)..{var}.len() {{",
+            f"            if {var}[i] + {var}[j] == {spec.target} {{",
+            "                count += 1;",
+            "            }",
+            "        }",
+            "    }",
+        ])
+        if spec.no_result_default is not None:
+            lines.append("    if count == 0 {")
+            lines.append(f"        return {spec.no_result_default};")
+            lines.append("    }")
+        lines.append("    count")
+        lines.append("}")
+    else:
+        lines = [
+            f"fn {func_name}({var}: &[i64]) -> i64 {{",
+            "    use std::collections::HashSet;",
+            *preprocess,
+        ]
+        if spec.short_list_default is not None:
+            lines.append(f"    if {var}.len() < 2 {{")
+            lines.append(f"        return {spec.short_list_default};")
+            lines.append("    }")
+        lines.extend([
+            "    let mut seen_pairs: HashSet<(i64, i64)> = HashSet::new();",
+            f"    for i in 0..{var}.len() {{",
+            f"        for j in (i + 1)..{var}.len() {{",
+            f"            if {var}[i] + {var}[j] == {spec.target} {{",
+            f"                seen_pairs.insert(({var}[i].min({var}[j]), {var}[i].max({var}[j])));",
+            "            }",
+            "        }",
+            "    }",
+        ])
+        if spec.no_result_default is not None:
+            lines.append("    if seen_pairs.is_empty() {")
+            lines.append(f"        return {spec.no_result_default};")
+            lines.append("    }")
+        lines.append("    seen_pairs.len() as i64")
+        lines.append("}")
+    return "\n".join(lines)
+
+
+def _render_max_window_sum(
+    spec: MaxWindowSumSpec, func_name: str = "f", var: str = "xs"
+) -> str:
+    preprocess = _render_preprocess_rust(spec, var)
+
+    lines = [
+        f"fn {func_name}({var}: &[i64]) -> i64 {{",
+        *preprocess,
+    ]
+    if spec.empty_default is not None:
+        lines.append(f"    if {var}.is_empty() {{")
+        lines.append(f"        return {spec.empty_default};")
+        lines.append("    }")
+    lines.extend([
+        f"    if {var}.len() < {spec.k} {{",
+        f"        return {spec.invalid_k_default};",
+        "    }",
+        "    let mut window_sum: i64 = 0;",
+        f"    for i in 0..{spec.k} {{",
+        f"        window_sum += {var}[i];",
+        "    }",
+        "    let mut max_sum = window_sum;",
+        f"    for i in {spec.k}..{var}.len() {{",
+        f"        window_sum = window_sum - {var}[i - {spec.k}] + {var}[i];",
+        "        max_sum = max_sum.max(window_sum);",
+        "    }",
+        "    max_sum",
+        "}",
+    ])
+    return "\n".join(lines)
+
+
+def render_simple_algorithms(
+    spec: SimpleAlgorithmsSpec, func_name: str = "f", var: str = "xs"
+) -> str:
+    """Render a simple algorithms spec as a Rust function."""
+    match spec:
+        case MostFrequentSpec():
+            return _render_most_frequent(spec, func_name, var)
+        case CountPairsSumSpec():
+            return _render_count_pairs_sum(spec, func_name, var)
+        case MaxWindowSumSpec():
+            return _render_max_window_sum(spec, func_name, var)
+        case _:
+            raise ValueError(f"Unknown simple algorithms spec: {spec}")

@@ -127,6 +127,25 @@ class TestGenerate:
         assert result.exit_code == 1
         assert "Unknown family" in result.output
 
+    def test_generate_rust_language(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+                "--language",
+                "rust",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert output.exists()
 
 
 class TestSplit:
