@@ -17,6 +17,7 @@ from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.core.transforms import TransformType
 from genfxn.simple_algorithms.models import (
+    CountingMode,
     SimpleAlgorithmsAxes,
 )
 from genfxn.simple_algorithms.models import TemplateType as SATemplateType
@@ -366,6 +367,14 @@ def _pool_axes_simple_algorithms_d3(rng: random.Random) -> SimpleAlgorithmsAxes:
             axes_kwargs["target_range"] = (-50, -1)
         elif sign == "zero":
             axes_kwargs["target_range"] = (0, 0)
+            # Without extra edge defaults, zero/all_indices remains D2 and
+            # the D3 pool collapses to one unique zero candidate.
+            axes_kwargs["counting_modes"] = [
+                CountingMode.ALL_INDICES,
+                CountingMode.UNIQUE_VALUES,
+            ]
+            axes_kwargs["no_result_default_range"] = (-10, 10)
+            axes_kwargs["short_list_default_range"] = (-5, 5)
         else:
             axes_kwargs["target_range"] = (1, 50)
     else:

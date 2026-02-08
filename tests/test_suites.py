@@ -4,7 +4,12 @@ import random
 
 import pytest
 
-from genfxn.simple_algorithms.models import TemplateType as SATemplateType
+from genfxn.simple_algorithms.models import (
+    CountingMode,
+)
+from genfxn.simple_algorithms.models import (
+    TemplateType as SATemplateType,
+)
 from genfxn.suites.features import (
     simple_algorithms_features,
     stateful_features,
@@ -13,6 +18,7 @@ from genfxn.suites.features import (
 from genfxn.suites.generate import (
     Candidate,
     PoolStats,
+    _pool_axes_simple_algorithms_d3,
     _pool_axes_simple_algorithms_d4,
     generate_pool,
     generate_suite,
@@ -445,6 +451,22 @@ class _FixedChoiceRng:
         self._idx += 1
         assert picked in options, f"{picked!r} not in {options!r}"
         return picked
+
+
+class TestSimpleAlgorithmsD3PoolAxes:
+    def test_zero_target_enables_both_edge_defaults(self) -> None:
+        rng = _FixedChoiceRng([SATemplateType.COUNT_PAIRS_SUM, "zero"])
+
+        axes = _pool_axes_simple_algorithms_d3(rng)
+
+        assert axes.templates == [SATemplateType.COUNT_PAIRS_SUM]
+        assert axes.target_range == (0, 0)
+        assert axes.counting_modes == [
+            CountingMode.ALL_INDICES,
+            CountingMode.UNIQUE_VALUES,
+        ]
+        assert axes.no_result_default_range == (-10, 10)
+        assert axes.short_list_default_range == (-5, 5)
 
 
 class TestSimpleAlgorithmsD4PoolAxes:
