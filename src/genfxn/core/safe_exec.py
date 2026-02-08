@@ -87,7 +87,6 @@ def _validate_untrusted_code(code: str) -> None:
     )
 
     errors: list[str] = []
-    saw_f = False
     for stmt in tree.body:
         if (
             isinstance(stmt, ast.Expr)
@@ -100,9 +99,6 @@ def _validate_untrusted_code(code: str) -> None:
                 "Top-level statements are limited to function definitions"
             )
             continue
-        if stmt.name == "f":
-            saw_f = True
-
     for node in ast.walk(tree):
         if isinstance(node, blocked_nodes):
             errors.append(f"Disallowed syntax node: {type(node).__name__}")
@@ -131,9 +127,6 @@ def _validate_untrusted_code(code: str) -> None:
                 node.func.attr in blocked_attrs
             ):
                 errors.append(f"Disallowed call attribute: {node.func.attr}")
-
-    if not saw_f:
-        errors.append("Code must define a top-level function named 'f'")
 
     if errors:
         unique = list(dict.fromkeys(errors))
