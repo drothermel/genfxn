@@ -254,23 +254,6 @@ result = split_tasks(tasks, holdouts)
 # result.train, result.test
 ```
 
-## Viewer
-
-Web UI for browsing generated tasks.
-
-```bash
-# Generate tasks
-genfxn generate -o tasks.jsonl -n 50
-
-# Start backend
-cd viewer/backend && uv run viewer-api ../../tasks.jsonl --port 8000
-
-# Start frontend (separate terminal)
-cd viewer/frontend && bun dev
-```
-
-Open [http://localhost:5173](http://localhost:5173)
-
 ## CLI Reference
 
 ```bash
