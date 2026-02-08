@@ -2,8 +2,13 @@ import random
 
 import pytest
 
-from genfxn.core.predicates import PredicateGt, PredicateModEq
-from genfxn.core.transforms import TransformNegate, TransformShift
+from genfxn.core.models import QueryTag
+from genfxn.core.predicates import PredicateGt, PredicateModEq, PredicateType
+from genfxn.core.transforms import (
+    TransformNegate,
+    TransformShift,
+    TransformType,
+)
 from genfxn.simple_algorithms.eval import (
     eval_count_pairs_sum,
     eval_max_window_sum,
@@ -278,6 +283,70 @@ class TestQueryGeneration:
         inputs = [q.input for q in queries]
         assert [] in inputs
 
+    def test_max_window_empty_query_uses_empty_default_when_set(self) -> None:
+        spec = MaxWindowSumSpec(k=3, invalid_k_default=-1, empty_default=-99)
+        axes = SimpleAlgorithmsAxes()
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        empty_queries = [q for q in queries if q.input == []]
+        assert empty_queries
+        assert empty_queries[0].output == eval_simple_algorithms(spec, [])
+
+    def test_max_window_queries_respect_list_length_upper_bound(self) -> None:
+        spec = MaxWindowSumSpec(k=3, invalid_k_default=-1)
+        axes = SimpleAlgorithmsAxes(list_length_range=(1, 3), window_size_range=(1, 3))
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        assert queries
+        assert all(len(q.input) <= axes.list_length_range[1] for q in queries)
+
+    def test_max_window_k_minus_one_query_uses_eval_with_empty_default(self) -> None:
+        spec = MaxWindowSumSpec(
+            k=3,
+            invalid_k_default=-1,
+            empty_default=-99,
+            pre_filter=PredicateGt(value=100),
+            pre_transform=TransformShift(offset=1),
+        )
+        axes = SimpleAlgorithmsAxes()
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        k_minus_one_queries = [
+            q
+            for q in queries
+            if len(q.input) == spec.k - 1 and q.tag == QueryTag.BOUNDARY
+        ]
+        assert k_minus_one_queries
+        for q in k_minus_one_queries:
+            assert q.output == eval_simple_algorithms(spec, q.input)
+            assert q.output == -99
+
+    def test_count_pairs_no_pairs_query_has_no_valid_pair(self) -> None:
+        spec = CountPairsSumSpec(target=10, counting_mode=CountingMode.ALL_INDICES)
+        axes = SimpleAlgorithmsAxes(
+            value_range=(0, 15),
+            list_length_range=(2, 5),
+            window_size_range=(1, 5),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        no_pair_queries = [
+            q
+            for q in queries
+            if q.tag == QueryTag.TYPICAL and eval_count_pairs_sum(spec, q.input) == 0
+        ]
+        assert no_pair_queries
+        for q in no_pair_queries:
+            assert all(
+                q.input[i] + q.input[j] != spec.target
+                for i in range(len(q.input))
+                for j in range(i + 1, len(q.input))
+            )
+
 
 class TestAxesValidation:
     def test_invalid_value_range(self) -> None:
@@ -292,9 +361,49 @@ class TestAxesValidation:
         with pytest.raises(ValueError, match=r"window_size_range.*>= 1"):
             SimpleAlgorithmsAxes(window_size_range=(0, 5))
 
+    def test_window_size_high_cannot_exceed_list_length_high(self) -> None:
+        with pytest.raises(
+            ValueError, match=r"window_size_range: high .*<= list_length_range high"
+        ):
+            SimpleAlgorithmsAxes(
+                list_length_range=(1, 3), window_size_range=(1, 5)
+            )
+
     def test_empty_templates(self) -> None:
         with pytest.raises(ValueError, match="templates must not be empty"):
             SimpleAlgorithmsAxes(templates=[])
+
+    def test_empty_pre_filter_types(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_filter_types must not be empty"
+        ):
+            SimpleAlgorithmsAxes(pre_filter_types=[])
+
+    def test_empty_pre_transform_types(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_transform_types must not be empty"
+        ):
+            SimpleAlgorithmsAxes(pre_transform_types=[])
+
+    def test_non_empty_preprocess_type_lists(self) -> None:
+        axes = SimpleAlgorithmsAxes(
+            pre_filter_types=[PredicateType.MOD_EQ],
+            pre_transform_types=[TransformType.SHIFT],
+        )
+        assert axes.pre_filter_types == [PredicateType.MOD_EQ]
+        assert axes.pre_transform_types == [TransformType.SHIFT]
+
+    def test_unsupported_pre_filter_type(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_filter_types contains unsupported"
+        ):
+            SimpleAlgorithmsAxes(pre_filter_types=[PredicateType.IN_SET])
+
+    def test_unsupported_pre_transform_type(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_transform_types contains unsupported"
+        ):
+            SimpleAlgorithmsAxes(pre_transform_types=[TransformType.CLIP])
 
 
 class TestTaskGeneration:

@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.models import QueryTag
 from genfxn.core.predicates import (
     PredicateEven,
     PredicateGt,
@@ -34,7 +35,7 @@ from genfxn.stateful.models import (
 )
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stateful.render import render_stateful
-from genfxn.stateful.sampler import sample_stateful_spec
+from genfxn.stateful.sampler import sample_predicate, sample_stateful_spec
 from genfxn.stateful.task import generate_stateful_task
 
 
@@ -177,6 +178,27 @@ class TestQueryGeneration:
         inputs = [q.input for q in queries]
         assert [] in inputs
 
+    def test_unsatisfiable_predicate_skips_boundary_queries(self) -> None:
+        spec = LongestRunSpec(match_predicate=PredicateLt(value=-100))
+        axes = StatefulAxes(value_range=(0, 10))
+        queries = generate_stateful_queries(spec, axes, random.Random(42))
+        assert not any(q.tag == QueryTag.BOUNDARY for q in queries)
+
+    def test_boundary_and_adversarial_queries_respect_small_length_range(
+        self,
+    ) -> None:
+        spec = LongestRunSpec(match_predicate=PredicateEven())
+        axes = StatefulAxes(list_length_range=(1, 3), value_range=(0, 10))
+        queries = generate_stateful_queries(spec, axes, random.Random(42))
+        lo, hi = axes.list_length_range
+        constrained = [
+            q
+            for q in queries
+            if q.tag in (QueryTag.BOUNDARY, QueryTag.ADVERSARIAL)
+        ]
+        assert constrained
+        assert all(lo <= len(q.input) <= hi for q in constrained)
+
 
 class TestRender:
     def test_render_conditional_linear_sum(self) -> None:
@@ -303,6 +325,42 @@ class TestAxesValidation:
     def test_negative_divisor(self) -> None:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(-1, 5))
+
+    def test_min_composed_operands_rejected_for_and_or(self) -> None:
+        with pytest.raises(ValueError, match=r"min_composed_operands.*<= 3"):
+            StatefulAxes(
+                predicate_types=[PredicateType.AND],
+                min_composed_operands=4,
+            )
+
+    def test_min_composed_operands_allowed_when_not_used(self) -> None:
+        axes = StatefulAxes(
+            predicate_types=[PredicateType.EVEN],
+            min_composed_operands=5,
+        )
+        assert axes.min_composed_operands == 5
+
+
+class TestSamplerGuards:
+    def test_and_rejects_unsupported_min_operands(self) -> None:
+        with pytest.raises(ValueError, match=r"AND requires min_operands <= 3"):
+            sample_predicate(
+                PredicateType.AND,
+                threshold_range=(-5, 5),
+                divisor_range=(2, 5),
+                rng=random.Random(42),
+                min_operands=4,
+            )
+
+    def test_or_rejects_unsupported_min_operands(self) -> None:
+        with pytest.raises(ValueError, match=r"OR requires min_operands <= 3"):
+            sample_predicate(
+                PredicateType.OR,
+                threshold_range=(-5, 5),
+                divisor_range=(2, 5),
+                rng=random.Random(42),
+                min_operands=4,
+            )
 
 
 class TestTaskGeneration:

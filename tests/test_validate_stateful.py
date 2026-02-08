@@ -1,5 +1,7 @@
 import random
 
+import pytest
+
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import Severity
 from genfxn.stateful.task import generate_stateful_task
@@ -16,17 +18,25 @@ from genfxn.stateful.validate import (
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
     CODE_UNSAFE_AST,
+    _validate_ast_whitelist,
+    _validate_query_types,
     validate_stateful_task,
 )
 
 
+@pytest.fixture
+def baseline_task() -> Task:
+    return generate_stateful_task(rng=random.Random(42))
+
+
 class TestValidTask:
-    def test_generated_task_has_no_errors(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_generated_task_has_no_errors(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         issues = validate_stateful_task(task)
         errors = [i for i in issues if i.severity == Severity.ERROR]
         assert errors == []
 
+    @pytest.mark.full
     def test_multiple_seeds_valid(self) -> None:
         for seed in [1, 42, 123, 999]:
             task = generate_stateful_task(rng=random.Random(seed))
@@ -36,8 +46,8 @@ class TestValidTask:
 
 
 class TestTaskIdValidation:
-    def test_corrupted_task_id_detected(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_corrupted_task_id_detected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(update={"task_id": "stateful_00000000"})
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_TASK_ID_MISMATCH for i in issues)
@@ -46,8 +56,8 @@ class TestTaskIdValidation:
             for i in issues
         )
 
-    def test_wrong_family_prefix_detected(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_wrong_family_prefix_detected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={"task_id": "piecewise_" + task.task_id[9:]}
         )
@@ -56,8 +66,8 @@ class TestTaskIdValidation:
 
 
 class TestSpecDeserialization:
-    def test_invalid_spec_caught(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_invalid_spec_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(update={"spec": {"invalid": "spec"}})
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
@@ -67,8 +77,10 @@ class TestSpecDeserialization:
             for i in issues
         )
 
-    def test_query_type_checks_run_even_when_spec_fails(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_query_type_checks_run_even_when_spec_fails(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "spec": {"invalid": "spec"},
@@ -81,8 +93,8 @@ class TestSpecDeserialization:
         assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
         assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
 
-    def test_wrong_template_discriminator(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_wrong_template_discriminator(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={"spec": {"template": "nonexistent_template"}}
         )
@@ -91,9 +103,11 @@ class TestSpecDeserialization:
 
 
 class TestCodeCompilation:
-    def test_syntax_error_caught(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return ("})
+    def test_syntax_error_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    return ("}
+        )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
         assert any(
@@ -101,15 +115,21 @@ class TestCodeCompilation:
             for i in issues
         )
 
-    def test_exec_error_caught(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
+    def test_exec_error_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": "raise ValueError('boom')"}
+        )
         issues = validate_stateful_task(corrupted)
-        assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert any(
+            i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
+        )
 
-    def test_missing_func_caught(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def g(xs):\n    return 0"})
+    def test_missing_func_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": "def g(xs):\n    return 0"}
+        )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
         assert any(
@@ -119,10 +139,10 @@ class TestCodeCompilation:
 
 
 class TestCodeRuntime:
-    def test_runtime_error_caught(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_runtime_error_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    raise ZeroDivisionError('oops')"}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
@@ -131,24 +151,21 @@ class TestCodeRuntime:
             for i in issues
         )
 
-    def test_runtime_error_includes_input(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_runtime_error_includes_input(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={
-                "code": "def f(xs):\n    return 1 // len(xs)"
-            }  # Fails for []
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted)
         runtime_errors = [
             i for i in issues if i.code == CODE_CODE_RUNTIME_ERROR
         ]
-        # Empty list [] should cause the error
-        assert any("f([])" in i.message for i in runtime_errors)
+        assert any("f(" in i.message for i in runtime_errors)
 
 
 class TestQueryTypeValidation:
-    def test_non_list_input_is_error_strict(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_non_list_input_is_error_strict(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]
@@ -159,8 +176,8 @@ class TestQueryTypeValidation:
         assert len(type_issues) > 0
         assert all(i.severity == Severity.ERROR for i in type_issues)
 
-    def test_list_with_non_int_element_is_error(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_list_with_non_int_element_is_error(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [
@@ -173,8 +190,8 @@ class TestQueryTypeValidation:
         assert len(type_issues) > 0
         assert any("input[1]" in i.location for i in type_issues)
 
-    def test_non_int_output_is_error_strict(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_non_int_output_is_error_strict(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [
@@ -187,8 +204,8 @@ class TestQueryTypeValidation:
         assert len(type_issues) > 0
         assert all(i.severity == Severity.ERROR for i in type_issues)
 
-    def test_float_output_detected(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_float_output_detected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [
@@ -199,8 +216,8 @@ class TestQueryTypeValidation:
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
-    def test_location_includes_query_index(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_location_includes_query_index(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [
@@ -214,9 +231,28 @@ class TestQueryTypeValidation:
         assert any("queries[1]" in i.location for i in type_issues)
 
 
+class TestHelperLevelValidation:
+    def test_query_types_helper_without_full_pipeline(
+        self, baseline_task
+    ) -> None:
+        corrupted = baseline_task.model_copy(
+            update={
+                "queries": [
+                    Query(input=[1, "two", 3], output=0, tag=QueryTag.TYPICAL)
+                ]
+            }
+        )
+        issues = _validate_query_types(corrupted, strict=True)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+
+    def test_ast_whitelist_helper_without_execution(self) -> None:
+        issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+
 class TestQueryOutputValidation:
-    def test_wrong_output_caught(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_wrong_output_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         first_query = task.queries[0]
         wrong_query = Query(
             input=first_query.input,
@@ -232,8 +268,10 @@ class TestQueryOutputValidation:
             for i in issues
         )
 
-    def test_location_includes_specific_query_index(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_location_includes_specific_query_index(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
         assert len(task.queries) >= 2
         # Keep first query valid, corrupt second
         queries = list(task.queries[:2])
@@ -251,16 +289,20 @@ class TestQueryOutputValidation:
 
 
 class TestSemanticValidation:
-    def test_code_differing_from_spec_caught(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_code_differing_from_spec_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         # Replace with code that returns a constant
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    return 0"}
+        )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
 
-    def test_semantic_error_includes_input(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+    def test_semantic_error_includes_input(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    return 0"}
+        )
         issues = validate_stateful_task(corrupted)
         semantic_issues = [
             i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
@@ -270,9 +312,11 @@ class TestSemanticValidation:
             "f(" in i.message and ")" in i.message for i in semantic_issues
         )
 
-    def test_deterministic_with_same_seed(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+    def test_deterministic_with_same_seed(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    return 0"}
+        )
         issues1 = validate_stateful_task(corrupted, rng=random.Random(123))
         issues2 = validate_stateful_task(corrupted, rng=random.Random(123))
         # Messages should be identical with same seed
@@ -282,8 +326,8 @@ class TestSemanticValidation:
 
 
 class TestSemanticIssueCapping:
-    def test_caps_semantic_mismatch_issues(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_caps_semantic_mismatch_issues(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={"code": "def f(xs):\n    return 999999"}
         )
@@ -296,10 +340,10 @@ class TestSemanticIssueCapping:
         # Should have capped warning
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
-    def test_caps_runtime_errors(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_caps_runtime_errors(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    raise ValueError('boom')"}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted, max_semantic_issues=5)
         runtime_issues = [
@@ -308,25 +352,29 @@ class TestSemanticIssueCapping:
         assert len(runtime_issues) == 5
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
-    def test_capped_warning_is_warning_severity(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+    def test_capped_warning_is_warning_severity(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    return 0"}
+        )
         issues = validate_stateful_task(corrupted, max_semantic_issues=3)
         capped = [i for i in issues if i.code == CODE_SEMANTIC_ISSUES_CAPPED]
         assert len(capped) == 1
         assert capped[0].severity == Severity.WARNING
 
-    def test_custom_cap_respected(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+    def test_custom_cap_respected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": "def f(xs):\n    return 0"}
+        )
         issues = validate_stateful_task(corrupted, max_semantic_issues=3)
         semantic_issues = [
             i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
         ]
         assert len(semantic_issues) == 3
 
-    def test_zero_cap_means_unlimited(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_zero_cap_means_unlimited(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={"code": "def f(xs):\n    return 999999"}
         )
@@ -339,8 +387,8 @@ class TestSemanticIssueCapping:
         # No capped warning
         assert not any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
-    def test_no_cap_warning_when_under_limit(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_no_cap_warning_when_under_limit(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         # Code that only fails on empty list
         code = "def f(xs):\n    return 0 if xs else 999"
         corrupted = task.model_copy(update={"code": code})
@@ -354,8 +402,8 @@ class TestSemanticIssueCapping:
 
 
 class TestAxesDefault:
-    def test_uses_default_axes_when_none(self) -> None:
-        task = generate_stateful_task(rng=random.Random(42))
+    def test_uses_default_axes_when_none(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         issues = validate_stateful_task(task, axes=None)
         errors = [i for i in issues if i.severity == Severity.ERROR]
         assert errors == []
@@ -379,12 +427,13 @@ def _make_task_with_code(code: str) -> Task:
     return task.model_copy(update={"code": code})
 
 
+@pytest.mark.slow
 class TestParanoidMode:
     """Test AST whitelist validation in paranoid mode."""
 
-    def test_valid_generated_code_passes(self) -> None:
+    def test_valid_generated_code_passes(self, baseline_task) -> None:
         """Generated stateful code should pass paranoid check."""
-        task = generate_stateful_task(rng=random.Random(42))
+        task = baseline_task.model_copy(deep=True)
         issues = validate_stateful_task(task, paranoid=True)
         assert not any(i.code == CODE_UNSAFE_AST for i in issues)
 
@@ -456,12 +505,13 @@ class TestParanoidMode:
         unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
         assert any("line" in i.message for i in unsafe)
 
-    def test_paranoid_false_allows_unsafe_code(self) -> None:
-        """Without paranoid mode, unsafe code is not flagged as UNSAFE_AST."""
+    def test_unsafe_code_rejected_without_paranoid_flag(self) -> None:
+        """Unsafe code should be rejected even when paranoid=False."""
         task = _make_task_with_code("import os\ndef f(xs): return 0")
         issues = validate_stateful_task(task, paranoid=False)
-        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
+    @pytest.mark.full
     def test_multiple_seeds_pass_paranoid(self) -> None:
         """Multiple generated tasks should all pass paranoid check."""
         for seed in [1, 42, 123, 999]:

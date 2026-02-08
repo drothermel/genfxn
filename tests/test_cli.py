@@ -49,6 +49,37 @@ class TestGenerate:
         expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
         assert families == expected
 
+    def test_generate_all_distributes_remainder_fairly(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "all",
+                "-n",
+                "6",
+                "-s",
+                "42",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        counts: dict[str, int] = {}
+        for task in tasks:
+            fam = cast(str, task["family"])
+            counts[fam] = counts.get(fam, 0) + 1
+
+        assert counts == {
+            "piecewise": 2,
+            "stateful": 2,
+            "simple_algorithms": 1,
+            "stringrules": 1,
+        }
+
     def test_generate_with_seed(self, tmp_path) -> None:
         output1 = tmp_path / "tasks1.jsonl"
         output2 = tmp_path / "tasks2.jsonl"
@@ -95,6 +126,7 @@ class TestGenerate:
 
         assert result.exit_code == 1
         assert "Unknown family" in result.output
+
 
 
 class TestSplit:
@@ -193,6 +225,230 @@ class TestSplit:
             val = int(t["spec"]["branches"][0]["condition"]["value"])
             assert -10 <= val <= 10
 
+    def test_split_range_rejects_reversed_bounds(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "piecewise",
+                "-n",
+                "5",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "branches.0.condition.value",
+                "--holdout-value",
+                "10,-10",
+                "--holdout-type",
+                "range",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "low must be <= high" in result.output
+
+    def test_split_exact_parses_numeric_holdout_value(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "piecewise",
+                "-n",
+                "20",
+                "-s",
+                "42",
+            ],
+        )
+
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(input_file)))
+        holdout_value = tasks[0]["spec"]["branches"][0]["condition"]["value"]
+        holdout_value_str = str(holdout_value)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "branches.0.condition.value",
+                "--holdout-value",
+                holdout_value_str,
+            ],
+        )
+
+        assert result.exit_code == 0
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert len(test) > 0
+        assert all(
+            t["spec"]["branches"][0]["condition"]["value"] == holdout_value
+            for t in test
+        )
+
+    def test_split_exact_parses_bool_holdout_value(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"flag": True},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "Task with true flag",
+            },
+            {
+                "task_id": "task-2",
+                "family": "stateful",
+                "spec": {"flag": False},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "Task with false flag",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "flag",
+                "--holdout-value",
+                "true",
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+
+        assert len(test) == 1
+        assert test[0]["spec"]["flag"] is True
+        assert len(train) == 1
+        assert train[0]["spec"]["flag"] is False
+
+    def test_split_invalid_holdout_type_has_clean_error(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "5",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "template",
+                "--holdout-value",
+                "longest_run",
+                "--holdout-type",
+                "bogus",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Invalid value for '--holdout-type'" in result.output
+        assert "Traceback" not in result.output
+
+    def test_split_case_mismatched_holdout_type_has_clean_error(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "5",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "template",
+                "--holdout-value",
+                "longest_run",
+                "--holdout-type",
+                "Exact",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Invalid value for '--holdout-type'" in result.output
+        assert "Traceback" not in result.output
+
     def test_split_random_ratio_accepts_zero_and_one(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"
@@ -254,6 +510,123 @@ class TestSplit:
         test_1 = list(srsly.read_jsonl(test_file))
         assert len(train_1) == 10
         assert len(test_1) == 0
+
+    def test_split_random_ratio_seed_is_deterministic(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file_1 = tmp_path / "train1.jsonl"
+        test_file_1 = tmp_path / "test1.jsonl"
+        train_file_2 = tmp_path / "train2.jsonl"
+        test_file_2 = tmp_path / "test2.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "20",
+                "-s",
+                "42",
+            ],
+        )
+
+        result_1 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file_1),
+                "--test",
+                str(test_file_1),
+                "--random-ratio",
+                "0.5",
+                "--seed",
+                "123",
+            ],
+        )
+        result_2 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file_2),
+                "--test",
+                str(test_file_2),
+                "--random-ratio",
+                "0.5",
+                "--seed",
+                "123",
+            ],
+        )
+
+        assert result_1.exit_code == 0
+        assert result_2.exit_code == 0
+        train_1 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(train_file_1))
+        )
+        train_2 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(train_file_2))
+        )
+        test_1 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(test_file_1))
+        )
+        test_2 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(test_file_2))
+        )
+
+        assert len(train_1) == 10
+        assert len(test_1) == 10
+        assert [t["task_id"] for t in train_1] == [
+            t["task_id"] for t in train_2
+        ]
+        assert [t["task_id"] for t in test_1] == [t["task_id"] for t in test_2]
+
+    def test_split_random_ratio_uses_floor_count(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "7",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0.4",
+                "--seed",
+                "123",
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert len(train) == 2
+        assert len(test) == 5
 
 
 class TestInfo:

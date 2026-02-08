@@ -1,12 +1,16 @@
 import ast
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 from pydantic import ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
 from genfxn.core.predicates import get_threshold
+from genfxn.core.safe_exec import (
+    SafeExecMissingFunctionError,
+    execute_code_restricted,
+)
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.piecewise.ast_safety import ALLOWED_AST_NODES, ALLOWED_CALL_NAMES
 from genfxn.piecewise.eval import eval_piecewise
@@ -24,11 +28,14 @@ CODE_QUERY_OUTPUT_TYPE = "QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "QUERY_OUTPUT_MISMATCH"
 CODE_SEMANTIC_MISMATCH = "SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "SEMANTIC_ISSUES_CAPPED"
+CODE_SEMANTIC_RANGE_SAMPLED = "SEMANTIC_RANGE_SAMPLED"
 CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
 CODE_UNSUPPORTED_CONDITION = "UNSUPPORTED_CONDITION"
 CODE_UNSAFE_AST = "UNSAFE_AST"
 CURRENT_FAMILY = "piecewise"
+_ALLOWED_BUILTINS = {"abs": abs, "int": int}
+SEMANTIC_SAMPLE_MAX_POINTS = 1000
 
 
 def _validate_ast_whitelist(
@@ -177,9 +184,19 @@ def _validate_code_compile(
             )
         ], None
 
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, object]
     try:
-        exec(task.code, namespace)  # noqa: S102
+        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+    except SafeExecMissingFunctionError as e:
+        return [
+            Issue(
+                code=CODE_CODE_MISSING_FUNC,
+                severity=Severity.ERROR,
+                message=f"Failed to execute code: {e}",
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
     except Exception as e:
         return [
             Issue(
@@ -283,8 +300,30 @@ def _validate_semantics(
 ) -> list[Issue]:
     issues: list[Issue] = []
     lo, hi = value_range
+    total_points = hi - lo + 1
+    if total_points <= SEMANTIC_SAMPLE_MAX_POINTS:
+        sampled_points = list(range(lo, hi + 1))
+    else:
+        span = hi - lo
+        sampled_points = [
+            lo + (span * i) // (SEMANTIC_SAMPLE_MAX_POINTS - 1)
+            for i in range(SEMANTIC_SAMPLE_MAX_POINTS)
+        ]
+        issues.append(
+            Issue(
+                code=CODE_SEMANTIC_RANGE_SAMPLED,
+                severity=Severity.WARNING,
+                message=(
+                    "Semantic validation sampled "
+                    f"{SEMANTIC_SAMPLE_MAX_POINTS} of {total_points} points "
+                    f"across range [{lo}, {hi}]"
+                ),
+                location="code",
+                task_id=task.task_id,
+            )
+        )
 
-    for x in range(lo, hi + 1):
+    for x in sampled_points:
         if max_issues > 0 and len(issues) >= max_issues:
             issues.append(
                 Issue(
@@ -378,6 +417,7 @@ def validate_piecewise_task(
         ]
     if value_range is None:
         value_range = PiecewiseAxes().value_range
+    _ = paranoid
 
     issues: list[Issue] = []
 
@@ -389,11 +429,10 @@ def validate_piecewise_task(
     if spec is not None:
         issues.extend(_validate_condition_support(task, spec))
 
-    if paranoid:
-        ast_issues, _ = _validate_ast_whitelist(task.code)
-        if ast_issues:
-            issues.extend(ast_issues)
-            return issues  # Bail early, don't exec unsafe code
+    ast_issues, _ = _validate_ast_whitelist(task.code)
+    if ast_issues:
+        issues.extend(ast_issues)
+        return issues  # Bail early, don't exec unsafe code
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)
@@ -404,11 +443,16 @@ def validate_piecewise_task(
         issues.extend(_validate_query_outputs(task, spec))
 
     if spec is not None and func is not None:
-        issues.extend(
-            _validate_semantics(
-                task, func, spec, value_range, max_semantic_issues
+        try:
+            issues.extend(
+                _validate_semantics(
+                    task, func, spec, value_range, max_semantic_issues
+                )
             )
-        )
+        finally:
+            close = getattr(func, "close", None)
+            if callable(close):
+                close()
 
     if spec is not None and emit_diagnostics:
         issues.extend(_check_monotonic_thresholds(task, spec))

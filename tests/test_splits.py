@@ -13,6 +13,7 @@ def _make_task(task_id: str, spec: dict) -> Task:
         spec=spec,
         code="def f(): pass",
         queries=[Query(input=0, output=0, tag=QueryTag.TYPICAL)],
+        description="test task",
     )
 
 
@@ -418,3 +419,21 @@ class TestRandomSplit:
         original_first_40_ids = {f"t{i}" for i in range(40)}
         train_ids = {t.task_id for t in result.train}
         assert train_ids != original_first_40_ids
+
+    def test_contains_holdout_non_iterable_value_does_not_raise(self) -> None:
+        tasks = [
+            _make_task("t1", {"threshold": 5}),
+            _make_task("t2", {"threshold": 15}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="threshold",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value=1,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+
+        assert [t.task_id for t in result.train] == ["t1", "t2"]
+        assert result.test == []

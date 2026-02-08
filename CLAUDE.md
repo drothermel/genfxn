@@ -1,30 +1,5 @@
 # genfxn Project Instructions
 
-## Viewer API Paths
-
-Backend runs on `http://127.0.0.1:8000`
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/tasks` | GET | List all tasks. Optional `?family=` filter |
-| `/api/tasks/{task_id}` | GET | Get single task by ID |
-| `/api/families` | GET | List available task families |
-
-## Running the Viewer
-
-```bash
-# Generate test data
-uv run genfxn generate -f all -n 20 -o /tmp/viewer.jsonl
-
-# Start backend (from viewer/backend)
-cd viewer/backend && uv run viewer-api /tmp/viewer.jsonl
-
-# Start frontend (from viewer/frontend)
-cd viewer/frontend && bun dev
-```
-
-Frontend runs on `http://localhost:5173` (or next available port).
-
 ## Task Families
 
 - `piecewise` - Piecewise functions with branches

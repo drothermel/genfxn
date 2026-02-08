@@ -1,6 +1,7 @@
 import random
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.query_utils import find_satisfying
 from genfxn.core.predicates import (
     Predicate,
     PredicateAnd,
@@ -40,80 +41,84 @@ def _get_predicate_info(spec: StatefulSpec) -> Predicate:
 
 def _make_matching_value(
     pred, value_range: tuple[int, int], rng: random.Random
-) -> int:
+) -> int | None:
     lo, hi = value_range
-
-    def clamp(x: int) -> int:
-        return max(lo, min(x, hi))
 
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
-            return rng.choice(candidates) if candidates else lo
+            return rng.choice(candidates) if candidates else None
         case PredicateOdd():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else clamp(lo + 1)
+            return rng.choice(candidates) if candidates else None
         case PredicateLt(value=v):
-            return rng.randint(lo, min(v - 1, hi)) if lo <= v - 1 else lo
+            if lo <= v - 1:
+                return rng.randint(lo, min(v - 1, hi))
+            return None
         case PredicateLe(value=v):
-            return rng.randint(lo, min(v, hi)) if lo <= v else lo
+            if lo <= v:
+                return rng.randint(lo, min(v, hi))
+            return None
         case PredicateGt(value=v):
-            return rng.randint(max(v + 1, lo), hi) if v + 1 <= hi else hi
+            if v + 1 <= hi:
+                return rng.randint(max(v + 1, lo), hi)
+            return None
         case PredicateGe(value=v):
-            return rng.randint(max(v, lo), hi) if v <= hi else hi
+            if v <= hi:
+                return rng.randint(max(v, lo), hi)
+            return None
         case PredicateModEq(divisor=d, remainder=r):
             candidates = [x for x in range(lo, hi + 1) if x % d == r]
             if candidates:
                 return rng.choice(candidates)
-            # Compute smallest value >= lo congruent to r mod d, then clamp
-            base = lo + ((r - lo) % d)
-            return clamp(base)
+            return None
         case PredicateNot() | PredicateAnd() | PredicateOr():
-            for _ in range(100):
-                v = rng.randint(lo, hi)
-                if eval_predicate(pred, v):
-                    return v
-            return rng.randint(lo, hi)
+            return find_satisfying(
+                lambda: rng.randint(lo, hi),
+                lambda v: eval_predicate(pred, v),
+            )
         case _:
             return rng.randint(lo, hi)
 
 
 def _make_non_matching_value(
     pred, value_range: tuple[int, int], rng: random.Random
-) -> int:
+) -> int | None:
     lo, hi = value_range
-
-    def clamp(x: int) -> int:
-        return max(lo, min(x, hi))
 
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else clamp(lo + 1)
+            return rng.choice(candidates) if candidates else None
         case PredicateOdd():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
-            return rng.choice(candidates) if candidates else lo
+            return rng.choice(candidates) if candidates else None
         case PredicateLt(value=v):
-            return rng.randint(max(v, lo), hi) if v <= hi else hi
+            if v <= hi:
+                return rng.randint(max(v, lo), hi)
+            return None
         case PredicateLe(value=v):
-            return rng.randint(max(v + 1, lo), hi) if v + 1 <= hi else hi
+            if v + 1 <= hi:
+                return rng.randint(max(v + 1, lo), hi)
+            return None
         case PredicateGt(value=v):
-            return rng.randint(lo, min(v, hi)) if lo <= v else lo
+            if lo <= v:
+                return rng.randint(lo, min(v, hi))
+            return None
         case PredicateGe(value=v):
-            return rng.randint(lo, min(v - 1, hi)) if lo <= v - 1 else lo
+            if lo <= v - 1:
+                return rng.randint(lo, min(v - 1, hi))
+            return None
         case PredicateModEq(divisor=d, remainder=r):
             candidates = [x for x in range(lo, hi + 1) if x % d != r]
             if candidates:
                 return rng.choice(candidates)
-            # Compute smallest value >= lo NOT congruent to r mod d, then clamp
-            base = lo + ((r + 1 - lo) % d)
-            return clamp(base)
+            return None
         case PredicateNot() | PredicateAnd() | PredicateOr():
-            for _ in range(100):
-                v = rng.randint(lo, hi)
-                if not eval_predicate(pred, v):
-                    return v
-            return rng.randint(lo, hi)
+            return find_satisfying(
+                lambda: rng.randint(lo, hi),
+                lambda v: not eval_predicate(pred, v),
+            )
         case _:
             return rng.randint(lo, hi)
 
@@ -122,6 +127,23 @@ def _generate_random_list(
     length: int, value_range: tuple[int, int], rng: random.Random
 ) -> list[int]:
     return [rng.randint(*value_range) for _ in range(length)]
+
+
+def _fit_to_length_bounds(
+    values: list[int], length_bounds: tuple[int, int]
+) -> list[int] | None:
+    """Resize a query template so it stays within configured length bounds."""
+    len_lo, len_hi = length_bounds
+    if len_hi < len_lo:
+        return None
+
+    target_len = min(max(len(values), len_lo), len_hi)
+    if target_len <= 0:
+        return []
+    if len(values) >= target_len:
+        return values[:target_len]
+    repeats = (target_len + len(values) - 1) // len(values)
+    return (values * repeats)[:target_len]
 
 
 def _generate_coverage_queries(
@@ -166,39 +188,26 @@ def _generate_boundary_queries(
     non_match_val = _make_non_matching_value(pred, (lo, hi), rng)
 
     queries: list[Query] = []
-    # Matching then non-matching
-    transition_tf = [match_val, match_val, non_match_val, non_match_val]
-    queries.append(
-        Query(
-            input=transition_tf,
-            output=eval_stateful(spec, transition_tf),
-            tag=QueryTag.BOUNDARY,
+    # Skip boundary queries if we couldn't find valid match/non-match values
+    if match_val is None or non_match_val is None:
+        return queries
+
+    length_bounds = axes.list_length_range
+    for template in (
+        [match_val, match_val, non_match_val, non_match_val],
+        [non_match_val, non_match_val, match_val, match_val],
+        [match_val, non_match_val, match_val, non_match_val, match_val],
+    ):
+        fitted = _fit_to_length_bounds(template, length_bounds)
+        if fitted is None:
+            continue
+        queries.append(
+            Query(
+                input=fitted,
+                output=eval_stateful(spec, fitted),
+                tag=QueryTag.BOUNDARY,
+            )
         )
-    )
-    # Non-matching then matching
-    transition_ft = [non_match_val, non_match_val, match_val, match_val]
-    queries.append(
-        Query(
-            input=transition_ft,
-            output=eval_stateful(spec, transition_ft),
-            tag=QueryTag.BOUNDARY,
-        )
-    )
-    # Alternating
-    alternating = [
-        match_val,
-        non_match_val,
-        match_val,
-        non_match_val,
-        match_val,
-    ]
-    queries.append(
-        Query(
-            input=alternating,
-            output=eval_stateful(spec, alternating),
-            tag=QueryTag.BOUNDARY,
-        )
-    )
     return queries
 
 
@@ -231,39 +240,45 @@ def _generate_adversarial_queries(
     pred = _get_predicate_info(spec)
 
     queries: list[Query] = []
-    # All matching
-    all_match = [
+    # All matching (skip individual None values)
+    match_vals = [
         _make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)
     ]
-    queries.append(
-        Query(
-            input=all_match,
-            output=eval_stateful(spec, all_match),
-            tag=QueryTag.ADVERSARIAL,
+    all_match = [v for v in match_vals if v is not None]
+    if all_match:
+        queries.append(
+            Query(
+                input=all_match,
+                output=eval_stateful(spec, all_match),
+                tag=QueryTag.ADVERSARIAL,
+            )
         )
-    )
-    # All non-matching
-    all_non_match = [
+    # All non-matching (skip individual None values)
+    non_match_vals = [
         _make_non_matching_value(pred, (lo, hi), rng)
         for _ in range(typical_len)
     ]
-    queries.append(
-        Query(
-            input=all_non_match,
-            output=eval_stateful(spec, all_non_match),
-            tag=QueryTag.ADVERSARIAL,
+    all_non_match = [v for v in non_match_vals if v is not None]
+    if all_non_match:
+        queries.append(
+            Query(
+                input=all_non_match,
+                output=eval_stateful(spec, all_non_match),
+                tag=QueryTag.ADVERSARIAL,
+            )
         )
-    )
     # Extremes
     extremes = [lo, hi, 0, -1, 1, lo, hi]
     extremes = [x for x in extremes if lo <= x <= hi]
-    queries.append(
-        Query(
-            input=extremes,
-            output=eval_stateful(spec, extremes),
-            tag=QueryTag.ADVERSARIAL,
+    fitted_extremes = _fit_to_length_bounds(extremes, axes.list_length_range)
+    if fitted_extremes is not None:
+        queries.append(
+            Query(
+                input=fitted_extremes,
+                output=eval_stateful(spec, fitted_extremes),
+                tag=QueryTag.ADVERSARIAL,
+            )
         )
-    )
     return queries
 
 
@@ -281,15 +296,4 @@ def generate_stateful_queries(
         *_generate_typical_queries(spec, axes, rng),
         *_generate_adversarial_queries(spec, axes, rng),
     ]
-    return _dedupe_queries(queries)
-
-
-def _dedupe_queries(queries: list[Query]) -> list[Query]:
-    seen: set[tuple[int, ...]] = set()
-    result: list[Query] = []
-    for q in queries:
-        key = tuple(q.input)
-        if key not in seen:
-            seen.add(key)
-            result.append(q)
-    return result
+    return dedupe_queries(queries)

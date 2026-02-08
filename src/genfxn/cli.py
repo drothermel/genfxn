@@ -1,10 +1,12 @@
+import json
 import random
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Any, cast
 
 import srsly
 import typer
 
+from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
@@ -22,7 +24,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.splits import AxisHoldout, HoldoutType, random_split, split_tasks
+from genfxn.splits import AxisHoldout, HoldoutType
 from genfxn.stateful.models import StatefulAxes, TemplateType
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
@@ -39,18 +41,64 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
         parts = value.split(",")
         if len(parts) != 2:
             raise typer.BadParameter(
-                "Invalid range: expected 'LO,HI' with integers"
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
             )
         lo_s, hi_s = parts[0].strip(), parts[1].strip()
         if not lo_s or not hi_s:
             raise typer.BadParameter(
-                "Invalid range: expected 'LO,HI' with integers"
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
             )
-        return (int(lo_s), int(hi_s))
+        lo = int(lo_s)
+        hi = int(hi_s)
+        if lo > hi:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': low must be <= high"
+            )
+        return (lo, hi)
     except (ValueError, IndexError) as err:
         raise typer.BadParameter(
-            "Invalid range: expected 'LO,HI' with integers"
+            f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
         ) from err
+
+
+def _iter_validated_tasks(input_file: Path):
+    for raw in srsly.read_jsonl(input_file):
+        yield Task.model_validate(raw)
+
+
+def _write_task_line(handle, task: Task) -> None:
+    handle.write(srsly.json_dumps(task.model_dump()))
+    handle.write("\n")
+
+
+def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
+    value = get_spec_value(task.spec, holdout.axis_path)
+    if value is None:
+        return False
+
+    match holdout.holdout_type:
+        case HoldoutType.EXACT:
+            return value == holdout.holdout_value
+        case HoldoutType.RANGE:
+            lo, hi = holdout.holdout_value
+            if not isinstance(value, int | float):
+                return False
+            return lo <= value <= hi
+        case HoldoutType.CONTAINS:
+            try:
+                return holdout.holdout_value in value
+            except TypeError:
+                return False
+    return False
+
+
+def _count_nonempty_jsonl_lines(input_file: Path) -> int:
+    count = 0
+    with input_file.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                count += 1
+    return count
 
 
 def _build_stateful_axes(
@@ -275,7 +323,7 @@ def generate(
     # Type filters - stringrules
     n_rules: Annotated[
         int | None,
-        typer.Option("--n-rules", help="Number of string rules (1-8)"),
+        typer.Option("--n-rules", help="Number of string rules (1-10)"),
     ] = None,
     string_predicate_types: Annotated[
         str | None,
@@ -363,6 +411,41 @@ def generate(
         )
         raise typer.Exit(1)
 
+    # Reject combining --difficulty presets with manual axes options
+    if difficulty is not None:
+        manual_axes = {
+            "templates": templates,
+            "predicate-types": predicate_types,
+            "transform-types": transform_types,
+            "value-range": value_range,
+            "threshold-range": threshold_range,
+            "divisor-range": divisor_range,
+            "list-length-range": list_length_range,
+            "shift-range": shift_range,
+            "scale-range": scale_range,
+            "expr-types": expr_types,
+            "coeff-range": coeff_range,
+            "n-branches": n_branches,
+            "target-range": target_range,
+            "window-size-range": window_size_range,
+            "n-rules": n_rules,
+            "string-predicate-types": string_predicate_types,
+            "string-transform-types": string_transform_types,
+            "overlap-level": overlap_level,
+            "string-length-range": string_length_range,
+            "algorithm-types": algorithm_types,
+            "tie-break-modes": tie_break_modes,
+            "counting-modes": counting_modes,
+        }
+        provided = [f"--{k}" for k, v in manual_axes.items() if v is not None]
+        if provided:
+            typer.echo(
+                f"Error: --difficulty uses presets and cannot be combined "
+                f"with manual axes options: {', '.join(provided)}",
+                err=True,
+            )
+            raise typer.Exit(1)
+
     # Build axes for all families (or use preset if difficulty specified)
     if difficulty is not None:
         # Use difficulty preset - generate axes per task for variety
@@ -406,18 +489,37 @@ def generate(
         )
 
     if family == "all":
-        # Split evenly among all 4 families
-        quarter = count // 4
-        for _ in range(quarter):
-            tasks.append(generate_piecewise_task(axes=piecewise_axes, rng=rng))
-        for _ in range(quarter):
-            tasks.append(generate_stateful_task(axes=stateful_axes, rng=rng))
-        for _ in range(quarter):
-            t = generate_simple_algorithms_task(axes=simple_algo_axes, rng=rng)
+        # Split count as evenly as possible across all families.
+        family_order = [
+            "piecewise",
+            "stateful",
+            "simple_algorithms",
+            "stringrules",
+        ]
+        base = count // len(family_order)
+        remainder = count % len(family_order)
+        family_counts = {
+            fam: base + (1 if idx < remainder else 0)
+            for idx, fam in enumerate(family_order)
+        }
+
+        for _ in range(family_counts["piecewise"]):
+            tasks.append(generate_piecewise_task(
+                axes=piecewise_axes, rng=rng,
+            ))
+        for _ in range(family_counts["stateful"]):
+            tasks.append(generate_stateful_task(
+                axes=stateful_axes, rng=rng,
+            ))
+        for _ in range(family_counts["simple_algorithms"]):
+            t = generate_simple_algorithms_task(
+                axes=simple_algo_axes, rng=rng,
+            )
             tasks.append(t)
-        # Remainder goes to stringrules
-        for _ in range(count - 3 * quarter):
-            task = generate_stringrules_task(axes=stringrules_axes, rng=rng)
+        for _ in range(family_counts["stringrules"]):
+            task = generate_stringrules_task(
+                axes=stringrules_axes, rng=rng,
+            )
             tasks.append(task)
     elif family == "piecewise":
         for _ in range(count):
@@ -426,7 +528,9 @@ def generate(
             else:
                 axes = piecewise_axes
             tasks.append(
-                generate_piecewise_task(axes=cast(PiecewiseAxes, axes), rng=rng)
+                generate_piecewise_task(
+                    axes=cast(PiecewiseAxes, axes), rng=rng,
+                )
             )
     elif family == "stateful":
         for _ in range(count):
@@ -435,7 +539,9 @@ def generate(
             else:
                 axes = stateful_axes
             tasks.append(
-                generate_stateful_task(axes=cast(StatefulAxes, axes), rng=rng)
+                generate_stateful_task(
+                    axes=cast(StatefulAxes, axes), rng=rng,
+                )
             )
     elif family == "simple_algorithms":
         for _ in range(count):
@@ -444,7 +550,7 @@ def generate(
             else:
                 axes = simple_algo_axes
             t = generate_simple_algorithms_task(
-                axes=cast(SimpleAlgorithmsAxes, axes), rng=rng
+                axes=cast(SimpleAlgorithmsAxes, axes), rng=rng,
             )
             tasks.append(t)
     elif family == "stringrules":
@@ -454,7 +560,7 @@ def generate(
             else:
                 axes = stringrules_axes
             task = generate_stringrules_task(
-                axes=cast(StringRulesAxes, axes), rng=rng
+                axes=cast(StringRulesAxes, axes), rng=rng,
             )
             tasks.append(task)
     else:
@@ -489,13 +595,11 @@ def split(
         typer.Option("--holdout-value", help="Value to hold out"),
     ] = None,
     holdout_type: Annotated[
-        str, typer.Option("--holdout-type", help="exact, range, or contains")
-    ] = "exact",
+        HoldoutType,
+        typer.Option("--holdout-type", help="exact, range, or contains"),
+    ] = HoldoutType.EXACT,
 ) -> None:
     """Split tasks using random split or axis holdouts."""
-    raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task.model_validate(t) for t in raw]
-
     # Validate options
     has_random = random_ratio is not None
     has_holdout = holdout_axis is not None or holdout_value is not None
@@ -523,7 +627,36 @@ def split(
         if random_ratio < 0 or random_ratio > 1:
             typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
-        result = random_split(tasks, random_ratio, seed=split_seed)
+        total_count = _count_nonempty_jsonl_lines(input_file)
+        target_train_count = int(total_count * random_ratio)
+        rng = random.Random(split_seed)
+        with (
+            train.open("w", encoding="utf-8") as train_handle,
+            test.open("w", encoding="utf-8") as test_handle,
+        ):
+            remaining_total = total_count
+            remaining_train = target_train_count
+            train_count = 0
+            test_count = 0
+            for task in _iter_validated_tasks(input_file):
+                if remaining_train == 0:
+                    send_to_train = False
+                elif remaining_train == remaining_total:
+                    send_to_train = True
+                else:
+                    send_to_train = (
+                        rng.random() < (remaining_train / remaining_total)
+                    )
+
+                if send_to_train:
+                    _write_task_line(train_handle, task)
+                    train_count += 1
+                    remaining_train -= 1
+                else:
+                    _write_task_line(test_handle, task)
+                    test_count += 1
+
+                remaining_total -= 1
     else:
         if holdout_axis is None or holdout_value is None:
             typer.echo(
@@ -532,8 +665,8 @@ def split(
             )
             raise typer.Exit(1)
 
-        parsed_value: str | tuple[int, int] = holdout_value
-        if holdout_type == "range":
+        parsed_value: str | int | float | bool | None | tuple[int, int]
+        if holdout_type == HoldoutType.RANGE:
             range_val = _parse_range(holdout_value)
             if range_val is None:
                 typer.echo(
@@ -542,19 +675,50 @@ def split(
                 )
                 raise typer.Exit(1)
             parsed_value = range_val
+        else:
+            try:
+                parsed_value = json.loads(holdout_value)
+            except json.JSONDecodeError:
+                parsed_value = holdout_value
 
         holdouts = [
             AxisHoldout(
                 axis_path=holdout_axis,
-                holdout_type=HoldoutType(holdout_type),
+                holdout_type=holdout_type,
                 holdout_value=parsed_value,
             )
         ]
-        result = split_tasks(tasks, holdouts)
+        total_count = 0
+        train_count = 0
+        test_count = 0
+        first_sample: Any = None
+        with (
+            train.open("w", encoding="utf-8") as train_handle,
+            test.open("w", encoding="utf-8") as test_handle,
+        ):
+            for task in _iter_validated_tasks(input_file):
+                total_count += 1
+                if first_sample is None:
+                    first_sample = get_spec_value(task.spec, holdout_axis)
+                if any(_matches_holdout(task, h) for h in holdouts):
+                    _write_task_line(test_handle, task)
+                    test_count += 1
+                else:
+                    _write_task_line(train_handle, task)
+                    train_count += 1
 
-    srsly.write_jsonl(train, [t.model_dump() for t in result.train])
-    srsly.write_jsonl(test, [t.model_dump() for t in result.test])
-    typer.echo(f"Train: {len(result.train)}, Test: {len(result.test)}")
+        if test_count == 0 and total_count > 0:
+            typer.echo(
+                f"Warning: holdout matched 0 of {total_count} tasks. "
+                f"Check --holdout-axis spelling (got '{holdout_axis}').",
+                err=True,
+            )
+            typer.echo(
+                f"  First task's value at '{holdout_axis}': {first_sample!r}",
+                err=True,
+            )
+
+    typer.echo(f"Train: {train_count}, Test: {test_count}")
 
 
 @app.command()
@@ -562,13 +726,12 @@ def info(
     input_file: Annotated[Path, typer.Argument(help="Input JSONL file")],
 ) -> None:
     """Show info about tasks file."""
-    raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task.model_validate(t) for t in raw]
-
     by_family: dict[str, int] = {}
-    for t in tasks:
+    total = 0
+    for t in _iter_validated_tasks(input_file):
+        total += 1
         by_family[t.family] = by_family.get(t.family, 0) + 1
 
-    typer.echo(f"{input_file}: {len(tasks)} tasks")
+    typer.echo(f"{input_file}: {total} tasks")
     for fam, cnt in sorted(by_family.items()):
         typer.echo(f"  {fam}: {cnt}")

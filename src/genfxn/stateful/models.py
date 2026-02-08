@@ -89,6 +89,9 @@ class StatefulAxes(BaseModel):
     divisor_range: tuple[int, int] = Field(default=(2, 10))
     shift_range: tuple[int, int] = Field(default=(-10, 10))
     scale_range: tuple[int, int] = Field(default=(-5, 5))
+    min_composed_operands: int = Field(
+        default=2, ge=2, le=5, description="Min operands for AND/OR predicates"
+    )
 
     @model_validator(mode="after")
     def validate_axes(self) -> "StatefulAxes":
@@ -118,5 +121,15 @@ class StatefulAxes(BaseModel):
         lo, hi = self.divisor_range
         if lo < 1:
             raise ValueError(f"divisor_range: low ({lo}) must be >= 1")
+
+        has_boolean_composition = (
+            PredicateType.AND in self.predicate_types
+            or PredicateType.OR in self.predicate_types
+        )
+        if has_boolean_composition and self.min_composed_operands > 3:
+            raise ValueError(
+                "min_composed_operands must be <= 3 when AND/OR predicates "
+                "are enabled"
+            )
 
         return self

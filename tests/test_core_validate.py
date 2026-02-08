@@ -61,6 +61,7 @@ def _minimal_task_payload(**overrides: object) -> dict:
         "spec": {},
         "code": "def f(): pass",
         "queries": [{"input": 0, "output": 0, "tag": "typical"}],
+        "description": "test task",
         **overrides,
     }
 

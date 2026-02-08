@@ -23,8 +23,6 @@ def _random_string(
     Raises ValueError if length > 0 and charset after exclude is empty.
     """
     available = [c for c in charset if c not in exclude]
-    if not available:
-        available = list(charset)
     if length > 0 and not available:
         raise ValueError(
             "charset (after exclude) must contain at least one character"

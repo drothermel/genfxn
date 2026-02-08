@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.models import QueryTag
 from genfxn.core.string_predicates import (
     StringPredicateAnd,
     StringPredicateContains,
@@ -41,7 +42,7 @@ from genfxn.stringrules.queries import generate_stringrules_queries
 from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.stringrules.task import generate_stringrules_task
-from genfxn.stringrules.utils import _random_string
+from genfxn.stringrules.utils import _get_charset, _random_string
 
 
 class TestStringPredicates:
@@ -379,6 +380,55 @@ class TestQueryGeneration:
         for q in queries:
             assert q.output == eval_stringrules(spec, q.input)
 
+    def test_queries_respect_string_length_range(self) -> None:
+        axes = StringRulesAxes(n_rules=3, string_length_range=(0, 4))
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        lo, hi = axes.string_length_range
+        assert queries
+        assert all(lo <= len(q.input) <= hi for q in queries)
+
+    def test_coverage_queries_trigger_their_target_rule(self) -> None:
+        axes = StringRulesAxes(n_rules=3, overlap_level=OverlapLevel.NONE)
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        coverage = [q for q in queries if q.tag == QueryTag.COVERAGE]
+        assert len(coverage) >= len(spec.rules)
+
+        for i, rule in enumerate(spec.rules):
+            assert any(
+                eval_string_predicate(rule.predicate, q.input)
+                and not any(
+                    eval_string_predicate(prev.predicate, q.input)
+                    for prev in spec.rules[:i]
+                )
+                for q in coverage
+            )
+
+    def test_queries_respect_charset_constraints(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            charset="digits",
+            string_length_range=(1, 8),
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="12"),
+                    transform=StringTransformUppercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateContains(substring="34"),
+                    transform=StringTransformLowercase(),
+                ),
+            ],
+            default_transform=StringTransformReverse(),
+        )
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        charset = set(_get_charset(axes.charset))
+        assert queries
+        assert all(set(q.input).issubset(charset) for q in queries)
+
 
 class TestAxesValidation:
     def test_invalid_string_length_range(self) -> None:
@@ -526,3 +576,9 @@ class TestComposedRoundtrip:
         queries = generate_stringrules_queries(spec, axes, random.Random(42))
         for q in queries:
             assert f(q.input) == q.output, f"s={q.input!r}"
+
+class TestRandomStringExclude:
+    def test_raises_when_exclude_removes_all_chars(self) -> None:
+        rng = random.Random(42)
+        with pytest.raises(ValueError):
+            _random_string(length=3, charset="abc", rng=rng, exclude="abc")

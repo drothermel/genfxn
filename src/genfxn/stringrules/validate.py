@@ -1,13 +1,17 @@
 import ast
 import random
-import string
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
+from genfxn.core.safe_exec import (
+    SafeExecMissingFunctionError,
+    execute_code_restricted,
+)
+from genfxn.core.string_predicates import eval_string_predicate
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.stringrules.ast_safety import (
     ALLOWED_ANNOTATION_NAMES,
@@ -20,6 +24,7 @@ from genfxn.stringrules.ast_safety import (
 )
 from genfxn.stringrules.eval import eval_stringrules
 from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
+from genfxn.stringrules.utils import _get_charset
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -36,11 +41,15 @@ CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "UNSAFE_AST"
 CODE_SHADOWED_RULE = "SHADOWED_RULE"
 CODE_EMPTY_RULESET = "EMPTY_RULESET"
+CODE_AXES_INVALID = "AXES_INVALID"
+CODE_INVALID_CHARSET = "INVALID_CHARSET"
 CURRENT_FAMILY = "stringrules"
 
 DEFAULT_MAX_SEMANTIC_ISSUES = 10
 
 _spec_adapter = TypeAdapter(StringRulesSpec)
+_axes_adapter = TypeAdapter(StringRulesAxes)
+_ALLOWED_BUILTINS = {"len": len, "str": str}
 
 
 def _annotation_positions(tree: ast.Module) -> set[tuple[int, int]]:
@@ -243,9 +252,19 @@ def _validate_code_compile(
             )
         ], None
 
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, object]
     try:
-        exec(task.code, namespace)  # noqa: S102
+        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+    except SafeExecMissingFunctionError as e:
+        return [
+            Issue(
+                code=CODE_CODE_MISSING_FUNC,
+                severity=Severity.ERROR,
+                message=f"Failed to execute code: {e}",
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
     except Exception as e:
         return [
             Issue(
@@ -341,24 +360,30 @@ def _generate_test_inputs(
     axes: StringRulesAxes, rng: random.Random, num_samples: int = 50
 ) -> list[str]:
     """Generate test inputs including edge cases and random samples."""
-    charset = string.ascii_letters + string.digits
+    charset = _get_charset(axes.charset)
+    if not charset:
+        raise ValueError("axes.charset resolved to an empty character set")
     inputs: list[str] = []
     lo, hi = axes.string_length_range
 
     # Edge cases
-    inputs.append("")
-    inputs.append("a")
-    inputs.append("A")
-    inputs.append("1")
-    inputs.append("abc")
-    inputs.append("ABC")
-    inputs.append("123")
-    inputs.append("AbC123")
-    inputs.append(" ")
-    inputs.append("  spaces  ")
+    if lo <= 0 <= hi:
+        inputs.append("")
+    for candidate in ("a", "A", "1", "abc", "ABC", "123", "AbC123"):
+        if lo <= len(candidate) <= hi and all(c in charset for c in candidate):
+            inputs.append(candidate)
+    if " " in charset:
+        if lo <= 1 <= hi:
+            inputs.append(" ")
+        if lo <= 10 <= hi:
+            spaced_literal = "  spaces  "
+            if all(ch in charset for ch in spaced_literal):
+                inputs.append(spaced_literal)
+            else:
+                inputs.append(" " * 10)
 
     # Random samples
-    for _ in range(num_samples - len(inputs)):
+    for _ in range(max(0, num_samples - len(inputs))):
         length = rng.randint(lo, hi)
         inputs.append("".join(rng.choice(charset) for _ in range(length)))
 
@@ -374,7 +399,18 @@ def _validate_semantics(
     rng: random.Random,
 ) -> list[Issue]:
     issues: list[Issue] = []
-    test_inputs = _generate_test_inputs(axes, rng)
+    try:
+        test_inputs = _generate_test_inputs(axes, rng)
+    except ValueError as e:
+        return [
+            Issue(
+                code=CODE_AXES_INVALID,
+                severity=Severity.ERROR,
+                message=f"Invalid axes for semantic validation: {e}",
+                location="axes.charset",
+                task_id=task.task_id,
+            )
+        ]
 
     for s in test_inputs:
         if max_issues > 0 and len(issues) >= max_issues:
@@ -418,6 +454,83 @@ def _validate_semantics(
     return issues
 
 
+def _first_matching_rule_index(spec: StringRulesSpec, s: str) -> int | None:
+    for i, rule in enumerate(spec.rules):
+        if eval_string_predicate(rule.predicate, s):
+            return i
+    return None
+
+
+def _validate_rule_diagnostics(
+    task: Task,
+    spec: StringRulesSpec,
+    axes: StringRulesAxes,
+    rng: random.Random,
+) -> list[Issue]:
+    issues: list[Issue] = []
+
+    if not spec.rules:
+        issues.append(
+            Issue(
+                code=CODE_EMPTY_RULESET,
+                severity=Severity.WARNING,
+                message=(
+                    "Spec has no rules; default transform handles all inputs"
+                ),
+                location="spec.rules",
+                task_id=task.task_id,
+            )
+        )
+        return issues
+
+    try:
+        candidates = _generate_test_inputs(axes, rng, num_samples=100)
+    except ValueError as e:
+        issues.append(
+            Issue(
+                code=CODE_INVALID_CHARSET,
+                severity=Severity.ERROR,
+                message=str(e),
+                location="spec.axes",
+                task_id=task.task_id,
+            )
+        )
+        return issues
+
+    for i, rule in enumerate(spec.rules):
+        reachable = False
+        blockers: set[int] = set()
+        for s in candidates:
+            if not eval_string_predicate(rule.predicate, s):
+                continue
+            first_index = _first_matching_rule_index(spec, s)
+            if first_index == i:
+                reachable = True
+                break
+            if first_index is not None and first_index < i:
+                blockers.add(first_index)
+
+        if not reachable:
+            blocker_text = (
+                f"blocked by earlier rule(s) {sorted(blockers)}"
+                if blockers
+                else "unreachable on sampled inputs"
+            )
+            issues.append(
+                Issue(
+                    code=CODE_SHADOWED_RULE,
+                    severity=Severity.WARNING,
+                    message=(
+                        f"Rule {i} is shadowed/unreachable ({blocker_text})"
+                    ),
+                    location=f"spec.rules[{i}]",
+                    task_id=task.task_id,
+                )
+            )
+
+    return issues
+
+
 def validate_stringrules_task(
     task: Task,
     axes: StringRulesAxes | None = None,
@@ -435,8 +548,8 @@ def validate_stringrules_task(
         strict: If True, type issues are errors; if False, warnings.
         max_semantic_issues: Stop semantic testing after this many issues.
             Use 0 for unlimited.
-        emit_diagnostics: Kept for API parity. No diagnostics for this family.
-        paranoid: If True, validate AST whitelist before executing code.
+        emit_diagnostics: Emit non-fatal spec diagnostics.
+        paranoid: Deprecated; AST whitelist validation is always enforced.
         rng: Random generator for semantic testing. Random(42) if None.
 
     Returns:
@@ -454,8 +567,32 @@ def validate_stringrules_task(
         ]
     if axes is None:
         axes = StringRulesAxes()
+    else:
+        try:
+            axes = _axes_adapter.validate_python(axes, strict=True)
+        except ValidationError as e:
+            err = e.errors()[0] if e.errors() else {}
+            loc = err.get("loc", ())
+            if isinstance(loc, tuple):
+                loc_part = ".".join(str(part) for part in loc) or "value"
+            elif isinstance(loc, list):
+                loc_part = ".".join(str(part) for part in loc) or "value"
+            else:
+                loc_part = str(loc) if loc else "value"
+            if loc_part == "value" and "charset" in str(e):
+                loc_part = "charset"
+            return [
+                Issue(
+                    code=CODE_AXES_INVALID,
+                    severity=Severity.ERROR,
+                    message=f"Invalid axes: {e}",
+                    location=f"axes.{loc_part}",
+                    task_id=task.task_id,
+                )
+            ]
     if rng is None:
         rng = random.Random(42)
+    _ = paranoid
 
     issues: list[Issue] = []
 
@@ -464,11 +601,10 @@ def validate_stringrules_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    if paranoid:
-        ast_issues, _ = _validate_ast_whitelist(task.code)
-        if ast_issues:
-            issues.extend(ast_issues)
-            return issues
+    ast_issues, _ = _validate_ast_whitelist(task.code)
+    if ast_issues:
+        issues.extend(ast_issues)
+        return issues
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)
@@ -479,10 +615,18 @@ def validate_stringrules_task(
         issues.extend(_validate_query_outputs(task, spec))
 
     if spec is not None and func is not None:
-        issues.extend(
-            _validate_semantics(
-                task, func, spec, axes, max_semantic_issues, rng
+        try:
+            issues.extend(
+                _validate_semantics(
+                    task, func, spec, axes, max_semantic_issues, rng
+                )
             )
-        )
+        finally:
+            close = getattr(func, "close", None)
+            if callable(close):
+                close()
+
+    if spec is not None and emit_diagnostics:
+        issues.extend(_validate_rule_diagnostics(task, spec, axes, rng))
 
     return issues

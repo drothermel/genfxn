@@ -254,23 +254,6 @@ result = split_tasks(tasks, holdouts)
 # result.train, result.test
 ```
 
-## Viewer
-
-Web UI for browsing generated tasks.
-
-```bash
-# Generate tasks
-genfxn generate -o tasks.jsonl -n 50
-
-# Start backend
-cd viewer/backend && uv run viewer-api ../../tasks.jsonl --port 8000
-
-# Start frontend (separate terminal)
-cd viewer/frontend && bun dev
-```
-
-Open [http://localhost:5173](http://localhost:5173)
-
 ## CLI Reference
 
 ```bash
@@ -282,5 +265,28 @@ genfxn info FILE
 ## Tests
 
 ```bash
-uv run pytest tests/ -v
+# Fast feedback (skips slow + full)
+uv run pytest tests/ -v --verification-level=fast
+
+# Standard CI/dev confidence (skips full)
+uv run pytest tests/ -v --verification-level=standard
+
+# Full verification (runs everything)
+uv run pytest tests/ -v --verification-level=full
+```
+
+### Local Performance Budgets
+
+Use the helper runner to apply tuned xdist worker counts and optional
+runtime budget checks.
+
+```bash
+# Standard tier with tuned workers and duration report
+uv run python scripts/run_tests.py --tier standard
+
+# Enforce runtime budget for the selected tier
+uv run python scripts/run_tests.py --tier fast --enforce-budget
+
+# Override workers or pass through extra pytest args
+uv run python scripts/run_tests.py --tier full --workers 2 -- -k validate
 ```

@@ -18,3 +18,11 @@ class GenerationTrace(BaseModel):
     steps: list[TraceStep] = Field(
         default_factory=list, description="Ordered list of sampling steps"
     )
+
+
+def trace_step(
+    trace: list[TraceStep] | None, step: str, choice: str, value: Any
+) -> None:
+    """Append a TraceStep if trace is not None."""
+    if trace is not None:
+        trace.append(TraceStep(step=step, choice=choice, value=value))

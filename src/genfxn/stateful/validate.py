@@ -1,12 +1,16 @@
 import ast
 import random
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
+from genfxn.core.safe_exec import (
+    SafeExecMissingFunctionError,
+    execute_code_restricted,
+)
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.stateful.ast_safety import (
     ALLOWED_AST_NODES,
@@ -33,6 +37,15 @@ CODE_UNSAFE_AST = "UNSAFE_AST"
 CURRENT_FAMILY = "stateful"
 
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
+_ALLOWED_BUILTINS = {
+    "abs": abs,
+    "int": int,
+    "len": len,
+    "list": list,
+    "max": max,
+    "min": min,
+    "set": set,
+}
 
 
 def _validate_ast_whitelist(
@@ -166,9 +179,19 @@ def _validate_code_compile(
             )
         ], None
 
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, object]
     try:
-        exec(task.code, namespace)  # noqa: S102
+        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+    except SafeExecMissingFunctionError as e:
+        return [
+            Issue(
+                code=CODE_CODE_MISSING_FUNC,
+                severity=Severity.ERROR,
+                message=f"Failed to execute code: {e}",
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
     except Exception as e:
         return [
             Issue(
@@ -377,7 +400,7 @@ def validate_stateful_task(
             Use 0 for unlimited.
         emit_diagnostics: Kept for API parity with piecewise validator.
             Stateful has no diagnostic checks currently.
-        paranoid: If True, validate AST whitelist before executing code.
+        paranoid: Deprecated; AST whitelist validation is always enforced.
         rng: Random generator for semantic testing. Random(42) if None.
 
     Returns:
@@ -399,6 +422,7 @@ def validate_stateful_task(
         axes = StatefulAxes()
     if rng is None:
         rng = random.Random(42)
+    _ = paranoid
 
     issues: list[Issue] = []
 
@@ -407,11 +431,10 @@ def validate_stateful_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    if paranoid:
-        ast_issues, _ = _validate_ast_whitelist(task.code)
-        if ast_issues:
-            issues.extend(ast_issues)
-            return issues  # Bail early, don't exec unsafe code
+    ast_issues, _ = _validate_ast_whitelist(task.code)
+    if ast_issues:
+        issues.extend(ast_issues)
+        return issues  # Bail early, don't exec unsafe code
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)
@@ -422,10 +445,15 @@ def validate_stateful_task(
         issues.extend(_validate_query_outputs(task, spec))
 
     if spec is not None and func is not None:
-        issues.extend(
-            _validate_semantics(
-                task, func, spec, axes, max_semantic_issues, rng
+        try:
+            issues.extend(
+                _validate_semantics(
+                    task, func, spec, axes, max_semantic_issues, rng
+                )
             )
-        )
+        finally:
+            close = getattr(func, "close", None)
+            if callable(close):
+                close()
 
     return issues

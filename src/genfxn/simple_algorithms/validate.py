@@ -1,12 +1,16 @@
 import ast
 import random
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
+from genfxn.core.safe_exec import (
+    SafeExecMissingFunctionError,
+    execute_code_restricted,
+)
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.simple_algorithms.ast_safety import (
     ALLOWED_AST_NODES,
@@ -14,6 +18,7 @@ from genfxn.simple_algorithms.ast_safety import (
     ALLOWED_METHOD_NAMES,
     ALLOWED_VAR_NAMES,
     CALL_ARITIES,
+    METHOD_ARITIES,
 )
 from genfxn.simple_algorithms.eval import eval_simple_algorithms
 from genfxn.simple_algorithms.models import (
@@ -43,6 +48,19 @@ CODE_EDGE_CASE_FAILURE = "EDGE_CASE_FAILURE"
 CURRENT_FAMILY = "simple_algorithms"
 
 _spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
+_ALLOWED_BUILTINS = {
+    "abs": abs,
+    "int": int,
+    "len": len,
+    "list": list,
+    "max": max,
+    "min": min,
+    "range": range,
+    "set": set,
+    "sorted": sorted,
+    "sum": sum,
+    "tuple": tuple,
+}
 
 
 def _validate_ast_whitelist(
@@ -108,7 +126,13 @@ def _validate_ast_whitelist(
                 isinstance(node.func, ast.Attribute)
                 and node.func.attr in ALLOWED_METHOD_NAMES
             ):
-                valid_call = True
+                method_name = node.func.attr
+                allowed_arities = METHOD_ARITIES.get(method_name, set())
+                if (
+                    len(node.args) in allowed_arities
+                    and len(node.keywords) == 0
+                ):
+                    valid_call = True
             if not valid_call:
                 issues.append(
                     Issue(
@@ -189,9 +213,19 @@ def _validate_code_compile(
             )
         ], None
 
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, object]
     try:
-        exec(task.code, namespace)  # noqa: S102
+        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+    except SafeExecMissingFunctionError as e:
+        return [
+            Issue(
+                code=CODE_CODE_MISSING_FUNC,
+                severity=Severity.ERROR,
+                message=f"Failed to execute code: {e}",
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
     except Exception as e:
         return [
             Issue(
@@ -354,11 +388,7 @@ def _check_counting_mode_consistency(
         if spec.counting_mode == CountingMode.ALL_INDICES
         else CountingMode.ALL_INDICES
     )
-    alt_spec = CountPairsSumSpec(
-        template="count_pairs_sum",
-        target=spec.target,
-        counting_mode=other_mode,
-    )
+    alt_spec = spec.model_copy(update={"counting_mode": other_mode})
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
             type(elem) is int for elem in q.input
@@ -527,7 +557,7 @@ def validate_simple_algorithms_task(
         max_semantic_issues: Stop semantic testing after this many issues.
             Use 0 for unlimited.
         emit_diagnostics: Kept for API parity. No diagnostics for this family.
-        paranoid: If True, validate AST whitelist before executing code.
+        paranoid: Deprecated; AST whitelist validation is always enforced.
         rng: Random generator for semantic testing. Random(42) if None.
 
     Returns:
@@ -547,6 +577,7 @@ def validate_simple_algorithms_task(
         axes = SimpleAlgorithmsAxes()
     if rng is None:
         rng = random.Random(42)
+    _ = paranoid
 
     issues: list[Issue] = []
 
@@ -555,11 +586,10 @@ def validate_simple_algorithms_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    if paranoid:
-        ast_issues, _ = _validate_ast_whitelist(task.code)
-        if ast_issues:
-            issues.extend(ast_issues)
-            return issues
+    ast_issues, _ = _validate_ast_whitelist(task.code)
+    if ast_issues:
+        issues.extend(ast_issues)
+        return issues
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)
@@ -572,11 +602,16 @@ def validate_simple_algorithms_task(
         issues.extend(_check_counting_mode_consistency(task, spec))
 
     if spec is not None and func is not None:
-        issues.extend(_check_edge_case_handling(task, func, spec, axes))
-        issues.extend(
-            _validate_semantics(
-                task, func, spec, axes, max_semantic_issues, rng
+        try:
+            issues.extend(_check_edge_case_handling(task, func, spec, axes))
+            issues.extend(
+                _validate_semantics(
+                    task, func, spec, axes, max_semantic_issues, rng
+                )
             )
-        )
+        finally:
+            close = getattr(func, "close", None)
+            if callable(close):
+                close()
 
     return issues
