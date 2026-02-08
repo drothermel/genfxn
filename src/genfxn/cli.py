@@ -344,7 +344,7 @@ def generate(
         typer.Option(
             "--language",
             "-l",
-            help="Languages to render: 'all' or comma-separated (python,java,rust)",
+            help="Languages to render: 'all' or comma-separated (python,java)",
         ),
     ] = "all",
 ) -> None:

@@ -44,7 +44,8 @@ def render_string_transform_java(t: StringTransform, var: str = "s") -> str:
             if chars is None:
                 return f"{var}.strip()"
             escaped = _regex_char_class_escape(chars)
-            return f'{var}.replaceAll("^[{escaped}]+|[{escaped}]+$", "")'
+            pattern = f"^[{escaped}]+|[{escaped}]+$"
+            return f"{var}.replaceAll({java_string_literal(pattern)}, \"\")"
         case StringTransformPrepend(prefix=prefix):
             return f"{java_string_literal(prefix)} + {var}"
         case StringTransformAppend(suffix=suffix):

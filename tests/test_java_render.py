@@ -131,7 +131,7 @@ class TestPredicateJava:
         result = render_predicate_java(
             PredicateInSet(values=frozenset({3, 1, 2}))
         )
-        assert result == "Set.of(1, 2, 3).contains(x)"
+        assert result == "java.util.Set.of(1, 2, 3).contains(x)"
 
     def test_not(self) -> None:
         result = render_predicate_java(
@@ -331,6 +331,13 @@ class TestStringTransformJava:
         assert "replaceAll" in result
         assert "xy" in result
 
+    def test_strip_chars_escapes_java_string_literal(self) -> None:
+        chars = '\"]'
+        escaped = _regex_char_class_escape(chars)
+        pattern = f"^[{escaped}]+|[{escaped}]+$"
+        result = render_string_transform_java(StringTransformStrip(chars=chars))
+        assert result == f's.replaceAll({java_string_literal(pattern)}, "")'
+
     def test_prepend(self) -> None:
         result = render_string_transform_java(StringTransformPrepend(prefix="hi_"))
         assert result == '"hi_" + s'
@@ -391,6 +398,22 @@ class TestPiecewiseJava:
         assert "if (x < -5)" in code
         assert "} else if (x > 5)" in code
         assert "} else {" in code
+
+    def test_in_set_condition_uses_fully_qualified_set(self) -> None:
+        from genfxn.langs.java.piecewise import render_piecewise
+        from genfxn.piecewise.models import Branch, PiecewiseSpec
+
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateInSet(values=frozenset({1, 2})),
+                    expr=ExprAffine(a=1, b=0),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=0),
+        )
+        code = render_piecewise(spec)
+        assert "java.util.Set.of(1, 2).contains(x)" in code
 
 
 class TestStatefulJava:
@@ -675,7 +698,6 @@ class TestLangsInfra:
     def test_language_enum(self) -> None:
         assert Language.PYTHON.value == "python"
         assert Language.JAVA.value == "java"
-        assert Language.RUST.value == "rust"
 
     def test_registry_python(self) -> None:
         from genfxn.langs.registry import get_render_fn
@@ -694,6 +716,12 @@ class TestLangsInfra:
 
         with pytest.raises(ValueError, match="No render module"):
             get_render_fn(Language.PYTHON, "nonexistent")
+
+    def test_registry_rejects_unsupported_rust_language(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        with pytest.raises(ValueError, match="Unsupported language"):
+            get_render_fn("rust", "piecewise")  # type: ignore[arg-type]
 
     def test_available_languages_includes_python_and_java(self) -> None:
         from genfxn.langs.render import _available_languages

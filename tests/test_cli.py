@@ -116,6 +116,27 @@ class TestGenerate:
         assert result.exit_code == 1
         assert "Unknown family" in result.output
 
+    def test_generate_rejects_unsupported_rust_language(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+                "--language",
+                "rust",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "Valid languages: python, java" in result.output
+        assert "Traceback" not in result.output
+
 
 class TestSplit:
     def test_split_exact(self, tmp_path) -> None:
