@@ -1,3 +1,4 @@
+import json
 import random
 from pathlib import Path
 from typing import Annotated, cast
@@ -12,6 +13,7 @@ from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
+from genfxn.langs.types import Language
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.simple_algorithms.models import (
@@ -337,8 +339,28 @@ def generate(
         str | None,
         typer.Option("--scale-range", help="Scale range (lo,hi)"),
     ] = None,
+    language: Annotated[
+        str,
+        typer.Option(
+            "--language",
+            "-l",
+            help="Languages to render: 'all' or comma-separated (python,java,rust)",
+        ),
+    ] = "all",
 ) -> None:
     """Generate tasks to JSONL file."""
+    if language.strip().lower() == "all":
+        languages: list[Language] | None = None
+    else:
+        try:
+            languages = [
+                Language(tok.strip().lower()) for tok in language.split(",")
+            ]
+        except ValueError as e:
+            valid = ", ".join(lang.value for lang in Language)
+            typer.echo(f"Error: {e}. Valid languages: {valid}", err=True)
+            raise typer.Exit(1) from e
+
     rng = random.Random(seed)
     tasks: list[Task] = []
 
@@ -448,18 +470,37 @@ def generate(
         )
 
     if family == "all":
-        # Split evenly among all 4 families
-        quarter = count // 4
-        for _ in range(quarter):
-            tasks.append(generate_piecewise_task(axes=piecewise_axes, rng=rng))
-        for _ in range(quarter):
-            tasks.append(generate_stateful_task(axes=stateful_axes, rng=rng))
-        for _ in range(quarter):
-            t = generate_simple_algorithms_task(axes=simple_algo_axes, rng=rng)
+        # Split count as evenly as possible across all families.
+        family_order = [
+            "piecewise",
+            "stateful",
+            "simple_algorithms",
+            "stringrules",
+        ]
+        base = count // len(family_order)
+        remainder = count % len(family_order)
+        family_counts = {
+            fam: base + (1 if idx < remainder else 0)
+            for idx, fam in enumerate(family_order)
+        }
+
+        for _ in range(family_counts["piecewise"]):
+            tasks.append(generate_piecewise_task(
+                axes=piecewise_axes, rng=rng, languages=languages,
+            ))
+        for _ in range(family_counts["stateful"]):
+            tasks.append(generate_stateful_task(
+                axes=stateful_axes, rng=rng, languages=languages,
+            ))
+        for _ in range(family_counts["simple_algorithms"]):
+            t = generate_simple_algorithms_task(
+                axes=simple_algo_axes, rng=rng, languages=languages,
+            )
             tasks.append(t)
-        # Remainder goes to stringrules
-        for _ in range(count - 3 * quarter):
-            task = generate_stringrules_task(axes=stringrules_axes, rng=rng)
+        for _ in range(family_counts["stringrules"]):
+            task = generate_stringrules_task(
+                axes=stringrules_axes, rng=rng, languages=languages,
+            )
             tasks.append(task)
     elif family == "piecewise":
         for _ in range(count):
@@ -468,7 +509,10 @@ def generate(
             else:
                 axes = piecewise_axes
             tasks.append(
-                generate_piecewise_task(axes=cast(PiecewiseAxes, axes), rng=rng)
+                generate_piecewise_task(
+                    axes=cast(PiecewiseAxes, axes), rng=rng,
+                    languages=languages,
+                )
             )
     elif family == "stateful":
         for _ in range(count):
@@ -477,7 +521,10 @@ def generate(
             else:
                 axes = stateful_axes
             tasks.append(
-                generate_stateful_task(axes=cast(StatefulAxes, axes), rng=rng)
+                generate_stateful_task(
+                    axes=cast(StatefulAxes, axes), rng=rng,
+                    languages=languages,
+                )
             )
     elif family == "simple_algorithms":
         for _ in range(count):
@@ -486,7 +533,8 @@ def generate(
             else:
                 axes = simple_algo_axes
             t = generate_simple_algorithms_task(
-                axes=cast(SimpleAlgorithmsAxes, axes), rng=rng
+                axes=cast(SimpleAlgorithmsAxes, axes), rng=rng,
+                languages=languages,
             )
             tasks.append(t)
     elif family == "stringrules":
@@ -496,7 +544,8 @@ def generate(
             else:
                 axes = stringrules_axes
             task = generate_stringrules_task(
-                axes=cast(StringRulesAxes, axes), rng=rng
+                axes=cast(StringRulesAxes, axes), rng=rng,
+                languages=languages,
             )
             tasks.append(task)
     else:
@@ -531,8 +580,9 @@ def split(
         typer.Option("--holdout-value", help="Value to hold out"),
     ] = None,
     holdout_type: Annotated[
-        str, typer.Option("--holdout-type", help="exact, range, or contains")
-    ] = "exact",
+        HoldoutType,
+        typer.Option("--holdout-type", help="exact, range, or contains"),
+    ] = HoldoutType.EXACT,
 ) -> None:
     """Split tasks using random split or axis holdouts."""
     raw = list(srsly.read_jsonl(input_file))
@@ -574,8 +624,8 @@ def split(
             )
             raise typer.Exit(1)
 
-        parsed_value: str | tuple[int, int] = holdout_value
-        if holdout_type == "range":
+        parsed_value: str | int | float | bool | None | tuple[int, int]
+        if holdout_type == HoldoutType.RANGE:
             range_val = _parse_range(holdout_value)
             if range_val is None:
                 typer.echo(
@@ -584,11 +634,16 @@ def split(
                 )
                 raise typer.Exit(1)
             parsed_value = range_val
+        else:
+            try:
+                parsed_value = json.loads(holdout_value)
+            except json.JSONDecodeError:
+                parsed_value = holdout_value
 
         holdouts = [
             AxisHoldout(
                 axis_path=holdout_axis,
-                holdout_type=HoldoutType(holdout_type),
+                holdout_type=holdout_type,
                 holdout_value=parsed_value,
             )
         ]

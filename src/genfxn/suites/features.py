@@ -113,36 +113,37 @@ def _n_rules_bucket(n: int) -> str:
         return "8-10"
 
 
-def _pred_majority_category(pred: dict[str, Any]) -> str:
-    """Classify string predicate (ignoring wrappers)."""
+def _pred_majority_categories(pred: dict[str, Any]) -> list[str]:
+    """Collect predicate categories recursively over composed predicates."""
     kind = pred.get("kind", "")
     if kind in ("not",):
-        # Look at the operand
-        return _pred_majority_category(pred.get("operand", {}))
+        return _pred_majority_categories(pred.get("operand", {}))
     if kind in ("and", "or"):
-        # Use first operand
         operands = pred.get("operands", [])
-        if operands:
-            return _pred_majority_category(operands[0])
+        categories: list[str] = []
+        for operand in operands:
+            categories.extend(_pred_majority_categories(operand))
+        return categories
     if kind in ("is_alpha", "is_digit", "is_upper", "is_lower"):
-        return "simple"
+        return ["simple"]
     elif kind in ("starts_with", "ends_with", "contains"):
-        return "pattern"
+        return ["pattern"]
     elif kind == "length_cmp":
-        return "length"
-    return "simple"
+        return ["length"]
+    return ["simple"]
 
 
-def _trans_majority_category(trans: dict[str, Any]) -> str:
-    """Classify string transform (ignoring pipeline)."""
+def _trans_majority_categories(trans: dict[str, Any]) -> list[str]:
+    """Collect transform categories recursively over pipelines."""
     kind = trans.get("kind", "")
     if kind == "pipeline":
-        # Use first step
         steps = trans.get("steps", [])
-        if steps:
-            return _trans_majority_category(steps[0])
+        categories: list[str] = []
+        for step in steps:
+            categories.extend(_trans_majority_categories(step))
+        return categories
     if kind == "identity":
-        return "identity"
+        return ["identity"]
     elif kind in (
         "lowercase",
         "uppercase",
@@ -150,10 +151,10 @@ def _trans_majority_category(trans: dict[str, Any]) -> str:
         "swapcase",
         "reverse",
     ):
-        return "simple"
+        return ["simple"]
     elif kind in ("replace", "strip", "prepend", "append"):
-        return "param"
-    return "identity"
+        return ["param"]
+    return ["identity"]
 
 
 def _majority_vote(categories: list[str], tie_order: list[str]) -> str:
@@ -226,11 +227,19 @@ def stringrules_features(spec: dict[str, Any]) -> dict[str, str]:
     pipe_rate = pipe_rule_count / n_rules if n_rules > 0 else 0.0
 
     # pred_majority
-    pred_cats = [_pred_majority_category(r.get("predicate", {})) for r in rules]
+    pred_cats = [
+        category
+        for r in rules
+        for category in _pred_majority_categories(r.get("predicate", {}))
+    ]
     pred_majority = _majority_vote(pred_cats, ["simple", "pattern", "length"])
 
     # transform_majority (includes default)
-    trans_cats = [_trans_majority_category(t) for t in all_transforms]
+    trans_cats = [
+        category
+        for t in all_transforms
+        for category in _trans_majority_categories(t)
+    ]
     transform_majority = _majority_vote(
         trans_cats, ["identity", "simple", "param"]
     )

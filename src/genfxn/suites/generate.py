@@ -684,17 +684,17 @@ def _generate_task_from_candidate(
     if family == "stringrules":
         if axes is None:
             axes = StringRulesAxes()
-        code = render_stringrules(spec)
+        py_code = render_stringrules(spec)
         queries = generate_stringrules_queries(spec, axes, rng)
     elif family == "stateful":
         if axes is None:
             axes = StatefulAxes()
-        code = render_stateful(spec)
+        py_code = render_stateful(spec)
         queries = generate_stateful_queries(spec, axes, rng)
     elif family == "simple_algorithms":
         if axes is None:
             axes = SimpleAlgorithmsAxes()
-        code = render_simple_algorithms(spec)
+        py_code = render_simple_algorithms(spec)
         queries = generate_simple_algorithms_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
@@ -707,7 +707,7 @@ def _generate_task_from_candidate(
         task_id=candidate.task_id,
         family=family,
         spec=spec_dict,
-        code=code,
+        code={"python": py_code},
         queries=queries,
         trace=trace,
         axes=axes.model_dump(),

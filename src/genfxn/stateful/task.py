@@ -5,15 +5,17 @@ from genfxn.core.describe import describe_task
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
+from genfxn.langs.render import render_all_languages
+from genfxn.langs.types import Language
 from genfxn.stateful.models import StatefulAxes
 from genfxn.stateful.queries import generate_stateful_queries
-from genfxn.stateful.render import render_stateful
 from genfxn.stateful.sampler import sample_stateful_spec
 
 
 def generate_stateful_task(
     axes: StatefulAxes | None = None,
     rng: random.Random | None = None,
+    languages: list[Language] | None = None,
 ) -> Task:
     if axes is None:
         axes = StatefulAxes()
@@ -24,7 +26,7 @@ def generate_stateful_task(
     spec = sample_stateful_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
     task_id = task_id_from_spec("stateful", spec_dict)
-    code = render_stateful(spec)
+    code = render_all_languages("stateful", spec, languages)
     queries = generate_stateful_queries(spec, axes, rng)
 
     trace = GenerationTrace(family="stateful", steps=trace_steps)

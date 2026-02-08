@@ -435,7 +435,7 @@ class TestTaskGeneration:
         assert len(task.queries) > 0
 
         namespace: dict = {}
-        exec(task.code, namespace)  # noqa: S102
+        exec(task.code["python"], namespace)  # noqa: S102
         f = namespace["f"]
         for q in task.queries:
             assert f(q.input) == q.output
@@ -447,7 +447,7 @@ class TestTaskGeneration:
             assert len(task.spec["rules"]) == 3
 
             namespace: dict = {}
-            exec(task.code, namespace)  # noqa: S102
+            exec(task.code["python"], namespace)  # noqa: S102
             f = namespace["f"]
             for q in task.queries:
                 assert f(q.input) == q.output, f"Overlap {overlap}: mismatch"

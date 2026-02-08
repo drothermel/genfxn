@@ -21,10 +21,27 @@ class Query(BaseModel):
 
 def dedupe_queries(queries: list[Query]) -> list[Query]:
     """Deduplicate queries by input, keeping first occurrence."""
+
+    def _freeze(value: Any) -> Any:
+        if isinstance(value, dict):
+            return (
+                "__dict__",
+                tuple(
+                    sorted((_freeze(key), _freeze(val)) for key, val in value.items())
+                ),
+            )
+        if isinstance(value, list):
+            return ("__list__", tuple(_freeze(item) for item in value))
+        if isinstance(value, tuple):
+            return ("__tuple__", tuple(_freeze(item) for item in value))
+        if isinstance(value, set):
+            return ("__set__", tuple(sorted(_freeze(item) for item in value)))
+        return value
+
     seen: set[Any] = set()
     result: list[Query] = []
     for q in queries:
-        key = tuple(q.input) if isinstance(q.input, list) else q.input
+        key = _freeze(q.input)
         if key not in seen:
             seen.add(key)
             result.append(q)
@@ -35,7 +52,9 @@ class Task(BaseModel):
     task_id: str = Field(description="Deterministic hash of spec")
     family: str = Field(description="Function family (piecewise, stateful)")
     spec: dict[str, Any] = Field(description="Full specification as dict")
-    code: str = Field(description="Rendered Python function")
+    code: dict[str, str] = Field(
+        description="Rendered code per language, e.g. {'python': '...'}"
+    )
     queries: list[Query] = Field(description="Test queries with tags")
     trace: GenerationTrace | None = Field(
         default=None, description="Optional generation trace for debugging"

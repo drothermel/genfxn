@@ -37,3 +37,29 @@ def test_dedupe_queries_stable_order_for_unique_values() -> None:
     deduped = dedupe_queries(queries)
 
     assert [q.input for q in deduped] == ["a", "b", "c"]
+
+
+def test_dedupe_queries_nested_unhashable_inputs_first_wins() -> None:
+    queries = [
+        Query(
+            input={"a": [1, {"k": {2, 3}}], "b": (4, 5)},
+            output=10,
+            tag=QueryTag.TYPICAL,
+        ),
+        Query(
+            input={"b": (4, 5), "a": [1, {"k": {3, 2}}]},
+            output=99,
+            tag=QueryTag.BOUNDARY,
+        ),
+        Query(
+            input={"a": [1, {"k": {2, 4}}], "b": (4, 5)},
+            output=20,
+            tag=QueryTag.COVERAGE,
+        ),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 2
+    assert deduped[0].output == 10
+    assert deduped[1].output == 20

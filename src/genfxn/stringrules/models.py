@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from genfxn.core.string_predicates import StringPredicate, StringPredicateType
 from genfxn.core.string_transforms import StringTransform, StringTransformType
+from genfxn.stringrules.utils import _get_charset
 
 
 class OverlapLevel(str, Enum):
@@ -63,6 +64,8 @@ class StringRulesAxes(BaseModel):
             raise ValueError("predicate_types must not be empty")
         if not self.transform_types:
             raise ValueError("transform_types must not be empty")
+        if not _get_charset(self.charset):
+            raise ValueError("charset must resolve to a non-empty character set")
 
         for name in (
             "string_length_range",
