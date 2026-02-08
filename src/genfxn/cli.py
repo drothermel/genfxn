@@ -5,6 +5,7 @@ from typing import Annotated, Any, cast
 
 import srsly
 import typer
+from pydantic import TypeAdapter
 
 from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
@@ -38,6 +39,8 @@ from genfxn.stringrules.models import (
 from genfxn.stringrules.task import generate_stringrules_task
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
+_stateful_spec_adapter = TypeAdapter(StatefulSpec)
+_simple_algorithms_spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -149,11 +152,12 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
         case "piecewise":
             spec_obj = PiecewiseSpec.model_validate(task.spec, strict=True)
         case "stateful":
-            spec_obj = StatefulSpec.model_validate(task.spec, strict=True)
+            spec_obj = _stateful_spec_adapter.validate_python(
+                task.spec, strict=True
+            )
         case "simple_algorithms":
-            spec_obj = SimpleAlgorithmsSpec.model_validate(
-                task.spec,
-                strict=True,
+            spec_obj = _simple_algorithms_spec_adapter.validate_python(
+                task.spec, strict=True
             )
         case "stringrules":
             spec_obj = StringRulesSpec.model_validate(task.spec, strict=True)

@@ -152,6 +152,57 @@ class TestGenerate:
         assert tasks[0]["code"].startswith("fn f(")
         assert "def f(" not in tasks[0]["code"]
 
+    def test_generate_simple_algorithms_rust_language(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "simple_algorithms",
+                "-n",
+                "1",
+                "--language",
+                "rust",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 1
+        assert tasks[0]["family"] == "simple_algorithms"
+        assert tasks[0]["code"].startswith("fn f(")
+        assert "def f(" not in tasks[0]["code"]
+
+    def test_generate_all_rust_language(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "all",
+                "-n",
+                "8",
+                "--language",
+                "rust",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 8
+        families = {t["family"] for t in tasks}
+        expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
+        assert families == expected
+        assert all("def f(" not in cast(str, t["code"]) for t in tasks)
+
     def test_generate_java_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
