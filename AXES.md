@@ -36,7 +36,7 @@ Conditional functions with predicate-guarded branches: `f(x: int) -> int`
 | Value | CLI | Description |
 |-------|-----|-------------|
 | `EVEN` | `even` | `x % 2 == 0` |
-| `ODD` | `odd` | `x % 2 == 1` |
+| `ODD` | `odd` | `x % 2 != 0` |
 | `LT` | `lt` | `x < threshold` |
 | `LE` | `le` | `x <= threshold` |
 | `GT` | `gt` | `x > threshold` |
@@ -50,7 +50,7 @@ Conditional functions with predicate-guarded branches: `f(x: int) -> int`
 |------|--------|-------|
 | `default_expr.kind` | `affine`, `quadratic`, `abs`, `mod` | Default branch expression |
 | `branches.N.expr.kind` | same | Expression in branch N |
-| `branches.N.condition.type` | predicate types | Condition type in branch N |
+| `branches.N.condition.kind` | predicate types | Condition type in branch N |
 
 ---
 
@@ -87,7 +87,7 @@ Iteration functions with accumulator state: `f(xs: list[int]) -> int`
 | Value | CLI | Description |
 |-------|-----|-------------|
 | `EVEN` | `even` | `x % 2 == 0` |
-| `ODD` | `odd` | `x % 2 == 1` |
+| `ODD` | `odd` | `x % 2 != 0` |
 | `LT` | `lt` | `x < threshold` |
 | `LE` | `le` | `x <= threshold` |
 | `GT` | `gt` | `x > threshold` |
@@ -109,11 +109,11 @@ Iteration functions with accumulator state: `f(xs: list[int]) -> int`
 | Path | Values | Notes |
 |------|--------|-------|
 | `template` | template types | Which algorithm template |
-| `predicate.type` | predicate types | Condition predicate |
-| `true_transform.type` | transform types | Transform when predicate is true |
-| `false_transform.type` | transform types | Transform when predicate is false |
-| `reset_predicate.type` | predicate types | Reset condition (resetting_best_prefix_sum) |
-| `match_predicate.type` | predicate types | Match condition (longest_run) |
+| `predicate.kind` | predicate types | Condition predicate |
+| `true_transform.kind` | transform types | Transform when predicate is true |
+| `false_transform.kind` | transform types | Transform when predicate is false |
+| `reset_predicate.kind` | predicate types | Reset condition (resetting_best_prefix_sum) |
+| `match_predicate.kind` | predicate types | Match condition (longest_run) |
 
 ---
 
@@ -243,7 +243,7 @@ genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
 
 # Hold out by nested predicate type
 genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-    --holdout-axis predicate.type --holdout-value mod_eq
+    --holdout-axis predicate.kind --holdout-value mod_eq
 
 # Hold out first rule's predicate type (stringrules)
 genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \

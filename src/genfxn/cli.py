@@ -109,15 +109,21 @@ def _count_nonempty_jsonl_lines(input_file: Path) -> int:
 
 
 def _parse_single_language(language: str) -> Language:
-    if language.strip().lower() == "all":
-        # Task.code is a single string, so default to Python.
-        return Language.PYTHON
-
     tokens = [token.strip().lower() for token in language.split(",")]
     parsed = [token for token in tokens if token]
-    if len(parsed) != 1:
+    if not parsed:
         raise typer.BadParameter(
             "Expected exactly one language value (python, java, or rust)."
+        )
+    if len(parsed) > 1:
+        raise typer.BadParameter(
+            "Expected exactly one language value (python, java, or rust); "
+            "comma-separated values are not supported."
+        )
+    if parsed[0] == "all":
+        raise typer.BadParameter(
+            "Language 'all' is not supported. "
+            "Choose one of: python, java, rust."
         )
     try:
         return Language(parsed[0])
@@ -318,12 +324,9 @@ def generate(
         typer.Option(
             "--language",
             "-l",
-            help=(
-                "Languages to render: 'all' or "
-                "comma-separated (python,java,rust)"
-            ),
+            help="Single language to render: python, java, or rust.",
         ),
-    ] = "all",
+    ] = "python",
     # Difficulty presets
     difficulty: Annotated[
         int | None,

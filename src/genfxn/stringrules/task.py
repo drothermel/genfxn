@@ -19,6 +19,8 @@ def _render_stringrules_for_languages(
 ) -> str | dict[str, str]:
     if languages is None:
         return render_stringrules(spec)
+    if len(languages) == 0:
+        raise ValueError("languages list is empty")
 
     rendered: dict[str, str] = {}
     for language in dict.fromkeys(languages):

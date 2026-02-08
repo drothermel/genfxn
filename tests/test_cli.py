@@ -172,6 +172,26 @@ class TestGenerate:
         assert result.exit_code == 1
         assert "exactly one language value" in result.output
 
+    def test_generate_rejects_all_language(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+                "--language",
+                "all",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "Language 'all' is not supported" in result.output
+
     def test_generate_difficulty_requires_specific_family(
         self, tmp_path
     ) -> None:

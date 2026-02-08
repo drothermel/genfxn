@@ -739,6 +739,24 @@ class TestMultiLanguageGeneration:
         assert "python" in task.code
         assert "java" not in task.code
 
+    def test_piecewise_rejects_empty_languages(self) -> None:
+        with pytest.raises(ValueError, match="languages list is empty"):
+            generate_piecewise_task(rng=random.Random(42), languages=[])
+
+    def test_stateful_rejects_empty_languages(self) -> None:
+        with pytest.raises(ValueError, match="languages list is empty"):
+            generate_stateful_task(rng=random.Random(42), languages=[])
+
+    def test_stringrules_rejects_empty_languages(self) -> None:
+        with pytest.raises(ValueError, match="languages list is empty"):
+            generate_stringrules_task(rng=random.Random(42), languages=[])
+
+    def test_simple_algorithms_rejects_empty_languages(self) -> None:
+        with pytest.raises(ValueError, match="languages list is empty"):
+            generate_simple_algorithms_task(
+                rng=random.Random(42), languages=[]
+            )
+
     @pytest.mark.parametrize("seed", range(10))
     def test_piecewise_java_renders_non_empty(self, seed: int) -> None:
         task = generate_piecewise_task(
