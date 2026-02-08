@@ -48,6 +48,65 @@ _COMPOSED_PREDICATE_TYPES = {
     StringPredicateType.OR,
 }
 
+_ATOMIC_PREDICATE_TYPES = [
+    StringPredicateType.STARTS_WITH,
+    StringPredicateType.ENDS_WITH,
+    StringPredicateType.CONTAINS,
+    StringPredicateType.IS_ALPHA,
+    StringPredicateType.IS_DIGIT,
+    StringPredicateType.IS_UPPER,
+    StringPredicateType.IS_LOWER,
+    StringPredicateType.LENGTH_CMP,
+]
+
+_ATOMIC_TRANSFORM_TYPES = [
+    StringTransformType.IDENTITY,
+    StringTransformType.LOWERCASE,
+    StringTransformType.UPPERCASE,
+    StringTransformType.CAPITALIZE,
+    StringTransformType.SWAPCASE,
+    StringTransformType.REVERSE,
+    StringTransformType.REPLACE,
+    StringTransformType.STRIP,
+    StringTransformType.PREPEND,
+    StringTransformType.APPEND,
+]
+
+_PARAMETERIZED_TRANSFORM_TYPES = [
+    StringTransformType.REPLACE,
+    StringTransformType.STRIP,
+    StringTransformType.PREPEND,
+    StringTransformType.APPEND,
+]
+
+
+def _sample_atomic_predicate_type(
+    axes: StringRulesAxes, rng: random.Random
+) -> StringPredicateType:
+    atom_types = [
+        t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+    ]
+    if not atom_types:
+        atom_types = _ATOMIC_PREDICATE_TYPES
+    return rng.choice(atom_types)
+
+
+def _sample_pipeline_step_types(
+    axes: StringRulesAxes, n_steps: int, rng: random.Random
+) -> list[StringTransformType]:
+    atom_types = [
+        t for t in axes.transform_types if t != StringTransformType.PIPELINE
+    ]
+    if atom_types:
+        return [rng.choice(atom_types) for _ in range(n_steps)]
+
+    # Pipeline-only configs still need meaningful internal step variety.
+    first = rng.choice(_PARAMETERIZED_TRANSFORM_TYPES)
+    rest = [rng.choice(_ATOMIC_TRANSFORM_TYPES) for _ in range(n_steps - 1)]
+    steps = [first, *rest]
+    rng.shuffle(steps)
+    return steps
+
 
 def sample_string_predicate(
     pred_type: StringPredicateType,
@@ -90,49 +149,37 @@ def sample_string_predicate(
             return StringPredicateLengthCmp(op=op, value=value)
 
         case StringPredicateType.NOT:
-            atom_types = [
-                t
-                for t in axes.predicate_types
-                if t not in _COMPOSED_PREDICATE_TYPES
-            ]
-            if not atom_types:
-                atom_types = [StringPredicateType.IS_ALPHA]
-            operand = sample_string_predicate(rng.choice(atom_types), axes, rng)
+            operand_type = _sample_atomic_predicate_type(axes, rng)
+            operand = sample_string_predicate(operand_type, axes, rng)
             return StringPredicateNot(
                 operand=cast(StringPredicateAtom, operand)
             )
 
         case StringPredicateType.AND:
-            atom_types = [
-                t
-                for t in axes.predicate_types
-                if t not in _COMPOSED_PREDICATE_TYPES
-            ]
-            if not atom_types:
-                atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
             operands = [
                 cast(
                     StringPredicateAtom,
-                    sample_string_predicate(rng.choice(atom_types), axes, rng),
+                    sample_string_predicate(
+                        _sample_atomic_predicate_type(axes, rng),
+                        axes,
+                        rng,
+                    ),
                 )
                 for _ in range(n)
             ]
             return StringPredicateAnd(operands=operands)
 
         case StringPredicateType.OR:
-            atom_types = [
-                t
-                for t in axes.predicate_types
-                if t not in _COMPOSED_PREDICATE_TYPES
-            ]
-            if not atom_types:
-                atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
             operands = [
                 cast(
                     StringPredicateAtom,
-                    sample_string_predicate(rng.choice(atom_types), axes, rng),
+                    sample_string_predicate(
+                        _sample_atomic_predicate_type(axes, rng),
+                        axes,
+                        rng,
+                    ),
                 )
                 for _ in range(n)
             ]
@@ -193,19 +240,13 @@ def sample_string_transform(
 
         case StringTransformType.PIPELINE:
             n = rng.choice([2, 3])
-            atom_types = [
-                t
-                for t in axes.transform_types
-                if t != StringTransformType.PIPELINE
-            ]
-            if not atom_types:
-                atom_types = [StringTransformType.LOWERCASE]
+            step_types = _sample_pipeline_step_types(axes, n, rng)
             steps = [
                 cast(
                     StringTransformAtom,
-                    sample_string_transform(rng.choice(atom_types), axes, rng),
+                    sample_string_transform(step_type, axes, rng),
                 )
-                for _ in range(n)
+                for step_type in step_types
             ]
             return StringTransformPipeline(steps=steps)
 

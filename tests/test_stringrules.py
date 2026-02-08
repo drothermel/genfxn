@@ -534,6 +534,19 @@ class TestComposedPredicateSampling:
             assert isinstance(rule.predicate, StringPredicateOr)
             assert len(rule.predicate.operands) >= 2
 
+    def test_composed_only_sampling_uses_multiple_atom_kinds(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=8,
+            predicate_types=[StringPredicateType.AND],
+        )
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        operand_kinds = {
+            operand.kind
+            for rule in spec.rules
+            for operand in rule.predicate.operands
+        }
+        assert len(operand_kinds) >= 2
+
 
 class TestPipelineTransformSampling:
     def test_sample_pipeline_transform(self) -> None:
@@ -546,6 +559,21 @@ class TestPipelineTransformSampling:
         for rule in spec.rules:
             assert isinstance(rule.transform, StringTransformPipeline)
             assert len(rule.transform.steps) >= 2
+
+    def test_pipeline_only_sampling_includes_parameterized_steps(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=8,
+            transform_types=[StringTransformType.PIPELINE],
+        )
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        param_kinds = {"replace", "strip", "prepend", "append"}
+
+        pipelines = [rule.transform for rule in spec.rules]
+        pipelines.append(spec.default_transform)
+
+        for pipeline in pipelines:
+            assert isinstance(pipeline, StringTransformPipeline)
+            assert any(step.kind in param_kinds for step in pipeline.steps)
 
 
 class TestComposedRoundtrip:
