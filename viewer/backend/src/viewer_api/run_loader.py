@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import srsly
 from pydantic import BaseModel, ConfigDict, Field
@@ -89,6 +90,9 @@ class RunStore:
 
     def __init__(self, base_path: Path) -> None:
         self.base_path = base_path.resolve()
+        self._runs_cache: dict[
+            tuple[str, str], tuple[tuple[Any, ...], list[RunSummary]]
+        ] = {}
 
     def _resolve_within_base(self, *parts: str) -> Path:
         """Resolve path safely under base_path and reject traversal."""
@@ -129,6 +133,12 @@ class RunStore:
         model_path = self._resolve_within_base(tag, model)
         if not model_path.exists():
             return []
+
+        model_state = self._summaries_state(model_path)
+        cache_key = (tag, model)
+        cached = self._runs_cache.get(cache_key)
+        if cached is not None and cached[0] == model_state:
+            return cached[1]
 
         summaries = []
         for run_dir in model_path.iterdir():
@@ -191,7 +201,9 @@ class RunStore:
                 )
             )
 
-        return sorted(summaries, key=lambda r: r.run_id)
+        result = sorted(summaries, key=lambda r: r.run_id)
+        self._runs_cache[cache_key] = (model_state, result)
+        return result
 
     def get_run(self, tag: str, model: str, run_id: str) -> RunData | None:
         """Get full run data for a specific run."""
@@ -254,7 +266,56 @@ class RunStore:
         )
 
     def _read_text(self, path: Path) -> str | None:
-        """Read text file if it exists."""
+        """Read text file if it exists, tolerating invalid UTF-8 bytes."""
         if path.exists():
-            return path.read_text()
+            data = path.read_bytes()
+            try:
+                return data.decode("utf-8")
+            except UnicodeDecodeError:
+                return data.decode("utf-8", errors="replace")
         return None
+
+    def _summaries_state(self, model_path: Path) -> tuple[Any, ...]:
+        """Build a lightweight state signature for run summary invalidation."""
+        runs: list[tuple[Any, ...]] = []
+        for run_dir in model_path.iterdir():
+            if not run_dir.is_dir() or run_dir.name.startswith("."):
+                continue
+            try:
+                run_mtime = run_dir.stat().st_mtime_ns
+            except OSError:
+                run_mtime = 0
+            meta_mtime = self._safe_mtime_ns(run_dir / "run_meta.json")
+            eval_mtime = self._safe_mtime_ns(run_dir / "output.eval.json")
+            validation_state = tuple(
+                sorted(
+                    (
+                        path.name,
+                        self._safe_mtime_ns(path),
+                    )
+                    for path in run_dir.glob("validation_*.json")
+                )
+            )
+            runs.append(
+                (
+                    run_dir.name,
+                    run_mtime,
+                    meta_mtime,
+                    eval_mtime,
+                    validation_state,
+                )
+            )
+
+        try:
+            model_mtime = model_path.stat().st_mtime_ns
+        except OSError:
+            model_mtime = 0
+
+        return (model_mtime, tuple(sorted(runs)))
+
+    def _safe_mtime_ns(self, path: Path) -> int:
+        """Return file mtime in nanoseconds, or 0 if unavailable."""
+        try:
+            return path.stat().st_mtime_ns
+        except OSError:
+            return 0

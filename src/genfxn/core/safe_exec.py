@@ -9,6 +9,19 @@ class SafeExecTimeoutError(TimeoutError):
     """Raised when execution exceeds the configured timeout."""
 
 
+class SafeExecExecutionError(RuntimeError):
+    """Raised when isolated execution fails."""
+
+    def __init__(self, error_type: str, error_message: str) -> None:
+        super().__init__(f"{error_type}: {error_message}")
+        self.error_type = error_type
+        self.error_message = error_message
+
+
+class SafeExecMissingFunctionError(SafeExecExecutionError):
+    """Raised when function ``f`` is missing from the executed code."""
+
+
 @dataclass
 class _WorkerResult:
     ok: bool
@@ -94,7 +107,11 @@ def _run_isolated(
     if not result.ok:
         error_type = result.error_type or "RuntimeError"
         error_message = result.error_message or "Unknown execution error"
-        raise RuntimeError(f"{error_type}: {error_message}")
+        if error_type == "NameError" and (
+            error_message == "Function 'f' not found in code namespace"
+        ):
+            raise SafeExecMissingFunctionError(error_type, error_message)
+        raise SafeExecExecutionError(error_type, error_message)
     return result.value
 
 

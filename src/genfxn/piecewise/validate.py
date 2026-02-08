@@ -7,7 +7,10 @@ from pydantic import ValidationError
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
 from genfxn.core.predicates import get_threshold
-from genfxn.core.safe_exec import execute_code_restricted
+from genfxn.core.safe_exec import (
+    SafeExecMissingFunctionError,
+    execute_code_restricted,
+)
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.piecewise.ast_safety import ALLOWED_AST_NODES, ALLOWED_CALL_NAMES
 from genfxn.piecewise.eval import eval_piecewise
@@ -182,6 +185,16 @@ def _validate_code_compile(
     namespace: dict[str, object]
     try:
         namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+    except SafeExecMissingFunctionError as e:
+        return [
+            Issue(
+                code=CODE_CODE_MISSING_FUNC,
+                severity=Severity.ERROR,
+                message=f"Failed to execute code: {e}",
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
     except Exception as e:
         return [
             Issue(

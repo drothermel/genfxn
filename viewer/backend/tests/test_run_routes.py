@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -68,3 +69,39 @@ def test_malformed_run_detail_returns_422(tmp_path: Path) -> None:
     response = client.get("/api/runs/tag/model/run-1")
 
     assert response.status_code == 422
+
+
+def test_non_utf8_decoder_output_is_tolerated(tmp_path: Path) -> None:
+    run_dir = _write_good_run(tmp_path, "tag", "model", "run-1")
+    (run_dir / "output_decoder.txt").write_bytes(b"ok\xffbad")
+
+    client = _make_app(tmp_path)
+    response = client.get("/api/runs/tag/model/run-1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decoder_outputs"]["decoder"] == "ok\ufffdbad"
+
+
+def test_runs_summary_cache_invalidates_on_meta_change(tmp_path: Path) -> None:
+    run_dir = _write_good_run(tmp_path, "tag", "model", "run-1")
+    client = _make_app(tmp_path)
+
+    first = client.get("/api/runs/tag/model")
+    assert first.status_code == 200
+    assert first.json()[0]["task_id"] == "t1"
+
+    time.sleep(0.001)
+    (run_dir / "run_meta.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run-1",
+                "model": "model",
+                "tag": "tag",
+                "task": {"task_id": "t2", "family": "piecewise"},
+            }
+        )
+    )
+    second = client.get("/api/runs/tag/model")
+    assert second.status_code == 200
+    assert second.json()[0]["task_id"] == "t2"

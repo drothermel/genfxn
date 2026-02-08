@@ -30,3 +30,6 @@ exclude = ["viewer/backend"]
 
 [dependency-groups]
 dev = ["ty>=0.0.14", "pytest>=9.0.2", "ruff>=0.14.14"]
+
+[tool.pytest.ini_options]
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
