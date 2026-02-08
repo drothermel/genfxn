@@ -18,6 +18,7 @@ from genfxn.stringrules.validate import (
     CODE_TASK_ID_MISMATCH,
     CODE_UNSAFE_AST,
     DEFAULT_MAX_SEMANTIC_ISSUES,
+    _generate_test_inputs,
     validate_stringrules_task,
 )
 
@@ -76,7 +77,9 @@ class TestCodeCompilation:
         task = generate_stringrules_task(rng=random.Random(42))
         corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
         issues = validate_stringrules_task(corrupted)
-        assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert any(
+            i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
+        )
 
     def test_missing_func_caught(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
@@ -89,7 +92,7 @@ class TestCodeRuntime:
     def test_runtime_error_caught(self) -> None:
         task = generate_stringrules_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"code": "def f(s):\n    raise ZeroDivisionError('oops')"}
+            update={"code": "def f(s):\n    return s[1000]"}
         )
         issues = validate_stringrules_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
@@ -200,6 +203,11 @@ class TestParanoidMode:
             for i in unsafe
         )
 
+    def test_unsafe_code_rejected_without_paranoid_flag(self) -> None:
+        task = _make_task_with_code("import os\ndef f(s): return s")
+        issues = validate_stringrules_task(task, paranoid=False)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
     def test_multiple_seeds_pass_paranoid(self) -> None:
         for seed in [1, 42, 123, 999]:
             task = generate_stringrules_task(rng=random.Random(seed))
@@ -225,3 +233,9 @@ class TestDifferentConfigurations:
             issues = validate_stringrules_task(task, axes=axes, paranoid=True)
             errors = [i for i in issues if i.severity == Severity.ERROR]
             assert errors == [], f"overlap={overlap}: {errors}"
+
+    def test_generate_test_inputs_respects_digits_charset(self) -> None:
+        axes = StringRulesAxes(charset="digits", string_length_range=(1, 5))
+        inputs = _generate_test_inputs(axes, random.Random(42), num_samples=30)
+        assert inputs
+        assert all(all(ch.isdigit() for ch in s) for s in inputs)

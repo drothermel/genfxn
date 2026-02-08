@@ -1,12 +1,13 @@
 import ast
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 from pydantic import ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
 from genfxn.core.predicates import get_threshold
+from genfxn.core.safe_exec import execute_code_restricted
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.piecewise.ast_safety import ALLOWED_AST_NODES, ALLOWED_CALL_NAMES
 from genfxn.piecewise.eval import eval_piecewise
@@ -29,6 +30,7 @@ CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
 CODE_UNSUPPORTED_CONDITION = "UNSUPPORTED_CONDITION"
 CODE_UNSAFE_AST = "UNSAFE_AST"
 CURRENT_FAMILY = "piecewise"
+_ALLOWED_BUILTINS = {"abs": abs, "int": int}
 
 
 def _validate_ast_whitelist(
@@ -177,9 +179,9 @@ def _validate_code_compile(
             )
         ], None
 
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, object]
     try:
-        exec(task.code, namespace)  # noqa: S102
+        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
     except Exception as e:
         return [
             Issue(
@@ -378,6 +380,7 @@ def validate_piecewise_task(
         ]
     if value_range is None:
         value_range = PiecewiseAxes().value_range
+    _ = paranoid
 
     issues: list[Issue] = []
 
@@ -389,11 +392,10 @@ def validate_piecewise_task(
     if spec is not None:
         issues.extend(_validate_condition_support(task, spec))
 
-    if paranoid:
-        ast_issues, _ = _validate_ast_whitelist(task.code)
-        if ast_issues:
-            issues.extend(ast_issues)
-            return issues  # Bail early, don't exec unsafe code
+    ast_issues, _ = _validate_ast_whitelist(task.code)
+    if ast_issues:
+        issues.extend(ast_issues)
+        return issues  # Bail early, don't exec unsafe code
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)

@@ -1,13 +1,13 @@
 import ast
 import random
-import string
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Task
+from genfxn.core.safe_exec import execute_code_restricted
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.stringrules.ast_safety import (
     ALLOWED_ANNOTATION_NAMES,
@@ -20,6 +20,7 @@ from genfxn.stringrules.ast_safety import (
 )
 from genfxn.stringrules.eval import eval_stringrules
 from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
+from genfxn.stringrules.utils import _get_charset
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -41,6 +42,7 @@ CURRENT_FAMILY = "stringrules"
 DEFAULT_MAX_SEMANTIC_ISSUES = 10
 
 _spec_adapter = TypeAdapter(StringRulesSpec)
+_ALLOWED_BUILTINS = {"len": len, "str": str}
 
 
 def _annotation_positions(tree: ast.Module) -> set[tuple[int, int]]:
@@ -243,9 +245,9 @@ def _validate_code_compile(
             )
         ], None
 
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, object]
     try:
-        exec(task.code, namespace)  # noqa: S102
+        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
     except Exception as e:
         return [
             Issue(
@@ -341,24 +343,24 @@ def _generate_test_inputs(
     axes: StringRulesAxes, rng: random.Random, num_samples: int = 50
 ) -> list[str]:
     """Generate test inputs including edge cases and random samples."""
-    charset = string.ascii_letters + string.digits
+    charset = _get_charset(axes.charset)
     inputs: list[str] = []
     lo, hi = axes.string_length_range
 
     # Edge cases
-    inputs.append("")
-    inputs.append("a")
-    inputs.append("A")
-    inputs.append("1")
-    inputs.append("abc")
-    inputs.append("ABC")
-    inputs.append("123")
-    inputs.append("AbC123")
-    inputs.append(" ")
-    inputs.append("  spaces  ")
+    if lo <= 0 <= hi:
+        inputs.append("")
+    for candidate in ("a", "A", "1", "abc", "ABC", "123", "AbC123"):
+        if lo <= len(candidate) <= hi and all(c in charset for c in candidate):
+            inputs.append(candidate)
+    if " " in charset:
+        if lo <= 1 <= hi:
+            inputs.append(" ")
+        if lo <= 10 <= hi:
+            inputs.append("  spaces  ")
 
     # Random samples
-    for _ in range(num_samples - len(inputs)):
+    for _ in range(max(0, num_samples - len(inputs))):
         length = rng.randint(lo, hi)
         inputs.append("".join(rng.choice(charset) for _ in range(length)))
 
@@ -436,7 +438,7 @@ def validate_stringrules_task(
         max_semantic_issues: Stop semantic testing after this many issues.
             Use 0 for unlimited.
         emit_diagnostics: Kept for API parity. No diagnostics for this family.
-        paranoid: If True, validate AST whitelist before executing code.
+        paranoid: Deprecated; AST whitelist validation is always enforced.
         rng: Random generator for semantic testing. Random(42) if None.
 
     Returns:
@@ -456,6 +458,7 @@ def validate_stringrules_task(
         axes = StringRulesAxes()
     if rng is None:
         rng = random.Random(42)
+    _ = paranoid
 
     issues: list[Issue] = []
 
@@ -464,11 +467,10 @@ def validate_stringrules_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    if paranoid:
-        ast_issues, _ = _validate_ast_whitelist(task.code)
-        if ast_issues:
-            issues.extend(ast_issues)
-            return issues
+    ast_issues, _ = _validate_ast_whitelist(task.code)
+    if ast_issues:
+        issues.extend(ast_issues)
+        return issues
 
     code_issues, func = _validate_code_compile(task)
     issues.extend(code_issues)

@@ -97,6 +97,14 @@ ALLOWED_METHOD_NAMES: frozenset[str] = frozenset(
     {"get", "items", "values", "keys", "add"}
 )
 
+METHOD_ARITIES: dict[str, set[int]] = {
+    "get": {1, 2},
+    "items": {0},
+    "values": {0},
+    "keys": {0},
+    "add": {1},
+}
+
 # Variable names used in rendered simple_algorithms code
 ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
     {

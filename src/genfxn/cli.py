@@ -47,7 +47,13 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
             raise typer.BadParameter(
                 f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
             )
-        return (int(lo_s), int(hi_s))
+        lo = int(lo_s)
+        hi = int(hi_s)
+        if lo > hi:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': low must be <= high"
+            )
+        return (lo, hi)
     except (ValueError, IndexError) as err:
         raise typer.BadParameter(
             f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"

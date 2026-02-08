@@ -284,7 +284,7 @@ def _generate_max_window_queries(
     queries.append(
         Query(
             input=[],
-            output=spec.invalid_k_default,
+            output=eval_simple_algorithms(spec, []),
             tag=QueryTag.COVERAGE,
         )
     )

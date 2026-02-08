@@ -30,91 +30,93 @@ def _generate_matching_string(
     charset = _get_charset(axes.charset)
     lo, hi = axes.string_length_range
 
+    def _sample_length(
+        min_len: int = 0, max_len: int | None = None
+    ) -> int | None:
+        upper = hi if max_len is None else min(max_len, hi)
+        lower = max(lo, min_len)
+        if lower > upper:
+            return None
+        return rng.randint(lower, upper)
+
+    def _valid(s: str) -> str | None:
+        if lo <= len(s) <= hi and eval_string_predicate(pred, s):
+            return s
+        return None
+
     match pred:
         case StringPredicateStartsWith(prefix=prefix):
-            remaining_len = rng.randint(0, max(0, hi - len(prefix)))
-            suffix = _random_string(remaining_len, charset, rng)
-            return prefix + suffix
+            length = _sample_length(min_len=len(prefix))
+            if length is None:
+                return None
+            suffix = _random_string(length - len(prefix), charset, rng)
+            return _valid(prefix + suffix)
 
         case StringPredicateEndsWith(suffix=suffix):
-            remaining_len = rng.randint(0, max(0, hi - len(suffix)))
-            prefix = _random_string(remaining_len, charset, rng)
-            return prefix + suffix
+            length = _sample_length(min_len=len(suffix))
+            if length is None:
+                return None
+            prefix = _random_string(length - len(suffix), charset, rng)
+            return _valid(prefix + suffix)
 
         case StringPredicateContains(substring=sub):
-            slack = max(0, hi - len(sub))
-            before_len = rng.randint(0, slack // 2)
-            after_len = rng.randint(0, slack // 2)
+            length = _sample_length(min_len=len(sub))
+            if length is None:
+                return None
+            slack = length - len(sub)
+            before_len = rng.randint(0, slack)
+            after_len = slack - before_len
             before = _random_string(before_len, charset, rng)
             after = _random_string(after_len, charset, rng)
-            return before + sub + after
+            return _valid(before + sub + after)
 
         case StringPredicateIsAlpha():
-            length = rng.randint(max(1, lo), hi)
-            return _random_string(length, string.ascii_letters, rng)
+            length = _sample_length(min_len=1)
+            if length is None:
+                return None
+            return _valid(_random_string(length, string.ascii_letters, rng))
 
         case StringPredicateIsDigit():
-            length = rng.randint(max(1, lo), hi)
-            return _random_string(length, string.digits, rng)
+            length = _sample_length(min_len=1)
+            if length is None:
+                return None
+            return _valid(_random_string(length, string.digits, rng))
 
         case StringPredicateIsUpper():
-            length = rng.randint(max(1, lo), hi)
-            return _random_string(
-                length, string.ascii_uppercase + string.digits, rng
+            length = _sample_length(min_len=1)
+            if length is None:
+                return None
+            tail = _random_string(
+                max(0, length - 1), string.ascii_uppercase + string.digits, rng
             )
+            return _valid(rng.choice(string.ascii_uppercase) + tail)
 
         case StringPredicateIsLower():
-            length = rng.randint(max(1, lo), hi)
-            return _random_string(
-                length, string.ascii_lowercase + string.digits, rng
+            length = _sample_length(min_len=1)
+            if length is None:
+                return None
+            tail = _random_string(
+                max(0, length - 1), string.ascii_lowercase + string.digits, rng
             )
+            return _valid(rng.choice(string.ascii_lowercase) + tail)
 
         case StringPredicateLengthCmp(op=op, value=v):
             match op:
                 case "lt":
-                    # length < v: only length 0 when v==1; none when v==0
-                    if v <= 1:
-                        return _random_string(0, charset, rng)
-                    low, high = max(lo, 0), min(hi, v - 1)
-                    if low <= high:
-                        length = rng.randint(low, high)
-                    else:
-                        return _random_string(0, charset, rng)
+                    length = _sample_length(max_len=v - 1)
                 case "le":
-                    # length <= v: only length 0 when v==0
-                    if v == 0:
-                        return _random_string(0, charset, rng)
-                    low, high = max(lo, 0), min(hi, v)
-                    if low <= high:
-                        length = rng.randint(low, high)
-                    else:
-                        return _random_string(0, charset, rng)
+                    length = _sample_length(max_len=v)
                 case "gt":
-                    # length > v
-                    low, high = max(lo, v + 1), hi
-                    if low <= high:
-                        length = rng.randint(low, high)
-                    else:
-                        return _random_string(0, charset, rng)
+                    length = _sample_length(min_len=v + 1)
                 case "ge":
-                    # length >= v
-                    low, high = max(lo, v), hi
-                    if low <= high:
-                        length = rng.randint(low, high)
-                    else:
-                        return _random_string(0, charset, rng)
+                    length = _sample_length(min_len=v)
                 case "eq":
-                    # length == v: must be 0 when v==0
-                    if v == 0:
-                        return _random_string(0, charset, rng)
-                    length = v
+                    length = _sample_length(min_len=v, max_len=v)
                 case _:
-                    low, high = lo, hi
-                    if low <= high:
-                        length = rng.randint(low, high)
-                    else:
-                        return _random_string(0, charset, rng)
-            return _random_string(length, charset, rng)
+                    length = _sample_length()
+            if length is None:
+                return None
+            return _valid(_random_string(length, charset, rng))
 
         case StringPredicateNot() | StringPredicateAnd() | StringPredicateOr():
             return find_satisfying(
@@ -124,7 +126,7 @@ def _generate_matching_string(
             )
 
         case _:
-            return _random_string(rng.randint(lo, hi), charset, rng)
+            return _valid(_random_string(rng.randint(lo, hi), charset, rng))
 
 
 def _generate_non_matching_string(
@@ -134,68 +136,86 @@ def _generate_non_matching_string(
     charset = _get_charset(axes.charset)
     lo, hi = axes.string_length_range
 
+    def _sample_length(min_len: int = 0) -> int | None:
+        lower = max(lo, min_len)
+        if lower > hi:
+            return None
+        return rng.randint(lower, hi)
+
     match pred:
         case StringPredicateStartsWith(prefix=prefix):
             # Start with something different
             if not prefix:
-                first_char = rng.choice(charset)
-            else:
-                excluded = [c for c in charset if c != prefix[0]]
-                if not excluded:
-                    first_char = rng.choice(charset)
-                else:
-                    first_char = rng.choice(excluded)
-            length = rng.randint(max(1, lo), hi)
+                return None
+            excluded = [c for c in charset if c != prefix[0]]
+            if not excluded:
+                return None
+            first_char = rng.choice(excluded)
+            length = _sample_length(min_len=1)
+            if length is None:
+                return None
             return first_char + _random_string(length - 1, charset, rng)
 
         case StringPredicateEndsWith(suffix=suffix):
             # End with something different
             if not suffix:
-                last_char = rng.choice(charset)
-            else:
-                excluded = [c for c in charset if c != suffix[-1]]
-                if not excluded:
-                    last_char = rng.choice(charset)
-                else:
-                    last_char = rng.choice(excluded)
-            length = rng.randint(max(1, lo), hi)
+                return None
+            excluded = [c for c in charset if c != suffix[-1]]
+            if not excluded:
+                return None
+            last_char = rng.choice(excluded)
+            length = _sample_length(min_len=1)
+            if length is None:
+                return None
             return _random_string(length - 1, charset, rng) + last_char
 
         case StringPredicateContains(substring=sub):
             # Generate without the substring
-            length = rng.randint(max(1, lo), hi)
+            length = _sample_length(min_len=1)
+            if length is None:
+                return None
             result = _random_string(length, charset, rng)
             # Keep regenerating if we accidentally included it
             attempts = 0
             while sub in result and attempts < 10:
                 result = _random_string(length, charset, rng)
                 attempts += 1
+            if sub in result:
+                return None
             return result
 
         case StringPredicateIsAlpha():
             # Include a digit
-            length = rng.randint(max(2, lo), hi)
+            length = _sample_length(min_len=2)
+            if length is None:
+                return None
             base = _random_string(length - 1, string.ascii_letters, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(string.digits) + base[pos:]
 
         case StringPredicateIsDigit():
             # Include a letter
-            length = rng.randint(max(2, lo), hi)
+            length = _sample_length(min_len=2)
+            if length is None:
+                return None
             base = _random_string(length - 1, string.digits, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(string.ascii_letters) + base[pos:]
 
         case StringPredicateIsUpper():
             # Include lowercase
-            length = rng.randint(max(2, lo), hi)
+            length = _sample_length(min_len=2)
+            if length is None:
+                return None
             base = _random_string(length - 1, string.ascii_uppercase, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(string.ascii_lowercase) + base[pos:]
 
         case StringPredicateIsLower():
             # Include uppercase
-            length = rng.randint(max(2, lo), hi)
+            length = _sample_length(min_len=2)
+            if length is None:
+                return None
             base = _random_string(length - 1, string.ascii_lowercase, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(string.ascii_uppercase) + base[pos:]
@@ -203,24 +223,37 @@ def _generate_non_matching_string(
         case StringPredicateLengthCmp(op=op, value=v):
             match op:
                 case "lt":
-                    length = rng.randint(max(v, 1), max(v, hi))
+                    lower = max(lo, v)
+                    if lower > hi:
+                        return None
+                    length = rng.randint(lower, hi)
                 case "le":
-                    length = rng.randint(v + 1, max(v + 1, hi))
+                    lower = max(lo, v + 1)
+                    if lower > hi:
+                        return None
+                    length = rng.randint(lower, hi)
                 case "gt":
                     # Non-matching: length <= v; clamp upper to hi
                     upper = min(v, hi)
-                    length = lo if upper < lo else rng.randint(lo, upper)
+                    if upper < lo:
+                        return None
+                    length = rng.randint(lo, upper)
                 case "ge":
                     # Non-matching: length < v; clamp upper to hi
                     upper = min(v - 1, hi)
-                    length = lo if upper < lo else rng.randint(lo, upper)
+                    if upper < lo:
+                        return None
+                    length = rng.randint(lo, upper)
                 case "eq":
                     # Any length except v
-                    if v < hi:
-                        length = v + 1
-                    else:
-                        # v >= hi: use v - 1 (may be 0 or below lo)
-                        length = v - 1
+                    candidates = [
+                        candidate
+                        for candidate in range(lo, hi + 1)
+                        if candidate != v
+                    ]
+                    if not candidates:
+                        return None
+                    length = rng.choice(candidates)
                 case _:
                     length = rng.randint(lo, hi)
             return _random_string(length, charset, rng)
@@ -286,69 +319,42 @@ def _generate_boundary_queries(
     """Generate inputs that test rule precedence (match multiple rules)."""
     queries: list[Query] = []
 
+    lo, hi = _axes.string_length_range
+
+    def _append_if_in_range(s: str) -> None:
+        if lo <= len(s) <= hi:
+            queries.append(
+                Query(
+                    input=s,
+                    output=eval_stringrules(spec, s),
+                    tag=QueryTag.BOUNDARY,
+                )
+            )
+
     # Generate strings that could match multiple rules
     for rule in spec.rules:
         # For pattern predicates, test exact matches and near-matches
         match rule.predicate:
             case StringPredicateStartsWith(prefix=prefix):
-                # Exact prefix
-                queries.append(
-                    Query(
-                        input=prefix,
-                        output=eval_stringrules(spec, prefix),
-                        tag=QueryTag.BOUNDARY,
-                    )
-                )
+                _append_if_in_range(prefix)
                 # Prefix + extra char
                 s = prefix + "x"
-                queries.append(
-                    Query(
-                        input=s,
-                        output=eval_stringrules(spec, s),
-                        tag=QueryTag.BOUNDARY,
-                    )
-                )
+                _append_if_in_range(s)
 
             case StringPredicateEndsWith(suffix=suffix):
-                # Exact suffix
-                queries.append(
-                    Query(
-                        input=suffix,
-                        output=eval_stringrules(spec, suffix),
-                        tag=QueryTag.BOUNDARY,
-                    )
-                )
+                _append_if_in_range(suffix)
 
             case StringPredicateContains(substring=sub):
-                # Just the substring
-                queries.append(
-                    Query(
-                        input=sub,
-                        output=eval_stringrules(spec, sub),
-                        tag=QueryTag.BOUNDARY,
-                    )
-                )
+                _append_if_in_range(sub)
 
             case StringPredicateLengthCmp(op=op, value=v):
                 # Test boundary values
                 if op in ("lt", "le"):
                     s = "x" * v
-                    queries.append(
-                        Query(
-                            input=s,
-                            output=eval_stringrules(spec, s),
-                            tag=QueryTag.BOUNDARY,
-                        )
-                    )
+                    _append_if_in_range(s)
                 if op in ("gt", "ge") and v > 0:
                     s = "x" * v
-                    queries.append(
-                        Query(
-                            input=s,
-                            output=eval_stringrules(spec, s),
-                            tag=QueryTag.BOUNDARY,
-                        )
-                    )
+                    _append_if_in_range(s)
 
             case _:
                 pass
@@ -384,34 +390,10 @@ def _generate_adversarial_queries(
     """Generate edge cases and strings that hit the default."""
     queries: list[Query] = []
 
-    # Empty string
-    queries.append(
-        Query(
-            input="",
-            output=eval_stringrules(spec, ""),
-            tag=QueryTag.ADVERSARIAL,
-        )
-    )
+    lo, hi = axes.string_length_range
 
-    # Single character
-    queries.append(
-        Query(
-            input="x",
-            output=eval_stringrules(spec, "x"),
-            tag=QueryTag.ADVERSARIAL,
-        )
-    )
-
-    # Try to hit the default (no rule matches)
-    attempts = 0
-    while attempts < 20:
-        s = _random_string(rng.randint(3, 10), _get_charset(axes.charset), rng)
-        matches_any = False
-        for rule in spec.rules:
-            if eval_string_predicate(rule.predicate, s):
-                matches_any = True
-                break
-        if not matches_any:
+    def _append_if_in_range(s: str) -> None:
+        if lo <= len(s) <= hi:
             queries.append(
                 Query(
                     input=s,
@@ -419,6 +401,24 @@ def _generate_adversarial_queries(
                     tag=QueryTag.ADVERSARIAL,
                 )
             )
+
+    # Empty string
+    _append_if_in_range("")
+
+    # Single character
+    _append_if_in_range("x")
+
+    # Try to hit the default (no rule matches)
+    attempts = 0
+    while attempts < 20:
+        s = _random_string(rng.randint(lo, hi), _get_charset(axes.charset), rng)
+        matches_any = False
+        for rule in spec.rules:
+            if eval_string_predicate(rule.predicate, s):
+                matches_any = True
+                break
+        if not matches_any:
+            _append_if_in_range(s)
             break
         attempts += 1
 
@@ -433,13 +433,7 @@ def _generate_adversarial_queries(
         "MixedCase123",
     ]
     for s in special:
-        queries.append(
-            Query(
-                input=s,
-                output=eval_stringrules(spec, s),
-                tag=QueryTag.ADVERSARIAL,
-            )
-        )
+        _append_if_in_range(s)
 
     return queries
 

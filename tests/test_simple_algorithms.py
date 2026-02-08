@@ -282,6 +282,16 @@ class TestQueryGeneration:
         inputs = [q.input for q in queries]
         assert [] in inputs
 
+    def test_max_window_empty_query_uses_empty_default_when_set(self) -> None:
+        spec = MaxWindowSumSpec(k=3, invalid_k_default=-1, empty_default=-99)
+        axes = SimpleAlgorithmsAxes()
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        empty_queries = [q for q in queries if q.input == []]
+        assert empty_queries
+        assert empty_queries[0].output == eval_simple_algorithms(spec, [])
+
 
 class TestAxesValidation:
     def test_invalid_value_range(self) -> None:

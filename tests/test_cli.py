@@ -193,6 +193,46 @@ class TestSplit:
             val = int(t["spec"]["branches"][0]["condition"]["value"])
             assert -10 <= val <= 10
 
+    def test_split_range_rejects_reversed_bounds(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "piecewise",
+                "-n",
+                "5",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "branches.0.condition.value",
+                "--holdout-value",
+                "10,-10",
+                "--holdout-type",
+                "range",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "low must be <= high" in result.output
+
     def test_split_random_ratio_accepts_zero_and_one(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"

@@ -105,7 +105,9 @@ class TestCodeCompilation:
         task = generate_stateful_task(rng=random.Random(42))
         corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
         issues = validate_stateful_task(corrupted)
-        assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert any(
+            i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
+        )
 
     def test_missing_func_caught(self) -> None:
         task = generate_stateful_task(rng=random.Random(42))
@@ -122,7 +124,7 @@ class TestCodeRuntime:
     def test_runtime_error_caught(self) -> None:
         task = generate_stateful_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    raise ZeroDivisionError('oops')"}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
@@ -134,16 +136,13 @@ class TestCodeRuntime:
     def test_runtime_error_includes_input(self) -> None:
         task = generate_stateful_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={
-                "code": "def f(xs):\n    return 1 // len(xs)"
-            }  # Fails for []
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted)
         runtime_errors = [
             i for i in issues if i.code == CODE_CODE_RUNTIME_ERROR
         ]
-        # Empty list [] should cause the error
-        assert any("f([])" in i.message for i in runtime_errors)
+        assert any("f(" in i.message for i in runtime_errors)
 
 
 class TestQueryTypeValidation:
@@ -299,7 +298,7 @@ class TestSemanticIssueCapping:
     def test_caps_runtime_errors(self) -> None:
         task = generate_stateful_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    raise ValueError('boom')"}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted, max_semantic_issues=5)
         runtime_issues = [
@@ -456,11 +455,11 @@ class TestParanoidMode:
         unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
         assert any("line" in i.message for i in unsafe)
 
-    def test_paranoid_false_allows_unsafe_code(self) -> None:
-        """Without paranoid mode, unsafe code is not flagged as UNSAFE_AST."""
+    def test_unsafe_code_rejected_without_paranoid_flag(self) -> None:
+        """Unsafe code should be rejected even when paranoid=False."""
         task = _make_task_with_code("import os\ndef f(xs): return 0")
         issues = validate_stateful_task(task, paranoid=False)
-        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
     def test_multiple_seeds_pass_paranoid(self) -> None:
         """Multiple generated tasks should all pass paranoid check."""

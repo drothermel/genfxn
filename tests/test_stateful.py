@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.models import QueryTag
 from genfxn.core.predicates import (
     PredicateEven,
     PredicateGt,
@@ -176,6 +177,12 @@ class TestQueryGeneration:
         queries = generate_stateful_queries(spec, axes, random.Random(42))
         inputs = [q.input for q in queries]
         assert [] in inputs
+
+    def test_unsatisfiable_predicate_skips_boundary_queries(self) -> None:
+        spec = LongestRunSpec(match_predicate=PredicateLt(value=-100))
+        axes = StatefulAxes(value_range=(0, 10))
+        queries = generate_stateful_queries(spec, axes, random.Random(42))
+        assert not any(q.tag == QueryTag.BOUNDARY for q in queries)
 
 
 class TestRender:

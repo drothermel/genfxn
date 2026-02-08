@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.models import QueryTag
 from genfxn.core.string_predicates import (
     StringPredicateAnd,
     StringPredicateContains,
@@ -378,6 +379,31 @@ class TestQueryGeneration:
         queries = generate_stringrules_queries(spec, axes, random.Random(42))
         for q in queries:
             assert q.output == eval_stringrules(spec, q.input)
+
+    def test_queries_respect_string_length_range(self) -> None:
+        axes = StringRulesAxes(n_rules=3, string_length_range=(0, 4))
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        lo, hi = axes.string_length_range
+        assert queries
+        assert all(lo <= len(q.input) <= hi for q in queries)
+
+    def test_coverage_queries_trigger_their_target_rule(self) -> None:
+        axes = StringRulesAxes(n_rules=3, overlap_level=OverlapLevel.NONE)
+        spec = sample_stringrules_spec(axes, random.Random(42))
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        coverage = [q for q in queries if q.tag == QueryTag.COVERAGE]
+        assert len(coverage) >= len(spec.rules)
+
+        for i, rule in enumerate(spec.rules):
+            assert any(
+                eval_string_predicate(rule.predicate, q.input)
+                and not any(
+                    eval_string_predicate(prev.predicate, q.input)
+                    for prev in spec.rules[:i]
+                )
+                for q in coverage
+            )
 
 
 class TestAxesValidation:

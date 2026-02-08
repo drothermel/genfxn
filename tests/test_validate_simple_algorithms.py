@@ -77,7 +77,9 @@ class TestCodeCompilation:
         task = generate_simple_algorithms_task(rng=random.Random(42))
         corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
         issues = validate_simple_algorithms_task(corrupted)
-        assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert any(
+            i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
+        )
 
     def test_missing_func_caught(self) -> None:
         task = generate_simple_algorithms_task(rng=random.Random(42))
@@ -90,7 +92,7 @@ class TestCodeRuntime:
     def test_runtime_error_caught(self) -> None:
         task = generate_simple_algorithms_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    raise ZeroDivisionError('oops')"}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
@@ -120,6 +122,38 @@ class TestQueryTypeValidation:
         issues = validate_simple_algorithms_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
         assert len(type_issues) > 0
+
+    def test_non_int_element_in_list_input_is_error(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={
+                "queries": [
+                    Query(
+                        input=[1, "two", 3], output=0, tag=QueryTag.TYPICAL
+                    )
+                ]
+            }
+        )
+        issues = validate_simple_algorithms_task(corrupted, strict=True)
+        type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
+        assert len(type_issues) > 0
+
+    def test_query_type_checks_run_with_bad_spec(self) -> None:
+        task = generate_simple_algorithms_task(rng=random.Random(42))
+        corrupted = task.model_copy(
+            update={
+                "spec": {"invalid": "spec"},
+                "queries": [
+                    Query(
+                        input=[1, "two", 3], output="bad", tag=QueryTag.TYPICAL
+                    )
+                ],
+            }
+        )
+        issues = validate_simple_algorithms_task(corrupted, strict=True)
+        assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+        assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
 
 class TestQueryOutputValidation:
@@ -185,6 +219,16 @@ class TestParanoidMode:
         issues = validate_simple_algorithms_task(task, paranoid=True)
         unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
         assert len(unsafe) >= 1
+
+    def test_method_arity_mismatch_rejected(self) -> None:
+        task = _make_task_with_code("def f(xs): return {}.get(1, 2, 3)")
+        issues = validate_simple_algorithms_task(task, paranoid=True)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_unsafe_code_rejected_without_paranoid_flag(self) -> None:
+        task = _make_task_with_code("import os\ndef f(xs): return 0")
+        issues = validate_simple_algorithms_task(task, paranoid=False)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
     def test_multiple_seeds_pass_paranoid(self) -> None:
         for seed in [1, 42, 123, 999]:

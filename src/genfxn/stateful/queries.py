@@ -44,31 +44,34 @@ def _make_matching_value(
 ) -> int | None:
     lo, hi = value_range
 
-    def clamp(x: int) -> int:
-        return max(lo, min(x, hi))
-
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
-            return rng.choice(candidates) if candidates else lo
+            return rng.choice(candidates) if candidates else None
         case PredicateOdd():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else clamp(lo + 1)
+            return rng.choice(candidates) if candidates else None
         case PredicateLt(value=v):
-            return rng.randint(lo, min(v - 1, hi)) if lo <= v - 1 else lo
+            if lo <= v - 1:
+                return rng.randint(lo, min(v - 1, hi))
+            return None
         case PredicateLe(value=v):
-            return rng.randint(lo, min(v, hi)) if lo <= v else lo
+            if lo <= v:
+                return rng.randint(lo, min(v, hi))
+            return None
         case PredicateGt(value=v):
-            return rng.randint(max(v + 1, lo), hi) if v + 1 <= hi else hi
+            if v + 1 <= hi:
+                return rng.randint(max(v + 1, lo), hi)
+            return None
         case PredicateGe(value=v):
-            return rng.randint(max(v, lo), hi) if v <= hi else hi
+            if v <= hi:
+                return rng.randint(max(v, lo), hi)
+            return None
         case PredicateModEq(divisor=d, remainder=r):
             candidates = [x for x in range(lo, hi + 1) if x % d == r]
             if candidates:
                 return rng.choice(candidates)
-            # Compute smallest value >= lo congruent to r mod d, then clamp
-            base = lo + ((r - lo) % d)
-            return clamp(base)
+            return None
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(
                 lambda: rng.randint(lo, hi),
@@ -83,31 +86,34 @@ def _make_non_matching_value(
 ) -> int | None:
     lo, hi = value_range
 
-    def clamp(x: int) -> int:
-        return max(lo, min(x, hi))
-
     match pred:
         case PredicateEven():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else clamp(lo + 1)
+            return rng.choice(candidates) if candidates else None
         case PredicateOdd():
             candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
-            return rng.choice(candidates) if candidates else lo
+            return rng.choice(candidates) if candidates else None
         case PredicateLt(value=v):
-            return rng.randint(max(v, lo), hi) if v <= hi else hi
+            if v <= hi:
+                return rng.randint(max(v, lo), hi)
+            return None
         case PredicateLe(value=v):
-            return rng.randint(max(v + 1, lo), hi) if v + 1 <= hi else hi
+            if v + 1 <= hi:
+                return rng.randint(max(v + 1, lo), hi)
+            return None
         case PredicateGt(value=v):
-            return rng.randint(lo, min(v, hi)) if lo <= v else lo
+            if lo <= v:
+                return rng.randint(lo, min(v, hi))
+            return None
         case PredicateGe(value=v):
-            return rng.randint(lo, min(v - 1, hi)) if lo <= v - 1 else lo
+            if lo <= v - 1:
+                return rng.randint(lo, min(v - 1, hi))
+            return None
         case PredicateModEq(divisor=d, remainder=r):
             candidates = [x for x in range(lo, hi + 1) if x % d != r]
             if candidates:
                 return rng.choice(candidates)
-            # Compute smallest value >= lo NOT congruent to r mod d, then clamp
-            base = lo + ((r + 1 - lo) % d)
-            return clamp(base)
+            return None
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(
                 lambda: rng.randint(lo, hi),
