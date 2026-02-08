@@ -320,6 +320,18 @@ class TestAxesValidation:
         assert axes.pre_filter_types == [PredicateType.MOD_EQ]
         assert axes.pre_transform_types == [TransformType.SHIFT]
 
+    def test_unsupported_pre_filter_type(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_filter_types contains unsupported"
+        ):
+            SimpleAlgorithmsAxes(pre_filter_types=[PredicateType.IN_SET])
+
+    def test_unsupported_pre_transform_type(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_transform_types contains unsupported"
+        ):
+            SimpleAlgorithmsAxes(pre_transform_types=[TransformType.CLIP])
+
 
 class TestTaskGeneration:
     def test_full_pipeline(self) -> None:
