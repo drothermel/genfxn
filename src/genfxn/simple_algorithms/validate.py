@@ -612,10 +612,12 @@ def validate_simple_algorithms_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    ast_issues, tree = _validate_ast_whitelist(task.code)
-    if ast_issues:
-        issues.extend(ast_issues)
-        return issues
+    tree: ast.Module | None = None
+    if isinstance(task.code, str):
+        ast_issues, tree = _validate_ast_whitelist(task.code)
+        if ast_issues:
+            issues.extend(ast_issues)
+            return issues
 
     code_issues, func = _validate_code_compile(
         task,

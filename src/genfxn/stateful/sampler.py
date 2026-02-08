@@ -1,8 +1,10 @@
 import random
+from typing import cast
 
 from genfxn.core.predicates import (
     Predicate,
     PredicateAnd,
+    PredicateAtom,
     PredicateEven,
     PredicateGe,
     PredicateGt,
@@ -19,6 +21,7 @@ from genfxn.core.trace import TraceStep, trace_step
 from genfxn.core.transforms import (
     Transform,
     TransformAbs,
+    TransformAtom,
     TransformIdentity,
     TransformNegate,
     TransformPipeline,
@@ -73,11 +76,14 @@ def sample_predicate(
             remainder = rng.randint(0, divisor - 1)
             return PredicateModEq(divisor=divisor, remainder=remainder)
         case PredicateType.NOT:
-            operand = sample_predicate(
-                rng.choice(_ATOM_PREDICATE_TYPES),
-                threshold_range,
-                divisor_range,
-                rng,
+            operand = cast(
+                PredicateAtom,
+                sample_predicate(
+                    rng.choice(_ATOM_PREDICATE_TYPES),
+                    threshold_range,
+                    divisor_range,
+                    rng,
+                ),
             )
             return PredicateNot(operand=operand)
         case PredicateType.AND:
@@ -89,11 +95,14 @@ def sample_predicate(
                 )
             n = rng.randint(min_operands, max_operands)
             operands = [
-                sample_predicate(
-                    rng.choice(_ATOM_PREDICATE_TYPES),
-                    threshold_range,
-                    divisor_range,
-                    rng,
+                cast(
+                    PredicateAtom,
+                    sample_predicate(
+                        rng.choice(_ATOM_PREDICATE_TYPES),
+                        threshold_range,
+                        divisor_range,
+                        rng,
+                    ),
                 )
                 for _ in range(n)
             ]
@@ -107,11 +116,14 @@ def sample_predicate(
                 )
             n = rng.randint(min_operands, max_operands)
             operands = [
-                sample_predicate(
-                    rng.choice(_ATOM_PREDICATE_TYPES),
-                    threshold_range,
-                    divisor_range,
-                    rng,
+                cast(
+                    PredicateAtom,
+                    sample_predicate(
+                        rng.choice(_ATOM_PREDICATE_TYPES),
+                        threshold_range,
+                        divisor_range,
+                        rng,
+                    ),
                 )
                 for _ in range(n)
             ]
@@ -142,13 +154,19 @@ def sample_transform(
             param_types = [TransformType.SHIFT, TransformType.SCALE]
             nonparam_types = [TransformType.ABS, TransformType.NEGATE]
             # Ensure at least one param step for meaningful pipelines
-            first = sample_transform(
-                rng.choice(param_types), shift_range, scale_range, rng
+            first = cast(
+                TransformAtom,
+                sample_transform(
+                    rng.choice(param_types), shift_range, scale_range, rng
+                ),
             )
             rest_types = param_types + nonparam_types
             rest = [
-                sample_transform(
-                    rng.choice(rest_types), shift_range, scale_range, rng
+                cast(
+                    TransformAtom,
+                    sample_transform(
+                        rng.choice(rest_types), shift_range, scale_range, rng
+                    ),
                 )
                 for _ in range(n - 1)
             ]

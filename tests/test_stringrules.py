@@ -458,6 +458,7 @@ class TestTaskGeneration:
         assert task.task_id.startswith("stringrules_")
         assert len(task.queries) > 0
 
+        assert isinstance(task.code, str)
         namespace: dict = {}
         exec(task.code, namespace)  # noqa: S102
         f = namespace["f"]
@@ -470,6 +471,7 @@ class TestTaskGeneration:
             task = generate_stringrules_task(axes, random.Random(42))
             assert len(task.spec["rules"]) == 3
 
+            assert isinstance(task.code, str)
             namespace: dict = {}
             exec(task.code, namespace)  # noqa: S102
             f = namespace["f"]

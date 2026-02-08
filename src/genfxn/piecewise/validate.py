@@ -455,10 +455,12 @@ def validate_piecewise_task(
     if spec is not None:
         issues.extend(_validate_condition_support(task, spec))
 
-    ast_issues, tree = _validate_ast_whitelist(task.code)
-    if ast_issues:
-        issues.extend(ast_issues)
-        return issues  # Bail early, don't exec unsafe code
+    tree: ast.Module | None = None
+    if isinstance(task.code, str):
+        ast_issues, tree = _validate_ast_whitelist(task.code)
+        if ast_issues:
+            issues.extend(ast_issues)
+            return issues  # Bail early, don't exec unsafe code
 
     code_issues, func = _validate_code_compile(
         task,

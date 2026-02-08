@@ -375,6 +375,7 @@ class TestTaskGeneration:
         assert task.task_id.startswith("stateful_")
         assert len(task.queries) > 0
 
+        assert isinstance(task.code, str)
         namespace: dict = {}
         exec(task.code, namespace)  # noqa: S102
         f = namespace["f"]
@@ -387,6 +388,7 @@ class TestTaskGeneration:
             task = generate_stateful_task(axes, random.Random(42))
             assert task.spec["template"] == template.value
 
+            assert isinstance(task.code, str)
             namespace: dict = {}
             exec(task.code, namespace)  # noqa: S102
             f = namespace["f"]

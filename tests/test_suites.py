@@ -1,6 +1,8 @@
 """Tests for balanced suite generation."""
 
 import random
+from collections.abc import Callable
+from typing import cast
 
 import pytest
 
@@ -457,7 +459,7 @@ class TestSimpleAlgorithmsD3PoolAxes:
     def test_zero_target_enables_both_edge_defaults(self) -> None:
         rng = _FixedChoiceRng([SATemplateType.COUNT_PAIRS_SUM, "zero"])
 
-        axes = _pool_axes_simple_algorithms_d3(rng)
+        axes = _pool_axes_simple_algorithms_d3(cast(random.Random, rng))
 
         assert axes.templates == [SATemplateType.COUNT_PAIRS_SUM]
         assert axes.target_range == (0, 0)
@@ -479,7 +481,7 @@ class TestSimpleAlgorithmsD4PoolAxes:
             ]
         )
 
-        axes = _pool_axes_simple_algorithms_d4(rng)
+        axes = _pool_axes_simple_algorithms_d4(cast(random.Random, rng))
 
         assert axes.templates == [SATemplateType.MOST_FREQUENT]
         assert axes.tie_default_range == (-10, 10)
@@ -496,7 +498,7 @@ class TestSimpleAlgorithmsD4PoolAxes:
             ]
         )
 
-        axes = _pool_axes_simple_algorithms_d4(rng)
+        axes = _pool_axes_simple_algorithms_d4(cast(random.Random, rng))
 
         assert axes.templates == [SATemplateType.MAX_WINDOW_SUM]
         assert axes.empty_default_for_empty_range == (-10, 10)
@@ -514,7 +516,7 @@ class TestSimpleAlgorithmsD4PoolAxes:
             ]
         )
 
-        axes = _pool_axes_simple_algorithms_d4(rng)
+        axes = _pool_axes_simple_algorithms_d4(cast(random.Random, rng))
 
         assert axes.templates == [SATemplateType.COUNT_PAIRS_SUM]
         assert axes.no_result_default_range == (-10, 10)
@@ -899,7 +901,9 @@ class TestSuiteGenerationValidation:
             lambda: quota_report([], "bad_family", 3),
         ],
     )
-    def test_invalid_family_raises_value_error(self, call: object) -> None:
+    def test_invalid_family_raises_value_error(
+        self, call: Callable[[], object]
+    ) -> None:
         with pytest.raises(
             ValueError,
             match=r"Invalid family 'bad_family'.*Valid options:",
@@ -914,7 +918,9 @@ class TestSuiteGenerationValidation:
             lambda: quota_report([], "stringrules", 999),
         ],
     )
-    def test_invalid_difficulty_raises_value_error(self, call: object) -> None:
+    def test_invalid_difficulty_raises_value_error(
+        self, call: Callable[[], object]
+    ) -> None:
         with pytest.raises(
             ValueError,
             match=(

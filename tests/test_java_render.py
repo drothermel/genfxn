@@ -4,6 +4,7 @@ import random
 
 import pytest
 
+from genfxn.core.models import Task
 from genfxn.core.predicates import (
     PredicateAnd,
     PredicateEven,
@@ -67,6 +68,12 @@ from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
+
+
+def _code_map(task: Task) -> dict[str, str]:
+    assert isinstance(task.code, dict)
+    return task.code
+
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -678,40 +685,44 @@ class TestMultiLanguageGeneration:
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.JAVA],
         )
-        assert "python" in task.code
-        assert "java" in task.code
-        assert task.code["python"].startswith("def f(")
-        assert "public static int f(int x)" in task.code["java"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert code["python"].startswith("def f(")
+        assert "public static int f(int x)" in code["java"]
 
     def test_stateful_generates_java(self) -> None:
         task = generate_stateful_task(
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.JAVA],
         )
-        assert "python" in task.code
-        assert "java" in task.code
-        assert "def f(" in task.code["python"]
-        assert "public static int f(int[] xs)" in task.code["java"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static int f(int[] xs)" in code["java"]
 
     def test_stringrules_generates_java(self) -> None:
         task = generate_stringrules_task(
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.JAVA],
         )
-        assert "python" in task.code
-        assert "java" in task.code
-        assert "def f(" in task.code["python"]
-        assert "public static String f(String s)" in task.code["java"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static String f(String s)" in code["java"]
 
     def test_simple_algorithms_generates_java(self) -> None:
         task = generate_simple_algorithms_task(
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.JAVA],
         )
-        assert "python" in task.code
-        assert "java" in task.code
-        assert "def f(" in task.code["python"]
-        assert "public static int f(int[] xs)" in task.code["java"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static int f(int[] xs)" in code["java"]
 
     def test_python_only(self) -> None:
         task = generate_piecewise_task(
@@ -727,7 +738,8 @@ class TestMultiLanguageGeneration:
             rng=random.Random(seed),
             languages=[Language.JAVA],
         )
-        assert len(task.code["java"]) > 20
+        code = _code_map(task)
+        assert len(code["java"]) > 20
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stateful_java_renders_non_empty(self, seed: int) -> None:
@@ -735,7 +747,8 @@ class TestMultiLanguageGeneration:
             rng=random.Random(seed),
             languages=[Language.JAVA],
         )
-        assert len(task.code["java"]) > 20
+        code = _code_map(task)
+        assert len(code["java"]) > 20
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stringrules_java_renders_non_empty(self, seed: int) -> None:
@@ -743,7 +756,8 @@ class TestMultiLanguageGeneration:
             rng=random.Random(seed),
             languages=[Language.JAVA],
         )
-        assert len(task.code["java"]) > 20
+        code = _code_map(task)
+        assert len(code["java"]) > 20
 
     @pytest.mark.parametrize("seed", range(10))
     def test_simple_algorithms_java_renders_non_empty(self, seed: int) -> None:
@@ -751,7 +765,8 @@ class TestMultiLanguageGeneration:
             rng=random.Random(seed),
             languages=[Language.JAVA],
         )
-        assert len(task.code["java"]) > 20
+        code = _code_map(task)
+        assert len(code["java"]) > 20
 
 
 # ── Registry / Render Dispatcher Tests ─────────────────────────────────

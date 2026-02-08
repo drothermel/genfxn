@@ -193,12 +193,12 @@ def _render_max_window_sum(
             f"    for (int i = 0; i < {spec.k}; i++) {{",
             f"        window_sum += {var}[i];",
             "    }",
-        "    int max_sum = window_sum;",
-        f"    for (int i = {spec.k}; i < {var}.length; i++) {{",
-        "        window_sum = window_sum "
-        f"- {var}[i - {spec.k}] + {var}[i];",
-        "        max_sum = Math.max(max_sum, window_sum);",
-        "    }",
+            "    int max_sum = window_sum;",
+            f"    for (int i = {spec.k}; i < {var}.length; i++) {{",
+            "        window_sum = window_sum "
+            f"- {var}[i - {spec.k}] + {var}[i];",
+            "        max_sum = Math.max(max_sum, window_sum);",
+            "    }",
             "    return max_sum;",
             "}",
         ]

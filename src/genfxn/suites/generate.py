@@ -3,6 +3,7 @@
 import logging
 import random
 import zlib
+from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -517,7 +518,7 @@ _FEATURE_FNS = {
 }
 
 
-def _format_valid_options(options: list[str | int]) -> str:
+def _format_valid_options(options: Sequence[str | int]) -> str:
     return ", ".join(str(option) for option in options)
 
 

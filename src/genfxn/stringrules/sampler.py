@@ -1,8 +1,10 @@
 import random
+from typing import cast
 
 from genfxn.core.string_predicates import (
     StringPredicate,
     StringPredicateAnd,
+    StringPredicateAtom,
     StringPredicateContains,
     StringPredicateEndsWith,
     StringPredicateIsAlpha,
@@ -18,6 +20,7 @@ from genfxn.core.string_predicates import (
 from genfxn.core.string_transforms import (
     StringTransform,
     StringTransformAppend,
+    StringTransformAtom,
     StringTransformCapitalize,
     StringTransformIdentity,
     StringTransformLowercase,
@@ -95,7 +98,9 @@ def sample_string_predicate(
             if not atom_types:
                 atom_types = [StringPredicateType.IS_ALPHA]
             operand = sample_string_predicate(rng.choice(atom_types), axes, rng)
-            return StringPredicateNot(operand=operand)
+            return StringPredicateNot(
+                operand=cast(StringPredicateAtom, operand)
+            )
 
         case StringPredicateType.AND:
             atom_types = [
@@ -107,7 +112,10 @@ def sample_string_predicate(
                 atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
             operands = [
-                sample_string_predicate(rng.choice(atom_types), axes, rng)
+                cast(
+                    StringPredicateAtom,
+                    sample_string_predicate(rng.choice(atom_types), axes, rng),
+                )
                 for _ in range(n)
             ]
             return StringPredicateAnd(operands=operands)
@@ -122,7 +130,10 @@ def sample_string_predicate(
                 atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
             operands = [
-                sample_string_predicate(rng.choice(atom_types), axes, rng)
+                cast(
+                    StringPredicateAtom,
+                    sample_string_predicate(rng.choice(atom_types), axes, rng),
+                )
                 for _ in range(n)
             ]
             return StringPredicateOr(operands=operands)
@@ -190,7 +201,10 @@ def sample_string_transform(
             if not atom_types:
                 atom_types = [StringTransformType.LOWERCASE]
             steps = [
-                sample_string_transform(rng.choice(atom_types), axes, rng)
+                cast(
+                    StringTransformAtom,
+                    sample_string_transform(rng.choice(atom_types), axes, rng),
+                )
                 for _ in range(n)
             ]
             return StringTransformPipeline(steps=steps)

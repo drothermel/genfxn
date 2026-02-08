@@ -192,12 +192,12 @@ def _render_max_window_sum(
             f"    for i in 0..{spec.k} {{",
             f"        window_sum += {var}[i];",
             "    }",
-        "    let mut max_sum = window_sum;",
-        f"    for i in {spec.k}..{var}.len() {{",
-        "        window_sum = window_sum "
-        f"- {var}[i - {spec.k}] + {var}[i];",
-        "        max_sum = max_sum.max(window_sum);",
-        "    }",
+            "    let mut max_sum = window_sum;",
+            f"    for i in {spec.k}..{var}.len() {{",
+            "        window_sum = window_sum "
+            f"- {var}[i - {spec.k}] + {var}[i];",
+            "        max_sum = max_sum.max(window_sum);",
+            "    }",
             "    max_sum",
             "}",
         ]

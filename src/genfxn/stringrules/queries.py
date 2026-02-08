@@ -213,7 +213,7 @@ def _generate_non_matching_string(
             if length == 1:
                 return rng.choice(breakers)
             if not alpha_charset:
-                return _random_string(length, breakers, rng)
+                return _random_string(length, "".join(breakers), rng)
             base = _random_string(length - 1, alpha_charset, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(breakers) + base[pos:]
@@ -227,7 +227,7 @@ def _generate_non_matching_string(
             if length == 1:
                 return rng.choice(breakers)
             if not digit_charset:
-                return _random_string(length, breakers, rng)
+                return _random_string(length, "".join(breakers), rng)
             base = _random_string(length - 1, digit_charset, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(breakers) + base[pos:]
@@ -241,7 +241,7 @@ def _generate_non_matching_string(
             if length == 1:
                 return rng.choice(breakers)
             if not upper_charset:
-                return _random_string(length, breakers, rng)
+                return _random_string(length, "".join(breakers), rng)
             base = _random_string(length - 1, upper_charset, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(breakers) + base[pos:]
@@ -255,7 +255,7 @@ def _generate_non_matching_string(
             if length == 1:
                 return rng.choice(breakers)
             if not lower_charset:
-                return _random_string(length, breakers, rng)
+                return _random_string(length, "".join(breakers), rng)
             base = _random_string(length - 1, lower_charset, rng)
             pos = rng.randint(0, len(base))
             return base[:pos] + rng.choice(breakers) + base[pos:]

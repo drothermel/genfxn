@@ -9,7 +9,7 @@ import pickle
 import signal
 from dataclasses import dataclass
 from queue import Empty
-from typing import Any
+from typing import Any, cast
 
 
 class SafeExecValidationError(ValueError):
@@ -352,9 +352,10 @@ def _run_isolated(
 ) -> Any:
     _validate_untrusted_code(code)
     ctx = _get_mp_context()
+    ctx_runtime = cast(Any, ctx)
     method = ctx.get_start_method()
-    queue: mp.Queue = ctx.Queue()
-    process = ctx.Process(
+    queue: mp.Queue = ctx_runtime.Queue()
+    process = ctx_runtime.Process(
         target=_exec_worker,
         args=(
             queue,
@@ -530,10 +531,11 @@ class _PersistentWorker:
         max_result_bytes: int | None = _DEFAULT_MAX_RESULT_BYTES,
     ) -> None:
         self._ctx = _get_mp_context()
+        ctx_runtime = cast(Any, self._ctx)
         self._start_method = self._ctx.get_start_method()
-        self._request_queue: mp.Queue = self._ctx.Queue()
-        self._response_queue: mp.Queue = self._ctx.Queue()
-        self._process = self._ctx.Process(
+        self._request_queue: mp.Queue = ctx_runtime.Queue()
+        self._response_queue: mp.Queue = ctx_runtime.Queue()
+        self._process = ctx_runtime.Process(
             target=_persistent_worker,
             args=(
                 self._request_queue,

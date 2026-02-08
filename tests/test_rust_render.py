@@ -4,6 +4,7 @@ import random
 
 import pytest
 
+from genfxn.core.models import Task
 from genfxn.core.predicates import (
     PredicateAnd,
     PredicateEven,
@@ -64,6 +65,12 @@ from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
+
+
+def _code_map(task: Task) -> dict[str, str]:
+    assert isinstance(task.code, dict)
+    return task.code
+
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -686,40 +693,44 @@ class TestMultiLanguageRustGeneration:
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.RUST],
         )
-        assert "python" in task.code
-        assert "rust" in task.code
-        assert task.code["python"].startswith("def f(")
-        assert "fn f(x: i64) -> i64" in task.code["rust"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert code["python"].startswith("def f(")
+        assert "fn f(x: i64) -> i64" in code["rust"]
 
     def test_stateful_generates_rust(self) -> None:
         task = generate_stateful_task(
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.RUST],
         )
-        assert "python" in task.code
-        assert "rust" in task.code
-        assert "def f(" in task.code["python"]
-        assert "fn f(xs: &[i64]) -> i64" in task.code["rust"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(xs: &[i64]) -> i64" in code["rust"]
 
     def test_stringrules_generates_rust(self) -> None:
         task = generate_stringrules_task(
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.RUST],
         )
-        assert "python" in task.code
-        assert "rust" in task.code
-        assert "def f(" in task.code["python"]
-        assert "fn f(s: &str) -> String" in task.code["rust"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(s: &str) -> String" in code["rust"]
 
     def test_simple_algorithms_generates_rust(self) -> None:
         task = generate_simple_algorithms_task(
             rng=random.Random(42),
             languages=[Language.PYTHON, Language.RUST],
         )
-        assert "python" in task.code
-        assert "rust" in task.code
-        assert "def f(" in task.code["python"]
-        assert "fn f(xs: &[i64]) -> i64" in task.code["rust"]
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(xs: &[i64]) -> i64" in code["rust"]
 
     def test_rust_only(self) -> None:
         task = generate_piecewise_task(
@@ -744,7 +755,8 @@ class TestMultiLanguageRustGeneration:
             rng=random.Random(seed),
             languages=[Language.RUST],
         )
-        assert len(task.code["rust"]) > 20
+        code = _code_map(task)
+        assert len(code["rust"]) > 20
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stateful_rust_renders_non_empty(self, seed: int) -> None:
@@ -752,7 +764,8 @@ class TestMultiLanguageRustGeneration:
             rng=random.Random(seed),
             languages=[Language.RUST],
         )
-        assert len(task.code["rust"]) > 20
+        code = _code_map(task)
+        assert len(code["rust"]) > 20
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stringrules_rust_renders_non_empty(self, seed: int) -> None:
@@ -760,7 +773,8 @@ class TestMultiLanguageRustGeneration:
             rng=random.Random(seed),
             languages=[Language.RUST],
         )
-        assert len(task.code["rust"]) > 20
+        code = _code_map(task)
+        assert len(code["rust"]) > 20
 
     @pytest.mark.parametrize("seed", range(10))
     def test_simple_algorithms_rust_renders_non_empty(self, seed: int) -> None:
@@ -768,7 +782,8 @@ class TestMultiLanguageRustGeneration:
             rng=random.Random(seed),
             languages=[Language.RUST],
         )
-        assert len(task.code["rust"]) > 20
+        code = _code_map(task)
+        assert len(code["rust"]) > 20
 
 
 # ── Registry Tests ─────────────────────────────────────────────────────
