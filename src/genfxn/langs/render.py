@@ -13,7 +13,7 @@ def _available_languages() -> list[Language]:
         try:
             get_render_fn(lang, "piecewise")
             available.append(lang)
-        except (ImportError, ModuleNotFoundError):
+        except (ImportError, ModuleNotFoundError, ValueError):
             pass
     return available
 

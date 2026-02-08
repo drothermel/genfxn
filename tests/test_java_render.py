@@ -91,6 +91,9 @@ class TestJavaStringLiteral:
     def test_escapes_newline(self) -> None:
         assert java_string_literal("a\nb") == '"a\\nb"'
 
+    def test_escapes_carriage_return(self) -> None:
+        assert java_string_literal("a\rb") == '"a\\rb"'
+
     def test_escapes_tab(self) -> None:
         assert java_string_literal("a\tb") == '"a\\tb"'
 
@@ -353,6 +356,10 @@ class TestStringTransformJava:
 
     def test_strip_none(self) -> None:
         result = render_string_transform_java(StringTransformStrip(chars=None))
+        assert result == "s.strip()"
+
+    def test_strip_empty_chars(self) -> None:
+        result = render_string_transform_java(StringTransformStrip(chars=""))
         assert result == "s.strip()"
 
     def test_strip_chars(self) -> None:
@@ -807,6 +814,22 @@ class TestLangsInfra:
         available = _available_languages()
         assert Language.PYTHON in available
         assert Language.JAVA in available
+
+    def test_available_languages_ignores_value_error(self, monkeypatch) -> None:
+        from genfxn.langs import render as render_module
+
+        original_get_render_fn = render_module.get_render_fn
+
+        def _fake_get_render_fn(language: Language, family: str):
+            if language == Language.JAVA:
+                raise ValueError("unsupported")
+            return original_get_render_fn(language, family)
+
+        monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
+
+        available = render_module._available_languages()
+        assert Language.PYTHON in available
+        assert Language.JAVA not in available
 
     def test_render_all_languages_default(self) -> None:
         from genfxn.langs.render import render_all_languages

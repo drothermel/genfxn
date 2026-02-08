@@ -7,14 +7,14 @@ from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
-from genfxn.stateful.models import StatefulAxes
+from genfxn.stateful.models import StatefulAxes, StatefulSpec
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stateful.render import render_stateful
 from genfxn.stateful.sampler import sample_stateful_spec
 
 
 def _render_stateful_for_languages(
-    spec,
+    spec: StatefulSpec,
     languages: list[Language] | None,
 ) -> str | dict[str, str]:
     if languages is None:

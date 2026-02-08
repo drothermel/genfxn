@@ -7,14 +7,17 @@ from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
-from genfxn.simple_algorithms.models import SimpleAlgorithmsAxes
+from genfxn.simple_algorithms.models import (
+    SimpleAlgorithmsAxes,
+    SimpleAlgorithmsSpec,
+)
 from genfxn.simple_algorithms.queries import generate_simple_algorithms_queries
 from genfxn.simple_algorithms.render import render_simple_algorithms
 from genfxn.simple_algorithms.sampler import sample_simple_algorithms_spec
 
 
 def _render_simple_algorithms_for_languages(
-    spec,
+    spec: SimpleAlgorithmsSpec,
     languages: list[Language] | None,
 ) -> str | dict[str, str]:
     if languages is None:

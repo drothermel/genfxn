@@ -70,7 +70,10 @@ def random_split(
     *,
     in_place: bool = False,
 ) -> SplitResult:
-    """Randomly split tasks into train/test."""
+    """Randomly split tasks into train/test.
+
+    If in_place is True, the input list is shuffled in place.
+    """
     if not (0.0 <= train_ratio <= 1.0):
         raise ValueError(
             f"train_ratio must be in [0.0, 1.0], got {train_ratio!r}"

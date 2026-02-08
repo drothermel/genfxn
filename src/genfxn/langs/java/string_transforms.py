@@ -51,7 +51,7 @@ def render_string_transform_java(t: StringTransform, var: str = "s") -> str:
                 f"{java_string_literal(new)})"
             )
         case StringTransformStrip(chars=chars):
-            if chars is None:
+            if not chars:
                 return f"{var}.strip()"
             escaped = _regex_char_class_escape(chars)
             pattern = f"^[{escaped}]+|[{escaped}]+$"

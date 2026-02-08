@@ -88,6 +88,9 @@ class TestRustStringLiteral:
     def test_escapes_newline(self) -> None:
         assert rust_string_literal("a\nb") == '"a\\nb"'
 
+    def test_escapes_carriage_return(self) -> None:
+        assert rust_string_literal("a\rb") == '"a\\rb"'
+
     def test_escapes_tab(self) -> None:
         assert rust_string_literal("a\tb") == '"a\\tb"'
 
@@ -325,10 +328,12 @@ class TestStringTransformRust:
 
     def test_swapcase(self) -> None:
         result = render_string_transform_rust(StringTransformSwapcase())
-        assert "chars().map(" in result
+        assert "chars().flat_map(" in result
         assert "is_uppercase()" in result
-        assert "to_ascii_lowercase()" in result
-        assert "to_ascii_uppercase()" in result
+        assert "to_lowercase()" in result
+        assert "to_uppercase()" in result
+        assert "to_ascii_lowercase()" not in result
+        assert "to_ascii_uppercase()" not in result
         assert "collect::<String>()" in result
 
     def test_reverse(self) -> None:

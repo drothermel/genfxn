@@ -7,14 +7,14 @@ from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
-from genfxn.stringrules.models import StringRulesAxes
+from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
 from genfxn.stringrules.queries import generate_stringrules_queries
 from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 
 
 def _render_stringrules_for_languages(
-    spec,
+    spec: StringRulesSpec,
     languages: list[Language] | None,
 ) -> str | dict[str, str]:
     if languages is None:

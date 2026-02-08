@@ -7,14 +7,14 @@ from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
-from genfxn.piecewise.models import PiecewiseAxes
+from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
 from genfxn.piecewise.queries import generate_piecewise_queries
 from genfxn.piecewise.render import render_piecewise
 from genfxn.piecewise.sampler import sample_piecewise_spec
 
 
 def _render_piecewise_for_languages(
-    spec,
+    spec: PiecewiseSpec,
     languages: list[Language] | None,
 ) -> str | dict[str, str]:
     if languages is None:

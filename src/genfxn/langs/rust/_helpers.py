@@ -4,6 +4,7 @@ def rust_string_literal(s: str) -> str:
         s.replace("\\", "\\\\")
         .replace('"', '\\"')
         .replace("\n", "\\n")
+        .replace("\r", "\\r")
         .replace("\t", "\\t")
     )
     return f'"{escaped}"'

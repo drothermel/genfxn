@@ -134,7 +134,7 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
 
     try:
         render_fn = get_render_fn(language, task.family)
-    except Exception as err:
+    except (ImportError, ModuleNotFoundError, ValueError) as err:
         raise typer.BadParameter(
             f"Language '{language.value}' is not available for '{task.family}'."
         ) from err

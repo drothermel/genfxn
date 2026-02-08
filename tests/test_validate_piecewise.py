@@ -180,6 +180,30 @@ class TestCodeCompilation:
             for i in issues
         )
 
+    def test_python_code_in_map_syntax_error_caught(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": {"python": "def f(x):\n    return ("}}
+        )
+        issues = validate_piecewise_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
+    def test_non_python_code_map_skips_python_parse_error(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={
+                "code": {
+                    "java": "public static int f(int x) { return x; }"
+                }
+            }
+        )
+        issues = validate_piecewise_task(corrupted)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
     def test_exec_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         # Code that raises at module exec time (not at call time)

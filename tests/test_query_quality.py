@@ -378,4 +378,5 @@ class TestCountPairsNoPairsInvariant:
             spec, axes, random.Random(42)
         )
         assert queries
-        assert all(1 <= len(q.input) <= 2 for q in queries if q.input != [])
+        assert all(q.input != [] for q in queries), "Unexpected empty input"
+        assert all(1 <= len(q.input) <= 2 for q in queries)

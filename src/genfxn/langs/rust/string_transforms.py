@@ -34,8 +34,9 @@ def render_string_transform_rust(t: StringTransform, var: str = "s") -> str:
             )
         case StringTransformSwapcase():
             return (
-                f"{var}.chars().map(|c| if c.is_uppercase() "
-                "{ c.to_ascii_lowercase() } else { c.to_ascii_uppercase() })"
+                f"{var}.chars().flat_map(|c| if c.is_uppercase() "
+                "{ c.to_lowercase().collect::<Vec<char>>() } else "
+                "{ c.to_uppercase().collect::<Vec<char>>() })"
                 ".collect::<String>()"
             )
         case StringTransformReverse():
