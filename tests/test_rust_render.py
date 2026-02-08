@@ -72,6 +72,10 @@ def _code_map(task: Task) -> dict[str, str]:
     return task.code
 
 
+def seeded_rng(seed: int) -> random.Random:  # noqa: S311
+    return random.Random(seed)
+
+
 # ── Helpers ────────────────────────────────────────────────────────────
 
 
@@ -709,7 +713,7 @@ class TestMultiLanguageRustGeneration:
 
     def test_piecewise_generates_rust(self) -> None:
         task = generate_piecewise_task(
-            rng=random.Random(42),
+            rng=seeded_rng(42),
             languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
@@ -720,7 +724,7 @@ class TestMultiLanguageRustGeneration:
 
     def test_stateful_generates_rust(self) -> None:
         task = generate_stateful_task(
-            rng=random.Random(42),
+            rng=seeded_rng(42),
             languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
@@ -731,7 +735,7 @@ class TestMultiLanguageRustGeneration:
 
     def test_stringrules_generates_rust(self) -> None:
         task = generate_stringrules_task(
-            rng=random.Random(42),
+            rng=seeded_rng(42),
             languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
@@ -742,7 +746,7 @@ class TestMultiLanguageRustGeneration:
 
     def test_simple_algorithms_generates_rust(self) -> None:
         task = generate_simple_algorithms_task(
-            rng=random.Random(42),
+            rng=seeded_rng(42),
             languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
@@ -753,7 +757,7 @@ class TestMultiLanguageRustGeneration:
 
     def test_rust_only(self) -> None:
         task = generate_piecewise_task(
-            rng=random.Random(42),
+            rng=seeded_rng(42),
             languages=[Language.RUST],
         )
         assert "rust" in task.code
@@ -761,7 +765,7 @@ class TestMultiLanguageRustGeneration:
 
     def test_all_three_languages(self) -> None:
         task = generate_piecewise_task(
-            rng=random.Random(42),
+            rng=seeded_rng(42),
             languages=[Language.PYTHON, Language.JAVA, Language.RUST],
         )
         assert "python" in task.code
@@ -771,7 +775,7 @@ class TestMultiLanguageRustGeneration:
     @pytest.mark.parametrize("seed", range(10))
     def test_piecewise_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_piecewise_task(
-            rng=random.Random(seed),
+            rng=seeded_rng(seed),
             languages=[Language.RUST],
         )
         code = _code_map(task)
@@ -780,7 +784,7 @@ class TestMultiLanguageRustGeneration:
     @pytest.mark.parametrize("seed", range(10))
     def test_stateful_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_stateful_task(
-            rng=random.Random(seed),
+            rng=seeded_rng(seed),
             languages=[Language.RUST],
         )
         code = _code_map(task)
@@ -789,7 +793,7 @@ class TestMultiLanguageRustGeneration:
     @pytest.mark.parametrize("seed", range(10))
     def test_stringrules_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_stringrules_task(
-            rng=random.Random(seed),
+            rng=seeded_rng(seed),
             languages=[Language.RUST],
         )
         code = _code_map(task)
@@ -798,7 +802,7 @@ class TestMultiLanguageRustGeneration:
     @pytest.mark.parametrize("seed", range(10))
     def test_simple_algorithms_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_simple_algorithms_task(
-            rng=random.Random(seed),
+            rng=seeded_rng(seed),
             languages=[Language.RUST],
         )
         code = _code_map(task)

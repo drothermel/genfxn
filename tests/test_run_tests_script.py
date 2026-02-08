@@ -20,7 +20,11 @@ def test_parse_duration_seconds_uses_last_match() -> None:
 def test_main_enforces_runtime_budget(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
-    def _fake_run(cmd: list[str], capture_output: bool, text: bool):  # noqa: ARG001
+    def _fake_run(  # noqa: ARG001
+        cmd: list[str],
+        capture_output: bool,
+        text: bool,
+    ):
         captured["cmd"] = cmd
 
         class _Proc:
@@ -54,7 +58,11 @@ def test_main_enforces_runtime_budget(monkeypatch) -> None:
 def test_main_adds_xdist_workers_when_available(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
-    def _fake_run(cmd: list[str], capture_output: bool, text: bool):  # noqa: ARG001
+    def _fake_run(  # noqa: ARG001
+        cmd: list[str],
+        capture_output: bool,
+        text: bool,
+    ):
         captured["cmd"] = cmd
 
         class _Proc:

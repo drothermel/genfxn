@@ -34,7 +34,9 @@ def test_main_parses_filters_and_writes_output(tmp_path, monkeypatch) -> None:
         return [_FakeTask(f"{family}_{difficulty}")]
 
     def _fake_quota_report(
-        tasks: list[_FakeTask], family: str, difficulty: int
+        tasks: list[_FakeTask],
+        family: str,  # noqa: ARG001
+        difficulty: int,  # noqa: ARG001
     ) -> list[tuple[str, str, int, int, str]]:
         assert tasks
         return [("axis", "value", 1, 1, "OK")]
