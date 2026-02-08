@@ -23,6 +23,13 @@ from genfxn.core.string_transforms import (
     StringTransformUppercase,
 )
 from genfxn.stateful.eval import eval_stateful
+from genfxn.simple_algorithms.eval import eval_count_pairs_sum
+from genfxn.simple_algorithms.models import (
+    CountingMode,
+    CountPairsSumSpec,
+    SimpleAlgorithmsAxes,
+)
+from genfxn.simple_algorithms.queries import generate_simple_algorithms_queries
 from genfxn.stateful.models import ConditionalLinearSumSpec, StatefulAxes
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stringrules.eval import eval_stringrules
@@ -206,4 +213,30 @@ class TestCoverageQueriesCoverAllRules:
             first_input = coverage_queries[0].input
             assert eval_string_predicate(spec.rules[0].predicate, first_input), (
                 f"First coverage query input '{first_input}' doesn't match rule 0 predicate"
+            )
+
+
+class TestCountPairsNoPairsInvariant:
+    def test_no_pairs_fixture_has_zero_pairs(self) -> None:
+        spec = CountPairsSumSpec(target=7, counting_mode=CountingMode.ALL_INDICES)
+        axes = SimpleAlgorithmsAxes(
+            value_range=(0, 12),
+            list_length_range=(2, 5),
+            window_size_range=(1, 5),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+
+        no_pair_candidates = [
+            q
+            for q in queries
+            if q.tag == QueryTag.TYPICAL and eval_count_pairs_sum(spec, q.input) == 0
+        ]
+        assert no_pair_candidates
+        for q in no_pair_candidates:
+            assert all(
+                q.input[i] + q.input[j] != spec.target
+                for i in range(len(q.input))
+                for j in range(i + 1, len(q.input))
             )

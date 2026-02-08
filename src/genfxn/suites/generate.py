@@ -613,6 +613,16 @@ def _condition_applies(bucket: Bucket, features: dict[str, str]) -> bool:
     return all(features.get(k) == v for k, v in bucket.condition.items())
 
 
+def _quota_targets_met(selected: list[Candidate], quota: QuotaSpec) -> bool:
+    """Return True when all bucket targets are met by selected candidates."""
+    filled: dict[int, int] = {i: 0 for i in range(len(quota.buckets))}
+    for candidate in selected:
+        for bi, bucket in enumerate(quota.buckets):
+            if _bucket_applies(bucket, candidate.features):
+                filled[bi] += 1
+    return all(filled[bi] >= bucket.target for bi, bucket in enumerate(quota.buckets))
+
+
 def greedy_select(
     candidates: list[Candidate],
     quota: QuotaSpec,
@@ -638,6 +648,9 @@ def greedy_select(
     used_ids: set[str] = set()
 
     for _ in range(quota.total):
+        deficits_remaining = any(
+            filled[bi] < bucket.target for bi, bucket in enumerate(quota.buckets)
+        )
         best_cand = None
         best_score = -1.0
 
@@ -657,6 +670,10 @@ def greedy_select(
                 best_cand = cand
 
         if best_cand is None:
+            break
+        if deficits_remaining and best_score <= 0.0:
+            # Do not consume quota slots with zero-contribution picks while
+            # any bucket target is still underfilled.
             break
 
         selected.append(best_cand)
@@ -738,18 +755,24 @@ def generate_suite(
         )
         selected = greedy_select(candidates, quota, select_rng)
 
-        if len(selected) >= quota.total:
+        if len(selected) >= quota.total and _quota_targets_met(selected, quota):
             break
         logger.debug(
-            "%s D%d attempt %d: %d/%d selected (pool=%d, candidates=%d)",
-            family, difficulty, attempt, len(selected), quota.total,
+            "%s D%d attempt %d: selected=%d/%d targets_met=%s (pool=%d, candidates=%d)",
+            family,
+            difficulty,
+            attempt,
+            len(selected),
+            quota.total,
+            _quota_targets_met(selected, quota),
             current_pool_size, stats.candidates,
         )
 
-    if len(selected) < quota.total:
+    if len(selected) < quota.total or not _quota_targets_met(selected, quota):
         raise RuntimeError(
             f"Could not fill suite for {family} D{difficulty}: "
-            f"selected {len(selected)}/{quota.total} after "
+            f"selected {len(selected)}/{quota.total}, "
+            f"targets_met={_quota_targets_met(selected, quota)} after "
             f"{max_retries + 1} attempt(s), final pool_size={current_pool_size}"
         )
 

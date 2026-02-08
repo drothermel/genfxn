@@ -320,9 +320,15 @@ def _generate_boundary_queries(
     queries: list[Query] = []
 
     lo, hi = _axes.string_length_range
+    charset = _get_charset(_axes.charset)
+    charset_set = set(charset)
+    boundary_char = charset[0] if charset else ""
+
+    def _chars_ok(s: str) -> bool:
+        return all(ch in charset_set for ch in s)
 
     def _append_if_in_range(s: str) -> None:
-        if lo <= len(s) <= hi:
+        if lo <= len(s) <= hi and _chars_ok(s):
             queries.append(
                 Query(
                     input=s,
@@ -338,7 +344,7 @@ def _generate_boundary_queries(
             case StringPredicateStartsWith(prefix=prefix):
                 _append_if_in_range(prefix)
                 # Prefix + extra char
-                s = prefix + "x"
+                s = prefix + boundary_char
                 _append_if_in_range(s)
 
             case StringPredicateEndsWith(suffix=suffix):
@@ -350,10 +356,10 @@ def _generate_boundary_queries(
             case StringPredicateLengthCmp(op=op, value=v):
                 # Test boundary values
                 if op in ("lt", "le"):
-                    s = "x" * v
+                    s = boundary_char * v
                     _append_if_in_range(s)
                 if op in ("gt", "ge") and v > 0:
-                    s = "x" * v
+                    s = boundary_char * v
                     _append_if_in_range(s)
 
             case _:
@@ -391,9 +397,14 @@ def _generate_adversarial_queries(
     queries: list[Query] = []
 
     lo, hi = axes.string_length_range
+    charset = _get_charset(axes.charset)
+    charset_set = set(charset)
+
+    def _chars_ok(s: str) -> bool:
+        return all(ch in charset_set for ch in s)
 
     def _append_if_in_range(s: str) -> None:
-        if lo <= len(s) <= hi:
+        if lo <= len(s) <= hi and _chars_ok(s):
             queries.append(
                 Query(
                     input=s,
@@ -406,12 +417,13 @@ def _generate_adversarial_queries(
     _append_if_in_range("")
 
     # Single character
-    _append_if_in_range("x")
+    if charset:
+        _append_if_in_range(charset[0])
 
     # Try to hit the default (no rule matches)
     attempts = 0
     while attempts < 20:
-        s = _random_string(rng.randint(lo, hi), _get_charset(axes.charset), rng)
+        s = _random_string(rng.randint(lo, hi), charset, rng)
         matches_any = False
         for rule in spec.rules:
             if eval_string_predicate(rule.predicate, s):
@@ -423,15 +435,18 @@ def _generate_adversarial_queries(
         attempts += 1
 
     # Special strings
-    special = [
-        " ",
-        "\t",
-        "  spaces  ",
-        "ALLCAPS",
-        "alllower",
-        "12345",
-        "MixedCase123",
-    ]
+    special: list[str] = []
+    if charset:
+        c0 = charset[0]
+        c1 = charset[1] if len(charset) > 1 else c0
+        c2 = charset[2] if len(charset) > 2 else c1
+        special = [
+            c0 * 2,
+            c1 * 5,
+            c0 + c1 + c2,
+            c2 + c1 + c0,
+            (c0 + c1) * 3,
+        ]
     for s in special:
         _append_if_in_range(s)
 

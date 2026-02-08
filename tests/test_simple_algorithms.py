@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.models import QueryTag
 from genfxn.core.predicates import PredicateGt, PredicateModEq, PredicateType
 from genfxn.core.transforms import (
     TransformNegate,
@@ -292,6 +293,38 @@ class TestQueryGeneration:
         assert empty_queries
         assert empty_queries[0].output == eval_simple_algorithms(spec, [])
 
+    def test_max_window_queries_respect_list_length_upper_bound(self) -> None:
+        spec = MaxWindowSumSpec(k=3, invalid_k_default=-1)
+        axes = SimpleAlgorithmsAxes(list_length_range=(1, 3), window_size_range=(1, 3))
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        assert queries
+        assert all(len(q.input) <= axes.list_length_range[1] for q in queries)
+
+    def test_count_pairs_no_pairs_query_has_no_valid_pair(self) -> None:
+        spec = CountPairsSumSpec(target=10, counting_mode=CountingMode.ALL_INDICES)
+        axes = SimpleAlgorithmsAxes(
+            value_range=(0, 15),
+            list_length_range=(2, 5),
+            window_size_range=(1, 5),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        no_pair_queries = [
+            q
+            for q in queries
+            if q.tag == QueryTag.TYPICAL and eval_count_pairs_sum(spec, q.input) == 0
+        ]
+        assert no_pair_queries
+        for q in no_pair_queries:
+            assert all(
+                q.input[i] + q.input[j] != spec.target
+                for i in range(len(q.input))
+                for j in range(i + 1, len(q.input))
+            )
+
 
 class TestAxesValidation:
     def test_invalid_value_range(self) -> None:
@@ -305,6 +338,14 @@ class TestAxesValidation:
     def test_zero_window_size(self) -> None:
         with pytest.raises(ValueError, match=r"window_size_range.*>= 1"):
             SimpleAlgorithmsAxes(window_size_range=(0, 5))
+
+    def test_window_size_high_cannot_exceed_list_length_high(self) -> None:
+        with pytest.raises(
+            ValueError, match=r"window_size_range: high .*<= list_length_range high"
+        ):
+            SimpleAlgorithmsAxes(
+                list_length_range=(1, 3), window_size_range=(1, 5)
+            )
 
     def test_empty_templates(self) -> None:
         with pytest.raises(ValueError, match="templates must not be empty"):

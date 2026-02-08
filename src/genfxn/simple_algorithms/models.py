@@ -123,6 +123,12 @@ class SimpleAlgorithmsAxes(BaseModel):
         lo, hi = self.window_size_range
         if lo < 1:
             raise ValueError(f"window_size_range: low ({lo}) must be >= 1")
+        list_hi = self.list_length_range[1]
+        if hi > list_hi:
+            raise ValueError(
+                "window_size_range: high "
+                f"({hi}) must be <= list_length_range high ({list_hi})"
+            )
 
         if self.pre_filter_types is not None and not self.pre_filter_types:
             raise ValueError(

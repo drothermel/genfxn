@@ -184,6 +184,21 @@ class TestQueryGeneration:
         queries = generate_stateful_queries(spec, axes, random.Random(42))
         assert not any(q.tag == QueryTag.BOUNDARY for q in queries)
 
+    def test_boundary_and_adversarial_queries_respect_small_length_range(
+        self,
+    ) -> None:
+        spec = LongestRunSpec(match_predicate=PredicateEven())
+        axes = StatefulAxes(list_length_range=(1, 3), value_range=(0, 10))
+        queries = generate_stateful_queries(spec, axes, random.Random(42))
+        lo, hi = axes.list_length_range
+        constrained = [
+            q
+            for q in queries
+            if q.tag in (QueryTag.BOUNDARY, QueryTag.ADVERSARIAL)
+        ]
+        assert constrained
+        assert all(lo <= len(q.input) <= hi for q in constrained)
+
 
 class TestRender:
     def test_render_conditional_linear_sum(self) -> None:

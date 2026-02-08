@@ -129,6 +129,23 @@ def _generate_random_list(
     return [rng.randint(*value_range) for _ in range(length)]
 
 
+def _fit_to_length_bounds(
+    values: list[int], length_bounds: tuple[int, int]
+) -> list[int] | None:
+    """Resize a query template so it stays within configured length bounds."""
+    len_lo, len_hi = length_bounds
+    if len_hi < len_lo:
+        return None
+
+    target_len = min(max(len(values), len_lo), len_hi)
+    if target_len <= 0:
+        return []
+    if len(values) >= target_len:
+        return values[:target_len]
+    repeats = (target_len + len(values) - 1) // len(values)
+    return (values * repeats)[:target_len]
+
+
 def _generate_coverage_queries(
     spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
 ) -> list[Query]:
@@ -175,39 +192,22 @@ def _generate_boundary_queries(
     if match_val is None or non_match_val is None:
         return queries
 
-    # Matching then non-matching
-    transition_tf = [match_val, match_val, non_match_val, non_match_val]
-    queries.append(
-        Query(
-            input=transition_tf,
-            output=eval_stateful(spec, transition_tf),
-            tag=QueryTag.BOUNDARY,
+    length_bounds = axes.list_length_range
+    for template in (
+        [match_val, match_val, non_match_val, non_match_val],
+        [non_match_val, non_match_val, match_val, match_val],
+        [match_val, non_match_val, match_val, non_match_val, match_val],
+    ):
+        fitted = _fit_to_length_bounds(template, length_bounds)
+        if fitted is None:
+            continue
+        queries.append(
+            Query(
+                input=fitted,
+                output=eval_stateful(spec, fitted),
+                tag=QueryTag.BOUNDARY,
+            )
         )
-    )
-    # Non-matching then matching
-    transition_ft = [non_match_val, non_match_val, match_val, match_val]
-    queries.append(
-        Query(
-            input=transition_ft,
-            output=eval_stateful(spec, transition_ft),
-            tag=QueryTag.BOUNDARY,
-        )
-    )
-    # Alternating
-    alternating = [
-        match_val,
-        non_match_val,
-        match_val,
-        non_match_val,
-        match_val,
-    ]
-    queries.append(
-        Query(
-            input=alternating,
-            output=eval_stateful(spec, alternating),
-            tag=QueryTag.BOUNDARY,
-        )
-    )
     return queries
 
 
@@ -270,13 +270,15 @@ def _generate_adversarial_queries(
     # Extremes
     extremes = [lo, hi, 0, -1, 1, lo, hi]
     extremes = [x for x in extremes if lo <= x <= hi]
-    queries.append(
-        Query(
-            input=extremes,
-            output=eval_stateful(spec, extremes),
-            tag=QueryTag.ADVERSARIAL,
+    fitted_extremes = _fit_to_length_bounds(extremes, axes.list_length_range)
+    if fitted_extremes is not None:
+        queries.append(
+            Query(
+                input=fitted_extremes,
+                output=eval_stateful(spec, fitted_extremes),
+                tag=QueryTag.ADVERSARIAL,
+            )
         )
-    )
     return queries
 
 

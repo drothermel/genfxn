@@ -618,6 +618,23 @@ class TestGreedySelect:
         assert len(circles) >= 2
         assert len(squares) >= 2
 
+    def test_stops_before_zero_score_pick_when_deficits_remain(self) -> None:
+        quota = QuotaSpec(
+            hard_constraints={},
+            buckets=[Bucket("color", "red", 2), Bucket("color", "blue", 1)],
+            total=3,
+        )
+        candidates = [
+            self._make_candidate("id_0", {"color": "red"}),
+            self._make_candidate("id_1", {"color": "red"}),
+            self._make_candidate("id_2", {"color": "green"}),
+            self._make_candidate("id_3", {"color": "green"}),
+        ]
+
+        selected = greedy_select(candidates, quota, random.Random(42))
+        assert len(selected) == 2
+        assert all(c.features["color"] == "red" for c in selected)
+
 
 # ── Pool generation smoke test ───────────────────────────────────────────
 
@@ -675,8 +692,8 @@ class TestDeterminism:
         """Same seed produces identical task_ids and queries across calls."""
         from genfxn.suites.generate import generate_suite
 
-        a = generate_suite("stringrules", 3, seed=7, pool_size=500)
-        b = generate_suite("stringrules", 3, seed=7, pool_size=500)
+        a = generate_suite("stringrules", 3, seed=7, pool_size=3000)
+        b = generate_suite("stringrules", 3, seed=7, pool_size=3000)
 
         assert len(a) == len(b) > 0
         for ta, tb in zip(a, b):
@@ -695,6 +712,32 @@ class TestDeterminism:
         with pytest.raises(RuntimeError, match="Could not fill suite"):
             suite_generate.generate_suite(
                 "stringrules", 3, seed=7, pool_size=20, max_retries=1
+            )
+
+    def test_generate_suite_raises_when_targets_not_met(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        quota = QUOTAS["stringrules"][3]
+        fake_selected = [
+            Candidate(spec=None, spec_dict={}, task_id=f"id_{i}", features={})
+            for i in range(quota.total)
+        ]
+        monkeypatch.setattr(
+            suite_generate,
+            "generate_pool",
+            lambda *_: (fake_selected, PoolStats(candidates=len(fake_selected))),
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "greedy_select",
+            lambda *_: list(fake_selected),
+        )
+
+        with pytest.raises(RuntimeError, match="targets_met=False"):
+            suite_generate.generate_suite(
+                "stringrules", 3, seed=7, pool_size=20, max_retries=0
             )
 
 

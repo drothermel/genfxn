@@ -42,7 +42,7 @@ from genfxn.stringrules.queries import generate_stringrules_queries
 from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.stringrules.task import generate_stringrules_task
-from genfxn.stringrules.utils import _random_string
+from genfxn.stringrules.utils import _get_charset, _random_string
 
 
 class TestStringPredicates:
@@ -404,6 +404,30 @@ class TestQueryGeneration:
                 )
                 for q in coverage
             )
+
+    def test_queries_respect_charset_constraints(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            charset="digits",
+            string_length_range=(1, 8),
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="12"),
+                    transform=StringTransformUppercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateContains(substring="34"),
+                    transform=StringTransformLowercase(),
+                ),
+            ],
+            default_transform=StringTransformReverse(),
+        )
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        charset = set(_get_charset(axes.charset))
+        assert queries
+        assert all(set(q.input).issubset(charset) for q in queries)
 
 
 class TestAxesValidation:
