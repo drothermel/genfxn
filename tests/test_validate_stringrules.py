@@ -26,6 +26,7 @@ from genfxn.stringrules.validate import (
     CODE_CODE_PARSE_ERROR,
     CODE_CODE_RUNTIME_ERROR,
     CODE_EMPTY_RULESET,
+    CODE_INVALID_CHARSET,
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
@@ -39,6 +40,7 @@ from genfxn.stringrules.validate import (
     _generate_test_inputs,
     _validate_ast_whitelist,
     _validate_query_types,
+    _validate_rule_diagnostics,
     validate_stringrules_task,
 )
 
@@ -294,6 +296,16 @@ class TestDifferentConfigurations:
         assert inputs
         assert all(all(ch.isdigit() for ch in s) for s in inputs)
 
+    def test_generate_test_inputs_space_charset_avoids_invalid_literal(
+        self,
+    ) -> None:
+        axes = StringRulesAxes(charset=" ", string_length_range=(1, 10))
+        inputs = _generate_test_inputs(axes, random.Random(42), num_samples=30)
+        assert inputs
+        assert all(set(s) <= {" "} for s in inputs)
+        assert " " * 10 in inputs
+        assert "  spaces  " not in inputs
+
     def test_empty_charset_axes_returns_issue_not_exception(
         self, baseline_task
     ) -> None:
@@ -365,3 +377,26 @@ class TestDiagnostics:
         )
         issues = validate_stringrules_task(task, emit_diagnostics=False)
         assert not any(i.code == CODE_SHADOWED_RULE for i in issues)
+
+    def test_rule_diagnostics_invalid_charset_returns_issue(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        spec = StringRulesSpec.model_validate(task.spec)
+        axes = StringRulesAxes.model_construct(  # bypass validation
+            charset="",
+            string_length_range=(0, 20),
+            n_rules=2,
+            overlap_level=OverlapLevel.HIGH,
+        )
+
+        issues = _validate_rule_diagnostics(
+            task, spec, axes, random.Random(42)
+        )
+        assert any(
+            i.code == CODE_INVALID_CHARSET
+            and i.severity == Severity.ERROR
+            and i.location == "spec.axes"
+            and i.task_id == task.task_id
+            for i in issues
+        )

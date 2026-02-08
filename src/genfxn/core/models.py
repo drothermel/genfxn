@@ -1,5 +1,4 @@
 import dataclasses
-import json
 from enum import Enum
 from typing import Any
 
@@ -25,8 +24,22 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
     """Deduplicate queries by input, keeping first occurrence."""
 
     def _freeze(value: Any) -> Any:
-        def _sort_key(v: Any) -> str:
-            return json.dumps(v, sort_keys=True, default=repr)
+        def _safe_repr(v: Any) -> str:
+            try:
+                rep = repr(v)
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                return f"<repr_error:{type(exc).__name__}>"
+            if not isinstance(rep, str):
+                return f"<non_str_repr:{type(rep).__name__}>"
+            return rep
+
+        def _sort_key(v: Any) -> tuple[str, str, str]:
+            typ = type(v)
+            return (
+                typ.__module__,
+                typ.__qualname__,
+                _safe_repr(v),
+            )
 
         if isinstance(value, dict):
             frozen_items = [

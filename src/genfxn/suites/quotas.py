@@ -189,7 +189,7 @@ _SIMPLE_ALGORITHMS_D4 = QuotaSpec(
         Bucket(
             "pre_transform_complexity",
             "pipeline4",
-            25,
+            26,
             condition={"has_transform": "true"},
         ),
         # edge_count

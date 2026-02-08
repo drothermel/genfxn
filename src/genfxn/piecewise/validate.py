@@ -301,8 +301,9 @@ def _validate_semantics(
     issues: list[Issue] = []
     lo, hi = value_range
     total_points = hi - lo + 1
-    sampled_points = list(range(lo, hi + 1))
-    if total_points > SEMANTIC_SAMPLE_MAX_POINTS:
+    if total_points <= SEMANTIC_SAMPLE_MAX_POINTS:
+        sampled_points = list(range(lo, hi + 1))
+    else:
         span = hi - lo
         sampled_points = [
             lo + (span * i) // (SEMANTIC_SAMPLE_MAX_POINTS - 1)

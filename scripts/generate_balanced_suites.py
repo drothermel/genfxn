@@ -31,11 +31,15 @@ def main(
     ),
 ) -> None:
     """Generate balanced 50-task suites per (family, difficulty)."""
-    family_list = ALL_FAMILIES if families == "all" else families.split(",")
+    family_list = (
+        ALL_FAMILIES
+        if families == "all"
+        else [f.strip() for f in families.split(",") if f.strip()]
+    )
     diff_list = (
         ALL_DIFFICULTIES
         if difficulties == "all"
-        else [int(d) for d in difficulties.split(",")]
+        else [int(d.strip()) for d in difficulties.split(",") if d.strip()]
     )
 
     for family in family_list:

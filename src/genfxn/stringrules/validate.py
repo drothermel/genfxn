@@ -42,6 +42,7 @@ CODE_UNSAFE_AST = "UNSAFE_AST"
 CODE_SHADOWED_RULE = "SHADOWED_RULE"
 CODE_EMPTY_RULESET = "EMPTY_RULESET"
 CODE_AXES_INVALID = "AXES_INVALID"
+CODE_INVALID_CHARSET = "INVALID_CHARSET"
 CURRENT_FAMILY = "stringrules"
 
 DEFAULT_MAX_SEMANTIC_ISSUES = 10
@@ -375,7 +376,11 @@ def _generate_test_inputs(
         if lo <= 1 <= hi:
             inputs.append(" ")
         if lo <= 10 <= hi:
-            inputs.append("  spaces  ")
+            spaced_literal = "  spaces  "
+            if all(ch in charset for ch in spaced_literal):
+                inputs.append(spaced_literal)
+            else:
+                inputs.append(" " * 10)
 
     # Random samples
     for _ in range(max(0, num_samples - len(inputs))):
@@ -478,7 +483,20 @@ def _validate_rule_diagnostics(
         )
         return issues
 
-    candidates = _generate_test_inputs(axes, rng, num_samples=100)
+    try:
+        candidates = _generate_test_inputs(axes, rng, num_samples=100)
+    except ValueError as e:
+        issues.append(
+            Issue(
+                code=CODE_INVALID_CHARSET,
+                severity=Severity.ERROR,
+                message=str(e),
+                location="spec.axes",
+                task_id=task.task_id,
+            )
+        )
+        return issues
+
     for i, rule in enumerate(spec.rules):
         reachable = False
         blockers: set[int] = set()

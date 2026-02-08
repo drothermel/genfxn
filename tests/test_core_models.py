@@ -8,6 +8,11 @@ class _UnhashableInput:
     __hash__ = None
 
 
+class _BadReprKey:
+    def __repr__(self) -> str:
+        return 1  # type: ignore[return-value]
+
+
 def test_dedupe_queries_first_wins() -> None:
     queries = [
         Query(input=1, output=10, tag=QueryTag.TYPICAL),
@@ -106,3 +111,23 @@ def test_dedupe_queries_unhashable_custom_input_does_not_crash() -> None:
 
     deduped = dedupe_queries(queries)
     assert [q.output for q in deduped] == [1, 3]
+
+
+def test_dedupe_queries_bad_repr_key_does_not_crash() -> None:
+    bad_key = _BadReprKey()
+    queries = [
+        Query(
+            input={bad_key: "x", 1: "one"},
+            output=1,
+            tag=QueryTag.TYPICAL,
+        ),
+        Query(
+            input={1: "one", bad_key: "x"},
+            output=2,
+            tag=QueryTag.BOUNDARY,
+        ),
+    ]
+
+    deduped = dedupe_queries(queries)
+    assert len(deduped) == 1
+    assert deduped[0].output == 1
