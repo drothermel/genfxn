@@ -1,4 +1,5 @@
-from typing import Callable, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -13,7 +14,10 @@ def find_satisfying(
     Returns the first satisfying value, or None if none found.
     """
     for _ in range(max_attempts):
-        value = generate()
-        if predicate(value):
-            return value
+        try:
+            value = generate()
+            if predicate(value):
+                return value
+        except Exception:
+            continue
     return None

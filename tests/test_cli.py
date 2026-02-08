@@ -52,7 +52,18 @@ class TestGenerate:
     def test_generate_all_distributes_remainder_fairly(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
-            app, ["generate", "-o", str(output), "-f", "all", "-n", "6", "-s", "42"]
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "all",
+                "-n",
+                "6",
+                "-s",
+                "42",
+            ],
         )
 
         assert result.exit_code == 0
@@ -519,6 +530,79 @@ class TestSplit:
         test_1 = list(srsly.read_jsonl(test_file))
         assert len(train_1) == 10
         assert len(test_1) == 0
+
+    def test_split_random_ratio_seed_is_deterministic(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file_1 = tmp_path / "train1.jsonl"
+        test_file_1 = tmp_path / "test1.jsonl"
+        train_file_2 = tmp_path / "train2.jsonl"
+        test_file_2 = tmp_path / "test2.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "20",
+                "-s",
+                "42",
+            ],
+        )
+
+        result_1 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file_1),
+                "--test",
+                str(test_file_1),
+                "--random-ratio",
+                "0.5",
+                "--seed",
+                "123",
+            ],
+        )
+        result_2 = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file_2),
+                "--test",
+                str(test_file_2),
+                "--random-ratio",
+                "0.5",
+                "--seed",
+                "123",
+            ],
+        )
+
+        assert result_1.exit_code == 0
+        assert result_2.exit_code == 0
+        train_1 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(train_file_1))
+        )
+        train_2 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(train_file_2))
+        )
+        test_1 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(test_file_1))
+        )
+        test_2 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(test_file_2))
+        )
+
+        assert [t["task_id"] for t in train_1] == [
+            t["task_id"] for t in train_2
+        ]
+        assert [t["task_id"] for t in test_1] == [t["task_id"] for t in test_2]
 
 
 class TestInfo:

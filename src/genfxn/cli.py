@@ -1,7 +1,7 @@
 import json
 import random
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Any, cast
 
 import srsly
 import typer
@@ -25,7 +25,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.splits import AxisHoldout, HoldoutType, random_split, split_tasks
+from genfxn.splits import AxisHoldout, HoldoutType
 from genfxn.stateful.models import StatefulAxes, TemplateType
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
@@ -60,6 +60,50 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
         raise typer.BadParameter(
             f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
         ) from err
+
+
+def _iter_validated_tasks(input_file: Path):
+    for raw in srsly.read_jsonl(input_file):
+        yield Task.model_validate(raw)
+
+
+def _write_task_line(handle, task: Task) -> None:
+    handle.write(srsly.json_dumps(task.model_dump()))
+    handle.write("\n")
+
+
+def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
+    value = get_spec_value(task.spec, holdout.axis_path)
+    if value is None:
+        return False
+
+    match holdout.holdout_type:
+        case HoldoutType.EXACT:
+            return value == holdout.holdout_value
+        case HoldoutType.RANGE:
+            lo, hi = holdout.holdout_value
+            if not isinstance(value, int | float):
+                return False
+            return lo <= value <= hi
+        case HoldoutType.CONTAINS:
+            try:
+                return holdout.holdout_value in value
+            except TypeError:
+                return False
+    return False
+
+
+def _collect_jsonl_offsets(input_file: Path) -> list[int]:
+    offsets: list[int] = []
+    with input_file.open("r", encoding="utf-8") as handle:
+        while True:
+            offset = handle.tell()
+            line = handle.readline()
+            if line == "":
+                break
+            if line.strip():
+                offsets.append(offset)
+    return offsets
 
 
 def _build_stateful_axes(
@@ -585,9 +629,6 @@ def split(
     ] = HoldoutType.EXACT,
 ) -> None:
     """Split tasks using random split or axis holdouts."""
-    raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task.model_validate(t) for t in raw]
-
     # Validate options
     has_random = random_ratio is not None
     has_holdout = holdout_axis is not None or holdout_value is not None
@@ -615,7 +656,31 @@ def split(
         if random_ratio < 0 or random_ratio > 1:
             typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
-        result = random_split(tasks, random_ratio, seed=split_seed)
+        offsets = _collect_jsonl_offsets(input_file)
+        shuffled = offsets.copy()
+        rng = random.Random(split_seed)
+        rng.shuffle(shuffled)
+        split_idx = int(len(shuffled) * random_ratio)
+        train_offsets = shuffled[:split_idx]
+        test_offsets = shuffled[split_idx:]
+
+        with (
+            input_file.open("r", encoding="utf-8") as input_handle,
+            train.open("w", encoding="utf-8") as train_handle,
+            test.open("w", encoding="utf-8") as test_handle,
+        ):
+            for offset in train_offsets:
+                input_handle.seek(offset)
+                raw_line = input_handle.readline()
+                task = Task.model_validate(srsly.json_loads(raw_line))
+                _write_task_line(train_handle, task)
+            for offset in test_offsets:
+                input_handle.seek(offset)
+                raw_line = input_handle.readline()
+                task = Task.model_validate(srsly.json_loads(raw_line))
+                _write_task_line(test_handle, task)
+        train_count = len(train_offsets)
+        test_count = len(test_offsets)
     else:
         if holdout_axis is None or holdout_value is None:
             typer.echo(
@@ -647,23 +712,37 @@ def split(
                 holdout_value=parsed_value,
             )
         ]
-        result = split_tasks(tasks, holdouts)
+        total_count = 0
+        train_count = 0
+        test_count = 0
+        first_sample: Any = None
+        with (
+            train.open("w", encoding="utf-8") as train_handle,
+            test.open("w", encoding="utf-8") as test_handle,
+        ):
+            for task in _iter_validated_tasks(input_file):
+                total_count += 1
+                if first_sample is None:
+                    first_sample = get_spec_value(task.spec, holdout_axis)
+                if any(_matches_holdout(task, h) for h in holdouts):
+                    _write_task_line(test_handle, task)
+                    test_count += 1
+                else:
+                    _write_task_line(train_handle, task)
+                    train_count += 1
 
-    if result.holdouts and len(result.test) == 0 and tasks:
-        typer.echo(
-            f"Warning: holdout matched 0 of {len(tasks)} tasks. "
-            f"Check --holdout-axis spelling (got '{holdout_axis}').",
-            err=True,
-        )
-        sample_val = get_spec_value(tasks[0].spec, holdout_axis)
-        typer.echo(
-            f"  First task's value at '{holdout_axis}': {sample_val!r}",
-            err=True,
-        )
+        if test_count == 0 and total_count > 0:
+            typer.echo(
+                f"Warning: holdout matched 0 of {total_count} tasks. "
+                f"Check --holdout-axis spelling (got '{holdout_axis}').",
+                err=True,
+            )
+            typer.echo(
+                f"  First task's value at '{holdout_axis}': {first_sample!r}",
+                err=True,
+            )
 
-    srsly.write_jsonl(train, [t.model_dump() for t in result.train])
-    srsly.write_jsonl(test, [t.model_dump() for t in result.test])
-    typer.echo(f"Train: {len(result.train)}, Test: {len(result.test)}")
+    typer.echo(f"Train: {train_count}, Test: {test_count}")
 
 
 @app.command()
@@ -671,13 +750,12 @@ def info(
     input_file: Annotated[Path, typer.Argument(help="Input JSONL file")],
 ) -> None:
     """Show info about tasks file."""
-    raw = list(srsly.read_jsonl(input_file))
-    tasks = [Task.model_validate(t) for t in raw]
-
     by_family: dict[str, int] = {}
-    for t in tasks:
+    total = 0
+    for t in _iter_validated_tasks(input_file):
+        total += 1
         by_family[t.family] = by_family.get(t.family, 0) + 1
 
-    typer.echo(f"{input_file}: {len(tasks)} tasks")
+    typer.echo(f"{input_file}: {total} tasks")
     for fam, cnt in sorted(by_family.items()):
         typer.echo(f"  {fam}: {cnt}")

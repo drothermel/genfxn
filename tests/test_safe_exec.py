@@ -1,17 +1,42 @@
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
 import pytest
 
 from genfxn.core import safe_exec
 from genfxn.core.safe_exec import (
     SafeExecTimeoutError,
+    SafeExecValidationError,
     execute_code_restricted,
 )
 
 
+def _spawn_sleep_and_record(path: str) -> int:
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+    Path(path).write_text(str(proc.pid), encoding="utf-8")
+    return proc.pid
+
+
+def _pid_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def test_execute_code_restricted_blocks_import() -> None:
     code = "def f(x):\n    return __import__('os').getcwd()"
-    fn = execute_code_restricted(code, {"len": len})["f"]
-    with pytest.raises(RuntimeError, match="NameError"):
-        fn(1)
+    with pytest.raises(SafeExecValidationError, match="Rejected by static"):
+        execute_code_restricted(code, {"len": len})
 
 
 def test_execute_code_restricted_times_out_infinite_loop() -> None:
@@ -83,3 +108,55 @@ def test_run_isolated_reports_missing_result_without_crash(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="exited without a result"):
         safe_exec._run_isolated("def f(x):\n    return x", {}, (), 1.0, None)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import os\ndef f(x):\n    return x",
+        "def f(x):\n    return open('/tmp/owned').read()",
+        "def f(x):\n    return x.__class__.__mro__",
+    ],
+)
+def test_execute_code_restricted_rejects_adversarial_patterns(
+    code: str,
+) -> None:
+    with pytest.raises(SafeExecValidationError, match="Rejected by static"):
+        execute_code_restricted(code, {"len": len})
+
+
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="Process-group descendant cleanup requires POSIX killpg",
+)
+def test_timeout_terminates_descendant_processes(tmp_path) -> None:
+    pid_file = tmp_path / "child.pid"
+    code = (
+        "def f(path):\n"
+        "    spawn(path)\n"
+        "    while True:\n"
+        "        pass"
+    )
+    fn = execute_code_restricted(
+        code,
+        {"spawn": _spawn_sleep_and_record},
+        timeout_sec=0.2,
+    )["f"]
+
+    with pytest.raises(SafeExecTimeoutError):
+        fn(str(pid_file))
+
+    assert pid_file.exists()
+    child_pid = int(pid_file.read_text(encoding="utf-8"))
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        if not _pid_exists(child_pid):
+            break
+        time.sleep(0.05)
+
+    try:
+        assert not _pid_exists(child_pid)
+    finally:
+        if _pid_exists(child_pid):
+            os.kill(child_pid, signal.SIGKILL)

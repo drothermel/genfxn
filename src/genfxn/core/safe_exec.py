@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import ast
 import multiprocessing as mp
+import os
+import signal
 from dataclasses import dataclass
 from queue import Empty
 from typing import Any
+
+
+class SafeExecValidationError(ValueError):
+    """Raised when code fails static safety validation."""
 
 
 class SafeExecTimeoutError(TimeoutError):
@@ -37,6 +44,148 @@ class _WorkerRequest:
     call_args: tuple[Any, ...] | None = None
 
 
+def _validate_untrusted_code(code: str) -> None:
+    """Best-effort static hardening for untrusted code.
+
+    This is not a security sandbox. It blocks known-dangerous patterns but
+    cannot provide complete containment against Python escapes.
+    """
+    try:
+        tree = ast.parse(code, mode="exec")
+    except SyntaxError as exc:
+        raise SafeExecValidationError(
+            f"Invalid Python syntax at line {exc.lineno}: {exc.msg}"
+        ) from exc
+
+    blocked_calls = {
+        "__import__",
+        "eval",
+        "exec",
+        "compile",
+        "open",
+        "input",
+        "globals",
+        "locals",
+        "vars",
+        "getattr",
+        "setattr",
+        "delattr",
+    }
+    blocked_attrs = {
+        "__subclasses__",
+        "__globals__",
+        "__code__",
+        "__getattribute__",
+        "__mro__",
+    }
+    blocked_nodes = (
+        ast.Import,
+        ast.ImportFrom,
+        ast.ClassDef,
+        ast.Global,
+        ast.Nonlocal,
+    )
+
+    errors: list[str] = []
+    saw_f = False
+    for stmt in tree.body:
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
+        if not isinstance(stmt, ast.FunctionDef):
+            errors.append(
+                "Top-level statements are limited to function definitions"
+            )
+            continue
+        if stmt.name == "f":
+            saw_f = True
+
+    for node in ast.walk(tree):
+        if isinstance(node, blocked_nodes):
+            errors.append(f"Disallowed syntax node: {type(node).__name__}")
+            continue
+
+        if isinstance(node, ast.Name) and (
+            node.id in blocked_calls
+            or (node.id.startswith("__") and node.id.endswith("__"))
+        ):
+            errors.append(f"Disallowed identifier: {node.id}")
+            continue
+
+        if isinstance(node, ast.Attribute):
+            if node.attr in blocked_attrs or (
+                node.attr.startswith("__") and node.attr.endswith("__")
+            ):
+                errors.append(f"Disallowed attribute access: {node.attr}")
+                continue
+
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and (
+                node.func.id in blocked_calls
+            ):
+                errors.append(f"Disallowed call: {node.func.id}")
+            if isinstance(node.func, ast.Attribute) and (
+                node.func.attr in blocked_attrs
+            ):
+                errors.append(f"Disallowed call attribute: {node.func.attr}")
+
+    if not saw_f:
+        errors.append("Code must define a top-level function named 'f'")
+
+    if errors:
+        unique = list(dict.fromkeys(errors))
+        summary = "; ".join(unique[:3])
+        if len(unique) > 3:
+            summary += f"; ... ({len(unique)} issues)"
+        raise SafeExecValidationError(
+            f"Rejected by static validation: {summary}"
+        )
+
+
+def _set_process_group() -> None:
+    if os.name != "posix":
+        return
+    try:
+        os.setsid()
+    except Exception:
+        return
+
+
+def _terminate_process_tree(process: mp.Process) -> None:
+    if not process.is_alive():
+        return
+
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except Exception:
+            pass
+        process.join(timeout=0.2)
+        if process.is_alive():
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except Exception:
+                pass
+            process.join(timeout=0.2)
+
+    if process.is_alive():
+        try:
+            process.terminate()
+        except Exception:
+            pass
+        process.join(timeout=0.2)
+
+    if process.is_alive():
+        try:
+            process.kill()
+        except Exception:
+            pass
+        process.join(timeout=0.2)
+
+
 def _set_memory_limit(memory_limit_mb: int | None) -> None:
     if memory_limit_mb is None:
         return
@@ -57,6 +206,7 @@ def _exec_worker(
     call_args: tuple[Any, ...] | None,
     memory_limit_mb: int | None,
 ) -> None:
+    _set_process_group()
     _set_memory_limit(memory_limit_mb)
     globals_dict: dict[str, Any] = {"__builtins__": allowed_builtins}
     namespace: dict[str, Any] = {}
@@ -91,6 +241,7 @@ def _run_isolated(
     timeout_sec: float,
     memory_limit_mb: int | None,
 ) -> Any:
+    _validate_untrusted_code(code)
     ctx = mp.get_context("spawn")
     queue: mp.Queue = ctx.Queue()
     process = ctx.Process(
@@ -101,8 +252,7 @@ def _run_isolated(
     process.join(timeout_sec)
 
     if process.is_alive():
-        process.terminate()
-        process.join()
+        _terminate_process_tree(process)
         raise SafeExecTimeoutError(
             f"Code execution timed out after {timeout_sec} seconds"
         )
@@ -162,6 +312,7 @@ def _persistent_worker(
     allowed_builtins: dict[str, Any],
     memory_limit_mb: int | None,
 ) -> None:
+    _set_process_group()
     _set_memory_limit(memory_limit_mb)
     globals_dict: dict[str, Any] = {"__builtins__": allowed_builtins}
     namespace: dict[str, Any] = {}
@@ -281,9 +432,7 @@ class _PersistentWorker:
         return result.value
 
     def _terminate(self) -> None:
-        if self._process.is_alive():
-            self._process.terminate()
-            self._process.join()
+        _terminate_process_tree(self._process)
 
     def close(self) -> None:
         try:
@@ -314,11 +463,15 @@ def execute_code_restricted(
     timeout_sec: float = 1.0,
     memory_limit_mb: int | None = 256,
 ) -> dict[str, Any]:
-    """Execute untrusted code in an isolated process and return namespace.
+    """Execute untrusted code in a constrained subprocess and return namespace.
 
     Returned namespace contains an isolated callable at key ``f`` that also
     executes in a separate process with the same limits.
+
+    Important: this is defense-in-depth for robustness, not a true security
+    sandbox. Do not run adversarial code without OS/container isolation.
     """
+    _validate_untrusted_code(code)
     return {
         "f": _IsolatedFunction(
             code=code,

@@ -1,6 +1,13 @@
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 
 
+class _UnhashableInput:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    __hash__ = None
+
+
 def test_dedupe_queries_first_wins() -> None:
     queries = [
         Query(input=1, output=10, tag=QueryTag.TYPICAL),
@@ -63,3 +70,39 @@ def test_dedupe_queries_nested_unhashable_inputs_first_wins() -> None:
     assert len(deduped) == 2
     assert deduped[0].output == 10
     assert deduped[1].output == 20
+
+
+def test_dedupe_queries_mixed_key_type_dict_does_not_crash() -> None:
+    queries = [
+        Query(
+            input={1: "one", "2": "two"},
+            output=1,
+            tag=QueryTag.TYPICAL,
+        ),
+        Query(
+            input={"2": "two", 1: "one"},
+            output=2,
+            tag=QueryTag.BOUNDARY,
+        ),
+        Query(
+            input={1: "one", "2": "TWO"},
+            output=3,
+            tag=QueryTag.COVERAGE,
+        ),
+    ]
+
+    deduped = dedupe_queries(queries)
+    assert len(deduped) == 2
+    assert deduped[0].output == 1
+    assert deduped[1].output == 3
+
+
+def test_dedupe_queries_unhashable_custom_input_does_not_crash() -> None:
+    queries = [
+        Query(input=_UnhashableInput(7), output=1, tag=QueryTag.TYPICAL),
+        Query(input=_UnhashableInput(7), output=2, tag=QueryTag.BOUNDARY),
+        Query(input=_UnhashableInput(8), output=3, tag=QueryTag.COVERAGE),
+    ]
+
+    deduped = dedupe_queries(queries)
+    assert [q.output for q in deduped] == [1, 3]
