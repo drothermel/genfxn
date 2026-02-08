@@ -72,9 +72,9 @@ def _validate_ast_whitelist(
     issues: list[Issue] = []
     try:
         tree = ast.parse(code)
-    except SyntaxError as e:
-        msg = e.msg or str(e)
-        if e.lineno is not None:
+    except (SyntaxError, TypeError) as e:
+        msg = e.msg if isinstance(e, SyntaxError) else str(e)
+        if isinstance(e, SyntaxError) and e.lineno is not None:
             loc = f" at line {e.lineno}"
             if e.offset is not None:
                 loc += f", column {e.offset}"
@@ -199,23 +199,48 @@ def _validate_spec_deserialize(
 
 def _validate_code_compile(
     task: Task,
+    parsed_tree: ast.Module | None = None,
+    execute_untrusted_code: bool = True,
 ) -> tuple[list[Issue], Callable[[list[int]], int] | None]:
-    try:
-        ast.parse(task.code)
-    except SyntaxError as e:
+    if not isinstance(task.code, str):
         return [
             Issue(
                 code=CODE_CODE_PARSE_ERROR,
                 severity=Severity.ERROR,
-                message=f"Syntax error in code: {e}",
+                message=(
+                    "Task code must be a Python string for this validator, "
+                    f"got {type(task.code).__name__}"
+                ),
                 location="code",
                 task_id=task.task_id,
             )
         ], None
 
+    if parsed_tree is None:
+        try:
+            parsed_tree = ast.parse(task.code)
+        except SyntaxError as e:
+            return [
+                Issue(
+                    code=CODE_CODE_PARSE_ERROR,
+                    severity=Severity.ERROR,
+                    message=f"Syntax error in code: {e}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
+    _ = parsed_tree
+
+    if not execute_untrusted_code:
+        return [], None
+
     namespace: dict[str, object]
     try:
-        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+        namespace = execute_code_restricted(
+            task.code,
+            _ALLOWED_BUILTINS,
+            trust_untrusted_code=True,
+        )
     except SafeExecMissingFunctionError as e:
         return [
             Issue(
@@ -547,6 +572,7 @@ def validate_simple_algorithms_task(
     emit_diagnostics: bool = True,  # noqa: ARG001 - kept for API parity
     paranoid: bool = False,
     rng: random.Random | None = None,
+    execute_untrusted_code: bool = False,
 ) -> list[Issue]:
     """Validate a simple_algorithms task for correctness.
 
@@ -586,12 +612,16 @@ def validate_simple_algorithms_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    ast_issues, _ = _validate_ast_whitelist(task.code)
+    ast_issues, tree = _validate_ast_whitelist(task.code)
     if ast_issues:
         issues.extend(ast_issues)
         return issues
 
-    code_issues, func = _validate_code_compile(task)
+    code_issues, func = _validate_code_compile(
+        task,
+        parsed_tree=tree,
+        execute_untrusted_code=execute_untrusted_code,
+    )
     issues.extend(code_issues)
 
     issues.extend(_validate_query_types(task, strict))

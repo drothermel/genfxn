@@ -1,4 +1,5 @@
 import random
+from typing import Any
 
 import pytest
 
@@ -29,8 +30,13 @@ from genfxn.simple_algorithms.validate import (
     _check_counting_mode_consistency,
     _validate_ast_whitelist,
     _validate_query_types,
-    validate_simple_algorithms_task,
+    validate_simple_algorithms_task as _validate_simple_algorithms_task,
 )
+
+
+def validate_simple_algorithms_task(*args: Any, **kwargs: Any):
+    kwargs.setdefault("execute_untrusted_code", True)
+    return _validate_simple_algorithms_task(*args, **kwargs)
 
 
 @pytest.fixture

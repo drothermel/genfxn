@@ -1,4 +1,5 @@
 import random
+from typing import Any
 
 import pytest
 
@@ -20,8 +21,13 @@ from genfxn.stateful.validate import (
     CODE_UNSAFE_AST,
     _validate_ast_whitelist,
     _validate_query_types,
-    validate_stateful_task,
+    validate_stateful_task as _validate_stateful_task,
 )
+
+
+def validate_stateful_task(*args: Any, **kwargs: Any):
+    kwargs.setdefault("execute_untrusted_code", True)
+    return _validate_stateful_task(*args, **kwargs)
 
 
 @pytest.fixture

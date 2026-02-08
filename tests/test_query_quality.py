@@ -11,6 +11,7 @@ from genfxn.core.predicates import (
 from genfxn.core.string_predicates import (
     StringPredicateContains,
     StringPredicateIsAlpha,
+    StringPredicateIsUpper,
     StringPredicateStartsWith,
     StringPredicateType,
     eval_string_predicate,
@@ -266,6 +267,58 @@ class TestCoverageQueriesCoverAllRules:
         assert len(first_match_indices) == len(set(first_match_indices))
 
 
+class TestCharsetAwareStringQueries:
+    def test_alpha_queries_respect_digit_charset(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsAlpha(),
+                    transform=StringTransformUppercase(),
+                )
+            ],
+            default_transform=StringTransformIdentity(),
+        )
+        axes = StringRulesAxes(
+            n_rules=1,
+            predicate_types=[StringPredicateType.IS_ALPHA],
+            transform_types=[
+                StringTransformType.IDENTITY,
+                StringTransformType.UPPERCASE,
+            ],
+            string_length_range=(1, 8),
+            charset="digits",
+        )
+
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        assert queries
+        assert all(all(ch.isdigit() for ch in q.input) for q in queries)
+
+    def test_upper_queries_respect_lowercase_charset(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsUpper(),
+                    transform=StringTransformUppercase(),
+                )
+            ],
+            default_transform=StringTransformIdentity(),
+        )
+        axes = StringRulesAxes(
+            n_rules=1,
+            predicate_types=[StringPredicateType.IS_UPPER],
+            transform_types=[
+                StringTransformType.IDENTITY,
+                StringTransformType.UPPERCASE,
+            ],
+            string_length_range=(1, 8),
+            charset="ascii_lowercase",
+        )
+
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        assert queries
+        assert all(all(ch.islower() for ch in q.input) for q in queries)
+
+
 class TestCountPairsNoPairsInvariant:
     def test_no_pairs_fixture_has_zero_pairs(self) -> None:
         spec = CountPairsSumSpec(target=7, counting_mode=CountingMode.ALL_INDICES)
@@ -290,3 +343,16 @@ class TestCountPairsNoPairsInvariant:
                 for i in range(len(q.input))
                 for j in range(i + 1, len(q.input))
             )
+
+    def test_queries_respect_tight_length_bounds(self) -> None:
+        spec = CountPairsSumSpec(target=7, counting_mode=CountingMode.ALL_INDICES)
+        axes = SimpleAlgorithmsAxes(
+            value_range=(0, 12),
+            list_length_range=(1, 2),
+            window_size_range=(1, 2),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        assert queries
+        assert all(1 <= len(q.input) <= 2 for q in queries if q.input != [])

@@ -1,4 +1,5 @@
 import random
+from typing import Any
 
 import pytest
 
@@ -24,8 +25,13 @@ from genfxn.piecewise.validate import (
     SEMANTIC_SAMPLE_MAX_POINTS,
     _validate_ast_whitelist,
     _validate_query_types,
-    validate_piecewise_task,
+    validate_piecewise_task as _validate_piecewise_task,
 )
+
+
+def validate_piecewise_task(*args: Any, **kwargs: Any):
+    kwargs.setdefault("execute_untrusted_code", True)
+    return _validate_piecewise_task(*args, **kwargs)
 
 
 @pytest.fixture

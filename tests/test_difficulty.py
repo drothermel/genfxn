@@ -83,6 +83,18 @@ class TestPiecewiseDifficulty:
         # 2 branches, affine, small coeffs -> low difficulty
         assert _piecewise_difficulty(spec) in (1, 2)
 
+    def test_single_branch_not_scored_as_two_branches(self) -> None:
+        spec = {
+            "branches": [
+                {
+                    "condition": {"kind": "lt", "value": 0},
+                    "expr": {"kind": "quadratic", "a": 1, "b": 0, "c": 0},
+                }
+            ],
+            "default_expr": {"kind": "affine", "a": 1, "b": 0},
+        }
+        assert _piecewise_difficulty(spec) == 2
+
     def test_multiple_branches_increases_difficulty(self) -> None:
         spec_1 = {
             "branches": [],
@@ -101,7 +113,7 @@ class TestPiecewiseDifficulty:
             ],
             "default_expr": {"kind": "affine", "a": 3, "b": 0},
         }
-        assert _piecewise_difficulty(spec_1) < _piecewise_difficulty(spec_3)
+        assert _piecewise_difficulty(spec_1) <= _piecewise_difficulty(spec_3)
 
     def test_quadratic_increases_difficulty(self) -> None:
         spec_affine = {

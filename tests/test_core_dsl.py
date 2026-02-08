@@ -385,6 +385,17 @@ class TestTaskId:
         id2 = task_id_from_spec("test", spec2)
         assert id1 == id2
 
+    def test_in_set_order_independent(self) -> None:
+        spec1 = {
+            "predicate": {"kind": "in_set", "values": frozenset({3, 1, 2})}
+        }
+        spec2 = {
+            "predicate": {"kind": "in_set", "values": frozenset({2, 3, 1})}
+        }
+        id1 = task_id_from_spec("stateful", spec1)
+        id2 = task_id_from_spec("stateful", spec2)
+        assert id1 == id2
+
 
 class TestRenderTests:
     def test_render_tests(self) -> None:

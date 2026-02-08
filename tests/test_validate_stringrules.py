@@ -1,4 +1,5 @@
 import random
+from typing import Any
 
 import pytest
 
@@ -41,8 +42,13 @@ from genfxn.stringrules.validate import (
     _validate_ast_whitelist,
     _validate_query_types,
     _validate_rule_diagnostics,
-    validate_stringrules_task,
+    validate_stringrules_task as _validate_stringrules_task,
 )
+
+
+def validate_stringrules_task(*args: Any, **kwargs: Any):
+    kwargs.setdefault("execute_untrusted_code", True)
+    return _validate_stringrules_task(*args, **kwargs)
 
 
 @pytest.fixture

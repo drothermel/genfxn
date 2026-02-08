@@ -1,5 +1,4 @@
 import random
-import string
 
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.query_utils import find_satisfying
@@ -35,6 +34,12 @@ def _generate_matching_string(
 ) -> str | None:
     """Generate a string that matches the given predicate."""
     charset = _get_charset(axes.charset)
+    alpha_charset = "".join(ch for ch in charset if ch.isalpha())
+    digit_charset = "".join(ch for ch in charset if ch.isdigit())
+    upper_charset = "".join(ch for ch in charset if ch.isupper())
+    lower_charset = "".join(ch for ch in charset if ch.islower())
+    upper_tail_charset = "".join(ch for ch in charset if not ch.islower())
+    lower_tail_charset = "".join(ch for ch in charset if not ch.isupper())
     lo, hi = axes.string_length_range
 
     def _sample_length(
@@ -79,33 +84,45 @@ def _generate_matching_string(
 
         case StringPredicateIsAlpha():
             length = _sample_length(min_len=1)
-            if length is None:
+            if length is None or not alpha_charset:
                 return None
-            return _valid(_random_string(length, string.ascii_letters, rng))
+            return _valid(_random_string(length, alpha_charset, rng))
 
         case StringPredicateIsDigit():
             length = _sample_length(min_len=1)
-            if length is None:
+            if length is None or not digit_charset:
                 return None
-            return _valid(_random_string(length, string.digits, rng))
+            return _valid(_random_string(length, digit_charset, rng))
 
         case StringPredicateIsUpper():
             length = _sample_length(min_len=1)
-            if length is None:
+            if (
+                length is None
+                or not upper_charset
+                or not upper_tail_charset
+            ):
                 return None
             tail = _random_string(
-                max(0, length - 1), string.ascii_uppercase + string.digits, rng
+                max(0, length - 1),
+                upper_tail_charset,
+                rng,
             )
-            return _valid(rng.choice(string.ascii_uppercase) + tail)
+            return _valid(rng.choice(upper_charset) + tail)
 
         case StringPredicateIsLower():
             length = _sample_length(min_len=1)
-            if length is None:
+            if (
+                length is None
+                or not lower_charset
+                or not lower_tail_charset
+            ):
                 return None
             tail = _random_string(
-                max(0, length - 1), string.ascii_lowercase + string.digits, rng
+                max(0, length - 1),
+                lower_tail_charset,
+                rng,
             )
-            return _valid(rng.choice(string.ascii_lowercase) + tail)
+            return _valid(rng.choice(lower_charset) + tail)
 
         case StringPredicateLengthCmp(op=op, value=v):
             match op:
@@ -141,6 +158,10 @@ def _generate_non_matching_string(
 ) -> str | None:
     """Generate a string that doesn't match the given predicate."""
     charset = _get_charset(axes.charset)
+    alpha_charset = "".join(ch for ch in charset if ch.isalpha())
+    digit_charset = "".join(ch for ch in charset if ch.isdigit())
+    upper_charset = "".join(ch for ch in charset if ch.isupper())
+    lower_charset = "".join(ch for ch in charset if ch.islower())
     lo, hi = axes.string_length_range
 
     def _sample_length(min_len: int = 0) -> int | None:
@@ -192,40 +213,60 @@ def _generate_non_matching_string(
             return result
 
         case StringPredicateIsAlpha():
-            # Include a digit
-            length = _sample_length(min_len=2)
-            if length is None:
+            # Include a non-alpha character from the configured charset.
+            length = _sample_length(min_len=1)
+            breakers = [ch for ch in charset if not ch.isalpha()]
+            if length is None or not breakers:
                 return None
-            base = _random_string(length - 1, string.ascii_letters, rng)
+            if length == 1:
+                return rng.choice(breakers)
+            if not alpha_charset:
+                return _random_string(length, breakers, rng)
+            base = _random_string(length - 1, alpha_charset, rng)
             pos = rng.randint(0, len(base))
-            return base[:pos] + rng.choice(string.digits) + base[pos:]
+            return base[:pos] + rng.choice(breakers) + base[pos:]
 
         case StringPredicateIsDigit():
-            # Include a letter
-            length = _sample_length(min_len=2)
-            if length is None:
+            # Include a non-digit character from the configured charset.
+            length = _sample_length(min_len=1)
+            breakers = [ch for ch in charset if not ch.isdigit()]
+            if length is None or not breakers:
                 return None
-            base = _random_string(length - 1, string.digits, rng)
+            if length == 1:
+                return rng.choice(breakers)
+            if not digit_charset:
+                return _random_string(length, breakers, rng)
+            base = _random_string(length - 1, digit_charset, rng)
             pos = rng.randint(0, len(base))
-            return base[:pos] + rng.choice(string.ascii_letters) + base[pos:]
+            return base[:pos] + rng.choice(breakers) + base[pos:]
 
         case StringPredicateIsUpper():
-            # Include lowercase
-            length = _sample_length(min_len=2)
-            if length is None:
+            # Force not-isupper() by including a non-uppercase character.
+            length = _sample_length(min_len=1)
+            breakers = [ch for ch in charset if not ch.isupper()]
+            if length is None or not breakers:
                 return None
-            base = _random_string(length - 1, string.ascii_uppercase, rng)
+            if length == 1:
+                return rng.choice(breakers)
+            if not upper_charset:
+                return _random_string(length, breakers, rng)
+            base = _random_string(length - 1, upper_charset, rng)
             pos = rng.randint(0, len(base))
-            return base[:pos] + rng.choice(string.ascii_lowercase) + base[pos:]
+            return base[:pos] + rng.choice(breakers) + base[pos:]
 
         case StringPredicateIsLower():
-            # Include uppercase
-            length = _sample_length(min_len=2)
-            if length is None:
+            # Force not-islower() by including a non-lowercase character.
+            length = _sample_length(min_len=1)
+            breakers = [ch for ch in charset if not ch.islower()]
+            if length is None or not breakers:
                 return None
-            base = _random_string(length - 1, string.ascii_lowercase, rng)
+            if length == 1:
+                return rng.choice(breakers)
+            if not lower_charset:
+                return _random_string(length, breakers, rng)
+            base = _random_string(length - 1, lower_charset, rng)
             pos = rng.randint(0, len(base))
-            return base[:pos] + rng.choice(string.ascii_uppercase) + base[pos:]
+            return base[:pos] + rng.choice(breakers) + base[pos:]
 
         case StringPredicateLengthCmp(op=op, value=v):
             match op:

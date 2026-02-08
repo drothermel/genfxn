@@ -30,7 +30,7 @@ def _piecewise_difficulty(spec: dict[str, Any]) -> int:
     branches = spec.get("branches", [])
     default_expr = spec.get("default_expr", {})
 
-    n_branches = len(branches) + 1
+    n_branches = max(1, len(branches))
     branch_score = min(n_branches, 5)
 
     branch_exprs = [b.get("expr") for b in branches]

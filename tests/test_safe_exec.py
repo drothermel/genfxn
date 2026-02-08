@@ -10,7 +10,10 @@ import pytest
 from genfxn.core import safe_exec
 from genfxn.core.safe_exec import (
     SafeExecBootstrapError,
+    SafeExecExecutionError,
+    SafeExecMissingFunctionError,
     SafeExecTimeoutError,
+    SafeExecTrustRequiredError,
     SafeExecValidationError,
     execute_code_restricted,
 )
@@ -37,12 +40,31 @@ def _pid_exists(pid: int) -> bool:
 def test_execute_code_restricted_blocks_import() -> None:
     code = "def f(x):\n    return __import__('os').getcwd()"
     with pytest.raises(SafeExecValidationError, match="Rejected by static"):
-        execute_code_restricted(code, {"len": len})
+        execute_code_restricted(
+            code,
+            {"len": len},
+            trust_untrusted_code=True,
+        )
+
+
+def test_execute_code_restricted_rejects_top_level_statements() -> None:
+    code = "x = 1\ndef f(y):\n    return y + x"
+    with pytest.raises(SafeExecValidationError, match="Top-level statements"):
+        execute_code_restricted(
+            code,
+            {},
+            trust_untrusted_code=True,
+        )
 
 
 def test_execute_code_restricted_times_out_infinite_loop() -> None:
     code = "def f(x):\n    while True:\n        pass"
-    fn = execute_code_restricted(code, {}, timeout_sec=0.2)["f"]
+    fn = execute_code_restricted(
+        code,
+        {},
+        timeout_sec=0.2,
+        trust_untrusted_code=True,
+    )["f"]
     with pytest.raises(SafeExecTimeoutError):
         fn(1)
 
@@ -164,7 +186,7 @@ def test_execute_code_restricted_works_in_script_without_main_guard(
     script.write_text(
         "from genfxn.core.safe_exec import execute_code_restricted\n"
         "fn = execute_code_restricted('def f(x):\\n    return x + 1', {}, "
-        "timeout_sec=1.0)['f']\n"
+        "timeout_sec=1.0, trust_untrusted_code=True)['f']\n"
         "print(fn(2))\n",
         encoding="utf-8",
     )
@@ -193,7 +215,11 @@ def test_execute_code_restricted_rejects_adversarial_patterns(
     code: str,
 ) -> None:
     with pytest.raises(SafeExecValidationError, match="Rejected by static"):
-        execute_code_restricted(code, {"len": len})
+        execute_code_restricted(
+            code,
+            {"len": len},
+            trust_untrusted_code=True,
+        )
 
 
 @pytest.mark.skipif(
@@ -212,6 +238,7 @@ def test_timeout_terminates_descendant_processes(tmp_path) -> None:
         code,
         {"spawn": _spawn_sleep_and_record},
         timeout_sec=0.2,
+        trust_untrusted_code=True,
     )["f"]
 
     with pytest.raises(SafeExecTimeoutError):
@@ -244,6 +271,7 @@ def test_close_terminates_descendant_processes_after_shutdown(tmp_path) -> None:
         code,
         {"spawn": _spawn_sleep_and_record},
         timeout_sec=1.0,
+        trust_untrusted_code=True,
     )["f"]
 
     try:
@@ -264,3 +292,44 @@ def test_close_terminates_descendant_processes_after_shutdown(tmp_path) -> None:
     finally:
         if _pid_exists(child_pid):
             os.kill(child_pid, signal.SIGKILL)
+
+
+def test_execute_code_restricted_requires_explicit_trust() -> None:
+    with pytest.raises(SafeExecTrustRequiredError, match="explicit trust"):
+        execute_code_restricted("def f(x):\n    return x", {})
+
+
+def test_execute_code_restricted_missing_f_raises() -> None:
+    with pytest.raises(SafeExecMissingFunctionError, match="not found"):
+        execute_code_restricted(
+            "def g(x):\n    return x",
+            {},
+            trust_untrusted_code=True,
+        )
+
+
+def test_execute_code_restricted_runtime_error_wrapped() -> None:
+    fn = execute_code_restricted(
+        "def f(x):\n    return 1 // 0",
+        {},
+        trust_untrusted_code=True,
+    )["f"]
+    with pytest.raises(SafeExecExecutionError, match="ZeroDivisionError"):
+        fn(1)
+
+
+def test_execute_code_restricted_result_size_limit() -> None:
+    fn = execute_code_restricted(
+        "def f(x):\n    return 'a' * x",
+        {},
+        trust_untrusted_code=True,
+        max_result_bytes=128,
+    )["f"]
+    with pytest.raises(SafeExecExecutionError, match="max_result_bytes"):
+        fn(10_000)
+
+
+def test_get_mp_context_invalid_override_raises(monkeypatch) -> None:
+    monkeypatch.setenv("GENFXN_SAFE_EXEC_START_METHOD", "bogus")
+    with pytest.raises(ValueError, match="Valid values"):
+        safe_exec._get_mp_context()

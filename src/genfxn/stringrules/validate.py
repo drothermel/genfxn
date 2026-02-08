@@ -87,7 +87,7 @@ def _validate_ast_whitelist(
 
     try:
         tree = ast.parse(code)
-    except SyntaxError:
+    except (SyntaxError, TypeError):
         return [], None
 
     annotation_positions = _annotation_positions(tree)
@@ -238,23 +238,48 @@ def _validate_spec_deserialize(
 
 def _validate_code_compile(
     task: Task,
+    parsed_tree: ast.Module | None = None,
+    execute_untrusted_code: bool = True,
 ) -> tuple[list[Issue], Callable[[str], str] | None]:
-    try:
-        ast.parse(task.code)
-    except SyntaxError as e:
+    if not isinstance(task.code, str):
         return [
             Issue(
                 code=CODE_CODE_PARSE_ERROR,
                 severity=Severity.ERROR,
-                message=f"Syntax error in code: {e}",
+                message=(
+                    "Task code must be a Python string for this validator, "
+                    f"got {type(task.code).__name__}"
+                ),
                 location="code",
                 task_id=task.task_id,
             )
         ], None
 
+    if parsed_tree is None:
+        try:
+            parsed_tree = ast.parse(task.code)
+        except SyntaxError as e:
+            return [
+                Issue(
+                    code=CODE_CODE_PARSE_ERROR,
+                    severity=Severity.ERROR,
+                    message=f"Syntax error in code: {e}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
+    _ = parsed_tree
+
+    if not execute_untrusted_code:
+        return [], None
+
     namespace: dict[str, object]
     try:
-        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+        namespace = execute_code_restricted(
+            task.code,
+            _ALLOWED_BUILTINS,
+            trust_untrusted_code=True,
+        )
     except SafeExecMissingFunctionError as e:
         return [
             Issue(
@@ -497,13 +522,17 @@ def _validate_rule_diagnostics(
         )
         return issues
 
+    first_match_by_candidate = {
+        s: _first_matching_rule_index(spec, s) for s in candidates
+    }
+
     for i, rule in enumerate(spec.rules):
         reachable = False
         blockers: set[int] = set()
         for s in candidates:
             if not eval_string_predicate(rule.predicate, s):
                 continue
-            first_index = _first_matching_rule_index(spec, s)
+            first_index = first_match_by_candidate[s]
             if first_index == i:
                 reachable = True
                 break
@@ -539,6 +568,7 @@ def validate_stringrules_task(
     emit_diagnostics: bool = True,  # noqa: ARG001 - kept for API parity
     paranoid: bool = False,
     rng: random.Random | None = None,
+    execute_untrusted_code: bool = False,
 ) -> list[Issue]:
     """Validate a stringrules task for correctness.
 
@@ -601,12 +631,16 @@ def validate_stringrules_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    ast_issues, _ = _validate_ast_whitelist(task.code)
+    ast_issues, tree = _validate_ast_whitelist(task.code)
     if ast_issues:
         issues.extend(ast_issues)
         return issues
 
-    code_issues, func = _validate_code_compile(task)
+    code_issues, func = _validate_code_compile(
+        task,
+        parsed_tree=tree,
+        execute_untrusted_code=execute_untrusted_code,
+    )
     issues.extend(code_issues)
 
     issues.extend(_validate_query_types(task, strict))

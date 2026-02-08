@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Phase 5 Demo: CLI usage for task generation and splitting."""
 
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -9,7 +10,13 @@ from pathlib import Path
 def run(cmd: str) -> None:
     """Run a command and print its output."""
     print(f"$ {cmd}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(
+        shlex.split(cmd),
+        shell=False,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     print(result.stdout)
     if result.stderr:
         print(result.stderr)

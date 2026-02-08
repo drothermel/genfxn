@@ -1,5 +1,6 @@
 from typing import Any, cast
 
+import pytest
 import srsly
 from typer.testing import CliRunner
 
@@ -146,6 +147,101 @@ class TestGenerate:
 
         assert result.exit_code == 0
         assert output.exists()
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 1
+        assert tasks[0]["code"].startswith("fn f(")
+        assert "def f(" not in tasks[0]["code"]
+
+    def test_generate_rejects_multiple_languages(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+                "--language",
+                "python,rust",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "exactly one language value" in result.output
+
+    def test_generate_difficulty_requires_specific_family(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "all",
+                "--difficulty",
+                "3",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "requires a specific family" in result.output
+
+    def test_generate_variant_requires_difficulty(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stateful",
+                "--variant",
+                "3A",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "requires --difficulty" in result.output
+
+    def test_generate_stateful_rejects_in_set_predicate(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stateful",
+                "--predicate-types",
+                "in_set",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "IN_SET is not supported" in result.output
+
+    @pytest.mark.parametrize("bad_range", ["1", "1,2,3", "a,b", "10,1"])
+    def test_generate_rejects_bad_range_values(
+        self, tmp_path, bad_range: str
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stateful",
+                "--value-range",
+                bad_range,
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Invalid range" in result.output or "low must be <=" in result.output
 
 
 class TestSplit:
@@ -381,6 +477,97 @@ class TestSplit:
         assert test[0]["spec"]["flag"] is True
         assert len(train) == 1
         assert train[0]["spec"]["flag"] is False
+
+    def test_split_contains_holdout_from_cli(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"labels": ["alpha", "beta"]},
+                "code": "def f(xs):\n    return 0\n",
+                "queries": [{"input": [1], "output": 0, "tag": "typical"}],
+                "description": "contains alpha",
+            },
+            {
+                "task_id": "task-2",
+                "family": "stateful",
+                "spec": {"labels": ["gamma"]},
+                "code": "def f(xs):\n    return 0\n",
+                "queries": [{"input": [1], "output": 0, "tag": "typical"}],
+                "description": "does not contain alpha",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "labels",
+                "--holdout-value",
+                "alpha",
+                "--holdout-type",
+                "contains",
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert len(test) == 1
+        assert test[0]["task_id"] == "task-1"
+        assert len(train) == 1
+        assert train[0]["task_id"] == "task-2"
+
+    def test_split_emits_warning_when_holdout_matches_none(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "5",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "template",
+                "--holdout-value",
+                "definitely_not_a_template",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Warning: holdout matched 0" in result.output
 
     def test_split_invalid_holdout_type_has_clean_error(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

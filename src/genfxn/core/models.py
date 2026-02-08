@@ -24,6 +24,20 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
     """Deduplicate queries by input, keeping first occurrence."""
 
     def _freeze(value: Any) -> Any:
+        # Fast paths for common primitive/query container types.
+        if type(value) in {int, str, bool, float, type(None)}:
+            return ("__scalar__", value)
+        if isinstance(value, list) and all(
+            type(item) in {int, str, bool, float, type(None)}
+            for item in value
+        ):
+            return ("__flat_list__", tuple(value))
+        if isinstance(value, tuple) and all(
+            type(item) in {int, str, bool, float, type(None)}
+            for item in value
+        ):
+            return ("__flat_tuple__", value)
+
         def _safe_repr(v: Any) -> str:
             try:
                 rep = repr(v)
@@ -93,7 +107,9 @@ class Task(BaseModel):
     task_id: str = Field(description="Deterministic hash of spec")
     family: str = Field(description="Function family (piecewise, stateful)")
     spec: dict[str, Any] = Field(description="Full specification as dict")
-    code: str = Field(description="Rendered Python function")
+    code: str | dict[str, str] = Field(
+        description="Rendered function code (single language or map)"
+    )
     queries: list[Query] = Field(description="Test queries with tags")
     trace: GenerationTrace | None = Field(
         default=None, description="Optional generation trace for debugging"

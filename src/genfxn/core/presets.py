@@ -126,20 +126,20 @@ PIECEWISE_PRESETS: dict[int, list[DifficultyPreset]] = {
     4: [
         DifficultyPreset(
             "4A",
-            "5 branches, abs, large coeffs",
+            "5 branches, quadratic, large coeffs",
             {
                 "n_branches": 5,
-                "expr_types": [ExprType.ABS],
+                "expr_types": [ExprType.QUADRATIC],
                 "coeff_range": (-4, 4),
             },
         ),
         DifficultyPreset(
             "4B",
-            "4 branches, quadratic, medium coeffs",
+            "5 branches, quadratic, large coeffs",
             {
-                "n_branches": 4,
+                "n_branches": 5,
                 "expr_types": [ExprType.QUADRATIC],
-                "coeff_range": (-2, 2),
+                "coeff_range": (-4, 4),
             },
         ),
         DifficultyPreset(

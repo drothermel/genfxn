@@ -1,7 +1,6 @@
 import random
 
 from genfxn.core.models import Query, QueryTag, dedupe_queries
-from genfxn.core.query_utils import find_satisfying
 from genfxn.core.predicates import (
     Predicate,
     PredicateAnd,
@@ -16,6 +15,7 @@ from genfxn.core.predicates import (
     PredicateOr,
     eval_predicate,
 )
+from genfxn.core.query_utils import find_satisfying
 from genfxn.stateful.eval import eval_stateful
 from genfxn.stateful.models import (
     ConditionalLinearSumSpec,
@@ -44,13 +44,29 @@ def _make_matching_value(
 ) -> int | None:
     lo, hi = value_range
 
+    def _random_parity(start: int, step: int) -> int | None:
+        if start > hi:
+            return None
+        slots = ((hi - start) // step) + 1
+        return start + step * rng.randrange(slots)
+
+    def _random_mod_eq(divisor: int, remainder: int) -> int | None:
+        step = abs(divisor)
+        if step == 0:
+            return None
+        first = lo + ((remainder - (lo % divisor)) % step)
+        if first > hi:
+            return None
+        slots = ((hi - first) // step) + 1
+        return first + step * rng.randrange(slots)
+
     match pred:
         case PredicateEven():
-            candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
-            return rng.choice(candidates) if candidates else None
+            first = lo if lo % 2 == 0 else lo + 1
+            return _random_parity(first, 2)
         case PredicateOdd():
-            candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else None
+            first = lo if lo % 2 == 1 else lo + 1
+            return _random_parity(first, 2)
         case PredicateLt(value=v):
             if lo <= v - 1:
                 return rng.randint(lo, min(v - 1, hi))
@@ -68,10 +84,7 @@ def _make_matching_value(
                 return rng.randint(max(v, lo), hi)
             return None
         case PredicateModEq(divisor=d, remainder=r):
-            candidates = [x for x in range(lo, hi + 1) if x % d == r]
-            if candidates:
-                return rng.choice(candidates)
-            return None
+            return _random_mod_eq(d, r)
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(
                 lambda: rng.randint(lo, hi),
@@ -88,11 +101,17 @@ def _make_non_matching_value(
 
     match pred:
         case PredicateEven():
-            candidates = [x for x in range(lo, hi + 1) if x % 2 == 1]
-            return rng.choice(candidates) if candidates else None
+            first = lo if lo % 2 == 1 else lo + 1
+            if first > hi:
+                return None
+            slots = ((hi - first) // 2) + 1
+            return first + 2 * rng.randrange(slots)
         case PredicateOdd():
-            candidates = [x for x in range(lo, hi + 1) if x % 2 == 0]
-            return rng.choice(candidates) if candidates else None
+            first = lo if lo % 2 == 0 else lo + 1
+            if first > hi:
+                return None
+            slots = ((hi - first) // 2) + 1
+            return first + 2 * rng.randrange(slots)
         case PredicateLt(value=v):
             if v <= hi:
                 return rng.randint(max(v, lo), hi)
@@ -110,9 +129,18 @@ def _make_non_matching_value(
                 return rng.randint(lo, min(v - 1, hi))
             return None
         case PredicateModEq(divisor=d, remainder=r):
-            candidates = [x for x in range(lo, hi + 1) if x % d != r]
-            if candidates:
-                return rng.choice(candidates)
+            candidate = rng.randint(lo, hi)
+            if candidate % d != r:
+                return candidate
+            if lo == hi:
+                return None
+            if candidate < hi and (candidate + 1) % d != r:
+                return candidate + 1
+            if candidate > lo and (candidate - 1) % d != r:
+                return candidate - 1
+            for value in range(lo, hi + 1):
+                if value % d != r:
+                    return value
             return None
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(

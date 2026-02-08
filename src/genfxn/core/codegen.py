@@ -27,9 +27,24 @@ def get_spec_value(spec: dict[str, Any], path: str) -> Any:
 
 
 def task_id_from_spec(family: str, spec: dict[str, Any]) -> str:
-    canonical = srsly.json_dumps(spec, sort_keys=True)
+    canonical = srsly.json_dumps(_canonicalize_for_hash(spec), sort_keys=True)
     hash_bytes = hashlib.sha256(canonical.encode()).digest()[:8]
     return f"{family}_{hash_bytes.hex()}"
+
+
+def _canonicalize_for_hash(value: Any) -> Any:
+    """Convert values into a deterministic JSON-serializable form."""
+    if isinstance(value, dict):
+        return {
+            str(k): _canonicalize_for_hash(v)
+            for k, v in sorted(value.items(), key=lambda item: str(item[0]))
+        }
+    if isinstance(value, list | tuple):
+        return [_canonicalize_for_hash(v) for v in value]
+    if isinstance(value, set | frozenset):
+        items = [_canonicalize_for_hash(v) for v in value]
+        return sorted(items, key=lambda item: srsly.json_dumps(item))
+    return value
 
 
 def render_tests(func_name: str, queries: list[Query]) -> str:
