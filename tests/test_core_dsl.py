@@ -416,10 +416,15 @@ class TestRenderTests:
 
 class TestCorpusIdUniqueness:
     def test_no_cross_family_collisions(self) -> None:
-        """IDs from different families never collide (family is part of hash)."""
+        """IDs from different families never collide.
+
+        Family is part of the hash.
+        """
         from genfxn.piecewise.task import generate_piecewise_task
+        from genfxn.simple_algorithms.task import (
+            generate_simple_algorithms_task,
+        )
         from genfxn.stateful.task import generate_stateful_task
-        from genfxn.simple_algorithms.task import generate_simple_algorithms_task
         from genfxn.stringrules.task import generate_stringrules_task
 
         n = 50
@@ -444,12 +449,14 @@ class TestCorpusIdUniqueness:
         for i, f1 in enumerate(families):
             for f2 in families[i + 1 :]:
                 overlap = family_ids[f1] & family_ids[f2]
-                assert not overlap, f"Cross-family collision between {f1} and {f2}: {overlap}"
+                assert not overlap, (
+                    f"Cross-family collision between {f1} and {f2}: {overlap}"
+                )
 
     def test_unique_specs_produce_unique_ids(self) -> None:
         """Distinct specs within a family produce distinct task_ids."""
-        from genfxn.piecewise.sampler import sample_piecewise_spec
         from genfxn.piecewise.models import PiecewiseAxes
+        from genfxn.piecewise.sampler import sample_piecewise_spec
 
         rng = random.Random(42)
         specs: list[dict] = []
@@ -465,5 +472,6 @@ class TestCorpusIdUniqueness:
         unique_specs = {str(sorted(s.items())) for s in specs}
         unique_ids = set(ids)
         assert len(unique_ids) == len(unique_specs), (
-            f"Hash collision: {len(unique_specs)} unique specs but {len(unique_ids)} unique IDs"
+            f"Hash collision: {len(unique_specs)} unique specs but "
+            f"{len(unique_ids)} unique IDs"
         )

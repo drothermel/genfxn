@@ -28,13 +28,11 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
         if type(value) in {int, str, bool, float, type(None)}:
             return ("__scalar__", value)
         if isinstance(value, list) and all(
-            type(item) in {int, str, bool, float, type(None)}
-            for item in value
+            type(item) in {int, str, bool, float, type(None)} for item in value
         ):
             return ("__flat_list__", tuple(value))
         if isinstance(value, tuple) and all(
-            type(item) in {int, str, bool, float, type(None)}
-            for item in value
+            type(item) in {int, str, bool, float, type(None)} for item in value
         ):
             return ("__flat_tuple__", value)
 
@@ -78,9 +76,7 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
         if dataclasses.is_dataclass(value):
             return ("__dataclass__", _freeze(dataclasses.asdict(value)))
         if hasattr(value, "model_dump") and callable(value.model_dump):
-            model_type = (
-                f"{type(value).__module__}.{type(value).__qualname__}"
-            )
+            model_type = f"{type(value).__module__}.{type(value).__qualname__}"
             return ("__model__", model_type, _freeze(value.model_dump()))
         try:
             hash(value)

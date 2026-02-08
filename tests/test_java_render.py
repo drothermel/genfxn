@@ -52,7 +52,10 @@ from genfxn.core.transforms import (
     TransformScale,
     TransformShift,
 )
-from genfxn.langs.java._helpers import _regex_char_class_escape, java_string_literal
+from genfxn.langs.java._helpers import (
+    _regex_char_class_escape,
+    java_string_literal,
+)
 from genfxn.langs.java.expressions import render_expression_java
 from genfxn.langs.java.predicates import render_predicate_java
 from genfxn.langs.java.string_predicates import render_string_predicate_java
@@ -64,7 +67,6 @@ from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
-
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -134,9 +136,7 @@ class TestPredicateJava:
         assert result == "java.util.Set.of(1, 2, 3).contains(x)"
 
     def test_not(self) -> None:
-        result = render_predicate_java(
-            PredicateNot(operand=PredicateEven())
-        )
+        result = render_predicate_java(PredicateNot(operand=PredicateEven()))
         assert result == "!(x % 2 == 0)"
 
     def test_and(self) -> None:
@@ -182,7 +182,9 @@ class TestTransformJava:
         assert render_transform_java(TransformScale(factor=2)) == "x * 2"
 
     def test_pipeline(self) -> None:
-        pipe = TransformPipeline(steps=[TransformAbs(), TransformShift(offset=1)])
+        pipe = TransformPipeline(
+            steps=[TransformAbs(), TransformShift(offset=1)]
+        )
         result = render_transform_java(pipe)
         assert result == "(Math.abs(x)) + 1"
 
@@ -244,19 +246,29 @@ class TestStringPredicateJava:
 
     def test_is_alpha(self) -> None:
         result = render_string_predicate_java(StringPredicateIsAlpha())
-        assert result == "!s.isEmpty() && s.chars().allMatch(Character::isLetter)"
+        assert result == (
+            "!s.isEmpty() && s.chars().allMatch(Character::isLetter)"
+        )
 
     def test_is_digit(self) -> None:
         result = render_string_predicate_java(StringPredicateIsDigit())
-        assert result == "!s.isEmpty() && s.chars().allMatch(Character::isDigit)"
+        assert result == (
+            "!s.isEmpty() && s.chars().allMatch(Character::isDigit)"
+        )
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_java(StringPredicateIsUpper())
-        assert result == "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && s.equals(s.toUpperCase())"
+        assert result == (
+            "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
+            "s.equals(s.toUpperCase())"
+        )
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_java(StringPredicateIsLower())
-        assert result == "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && s.equals(s.toLowerCase())"
+        assert result == (
+            "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
+            "s.equals(s.toLowerCase())"
+        )
 
     def test_length_cmp(self) -> None:
         result = render_string_predicate_java(
@@ -272,19 +284,23 @@ class TestStringPredicateJava:
 
     def test_and(self) -> None:
         result = render_string_predicate_java(
-            StringPredicateAnd(operands=[
-                StringPredicateIsAlpha(),
-                StringPredicateLengthCmp(op="gt", value=3),
-            ])
+            StringPredicateAnd(
+                operands=[
+                    StringPredicateIsAlpha(),
+                    StringPredicateLengthCmp(op="gt", value=3),
+                ]
+            )
         )
         assert "&&" in result
 
     def test_or(self) -> None:
         result = render_string_predicate_java(
-            StringPredicateOr(operands=[
-                StringPredicateStartsWith(prefix="a"),
-                StringPredicateEndsWith(suffix="z"),
-            ])
+            StringPredicateOr(
+                operands=[
+                    StringPredicateStartsWith(prefix="a"),
+                    StringPredicateEndsWith(suffix="z"),
+                ]
+            )
         )
         assert "||" in result
 
@@ -297,10 +313,16 @@ class TestStringTransformJava:
         assert render_string_transform_java(StringTransformIdentity()) == "s"
 
     def test_lowercase(self) -> None:
-        assert render_string_transform_java(StringTransformLowercase()) == "s.toLowerCase()"
+        assert (
+            render_string_transform_java(StringTransformLowercase())
+            == "s.toLowerCase()"
+        )
 
     def test_uppercase(self) -> None:
-        assert render_string_transform_java(StringTransformUppercase()) == "s.toUpperCase()"
+        assert (
+            render_string_transform_java(StringTransformUppercase())
+            == "s.toUpperCase()"
+        )
 
     def test_capitalize(self) -> None:
         result = render_string_transform_java(StringTransformCapitalize())
@@ -332,25 +354,31 @@ class TestStringTransformJava:
         assert "xy" in result
 
     def test_strip_chars_escapes_java_string_literal(self) -> None:
-        chars = '\"]'
+        chars = '"]'
         escaped = _regex_char_class_escape(chars)
         pattern = f"^[{escaped}]+|[{escaped}]+$"
         result = render_string_transform_java(StringTransformStrip(chars=chars))
         assert result == f's.replaceAll({java_string_literal(pattern)}, "")'
 
     def test_prepend(self) -> None:
-        result = render_string_transform_java(StringTransformPrepend(prefix="hi_"))
+        result = render_string_transform_java(
+            StringTransformPrepend(prefix="hi_")
+        )
         assert result == '"hi_" + s'
 
     def test_append(self) -> None:
-        result = render_string_transform_java(StringTransformAppend(suffix="_end"))
+        result = render_string_transform_java(
+            StringTransformAppend(suffix="_end")
+        )
         assert result == 's + "_end"'
 
     def test_pipeline(self) -> None:
-        pipe = StringTransformPipeline(steps=[
-            StringTransformLowercase(),
-            StringTransformReverse(),
-        ])
+        pipe = StringTransformPipeline(
+            steps=[
+                StringTransformLowercase(),
+                StringTransformReverse(),
+            ]
+        )
         result = render_string_transform_java(pipe)
         assert "toLowerCase()" in result
         assert "StringBuilder" in result
@@ -365,7 +393,12 @@ class TestPiecewiseJava:
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateGt(value=0), expr=ExprAffine(a=2, b=0))],
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=2, b=0),
+                )
+            ],
             default_expr=ExprAffine(a=0, b=-1),
         )
         code = render_piecewise(spec)
@@ -389,8 +422,14 @@ class TestPiecewiseJava:
 
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLt(value=-5), expr=ExprAffine(a=0, b=0)),
-                Branch(condition=PredicateGt(value=5), expr=ExprAffine(a=0, b=1)),
+                Branch(
+                    condition=PredicateLt(value=-5),
+                    expr=ExprAffine(a=0, b=0),
+                ),
+                Branch(
+                    condition=PredicateGt(value=5),
+                    expr=ExprAffine(a=0, b=1),
+                ),
             ],
             default_expr=ExprAffine(a=1, b=0),
         )
@@ -495,7 +534,10 @@ class TestStringrulesJava:
         from genfxn.langs.java.stringrules import render_stringrules
         from genfxn.stringrules.models import StringRulesSpec
 
-        spec = StringRulesSpec(rules=[], default_transform=StringTransformLowercase())
+        spec = StringRulesSpec(
+            rules=[],
+            default_transform=StringTransformLowercase(),
+        )
         code = render_stringrules(spec)
         assert "return s.toLowerCase();" in code
         assert "if" not in code
@@ -504,7 +546,10 @@ class TestStringrulesJava:
 class TestSimpleAlgorithmsJava:
     def test_most_frequent_smallest(self) -> None:
         from genfxn.langs.java.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -518,7 +563,10 @@ class TestSimpleAlgorithmsJava:
 
     def test_most_frequent_first_seen(self) -> None:
         from genfxn.langs.java.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.FIRST_SEEN,
@@ -530,7 +578,10 @@ class TestSimpleAlgorithmsJava:
 
     def test_count_pairs_all_indices(self) -> None:
         from genfxn.langs.java.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import CountingMode, CountPairsSumSpec
+        from genfxn.simple_algorithms.models import (
+            CountingMode,
+            CountPairsSumSpec,
+        )
 
         spec = CountPairsSumSpec(
             target=10,
@@ -542,7 +593,10 @@ class TestSimpleAlgorithmsJava:
 
     def test_count_pairs_unique(self) -> None:
         from genfxn.langs.java.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import CountingMode, CountPairsSumSpec
+        from genfxn.simple_algorithms.models import (
+            CountingMode,
+            CountPairsSumSpec,
+        )
 
         spec = CountPairsSumSpec(
             target=5,
@@ -565,7 +619,10 @@ class TestSimpleAlgorithmsJava:
 
     def test_preprocess_filter(self) -> None:
         from genfxn.langs.java.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -578,7 +635,10 @@ class TestSimpleAlgorithmsJava:
 
     def test_preprocess_transform(self) -> None:
         from genfxn.langs.java.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -591,7 +651,10 @@ class TestSimpleAlgorithmsJava:
 
     def test_edge_defaults_rendered(self) -> None:
         from genfxn.langs.java.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -735,7 +798,12 @@ class TestLangsInfra:
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateGt(value=0), expr=ExprAffine(a=1, b=0))],
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=1, b=0),
+                )
+            ],
             default_expr=ExprAffine(a=0, b=0),
         )
         result = render_all_languages("piecewise", spec)

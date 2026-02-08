@@ -109,38 +109,47 @@ def sample_piecewise_spec(
     )
 
     trace_step(
-        trace, "sample_thresholds",
-        f"Sampled {len(thresholds)} thresholds: {thresholds}", thresholds,
+        trace,
+        "sample_thresholds",
+        f"Sampled {len(thresholds)} thresholds: {thresholds}",
+        thresholds,
     )
 
     branches: list[Branch] = []
     for i, thresh in enumerate(thresholds):
         expr_type = rng.choice(axes.expr_types)
         trace_step(
-            trace, f"sample_branch_{i}_expr_type",
-            f"Branch {i}: chose {expr_type.value} expression", expr_type.value,
+            trace,
+            f"sample_branch_{i}_expr_type",
+            f"Branch {i}: chose {expr_type.value} expression",
+            expr_type.value,
         )
 
         expr = sample_expression(
             expr_type, axes.coeff_range, axes.divisor_range, rng
         )
         trace_step(
-            trace, f"sample_branch_{i}_expression",
-            f"Branch {i}: {_expr_to_str(expr)}", expr.model_dump(),
+            trace,
+            f"sample_branch_{i}_expression",
+            f"Branch {i}: {_expr_to_str(expr)}",
+            expr.model_dump(),
         )
 
         condition = sample_condition(thresh, rng)
         cond_str = "<" if isinstance(condition, PredicateLt) else "<="
         trace_step(
-            trace, f"sample_branch_{i}_condition",
-            f"Branch {i}: x {cond_str} {thresh}", condition.model_dump(),
+            trace,
+            f"sample_branch_{i}_condition",
+            f"Branch {i}: x {cond_str} {thresh}",
+            condition.model_dump(),
         )
 
         branches.append(Branch(condition=condition, expr=expr))
 
     default_expr_type = rng.choice(axes.expr_types)
     trace_step(
-        trace, "sample_default_expr_type",
+        trace,
+        "sample_default_expr_type",
         f"Default: chose {default_expr_type.value} expression",
         default_expr_type.value,
     )
@@ -149,8 +158,10 @@ def sample_piecewise_spec(
         default_expr_type, axes.coeff_range, axes.divisor_range, rng
     )
     trace_step(
-        trace, "sample_default_expression",
-        f"Default: {_expr_to_str(default_expr)}", default_expr.model_dump(),
+        trace,
+        "sample_default_expression",
+        f"Default: {_expr_to_str(default_expr)}",
+        default_expr.model_dump(),
     )
 
     return PiecewiseSpec(branches=branches, default_expr=default_expr)

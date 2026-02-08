@@ -472,13 +472,14 @@ def validate_piecewise_task(
     if spec is not None:
         issues.extend(_validate_query_outputs(task, spec))
 
-    if spec is not None and func is not None:
+    if func is not None:
         try:
-            issues.extend(
-                _validate_semantics(
-                    task, func, spec, value_range, max_semantic_issues
+            if spec is not None:
+                issues.extend(
+                    _validate_semantics(
+                        task, func, spec, value_range, max_semantic_issues
+                    )
                 )
-            )
         finally:
             close = getattr(func, "close", None)
             if callable(close):

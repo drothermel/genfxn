@@ -152,8 +152,7 @@ def analyze_family(family: str) -> FamilyAnalysis:
         weights = STATEFUL_WEIGHTS
         axes = STATEFUL_AXES
         formula = (
-            "raw = 0.4 × template + 0.3 × predicate_max + "
-            "0.3 × transform_avg"
+            "raw = 0.4 × template + 0.3 × predicate_max + 0.3 × transform_avg"
         )
     elif family == "simple_algorithms":
         weights = SIMPLE_ALGORITHMS_WEIGHTS
@@ -166,8 +165,7 @@ def analyze_family(family: str) -> FamilyAnalysis:
         weights = STRINGRULES_WEIGHTS
         axes = STRINGRULES_AXES
         formula = (
-            "raw = 0.4 × rule_count + 0.3 × predicate_avg + "
-            "0.3 × transform_avg"
+            "raw = 0.4 × rule_count + 0.3 × predicate_avg + 0.3 × transform_avg"
         )
     else:
         raise ValueError(f"Unknown family: {family}")
@@ -200,12 +198,7 @@ def analyze_family(family: str) -> FamilyAnalysis:
     max_raw = max(raw_scores)
 
     # Match runtime difficulty behavior exactly: round(raw), then clamp to 1..5.
-    achievable = sorted(
-        {
-            max(1, min(5, round(raw)))
-            for raw in raw_scores
-        }
-    )
+    achievable = sorted({max(1, min(5, round(raw))) for raw in raw_scores})
 
     return FamilyAnalysis(
         family=family,

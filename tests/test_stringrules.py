@@ -577,6 +577,7 @@ class TestComposedRoundtrip:
         for q in queries:
             assert f(q.input) == q.output, f"s={q.input!r}"
 
+
 class TestRandomStringExclude:
     def test_raises_when_exclude_removes_all_chars(self) -> None:
         rng = random.Random(42)

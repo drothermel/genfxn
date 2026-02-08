@@ -42,6 +42,8 @@ from genfxn.stringrules.validate import (
     _validate_ast_whitelist,
     _validate_query_types,
     _validate_rule_diagnostics,
+)
+from genfxn.stringrules.validate import (
     validate_stringrules_task as _validate_stringrules_task,
 )
 
@@ -103,17 +105,13 @@ class TestSpecDeserialization:
 class TestCodeCompilation:
     def test_syntax_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "def f(s):\n    return ("}
-        )
+        corrupted = task.model_copy(update={"code": "def f(s):\n    return ("})
         issues = validate_stringrules_task(corrupted)
         assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
 
     def test_exec_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "raise ValueError('boom')"}
-        )
+        corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
         issues = validate_stringrules_task(corrupted)
         assert any(
             i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
@@ -121,9 +119,7 @@ class TestCodeCompilation:
 
     def test_missing_func_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "def g(s):\n    return s"}
-        )
+        corrupted = task.model_copy(update={"code": "def g(s):\n    return s"})
         issues = validate_stringrules_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
@@ -396,9 +392,7 @@ class TestDiagnostics:
             overlap_level=OverlapLevel.HIGH,
         )
 
-        issues = _validate_rule_diagnostics(
-            task, spec, axes, random.Random(42)
-        )
+        issues = _validate_rule_diagnostics(task, spec, axes, random.Random(42))
         assert any(
             i.code == CODE_INVALID_CHARSET
             and i.severity == Severity.ERROR

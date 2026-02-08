@@ -12,7 +12,10 @@ from genfxn.core.string_transforms import (
     StringTransformSwapcase,
     StringTransformUppercase,
 )
-from genfxn.langs.java._helpers import _regex_char_class_escape, java_string_literal
+from genfxn.langs.java._helpers import (
+    _regex_char_class_escape,
+    java_string_literal,
+)
 
 
 def render_string_transform_java(t: StringTransform, var: str = "s") -> str:
@@ -27,25 +30,32 @@ def render_string_transform_java(t: StringTransform, var: str = "s") -> str:
         case StringTransformCapitalize():
             return (
                 f"{var}.isEmpty() ? {var} : "
-                f"{var}.substring(0, 1).toUpperCase() + {var}.substring(1).toLowerCase()"
+                f"{var}.substring(0, 1).toUpperCase() + "
+                f"{var}.substring(1).toLowerCase()"
             )
         case StringTransformSwapcase():
             return (
                 f"{var}.codePoints()"
-                ".map(c -> Character.isUpperCase(c) ? Character.toLowerCase(c) : Character.toUpperCase(c))"
-                ".collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)"
+                ".map(c -> Character.isUpperCase(c) ? "
+                "Character.toLowerCase(c) : Character.toUpperCase(c))"
+                ".collect(StringBuilder::new, "
+                "StringBuilder::appendCodePoint, StringBuilder::append)"
                 ".toString()"
             )
         case StringTransformReverse():
             return f"new StringBuilder({var}).reverse().toString()"
         case StringTransformReplace(old=old, new=new):
-            return f"{var}.replace({java_string_literal(old)}, {java_string_literal(new)})"
+            return (
+                f"{var}.replace("
+                f"{java_string_literal(old)}, "
+                f"{java_string_literal(new)})"
+            )
         case StringTransformStrip(chars=chars):
             if chars is None:
                 return f"{var}.strip()"
             escaped = _regex_char_class_escape(chars)
             pattern = f"^[{escaped}]+|[{escaped}]+$"
-            return f"{var}.replaceAll({java_string_literal(pattern)}, \"\")"
+            return f'{var}.replaceAll({java_string_literal(pattern)}, "")'
         case StringTransformPrepend(prefix=prefix):
             return f"{java_string_literal(prefix)} + {var}"
         case StringTransformAppend(suffix=suffix):

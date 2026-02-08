@@ -648,13 +648,14 @@ def validate_stringrules_task(
     if spec is not None:
         issues.extend(_validate_query_outputs(task, spec))
 
-    if spec is not None and func is not None:
+    if func is not None:
         try:
-            issues.extend(
-                _validate_semantics(
-                    task, func, spec, axes, max_semantic_issues, rng
+            if spec is not None:
+                issues.extend(
+                    _validate_semantics(
+                        task, func, spec, axes, max_semantic_issues, rng
+                    )
                 )
-            )
         finally:
             close = getattr(func, "close", None)
             if callable(close):

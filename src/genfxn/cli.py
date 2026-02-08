@@ -562,6 +562,7 @@ def generate(
         )
 
     with output.open("w", encoding="utf-8") as output_handle:
+
         def emit(task: Task) -> None:
             nonlocal generated_count
             rendered_task = _render_task_for_language(task, selected_language)
@@ -724,8 +725,8 @@ def split(
                 elif remaining_train == remaining_total:
                     send_to_train = True
                 else:
-                    send_to_train = (
-                        rng.random() < (remaining_train / remaining_total)
+                    send_to_train = rng.random() < (
+                        remaining_train / remaining_total
                     )
 
                 if send_to_train:

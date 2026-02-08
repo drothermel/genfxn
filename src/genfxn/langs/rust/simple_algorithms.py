@@ -16,16 +16,22 @@ def _render_preprocess_rust(
     lines: list[str] = []
     if spec.pre_filter is not None:
         cond = render_predicate_rust(spec.pre_filter, "x")
-        lines.extend([
-            f"    let _filtered: Vec<i64> = {var}.iter().copied().filter(|&x| {cond}).collect();",
-            "    let xs = _filtered.as_slice();",
-        ])
+        lines.extend(
+            [
+                f"    let _filtered: Vec<i64> = {var}.iter().copied()"
+                f".filter(|&x| {cond}).collect();",
+                f"    let {var} = _filtered.as_slice();",
+            ]
+        )
     if spec.pre_transform is not None:
         expr = render_transform_rust(spec.pre_transform, "x")
-        lines.extend([
-            f"    let _mapped: Vec<i64> = {var}.iter().copied().map(|x| {expr}).collect();",
-            "    let xs = _mapped.as_slice();",
-        ])
+        lines.extend(
+            [
+                f"    let _mapped: Vec<i64> = {var}.iter().copied()"
+                f".map(|x| {expr}).collect();",
+                f"    let {var} = _mapped.as_slice();",
+            ]
+        )
     return lines
 
 
@@ -42,7 +48,7 @@ def _render_most_frequent(
             f"    if {var}.is_empty() {{",
             f"        return {spec.empty_default};",
             "    }",
-            f"    let mut counts: HashMap<i64, i64> = HashMap::new();",
+            "    let mut counts: HashMap<i64, i64> = HashMap::new();",
             f"    for &x in {var} {{",
             "        *counts.entry(x).or_insert(0) += 1;",
             "    }",
@@ -69,7 +75,7 @@ def _render_most_frequent(
             f"    if {var}.is_empty() {{",
             f"        return {spec.empty_default};",
             "    }",
-            f"    let mut counts: HashMap<i64, i64> = HashMap::new();",
+            "    let mut counts: HashMap<i64, i64> = HashMap::new();",
             f"    for &x in {var} {{",
             "        *counts.entry(x).or_insert(0) += 1;",
             "    }",
@@ -85,15 +91,17 @@ def _render_most_frequent(
             lines.append("    if candidates.len() > 1 {")
             lines.append(f"        return {spec.tie_default};")
             lines.append("    }")
-        lines.extend([
-            f"    for &x in {var} {{",
-            "        if candidates.contains(&x) {",
-            "            return x;",
-            "        }",
-            "    }",
-            f"    {spec.empty_default}",
-            "}",
-        ])
+        lines.extend(
+            [
+                f"    for &x in {var} {{",
+                "        if candidates.contains(&x) {",
+                "            return x;",
+                "        }",
+                "    }",
+                f"    {spec.empty_default}",
+                "}",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -111,16 +119,18 @@ def _render_count_pairs_sum(
             lines.append(f"    if {var}.len() < 2 {{")
             lines.append(f"        return {spec.short_list_default};")
             lines.append("    }")
-        lines.extend([
-            "    let mut count: i64 = 0;",
-            f"    for i in 0..{var}.len() {{",
-            f"        for j in (i + 1)..{var}.len() {{",
-            f"            if {var}[i] + {var}[j] == {spec.target} {{",
-            "                count += 1;",
-            "            }",
-            "        }",
-            "    }",
-        ])
+        lines.extend(
+            [
+                "    let mut count: i64 = 0;",
+                f"    for i in 0..{var}.len() {{",
+                f"        for j in (i + 1)..{var}.len() {{",
+                f"            if {var}[i] + {var}[j] == {spec.target} {{",
+                "                count += 1;",
+                "            }",
+                "        }",
+                "    }",
+            ]
+        )
         if spec.no_result_default is not None:
             lines.append("    if count == 0 {")
             lines.append(f"        return {spec.no_result_default};")
@@ -137,16 +147,20 @@ def _render_count_pairs_sum(
             lines.append(f"    if {var}.len() < 2 {{")
             lines.append(f"        return {spec.short_list_default};")
             lines.append("    }")
-        lines.extend([
-            "    let mut seen_pairs: HashSet<(i64, i64)> = HashSet::new();",
-            f"    for i in 0..{var}.len() {{",
-            f"        for j in (i + 1)..{var}.len() {{",
-            f"            if {var}[i] + {var}[j] == {spec.target} {{",
-            f"                seen_pairs.insert(({var}[i].min({var}[j]), {var}[i].max({var}[j])));",
-            "            }",
-            "        }",
-            "    }",
-        ])
+        lines.extend(
+            [
+                "    let mut seen_pairs: HashSet<(i64, i64)> = HashSet::new();",
+                f"    for i in 0..{var}.len() {{",
+                f"        for j in (i + 1)..{var}.len() {{",
+                f"            if {var}[i] + {var}[j] == {spec.target} {{",
+                "                seen_pairs.insert(("
+                f"{var}[i].min({var}[j]), "
+                f"{var}[i].max({var}[j])));",
+                "            }",
+                "        }",
+                "    }",
+            ]
+        )
         if spec.no_result_default is not None:
             lines.append("    if seen_pairs.is_empty() {")
             lines.append(f"        return {spec.no_result_default};")
@@ -169,22 +183,25 @@ def _render_max_window_sum(
         lines.append(f"    if {var}.is_empty() {{")
         lines.append(f"        return {spec.empty_default};")
         lines.append("    }")
-    lines.extend([
-        f"    if {var}.len() < {spec.k} {{",
-        f"        return {spec.invalid_k_default};",
-        "    }",
-        "    let mut window_sum: i64 = 0;",
-        f"    for i in 0..{spec.k} {{",
-        f"        window_sum += {var}[i];",
-        "    }",
+    lines.extend(
+        [
+            f"    if {var}.len() < {spec.k} {{",
+            f"        return {spec.invalid_k_default};",
+            "    }",
+            "    let mut window_sum: i64 = 0;",
+            f"    for i in 0..{spec.k} {{",
+            f"        window_sum += {var}[i];",
+            "    }",
         "    let mut max_sum = window_sum;",
         f"    for i in {spec.k}..{var}.len() {{",
-        f"        window_sum = window_sum - {var}[i - {spec.k}] + {var}[i];",
+        "        window_sum = window_sum "
+        f"- {var}[i - {spec.k}] + {var}[i];",
         "        max_sum = max_sum.max(window_sum);",
         "    }",
-        "    max_sum",
-        "}",
-    ])
+            "    max_sum",
+            "}",
+        ]
+    )
     return "\n".join(lines)
 
 

@@ -295,14 +295,19 @@ class TestQueryGeneration:
 
     def test_max_window_queries_respect_list_length_upper_bound(self) -> None:
         spec = MaxWindowSumSpec(k=3, invalid_k_default=-1)
-        axes = SimpleAlgorithmsAxes(list_length_range=(1, 3), window_size_range=(1, 3))
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(1, 3),
+            window_size_range=(1, 3),
+        )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )
         assert queries
         assert all(len(q.input) <= axes.list_length_range[1] for q in queries)
 
-    def test_max_window_k_minus_one_query_uses_eval_with_empty_default(self) -> None:
+    def test_max_window_k_minus_one_query_uses_eval_with_empty_default(
+        self,
+    ) -> None:
         spec = MaxWindowSumSpec(
             k=3,
             invalid_k_default=-1,
@@ -325,7 +330,10 @@ class TestQueryGeneration:
             assert q.output == -99
 
     def test_count_pairs_no_pairs_query_has_no_valid_pair(self) -> None:
-        spec = CountPairsSumSpec(target=10, counting_mode=CountingMode.ALL_INDICES)
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
         axes = SimpleAlgorithmsAxes(
             value_range=(0, 15),
             list_length_range=(2, 5),
@@ -337,7 +345,8 @@ class TestQueryGeneration:
         no_pair_queries = [
             q
             for q in queries
-            if q.tag == QueryTag.TYPICAL and eval_count_pairs_sum(spec, q.input) == 0
+            if q.tag == QueryTag.TYPICAL
+            and eval_count_pairs_sum(spec, q.input) == 0
         ]
         assert no_pair_queries
         for q in no_pair_queries:
@@ -363,7 +372,8 @@ class TestAxesValidation:
 
     def test_window_size_high_cannot_exceed_list_length_high(self) -> None:
         with pytest.raises(
-            ValueError, match=r"window_size_range: high .*<= list_length_range high"
+            ValueError,
+            match=r"window_size_range: high .*<= list_length_range high",
         ):
             SimpleAlgorithmsAxes(
                 list_length_range=(1, 3), window_size_range=(1, 5)

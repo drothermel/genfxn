@@ -38,9 +38,7 @@ _RENDER_FUNCTIONS: dict[str, str] = {
 }
 
 
-def get_render_fn(
-    language: Language, family: str
-) -> Any:
+def get_render_fn(language: Language, family: str) -> Any:
     """Return the render function for a language/family pair."""
     family_map = _FAMILY_MODULES.get(language)
     if family_map is None:

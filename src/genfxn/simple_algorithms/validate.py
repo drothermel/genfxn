@@ -631,14 +631,15 @@ def validate_simple_algorithms_task(
         issues.extend(_check_tie_break_consistency(task, spec))
         issues.extend(_check_counting_mode_consistency(task, spec))
 
-    if spec is not None and func is not None:
+    if func is not None:
         try:
-            issues.extend(_check_edge_case_handling(task, func, spec, axes))
-            issues.extend(
-                _validate_semantics(
-                    task, func, spec, axes, max_semantic_issues, rng
+            if spec is not None:
+                issues.extend(_check_edge_case_handling(task, func, spec, axes))
+                issues.extend(
+                    _validate_semantics(
+                        task, func, spec, axes, max_semantic_issues, rng
+                    )
                 )
-            )
         finally:
             close = getattr(func, "close", None)
             if callable(close):

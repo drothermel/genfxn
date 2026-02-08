@@ -25,13 +25,26 @@ def render_string_predicate_rust(pred: StringPredicate, var: str = "s") -> str:
         case StringPredicateContains(substring=sub):
             return f"{var}.contains({rust_string_literal(sub)})"
         case StringPredicateIsAlpha():
-            return f"!{var}.is_empty() && {var}.chars().all(|c| c.is_alphabetic())"
+            return (
+                f"!{var}.is_empty() && {var}.chars().all(|c| c.is_alphabetic())"
+            )
         case StringPredicateIsDigit():
-            return f"!{var}.is_empty() && {var}.chars().all(|c| c.is_ascii_digit())"
+            return (
+                f"!{var}.is_empty() && "
+                f"{var}.chars().all(|c| c.is_ascii_digit())"
+            )
         case StringPredicateIsUpper():
-            return f"!{var}.is_empty() && {var}.chars().any(|c| c.is_alphabetic()) && {var}.to_uppercase() == {var}"
+            return (
+                f"!{var}.is_empty() && "
+                f"{var}.chars().any(|c| c.is_alphabetic()) && "
+                f"{var}.to_uppercase() == {var}"
+            )
         case StringPredicateIsLower():
-            return f"!{var}.is_empty() && {var}.chars().any(|c| c.is_alphabetic()) && {var}.to_lowercase() == {var}"
+            return (
+                f"!{var}.is_empty() && "
+                f"{var}.chars().any(|c| c.is_alphabetic()) && "
+                f"{var}.to_lowercase() == {var}"
+            )
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}
             return f"{var}.len() {op_map[op]} {v}"

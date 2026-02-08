@@ -96,11 +96,7 @@ def _generate_matching_string(
 
         case StringPredicateIsUpper():
             length = _sample_length(min_len=1)
-            if (
-                length is None
-                or not upper_charset
-                or not upper_tail_charset
-            ):
+            if length is None or not upper_charset or not upper_tail_charset:
                 return None
             tail = _random_string(
                 max(0, length - 1),
@@ -111,11 +107,7 @@ def _generate_matching_string(
 
         case StringPredicateIsLower():
             length = _sample_length(min_len=1)
-            if (
-                length is None
-                or not lower_charset
-                or not lower_tail_charset
-            ):
+            if length is None or not lower_charset or not lower_tail_charset:
                 return None
             tail = _random_string(
                 max(0, length - 1),

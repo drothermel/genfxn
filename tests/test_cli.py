@@ -172,7 +172,9 @@ class TestGenerate:
         assert result.exit_code == 1
         assert "exactly one language value" in result.output
 
-    def test_generate_difficulty_requires_specific_family(self, tmp_path) -> None:
+    def test_generate_difficulty_requires_specific_family(
+        self, tmp_path
+    ) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -241,7 +243,10 @@ class TestGenerate:
             ],
         )
         assert result.exit_code != 0
-        assert "Invalid range" in result.output or "low must be <=" in result.output
+        assert (
+            "Invalid range" in result.output
+            or "low must be <=" in result.output
+        )
 
 
 class TestSplit:
@@ -778,12 +783,8 @@ class TestSplit:
         train_2 = cast(
             list[dict[str, Any]], list(srsly.read_jsonl(train_file_2))
         )
-        test_1 = cast(
-            list[dict[str, Any]], list(srsly.read_jsonl(test_file_1))
-        )
-        test_2 = cast(
-            list[dict[str, Any]], list(srsly.read_jsonl(test_file_2))
-        )
+        test_1 = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file_1)))
+        test_2 = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file_2)))
 
         assert len(train_1) == 10
         assert len(test_1) == 10

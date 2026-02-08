@@ -65,7 +65,6 @@ from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
 
-
 # ── Helpers ────────────────────────────────────────────────────────────
 
 
@@ -119,9 +118,7 @@ class TestPredicateRust:
         assert result == "[1, 2, 3].contains(&x)"
 
     def test_not(self) -> None:
-        result = render_predicate_rust(
-            PredicateNot(operand=PredicateEven())
-        )
+        result = render_predicate_rust(PredicateNot(operand=PredicateEven()))
         assert result == "!(x % 2 == 0)"
 
     def test_and(self) -> None:
@@ -167,7 +164,9 @@ class TestTransformRust:
         assert render_transform_rust(TransformScale(factor=2)) == "x * 2"
 
     def test_pipeline(self) -> None:
-        pipe = TransformPipeline(steps=[TransformAbs(), TransformShift(offset=1)])
+        pipe = TransformPipeline(
+            steps=[TransformAbs(), TransformShift(offset=1)]
+        )
         result = render_transform_rust(pipe)
         assert result == "(x.abs()) + 1"
 
@@ -233,15 +232,23 @@ class TestStringPredicateRust:
 
     def test_is_digit(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsDigit())
-        assert result == "!s.is_empty() && s.chars().all(|c| c.is_ascii_digit())"
+        assert result == (
+            "!s.is_empty() && s.chars().all(|c| c.is_ascii_digit())"
+        )
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsUpper())
-        assert result == "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && s.to_uppercase() == s"
+        assert result == (
+            "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && "
+            "s.to_uppercase() == s"
+        )
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsLower())
-        assert result == "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && s.to_lowercase() == s"
+        assert result == (
+            "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && "
+            "s.to_lowercase() == s"
+        )
 
     def test_length_cmp(self) -> None:
         result = render_string_predicate_rust(
@@ -257,19 +264,23 @@ class TestStringPredicateRust:
 
     def test_and(self) -> None:
         result = render_string_predicate_rust(
-            StringPredicateAnd(operands=[
-                StringPredicateIsAlpha(),
-                StringPredicateLengthCmp(op="gt", value=3),
-            ])
+            StringPredicateAnd(
+                operands=[
+                    StringPredicateIsAlpha(),
+                    StringPredicateLengthCmp(op="gt", value=3),
+                ]
+            )
         )
         assert "&&" in result
 
     def test_or(self) -> None:
         result = render_string_predicate_rust(
-            StringPredicateOr(operands=[
-                StringPredicateStartsWith(prefix="a"),
-                StringPredicateEndsWith(suffix="z"),
-            ])
+            StringPredicateOr(
+                operands=[
+                    StringPredicateStartsWith(prefix="a"),
+                    StringPredicateEndsWith(suffix="z"),
+                ]
+            )
         )
         assert "||" in result
 
@@ -279,20 +290,31 @@ class TestStringPredicateRust:
 
 class TestStringTransformRust:
     def test_identity(self) -> None:
-        assert render_string_transform_rust(StringTransformIdentity()) == "s.to_string()"
+        assert (
+            render_string_transform_rust(StringTransformIdentity())
+            == "s.to_string()"
+        )
 
     def test_lowercase(self) -> None:
-        assert render_string_transform_rust(StringTransformLowercase()) == "s.to_lowercase()"
+        assert (
+            render_string_transform_rust(StringTransformLowercase())
+            == "s.to_lowercase()"
+        )
 
     def test_uppercase(self) -> None:
-        assert render_string_transform_rust(StringTransformUppercase()) == "s.to_uppercase()"
+        assert (
+            render_string_transform_rust(StringTransformUppercase())
+            == "s.to_uppercase()"
+        )
 
     def test_capitalize(self) -> None:
         result = render_string_transform_rust(StringTransformCapitalize())
-        assert "is_empty()" in result
+        assert "match _chars.next()" in result
         assert "String::new()" in result
-        assert "[..1].to_uppercase()" in result
-        assert "[1..].to_lowercase()" in result
+        assert "to_uppercase().collect::<String>()" in result
+        assert "_chars.as_str().to_lowercase()" in result
+        assert "[..1]" not in result
+        assert "[1..]" not in result
 
     def test_swapcase(self) -> None:
         result = render_string_transform_rust(StringTransformSwapcase())
@@ -324,20 +346,26 @@ class TestStringTransformRust:
         assert ".to_string()" in result
 
     def test_prepend(self) -> None:
-        result = render_string_transform_rust(StringTransformPrepend(prefix="hi_"))
+        result = render_string_transform_rust(
+            StringTransformPrepend(prefix="hi_")
+        )
         assert "format!" in result
         assert '"hi_"' in result
 
     def test_append(self) -> None:
-        result = render_string_transform_rust(StringTransformAppend(suffix="_end"))
+        result = render_string_transform_rust(
+            StringTransformAppend(suffix="_end")
+        )
         assert "format!" in result
         assert '"_end"' in result
 
     def test_pipeline(self) -> None:
-        pipe = StringTransformPipeline(steps=[
-            StringTransformLowercase(),
-            StringTransformReverse(),
-        ])
+        pipe = StringTransformPipeline(
+            steps=[
+                StringTransformLowercase(),
+                StringTransformReverse(),
+            ]
+        )
         result = render_string_transform_rust(pipe)
         assert "to_lowercase()" in result
         assert "chars().rev().collect::<String>()" in result
@@ -352,7 +380,12 @@ class TestPiecewiseRust:
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateGt(value=0), expr=ExprAffine(a=2, b=0))],
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=2, b=0),
+                )
+            ],
             default_expr=ExprAffine(a=0, b=-1),
         )
         code = render_piecewise(spec)
@@ -376,8 +409,14 @@ class TestPiecewiseRust:
 
         spec = PiecewiseSpec(
             branches=[
-                Branch(condition=PredicateLt(value=-5), expr=ExprAffine(a=0, b=0)),
-                Branch(condition=PredicateGt(value=5), expr=ExprAffine(a=0, b=1)),
+                Branch(
+                    condition=PredicateLt(value=-5),
+                    expr=ExprAffine(a=0, b=0),
+                ),
+                Branch(
+                    condition=PredicateGt(value=5),
+                    expr=ExprAffine(a=0, b=1),
+                ),
             ],
             default_expr=ExprAffine(a=1, b=0),
         )
@@ -483,7 +522,10 @@ class TestStringrulesRust:
         from genfxn.langs.rust.stringrules import render_stringrules
         from genfxn.stringrules.models import StringRulesSpec
 
-        spec = StringRulesSpec(rules=[], default_transform=StringTransformLowercase())
+        spec = StringRulesSpec(
+            rules=[],
+            default_transform=StringTransformLowercase(),
+        )
         code = render_stringrules(spec)
         assert "s.to_lowercase()" in code
         assert "if" not in code
@@ -492,7 +534,10 @@ class TestStringrulesRust:
 class TestSimpleAlgorithmsRust:
     def test_most_frequent_smallest(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -506,7 +551,10 @@ class TestSimpleAlgorithmsRust:
 
     def test_most_frequent_first_seen(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.FIRST_SEEN,
@@ -518,7 +566,10 @@ class TestSimpleAlgorithmsRust:
 
     def test_count_pairs_all_indices(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import CountingMode, CountPairsSumSpec
+        from genfxn.simple_algorithms.models import (
+            CountingMode,
+            CountPairsSumSpec,
+        )
 
         spec = CountPairsSumSpec(
             target=10,
@@ -530,7 +581,10 @@ class TestSimpleAlgorithmsRust:
 
     def test_count_pairs_unique(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import CountingMode, CountPairsSumSpec
+        from genfxn.simple_algorithms.models import (
+            CountingMode,
+            CountPairsSumSpec,
+        )
 
         spec = CountPairsSumSpec(
             target=5,
@@ -554,7 +608,10 @@ class TestSimpleAlgorithmsRust:
 
     def test_preprocess_filter(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -567,7 +624,10 @@ class TestSimpleAlgorithmsRust:
 
     def test_preprocess_transform(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -578,9 +638,31 @@ class TestSimpleAlgorithmsRust:
         assert ".map(" in code
         assert "_mapped" in code
 
+    def test_preprocess_respects_custom_var(self) -> None:
+        from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
+
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=0,
+            pre_filter=PredicateGt(value=0),
+            pre_transform=TransformAbs(),
+        )
+        code = render_simple_algorithms(spec, var="vals")
+        assert "fn f(vals: &[i64]) -> i64" in code
+        assert "let vals = _filtered.as_slice();" in code
+        assert "let vals = _mapped.as_slice();" in code
+        assert "for &x in vals {" in code
+
     def test_edge_defaults_rendered(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
-        from genfxn.simple_algorithms.models import MostFrequentSpec, TieBreakMode
+        from genfxn.simple_algorithms.models import (
+            MostFrequentSpec,
+            TieBreakMode,
+        )
 
         spec = MostFrequentSpec(
             tie_break=TieBreakMode.SMALLEST,
@@ -699,7 +781,12 @@ class TestRustRegistry:
     def test_registry_rust_all_families(self) -> None:
         from genfxn.langs.registry import get_render_fn
 
-        for family in ("piecewise", "stateful", "simple_algorithms", "stringrules"):
+        for family in (
+            "piecewise",
+            "stateful",
+            "simple_algorithms",
+            "stringrules",
+        ):
             fn = get_render_fn(Language.RUST, family)
             assert callable(fn)
 
@@ -714,7 +801,12 @@ class TestRustRegistry:
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 
         spec = PiecewiseSpec(
-            branches=[Branch(condition=PredicateGt(value=0), expr=ExprAffine(a=1, b=0))],
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=1, b=0),
+                )
+            ],
             default_expr=ExprAffine(a=0, b=0),
         )
         result = render_all_languages("piecewise", spec)

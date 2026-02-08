@@ -96,9 +96,7 @@ def test_run_isolated_reports_worker_crash_exit_code(monkeypatch) -> None:
         def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
             return _FakeProcess()
 
-    monkeypatch.setattr(
-        safe_exec.mp, "get_context", lambda _: _FakeCtx()
-    )
+    monkeypatch.setattr(safe_exec.mp, "get_context", lambda _: _FakeCtx())
 
     with pytest.raises(RuntimeError, match="crashed with exit code 7"):
         safe_exec._run_isolated("def f(x):\n    return x", {}, (), 1.0, None)
@@ -131,9 +129,7 @@ def test_run_isolated_reports_missing_result_without_crash(monkeypatch) -> None:
         def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
             return _FakeProcess()
 
-    monkeypatch.setattr(
-        safe_exec.mp, "get_context", lambda _: _FakeCtx()
-    )
+    monkeypatch.setattr(safe_exec.mp, "get_context", lambda _: _FakeCtx())
 
     with pytest.raises(RuntimeError, match="exited without a result"):
         safe_exec._run_isolated("def f(x):\n    return x", {}, (), 1.0, None)
@@ -228,12 +224,7 @@ def test_execute_code_restricted_rejects_adversarial_patterns(
 )
 def test_timeout_terminates_descendant_processes(tmp_path) -> None:
     pid_file = tmp_path / "child.pid"
-    code = (
-        "def f(path):\n"
-        "    spawn(path)\n"
-        "    while True:\n"
-        "        pass"
-    )
+    code = "def f(path):\n    spawn(path)\n    while True:\n        pass"
     fn = execute_code_restricted(
         code,
         {"spawn": _spawn_sleep_and_record},

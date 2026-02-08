@@ -1,6 +1,11 @@
 def java_string_literal(s: str) -> str:
     """Escape a string for use as a Java string literal."""
-    escaped = s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
+    escaped = (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+    )
     return f'"{escaped}"'
 
 

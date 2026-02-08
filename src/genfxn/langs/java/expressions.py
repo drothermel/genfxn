@@ -1,9 +1,9 @@
 from genfxn.piecewise.models import (
     ExprAbs,
     ExprAffine,
+    Expression,
     ExprMod,
     ExprQuadratic,
-    Expression,
 )
 
 

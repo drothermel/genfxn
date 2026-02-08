@@ -65,7 +65,9 @@ class StringRulesAxes(BaseModel):
         if not self.transform_types:
             raise ValueError("transform_types must not be empty")
         if not _get_charset(self.charset):
-            raise ValueError("charset must resolve to a non-empty character set")
+            raise ValueError(
+                "charset must resolve to a non-empty character set"
+            )
 
         for name in (
             "string_length_range",

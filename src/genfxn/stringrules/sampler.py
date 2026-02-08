@@ -88,7 +88,9 @@ def sample_string_predicate(
 
         case StringPredicateType.NOT:
             atom_types = [
-                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+                t
+                for t in axes.predicate_types
+                if t not in _COMPOSED_PREDICATE_TYPES
             ]
             if not atom_types:
                 atom_types = [StringPredicateType.IS_ALPHA]
@@ -97,7 +99,9 @@ def sample_string_predicate(
 
         case StringPredicateType.AND:
             atom_types = [
-                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+                t
+                for t in axes.predicate_types
+                if t not in _COMPOSED_PREDICATE_TYPES
             ]
             if not atom_types:
                 atom_types = [StringPredicateType.IS_ALPHA]
@@ -110,7 +114,9 @@ def sample_string_predicate(
 
         case StringPredicateType.OR:
             atom_types = [
-                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+                t
+                for t in axes.predicate_types
+                if t not in _COMPOSED_PREDICATE_TYPES
             ]
             if not atom_types:
                 atom_types = [StringPredicateType.IS_ALPHA]
@@ -214,7 +220,12 @@ def sample_stringrules_spec(
     rng: random.Random,
     trace: list[TraceStep] | None = None,
 ) -> StringRulesSpec:
-    trace_step(trace, "sample_n_rules", f"Number of rules: {axes.n_rules}", axes.n_rules)
+    trace_step(
+        trace,
+        "sample_n_rules",
+        f"Number of rules: {axes.n_rules}",
+        axes.n_rules,
+    )
 
     rules: list[StringRule] = []
     used_pred_types: set[StringPredicateType] = set()
@@ -242,12 +253,22 @@ def sample_stringrules_spec(
                 for op in predicate.operands:
                     used_pred_types.add(StringPredicateType(op.kind))
 
-        trace_step(trace, f"sample_rule_{i}_predicate", f"Rule {i} predicate: {pred_type.value}", predicate.model_dump())
+        trace_step(
+            trace,
+            f"sample_rule_{i}_predicate",
+            f"Rule {i} predicate: {pred_type.value}",
+            predicate.model_dump(),
+        )
 
         trans_type = rng.choice(axes.transform_types)
         transform = sample_string_transform(trans_type, axes, rng)
 
-        trace_step(trace, f"sample_rule_{i}_transform", f"Rule {i} transform: {trans_type.value}", transform.model_dump())
+        trace_step(
+            trace,
+            f"sample_rule_{i}_transform",
+            f"Rule {i} transform: {trans_type.value}",
+            transform.model_dump(),
+        )
 
         rules.append(StringRule(predicate=predicate, transform=transform))
 
@@ -255,6 +276,11 @@ def sample_stringrules_spec(
     default_trans_type = rng.choice(axes.transform_types)
     default_transform = sample_string_transform(default_trans_type, axes, rng)
 
-    trace_step(trace, "sample_default_transform", f"Default transform: {default_trans_type.value}", default_transform.model_dump())
+    trace_step(
+        trace,
+        "sample_default_transform",
+        f"Default transform: {default_trans_type.value}",
+        default_transform.model_dump(),
+    )
 
     return StringRulesSpec(rules=rules, default_transform=default_transform)

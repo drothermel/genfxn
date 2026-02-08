@@ -635,19 +635,29 @@ def generate_pool(
 
         features = feature_fn(spec_dict)
         stats.candidates += 1
-        candidates.append(Candidate(
-            spec=spec,
-            spec_dict=spec_dict,
-            task_id=task_id,
-            features=features,
-            trace_steps=trace_steps,
-            axes=axes,
-        ))
+        candidates.append(
+            Candidate(
+                spec=spec,
+                spec_dict=spec_dict,
+                task_id=task_id,
+                features=features,
+                trace_steps=trace_steps,
+                axes=axes,
+            )
+        )
 
     logger.debug(
-        "%s D%d pool: %d sampled, %d candidates, %d dupes, %d wrong-diff, %d errors",
-        family, difficulty, stats.total_sampled, stats.candidates,
-        stats.duplicates, stats.wrong_difficulty, stats.errors,
+        (
+            "%s D%d pool: %d sampled, %d candidates, %d dupes, "
+            "%d wrong-diff, %d errors"
+        ),
+        family,
+        difficulty,
+        stats.total_sampled,
+        stats.candidates,
+        stats.duplicates,
+        stats.wrong_difficulty,
+        stats.errors,
     )
     return candidates, stats
 
@@ -680,7 +690,9 @@ def _quota_targets_met(selected: list[Candidate], quota: QuotaSpec) -> bool:
         for bi, bucket in enumerate(quota.buckets):
             if _bucket_applies(bucket, candidate.features):
                 filled[bi] += 1
-    return all(filled[bi] >= bucket.target for bi, bucket in enumerate(quota.buckets))
+    return all(
+        filled[bi] >= bucket.target for bi, bucket in enumerate(quota.buckets)
+    )
 
 
 def greedy_select(
@@ -839,9 +851,7 @@ def generate_suite(
 ) -> list[Task]:
     """Generate a balanced 50-task suite for (family, difficulty)."""
     if max_retries < 0:
-        raise ValueError(
-            f"max_retries must be >= 0, got {max_retries}"
-        )
+        raise ValueError(f"max_retries must be >= 0, got {max_retries}")
 
     _validate_family_key(
         family=family,
@@ -861,7 +871,9 @@ def generate_suite(
 
     for attempt in range(max_retries + 1):
         current_pool_size = pool_size * (2**attempt)
-        candidates, stats = generate_pool(family, difficulty, seed, current_pool_size)
+        candidates, stats = generate_pool(
+            family, difficulty, seed, current_pool_size
+        )
 
         select_rng = random.Random(
             _stable_seed(seed, family, difficulty, 999999)
@@ -871,14 +883,18 @@ def generate_suite(
         if len(selected) >= quota.total and _quota_targets_met(selected, quota):
             break
         logger.debug(
-            "%s D%d attempt %d: selected=%d/%d targets_met=%s (pool=%d, candidates=%d)",
+            (
+                "%s D%d attempt %d: selected=%d/%d "
+                "targets_met=%s (pool=%d, candidates=%d)"
+            ),
             family,
             difficulty,
             attempt,
             len(selected),
             quota.total,
             _quota_targets_met(selected, quota),
-            current_pool_size, stats.candidates,
+            current_pool_size,
+            stats.candidates,
         )
 
     if len(selected) < quota.total or not _quota_targets_met(selected, quota):
@@ -893,7 +909,12 @@ def generate_suite(
     tasks: list[Task] = []
     for candidate in selected[: quota.total]:
         task_rng = random.Random(
-            _stable_seed(seed, family, difficulty, zlib.crc32(candidate.task_id.encode()) & 0xFFFFFFFF)
+            _stable_seed(
+                seed,
+                family,
+                difficulty,
+                zlib.crc32(candidate.task_id.encode()) & 0xFFFFFFFF,
+            )
         )
         task = _generate_task_from_candidate(family, candidate, task_rng)
         tasks.append(task)

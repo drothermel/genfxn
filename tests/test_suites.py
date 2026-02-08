@@ -563,8 +563,15 @@ class TestHardConstraints:
 
 
 class TestGreedySelect:
-    def _make_candidate(self, task_id: str, features: dict[str, str]) -> Candidate:
-        return Candidate(spec=None, spec_dict={}, task_id=task_id, features=features)
+    def _make_candidate(
+        self, task_id: str, features: dict[str, str]
+    ) -> Candidate:
+        return Candidate(
+            spec=None,
+            spec_dict={},
+            task_id=task_id,
+            features=features,
+        )
 
     def _reference_greedy_select(
         self,
@@ -604,7 +611,10 @@ class TestGreedySelect:
                 score = 0.0
                 for bi, bucket in enumerate(quota.buckets):
                     deficit = max(0, bucket.target - filled[bi])
-                    if deficit > 0 and cand.features.get(bucket.axis) == bucket.value:
+                    if (
+                        deficit > 0
+                        and cand.features.get(bucket.axis) == bucket.value
+                    ):
                         if bucket.condition is not None:
                             cond_match = True
                             for key, val in bucket.condition.items():
@@ -785,7 +795,9 @@ class TestPoolGeneration:
         self, family: str, difficulty: int
     ) -> None:
         """Pool produces candidates at correct difficulty."""
-        candidates, stats = generate_pool(family, difficulty, seed=42, pool_size=200)
+        candidates, stats = generate_pool(
+            family, difficulty, seed=42, pool_size=200
+        )
         assert len(candidates) > 0, f"No candidates for {family} D{difficulty}"
         assert stats.candidates == len(candidates)
         assert stats.total_sampled == 200
@@ -801,7 +813,10 @@ class TestPoolGeneration:
         import genfxn.suites.generate as suite_generate
 
         def always_fail(
-            _family: str, _axes: object, _rng: random.Random, trace: object = None,
+            _family: str,
+            _axes: object,
+            _rng: random.Random,
+            trace: object = None,
         ) -> object:
             raise ValueError("forced sampler failure")
 
@@ -854,7 +869,10 @@ class TestDeterminism:
         monkeypatch.setattr(
             suite_generate,
             "generate_pool",
-            lambda *_: (fake_selected, PoolStats(candidates=len(fake_selected))),
+            lambda *_: (
+                fake_selected,
+                PoolStats(candidates=len(fake_selected)),
+            ),
         )
         monkeypatch.setattr(
             suite_generate,
@@ -882,7 +900,10 @@ class TestSuiteGenerationValidation:
         ],
     )
     def test_invalid_family_raises_value_error(self, call: object) -> None:
-        with pytest.raises(ValueError, match=r"Invalid family 'bad_family'.*Valid options:"):
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid family 'bad_family'.*Valid options:",
+        ):
             call()
 
     @pytest.mark.parametrize(

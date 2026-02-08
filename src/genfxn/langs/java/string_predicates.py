@@ -25,13 +25,27 @@ def render_string_predicate_java(pred: StringPredicate, var: str = "s") -> str:
         case StringPredicateContains(substring=sub):
             return f"{var}.contains({java_string_literal(sub)})"
         case StringPredicateIsAlpha():
-            return f"!{var}.isEmpty() && {var}.chars().allMatch(Character::isLetter)"
+            return (
+                f"!{var}.isEmpty() && "
+                f"{var}.chars().allMatch(Character::isLetter)"
+            )
         case StringPredicateIsDigit():
-            return f"!{var}.isEmpty() && {var}.chars().allMatch(Character::isDigit)"
+            return (
+                f"!{var}.isEmpty() && "
+                f"{var}.chars().allMatch(Character::isDigit)"
+            )
         case StringPredicateIsUpper():
-            return f"!{var}.isEmpty() && {var}.chars().anyMatch(Character::isLetter) && {var}.equals({var}.toUpperCase())"
+            return (
+                f"!{var}.isEmpty() && "
+                f"{var}.chars().anyMatch(Character::isLetter) && "
+                f"{var}.equals({var}.toUpperCase())"
+            )
         case StringPredicateIsLower():
-            return f"!{var}.isEmpty() && {var}.chars().anyMatch(Character::isLetter) && {var}.equals({var}.toLowerCase())"
+            return (
+                f"!{var}.isEmpty() && "
+                f"{var}.chars().anyMatch(Character::isLetter) && "
+                f"{var}.equals({var}.toLowerCase())"
+            )
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}
             return f"{var}.length() {op_map[op]} {v}"
