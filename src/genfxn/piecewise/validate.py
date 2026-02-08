@@ -172,7 +172,7 @@ def _validate_code_compile(
     task: Task,
 ) -> tuple[list[Issue], Callable[[int], int] | None]:
     try:
-        ast.parse(task.code["python"])
+        ast.parse(task.code)
     except SyntaxError as e:
         return [
             Issue(
@@ -186,7 +186,7 @@ def _validate_code_compile(
 
     namespace: dict[str, object]
     try:
-        namespace = execute_code_restricted(task.code["python"], _ALLOWED_BUILTINS)
+        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
     except SafeExecMissingFunctionError as e:
         return [
             Issue(
@@ -428,7 +428,7 @@ def validate_piecewise_task(
     if spec is not None:
         issues.extend(_validate_condition_support(task, spec))
 
-    ast_issues, _ = _validate_ast_whitelist(task.code["python"])
+    ast_issues, _ = _validate_ast_whitelist(task.code)
     if ast_issues:
         issues.extend(ast_issues)
         return issues  # Bail early, don't exec unsafe code

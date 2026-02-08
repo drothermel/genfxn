@@ -127,25 +127,6 @@ class TestGenerate:
         assert result.exit_code == 1
         assert "Unknown family" in result.output
 
-    def test_generate_rust_language(self, tmp_path) -> None:
-        output = tmp_path / "tasks.jsonl"
-        result = runner.invoke(
-            app,
-            [
-                "generate",
-                "-o",
-                str(output),
-                "-f",
-                "piecewise",
-                "-n",
-                "1",
-                "--language",
-                "rust",
-            ],
-        )
-
-        assert result.exit_code == 0
-        assert output.exists()
 
 
 class TestSplit:
@@ -342,7 +323,7 @@ class TestSplit:
                 "task_id": "task-1",
                 "family": "stateful",
                 "spec": {"flag": True},
-                "code": {"python": "def solve(x):\n    return x\n"},
+                "code": "def solve(x):\n    return x\n",
                 "queries": [{"input": 1, "output": 1, "tag": "typical"}],
                 "description": "Task with true flag",
             },
@@ -350,7 +331,7 @@ class TestSplit:
                 "task_id": "task-2",
                 "family": "stateful",
                 "spec": {"flag": False},
-                "code": {"python": "def solve(x):\n    return x\n"},
+                "code": "def solve(x):\n    return x\n",
                 "queries": [{"input": 2, "output": 2, "tag": "typical"}],
                 "description": "Task with false flag",
             },

@@ -95,7 +95,7 @@ The renderer converts the spec into clean, executable Python. Notice:
   - Readable expressions (e.g., "2 * x - 1" not "2*x+-1")
 """)
 
-    print(task.code["python"])
+    print(task.code)
 
     # -------------------------------------------------------------------------
     # QUERIES
@@ -157,7 +157,7 @@ all queries produce the expected outputs. This catches rendering bugs.
 """)
 
     namespace: dict = {}
-    exec(task.code["python"], namespace)  # noqa: S102
+    exec(task.code, namespace)  # noqa: S102
     f = namespace["f"]
 
     errors = []

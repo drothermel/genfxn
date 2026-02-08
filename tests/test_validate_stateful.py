@@ -106,7 +106,7 @@ class TestCodeCompilation:
     def test_syntax_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return ("}}
+            update={"code": "def f(xs):\n    return ("}
         )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
@@ -118,7 +118,7 @@ class TestCodeCompilation:
     def test_exec_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "raise ValueError('boom')"}}
+            update={"code": "raise ValueError('boom')"}
         )
         issues = validate_stateful_task(corrupted)
         assert any(
@@ -128,7 +128,7 @@ class TestCodeCompilation:
     def test_missing_func_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def g(xs):\n    return 0"}}
+            update={"code": "def g(xs):\n    return 0"}
         )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
@@ -142,7 +142,7 @@ class TestCodeRuntime:
     def test_runtime_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 1 % 0"}}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
@@ -154,7 +154,7 @@ class TestCodeRuntime:
     def test_runtime_error_includes_input(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 1 % 0"}}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted)
         runtime_errors = [
@@ -293,7 +293,7 @@ class TestSemanticValidation:
         task = baseline_task.model_copy(deep=True)
         # Replace with code that returns a constant
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 0"}}
+            update={"code": "def f(xs):\n    return 0"}
         )
         issues = validate_stateful_task(corrupted)
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
@@ -301,7 +301,7 @@ class TestSemanticValidation:
     def test_semantic_error_includes_input(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 0"}}
+            update={"code": "def f(xs):\n    return 0"}
         )
         issues = validate_stateful_task(corrupted)
         semantic_issues = [
@@ -315,7 +315,7 @@ class TestSemanticValidation:
     def test_deterministic_with_same_seed(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 0"}}
+            update={"code": "def f(xs):\n    return 0"}
         )
         issues1 = validate_stateful_task(corrupted, rng=random.Random(123))
         issues2 = validate_stateful_task(corrupted, rng=random.Random(123))
@@ -329,7 +329,7 @@ class TestSemanticIssueCapping:
     def test_caps_semantic_mismatch_issues(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 999999"}}
+            update={"code": "def f(xs):\n    return 999999"}
         )
         issues = validate_stateful_task(corrupted)
         semantic_issues = [
@@ -343,7 +343,7 @@ class TestSemanticIssueCapping:
     def test_caps_runtime_errors(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 1 % 0"}}
+            update={"code": "def f(xs):\n    return 1 % 0"}
         )
         issues = validate_stateful_task(corrupted, max_semantic_issues=5)
         runtime_issues = [
@@ -355,7 +355,7 @@ class TestSemanticIssueCapping:
     def test_capped_warning_is_warning_severity(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 0"}}
+            update={"code": "def f(xs):\n    return 0"}
         )
         issues = validate_stateful_task(corrupted, max_semantic_issues=3)
         capped = [i for i in issues if i.code == CODE_SEMANTIC_ISSUES_CAPPED]
@@ -365,7 +365,7 @@ class TestSemanticIssueCapping:
     def test_custom_cap_respected(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 0"}}
+            update={"code": "def f(xs):\n    return 0"}
         )
         issues = validate_stateful_task(corrupted, max_semantic_issues=3)
         semantic_issues = [
@@ -376,7 +376,7 @@ class TestSemanticIssueCapping:
     def test_zero_cap_means_unlimited(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(xs):\n    return 999999"}}
+            update={"code": "def f(xs):\n    return 999999"}
         )
         issues = validate_stateful_task(corrupted, max_semantic_issues=0)
         semantic_issues = [
@@ -391,7 +391,7 @@ class TestSemanticIssueCapping:
         task = baseline_task.model_copy(deep=True)
         # Code that only fails on empty list
         code = "def f(xs):\n    return 0 if xs else 999"
-        corrupted = task.model_copy(update={"code": {"python": code}})
+        corrupted = task.model_copy(update={"code": code})
         issues = validate_stateful_task(corrupted, max_semantic_issues=10)
         # Should not emit capped warning since we didn't hit the limit
         # (only empty list returns 999, which may or may not be wrong)
@@ -424,7 +424,7 @@ class TestAxesDefault:
 def _make_task_with_code(code: str) -> Task:
     """Create a task with custom code for testing AST validation."""
     task = generate_stateful_task(rng=random.Random(42))
-    return task.model_copy(update={"code": {"python": code}})
+    return task.model_copy(update={"code": code})
 
 
 @pytest.mark.slow

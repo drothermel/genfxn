@@ -13,7 +13,6 @@ from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
-from genfxn.langs.types import Language
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.simple_algorithms.models import (
@@ -383,28 +382,8 @@ def generate(
         str | None,
         typer.Option("--scale-range", help="Scale range (lo,hi)"),
     ] = None,
-    language: Annotated[
-        str,
-        typer.Option(
-            "--language",
-            "-l",
-            help="Languages to render: 'all' or comma-separated (python,java)",
-        ),
-    ] = "all",
 ) -> None:
     """Generate tasks to JSONL file."""
-    if language.strip().lower() == "all":
-        languages: list[Language] | None = None
-    else:
-        try:
-            languages = [
-                Language(tok.strip().lower()) for tok in language.split(",")
-            ]
-        except ValueError as e:
-            valid = ", ".join(lang.value for lang in Language)
-            typer.echo(f"Error: {e}. Valid languages: {valid}", err=True)
-            raise typer.Exit(1) from e
-
     rng = random.Random(seed)
     tasks: list[Task] = []
 
@@ -530,20 +509,20 @@ def generate(
 
         for _ in range(family_counts["piecewise"]):
             tasks.append(generate_piecewise_task(
-                axes=piecewise_axes, rng=rng, languages=languages,
+                axes=piecewise_axes, rng=rng,
             ))
         for _ in range(family_counts["stateful"]):
             tasks.append(generate_stateful_task(
-                axes=stateful_axes, rng=rng, languages=languages,
+                axes=stateful_axes, rng=rng,
             ))
         for _ in range(family_counts["simple_algorithms"]):
             t = generate_simple_algorithms_task(
-                axes=simple_algo_axes, rng=rng, languages=languages,
+                axes=simple_algo_axes, rng=rng,
             )
             tasks.append(t)
         for _ in range(family_counts["stringrules"]):
             task = generate_stringrules_task(
-                axes=stringrules_axes, rng=rng, languages=languages,
+                axes=stringrules_axes, rng=rng,
             )
             tasks.append(task)
     elif family == "piecewise":
@@ -555,7 +534,6 @@ def generate(
             tasks.append(
                 generate_piecewise_task(
                     axes=cast(PiecewiseAxes, axes), rng=rng,
-                    languages=languages,
                 )
             )
     elif family == "stateful":
@@ -567,7 +545,6 @@ def generate(
             tasks.append(
                 generate_stateful_task(
                     axes=cast(StatefulAxes, axes), rng=rng,
-                    languages=languages,
                 )
             )
     elif family == "simple_algorithms":
@@ -578,7 +555,6 @@ def generate(
                 axes = simple_algo_axes
             t = generate_simple_algorithms_task(
                 axes=cast(SimpleAlgorithmsAxes, axes), rng=rng,
-                languages=languages,
             )
             tasks.append(t)
     elif family == "stringrules":
@@ -589,7 +565,6 @@ def generate(
                 axes = stringrules_axes
             task = generate_stringrules_task(
                 axes=cast(StringRulesAxes, axes), rng=rng,
-                languages=languages,
             )
             tasks.append(task)
     else:

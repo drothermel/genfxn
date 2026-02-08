@@ -67,7 +67,7 @@ Stateful functions iterate over list[int] and return int. Three templates:
 
         # Show the generated code
         print("\nGenerated Code:")
-        print(task.code["python"])
+        print(task.code)
 
         # Show spec
         print("\nSpec (JSON):")
@@ -86,7 +86,7 @@ Stateful functions iterate over list[int] and return int. Three templates:
 
         # Verify roundtrip
         namespace: dict = {}
-        exec(task.code["python"], namespace)  # noqa: S102
+        exec(task.code, namespace)  # noqa: S102
         f = namespace["f"]
 
         errors = []
@@ -141,7 +141,7 @@ StatefulAxes controls the generation space:
     task = generate_stateful_task(axes, random.Random(123))
     print(f"\nTask ID: {task.task_id}")
     print("\nGenerated Code:")
-    print(task.code["python"])
+    print(task.code)
 
     print("\n" + "=" * 70)
     print("Phase 3 Complete!")

@@ -80,9 +80,7 @@ class Task(BaseModel):
     task_id: str = Field(description="Deterministic hash of spec")
     family: str = Field(description="Function family (piecewise, stateful)")
     spec: dict[str, Any] = Field(description="Full specification as dict")
-    code: dict[str, str] = Field(
-        description="Rendered code per language, e.g. {'python': '...'}"
-    )
+    code: str = Field(description="Rendered Python function")
     queries: list[Query] = Field(description="Test queries with tags")
     trace: GenerationTrace | None = Field(
         default=None, description="Optional generation trace for debugging"

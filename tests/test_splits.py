@@ -11,7 +11,7 @@ def _make_task(task_id: str, spec: dict) -> Task:
         task_id=task_id,
         family="test",
         spec=spec,
-        code={"python": "def f(): pass"},
+        code="def f(): pass",
         queries=[Query(input=0, output=0, tag=QueryTag.TYPICAL)],
         description="test task",
     )

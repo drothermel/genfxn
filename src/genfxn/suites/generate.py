@@ -724,7 +724,7 @@ def _generate_task_from_candidate(
         task_id=candidate.task_id,
         family=family,
         spec=spec_dict,
-        code={"python": py_code},
+        code=py_code,
         queries=queries,
         trace=trace,
         axes=axes.model_dump(),

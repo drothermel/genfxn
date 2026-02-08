@@ -165,7 +165,7 @@ class TestCodeCompilation:
     def test_syntax_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return ("}}
+            update={"code": "def f(x):\n    return ("}
         )
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
@@ -178,7 +178,7 @@ class TestCodeCompilation:
         task = baseline_task.model_copy(deep=True)
         # Code that raises at module exec time (not at call time)
         corrupted = task.model_copy(
-            update={"code": {"python": "raise ValueError('boom')"}}
+            update={"code": "raise ValueError('boom')"}
         )
         issues = validate_piecewise_task(corrupted)
         assert any(
@@ -188,7 +188,7 @@ class TestCodeCompilation:
     def test_missing_func_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def g(x):\n    return x"}}
+            update={"code": "def g(x):\n    return x"}
         )
         issues = validate_piecewise_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
@@ -202,7 +202,7 @@ class TestCodeRuntime:
     def test_runtime_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return x % 0"}}
+            update={"code": "def f(x):\n    return x % 0"}
         )
         issues = validate_piecewise_task(corrupted, value_range=(0, 2))
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
@@ -214,7 +214,7 @@ class TestCodeRuntime:
     def test_runtime_error_includes_x_value(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return x % 0"}}
+            update={"code": "def f(x):\n    return x % 0"}
         )
         issues = validate_piecewise_task(corrupted, value_range=(-1, 1))
         runtime_errors = [
@@ -345,7 +345,7 @@ class TestSemanticValidation:
         task = baseline_task.model_copy(deep=True)
         # Replace with code that returns a constant
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 0"}}
+            update={"code": "def f(x):\n    return 0"}
         )
         issues = validate_piecewise_task(corrupted, value_range=(0, 5))
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
@@ -353,7 +353,7 @@ class TestSemanticValidation:
     def test_semantic_error_includes_x_value(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 0"}}
+            update={"code": "def f(x):\n    return 0"}
         )
         issues = validate_piecewise_task(corrupted, value_range=(0, 2))
         semantic_issues = [
@@ -448,7 +448,7 @@ class TestEmitDiagnostics:
         task = generate_piecewise_task(rng=random.Random(42))
         # Corrupt the code - this is a correctness error, not a diagnostic
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 999999"}}
+            update={"code": "def f(x):\n    return 999999"}
         )
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 5), emit_diagnostics=False
@@ -461,7 +461,7 @@ class TestEmitDiagnostics:
     ) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 999999"}}
+            update={"code": "def f(x):\n    return 999999"}
         )
         issues = validate_piecewise_task(
             corrupted,
@@ -495,7 +495,7 @@ class TestSemanticIssueCapping:
         task = baseline_task.model_copy(deep=True)
         # Code that always returns wrong value - would fail for all 201 inputs
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 999999"}}
+            update={"code": "def f(x):\n    return 999999"}
         )
         issues = validate_piecewise_task(corrupted, value_range=(-100, 100))
         semantic_issues = [
@@ -510,7 +510,7 @@ class TestSemanticIssueCapping:
         task = baseline_task.model_copy(deep=True)
         # Code that always raises
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return x % 0"}}
+            update={"code": "def f(x):\n    return x % 0"}
         )
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 50), max_semantic_issues=5
@@ -524,7 +524,7 @@ class TestSemanticIssueCapping:
     def test_capped_warning_is_warning_severity(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 0"}}
+            update={"code": "def f(x):\n    return 0"}
         )
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 20), max_semantic_issues=3
@@ -536,7 +536,7 @@ class TestSemanticIssueCapping:
     def test_custom_cap_respected(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 0"}}
+            update={"code": "def f(x):\n    return 0"}
         )
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 100), max_semantic_issues=3
@@ -549,7 +549,7 @@ class TestSemanticIssueCapping:
     def test_zero_cap_means_unlimited(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 999999"}}
+            update={"code": "def f(x):\n    return 999999"}
         )
         # Small range to keep test fast
         issues = validate_piecewise_task(
@@ -566,7 +566,7 @@ class TestSemanticIssueCapping:
     def test_no_cap_warning_when_under_limit(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 0"}}
+            update={"code": "def f(x):\n    return 0"}
         )
         # Only 3 values to check, cap is 10
         issues = validate_piecewise_task(
@@ -583,7 +583,7 @@ class TestSemanticRangeSampling:
     ) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 0"}}
+            update={"code": "def f(x):\n    return 0"}
         )
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 10_000), max_semantic_issues=0
@@ -604,7 +604,7 @@ class TestSemanticRangeSampling:
     ) -> None:
         task = generate_piecewise_task(rng=random.Random(42))
         corrupted = task.model_copy(
-            update={"code": {"python": "def f(x):\n    return 999999"}}
+            update={"code": "def f(x):\n    return 999999"}
         )
         issues = validate_piecewise_task(
             corrupted, value_range=(0, 20), max_semantic_issues=0
@@ -620,7 +620,7 @@ class TestSemanticRangeSampling:
 def _make_task_with_code(code: str) -> Task:
     """Create a task with custom code for testing AST validation."""
     task = generate_piecewise_task(rng=random.Random(42))
-    return task.model_copy(update={"code": {"python": code}})
+    return task.model_copy(update={"code": code})
 
 
 @pytest.mark.slow
