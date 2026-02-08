@@ -1,9 +1,16 @@
 """Loader for nl_latents run directories."""
 
+import logging
 from pathlib import Path
 
 import srsly
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger(__name__)
+
+
+class MalformedRunDataError(Exception):
+    """Raised when a run contains malformed JSON or invalid schema data."""
 
 
 class RunMeta(BaseModel):
@@ -81,7 +88,20 @@ class RunStore:
     """Store for loading runs from directory structure."""
 
     def __init__(self, base_path: Path) -> None:
-        self.base_path = base_path
+        self.base_path = base_path.resolve()
+
+    def _resolve_within_base(self, *parts: str) -> Path:
+        """Resolve path safely under base_path and reject traversal."""
+        for part in parts:
+            if part in {"", ".", ".."}:
+                raise ValueError("Invalid path segment")
+            path_part = Path(part)
+            if len(path_part.parts) != 1 or path_part.is_absolute():
+                raise ValueError("Invalid path segment")
+        candidate = (self.base_path / Path(*parts)).resolve()
+        if not candidate.is_relative_to(self.base_path):
+            raise ValueError("Invalid path segment")
+        return candidate
 
     def get_tags(self) -> list[str]:
         """List all tag directories."""
@@ -95,7 +115,7 @@ class RunStore:
 
     def get_models(self, tag: str) -> list[str]:
         """List all model directories for a tag."""
-        tag_path = self.base_path / tag
+        tag_path = self._resolve_within_base(tag)
         if not tag_path.exists():
             return []
         return sorted(
@@ -106,7 +126,7 @@ class RunStore:
 
     def get_runs(self, tag: str, model: str) -> list[RunSummary]:
         """List all runs for a tag/model combination."""
-        model_path = self.base_path / tag / model
+        model_path = self._resolve_within_base(tag, model)
         if not model_path.exists():
             return []
 
@@ -119,8 +139,26 @@ class RunStore:
             if not meta_path.exists():
                 continue
 
-            meta_data = srsly.read_json(meta_path)
+            try:
+                meta_data = srsly.read_json(meta_path)
+            except Exception as exc:
+                logger.warning(
+                    "Skipping run %s due to malformed run_meta.json: %s",
+                    run_dir,
+                    exc,
+                )
+                continue
+
+            if not isinstance(meta_data, dict):
+                logger.warning(
+                    "Skipping run %s due to non-object run_meta.json",
+                    run_dir,
+                )
+                continue
+
             task_info = meta_data.get("task", {})
+            if not isinstance(task_info, dict):
+                task_info = {}
 
             # Check for validation files
             validation_files = list(run_dir.glob("validation_*.json"))
@@ -132,8 +170,12 @@ class RunStore:
                     if rate is not None:
                         if best_pass_rate is None or rate > best_pass_rate:
                             best_pass_rate = rate
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(
+                        "Ignoring malformed validation file %s: %s",
+                        vf,
+                        exc,
+                    )
 
             summaries.append(
                 RunSummary(
@@ -153,13 +195,18 @@ class RunStore:
 
     def get_run(self, tag: str, model: str, run_id: str) -> RunData | None:
         """Get full run data for a specific run."""
-        run_path = self.base_path / tag / model / run_id
+        run_path = self._resolve_within_base(tag, model, run_id)
         meta_path = run_path / "run_meta.json"
 
         if not meta_path.exists():
             return None
 
-        meta = RunMeta.model_validate(srsly.read_json(meta_path))
+        try:
+            meta = RunMeta.model_validate(srsly.read_json(meta_path))
+        except Exception as exc:
+            raise MalformedRunDataError(
+                f"Malformed run_meta.json for {tag}/{model}/{run_id}"
+            ) from exc
 
         # Read text files
         task_prompt = self._read_text(run_path / "task_prompt.txt")
@@ -170,15 +217,25 @@ class RunStore:
         eval_data = None
         eval_path = run_path / "output.eval.json"
         if eval_path.exists():
-            eval_data = srsly.read_json(eval_path)
+            try:
+                eval_data = srsly.read_json(eval_path)
+            except Exception as exc:
+                raise MalformedRunDataError(
+                    f"Malformed output.eval.json for {tag}/{model}/{run_id}"
+                ) from exc
 
         # Read all validation files
         validations = []
         for vf in sorted(run_path.glob("validation_*.json")):
             decoder_name = vf.stem.replace("validation_", "")
-            vdata = srsly.read_json(vf)
-            vdata["decoder_name"] = decoder_name
-            validations.append(ValidationResult.model_validate(vdata))
+            try:
+                vdata = srsly.read_json(vf)
+                vdata["decoder_name"] = decoder_name
+                validations.append(ValidationResult.model_validate(vdata))
+            except Exception as exc:
+                raise MalformedRunDataError(
+                    f"Malformed {vf.name} for {tag}/{model}/{run_id}"
+                ) from exc
 
         # Read decoder outputs (output_*.txt files)
         decoder_outputs = {}

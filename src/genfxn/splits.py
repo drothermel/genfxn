@@ -43,7 +43,10 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
                 return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:
-            return holdout.holdout_value in value
+            try:
+                return holdout.holdout_value in value
+            except TypeError:
+                return False
         case _:
             raise ValueError(f"Unknown holdout type: {holdout.holdout_type}")
 

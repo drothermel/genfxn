@@ -3,6 +3,7 @@
 	import { Card, CardHeader, CardTitle, CardContent } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { CheckCircle, XCircle, AlertCircle } from 'lucide-svelte';
+	import { sanitizeHighlightedHtml } from '$lib/helpers/sanitize';
 	import { codeToHtml } from 'shiki';
 
 	interface Props {
@@ -25,7 +26,7 @@
 		let cancelled = false;
 		codeToHtml(code, { lang: 'python', theme: 'github-light' })
 			.then((html) => {
-				if (!cancelled) highlightedCode = html;
+				if (!cancelled) highlightedCode = sanitizeHighlightedHtml(html);
 			})
 			.catch(() => {
 				if (!cancelled) highlightedCode = '';

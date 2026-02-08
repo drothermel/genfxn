@@ -5,6 +5,7 @@
     CardTitle,
     CardContent,
   } from "$lib/components/ui/card";
+  import { sanitizeHighlightedHtml } from "$lib/helpers/sanitize";
   import { codeToHtml } from "shiki";
 
   interface Props {
@@ -19,7 +20,7 @@
     let cancelled = false;
     codeToHtml(c, { lang: "python", theme: "github-light" })
       .then((html) => {
-        if (!cancelled) highlightedHtml = html;
+        if (!cancelled) highlightedHtml = sanitizeHighlightedHtml(html);
       })
       .catch((err) => {
         if (!cancelled) {

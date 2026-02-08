@@ -2,7 +2,12 @@
 
 from fastapi import APIRouter, HTTPException
 
-from viewer_api.run_loader import RunData, RunStore, RunSummary
+from viewer_api.run_loader import (
+    MalformedRunDataError,
+    RunData,
+    RunStore,
+    RunSummary,
+)
 
 
 def create_run_routes(store: RunStore) -> APIRouter:
@@ -17,7 +22,10 @@ def create_run_routes(store: RunStore) -> APIRouter:
     @router.get("/tags/{tag}/models")
     def list_models(tag: str) -> list[str]:
         """List all models for a tag."""
-        models = store.get_models(tag)
+        try:
+            models = store.get_models(tag)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not models:
             raise HTTPException(status_code=404, detail=f"Tag not found: {tag}")
         return models
@@ -25,7 +33,10 @@ def create_run_routes(store: RunStore) -> APIRouter:
     @router.get("/{tag}/{model}")
     def list_runs(tag: str, model: str) -> list[RunSummary]:
         """List all runs for a tag/model combination."""
-        runs = store.get_runs(tag, model)
+        try:
+            runs = store.get_runs(tag, model)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not runs:
             raise HTTPException(
                 status_code=404, detail=f"No runs found for {tag}/{model}"
@@ -35,7 +46,12 @@ def create_run_routes(store: RunStore) -> APIRouter:
     @router.get("/{tag}/{model}/{run_id}")
     def get_run(tag: str, model: str, run_id: str) -> RunData:
         """Get full run data."""
-        run = store.get_run(tag, model, run_id)
+        try:
+            run = store.get_run(tag, model, run_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except MalformedRunDataError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         if run is None:
             raise HTTPException(
                 status_code=404, detail=f"Run not found: {tag}/{model}/{run_id}"

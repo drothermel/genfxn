@@ -56,6 +56,8 @@
 
 	// Expanded groups for stacked runs
 	let expandedGroups: Set<string> = $state(new Set());
+	let modelRequestId = 0;
+	let runsRequestId = 0;
 
 	// Restore state from snapshot if available
 	onMount(() => {
@@ -256,6 +258,7 @@
 	}
 
 	async function refreshAvailableModels() {
+		const requestId = ++modelRequestId;
 		const filteredTags = tags;
 		if (filteredTags.length === 0) {
 			availableModels = new Set();
@@ -267,10 +270,11 @@
 
 		try {
 			const models = new Set<string>();
-
-			// Fetch models for each filtered tag
-			for (const tag of filteredTags) {
-				const tagModels = await fetchRunModels(tag);
+			const modelsByTag = await Promise.all(
+				filteredTags.map(async (tag) => [tag, await fetchRunModels(tag)] as const)
+			);
+			if (requestId !== modelRequestId) return;
+			for (const [, tagModels] of modelsByTag) {
 				for (const m of tagModels) {
 					models.add(m);
 				}
@@ -308,6 +312,7 @@
 	}
 
 	async function loadAllRuns() {
+		const requestId = ++runsRequestId;
 		const filteredTags = tags;
 		if (filteredTags.length === 0) {
 			runs = [];
@@ -322,16 +327,26 @@
 			const allRuns: RunSummary[] = [];
 			const models = new Set<string>();
 
-			// For each filtered tag, get models then runs
-			for (const tag of filteredTags) {
-				const tagModels = await fetchRunModels(tag);
+			const modelsByTag = await Promise.all(
+				filteredTags.map(async (tag) => [tag, await fetchRunModels(tag)] as const)
+			);
+			if (requestId !== runsRequestId) return;
+
+			for (const [, tagModels] of modelsByTag) {
 				for (const model of tagModels) {
 					models.add(model);
-					// Skip if model is disabled
-					if (enabledModels[model] === false) continue;
-					const tagRuns = await fetchRuns(tag, model);
-					allRuns.push(...tagRuns);
 				}
+			}
+
+			const runRequests = modelsByTag.flatMap(([tag, tagModels]) =>
+				tagModels
+					.filter((model) => enabledModels[model] !== false)
+					.map(async (model) => fetchRuns(tag, model))
+			);
+			const runResults = await Promise.all(runRequests);
+			if (requestId !== runsRequestId) return;
+			for (const tagRuns of runResults) {
+				allRuns.push(...tagRuns);
 			}
 
 			// Update available models

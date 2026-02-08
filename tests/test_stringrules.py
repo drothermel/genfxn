@@ -552,3 +552,9 @@ class TestComposedRoundtrip:
         queries = generate_stringrules_queries(spec, axes, random.Random(42))
         for q in queries:
             assert f(q.input) == q.output, f"s={q.input!r}"
+
+class TestRandomStringExclude:
+    def test_raises_when_exclude_removes_all_chars(self) -> None:
+        rng = random.Random(42)
+        with pytest.raises(ValueError):
+            _random_string(length=3, charset="abc", rng=rng, exclude="abc")
