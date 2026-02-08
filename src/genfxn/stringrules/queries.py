@@ -4,6 +4,7 @@ import string
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.string_predicates import (
     StringPredicate,
+    StringPredicateAnd,
     StringPredicateContains,
     StringPredicateEndsWith,
     StringPredicateIsAlpha,
@@ -11,6 +12,8 @@ from genfxn.core.string_predicates import (
     StringPredicateIsLower,
     StringPredicateIsUpper,
     StringPredicateLengthCmp,
+    StringPredicateNot,
+    StringPredicateOr,
     StringPredicateStartsWith,
     eval_string_predicate,
 )
@@ -110,6 +113,13 @@ def _generate_matching_string(
                     else:
                         return _random_string(0, charset, rng)
             return _random_string(length, charset, rng)
+
+        case StringPredicateNot() | StringPredicateAnd() | StringPredicateOr():
+            for _ in range(50):
+                s = _random_string(rng.randint(lo, hi), charset, rng)
+                if eval_string_predicate(pred, s):
+                    return s
+            return _random_string(rng.randint(lo, hi), charset, rng)
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)
@@ -212,6 +222,13 @@ def _generate_non_matching_string(
                 case _:
                     length = rng.randint(lo, hi)
             return _random_string(length, charset, rng)
+
+        case StringPredicateNot() | StringPredicateAnd() | StringPredicateOr():
+            for _ in range(50):
+                s = _random_string(rng.randint(lo, hi), charset, rng)
+                if not eval_string_predicate(pred, s):
+                    return s
+            return _random_string(rng.randint(lo, hi), charset, rng)
 
         case _:
             return _random_string(rng.randint(lo, hi), charset, rng)

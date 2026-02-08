@@ -56,7 +56,9 @@ class TransformPipeline(BaseModel):
     @model_validator(mode="after")
     def validate_step_count(self) -> "TransformPipeline":
         if not (2 <= len(self.steps) <= 3):
-            raise ValueError(f"pipeline requires 2-3 steps, got {len(self.steps)}")
+            raise ValueError(
+                f"pipeline requires 2-3 steps, got {len(self.steps)}"
+            )
         return self
 
 
@@ -67,6 +69,7 @@ class TransformType(str, Enum):
     CLIP = TransformClip.model_fields["kind"].default
     NEGATE = TransformNegate.model_fields["kind"].default
     SCALE = TransformScale.model_fields["kind"].default
+    PIPELINE = TransformPipeline.model_fields["kind"].default
 
 
 Transform = Annotated[

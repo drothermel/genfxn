@@ -5,6 +5,7 @@ from genfxn.stateful.models import (
     LongestRunSpec,
     ResettingBestPrefixSumSpec,
     StatefulSpec,
+    ToggleSumSpec,
 )
 
 
@@ -29,7 +30,12 @@ def eval_resetting_best_prefix_sum(
         if eval_predicate(spec.reset_predicate, x):
             current_sum = spec.init_value
         else:
-            current_sum += x
+            val = (
+                eval_transform(spec.value_transform, x)
+                if spec.value_transform is not None
+                else x
+            )
+            current_sum += val
             best_sum = max(best_sum, current_sum)
     return best_sum
 
@@ -46,6 +52,19 @@ def eval_longest_run(spec: LongestRunSpec, xs: list[int]) -> int:
     return longest_run
 
 
+def eval_toggle_sum(spec: ToggleSumSpec, xs: list[int]) -> int:
+    on = False
+    acc = spec.init_value
+    for x in xs:
+        if eval_predicate(spec.toggle_predicate, x):
+            on = not on
+        if on:
+            acc += eval_transform(spec.on_transform, x)
+        else:
+            acc += eval_transform(spec.off_transform, x)
+    return acc
+
+
 def eval_stateful(spec: StatefulSpec, xs: list[int]) -> int:
     match spec:
         case ConditionalLinearSumSpec():
@@ -54,5 +73,7 @@ def eval_stateful(spec: StatefulSpec, xs: list[int]) -> int:
             return eval_resetting_best_prefix_sum(spec, xs)
         case LongestRunSpec():
             return eval_longest_run(spec, xs)
+        case ToggleSumSpec():
+            return eval_toggle_sum(spec, xs)
         case _:
             raise ValueError(f"Unknown stateful spec: {spec}")

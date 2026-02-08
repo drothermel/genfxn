@@ -23,7 +23,7 @@ class StringRulesSpec(BaseModel):
 
 
 class StringRulesAxes(BaseModel):
-    n_rules: int = Field(default=3, ge=1, le=8)
+    n_rules: int = Field(default=3, ge=1, le=10)
     predicate_types: list[StringPredicateType] = Field(
         default_factory=lambda: [
             StringPredicateType.STARTS_WITH,

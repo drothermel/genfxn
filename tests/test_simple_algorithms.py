@@ -2,6 +2,8 @@ import random
 
 import pytest
 
+from genfxn.core.predicates import PredicateGt, PredicateModEq
+from genfxn.core.transforms import TransformNegate, TransformShift
 from genfxn.simple_algorithms.eval import (
     eval_count_pairs_sum,
     eval_max_window_sum,
@@ -320,3 +322,191 @@ class TestTaskGeneration:
             f = namespace["f"]
             for q in task.queries:
                 assert f(q.input) == q.output, f"Template {template}: mismatch"
+
+
+class TestPreprocessFilter:
+    def test_most_frequent_with_filter(self) -> None:
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=-1,
+            pre_filter=PredicateGt(value=0),
+        )
+        # Filter keeps only positive: [3, 1, 3] -> most frequent = 3
+        assert eval_most_frequent(spec, [-5, 3, -2, 1, 3]) == 3
+
+    def test_filter_removes_all(self) -> None:
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=-99,
+            pre_filter=PredicateGt(value=100),
+        )
+        # Nothing passes the filter
+        assert eval_most_frequent(spec, [1, 2, 3]) == -99
+
+    def test_count_pairs_with_filter(self) -> None:
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+            pre_filter=PredicateGt(value=0),
+        )
+        # Filter to positives: [3, 7] -> 1 pair
+        assert eval_count_pairs_sum(spec, [-1, 3, -2, 7]) == 1
+
+    def test_max_window_with_filter(self) -> None:
+        spec = MaxWindowSumSpec(
+            k=2,
+            invalid_k_default=-1,
+            pre_filter=PredicateGt(value=0),
+        )
+        # Filter to positives: [3, 7, 1] -> windows [3,7]=10, [7,1]=8 -> max=10
+        assert eval_max_window_sum(spec, [-5, 3, -2, 7, 1]) == 10
+
+
+class TestPreprocessTransform:
+    def test_most_frequent_with_transform(self) -> None:
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=0,
+            pre_transform=TransformNegate(),
+        )
+        # Negate: [1, 2, 1] -> [-1, -2, -1] -> most frequent = -1
+        assert eval_most_frequent(spec, [1, 2, 1]) == -1
+
+    def test_count_pairs_with_transform(self) -> None:
+        spec = CountPairsSumSpec(
+            target=0,
+            counting_mode=CountingMode.ALL_INDICES,
+            pre_transform=TransformShift(offset=5),
+        )
+        # Shift by 5: [-5, -5] -> [0, 0] -> 1 pair summing to 0
+        assert eval_count_pairs_sum(spec, [-5, -5]) == 1
+
+
+class TestTieDefault:
+    def test_tie_default_used(self) -> None:
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=0,
+            tie_default=-999,
+        )
+        # 1 and 2 appear equally -> tie -> return tie_default
+        assert eval_most_frequent(spec, [1, 2, 1, 2]) == -999
+
+    def test_tie_default_not_used_when_clear_winner(self) -> None:
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=0,
+            tie_default=-999,
+        )
+        assert eval_most_frequent(spec, [1, 2, 2]) == 2
+
+    def test_tie_default_none_uses_tie_break(self) -> None:
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=0,
+            tie_default=None,
+        )
+        assert eval_most_frequent(spec, [2, 1, 2, 1]) == 1
+
+
+class TestNoResultDefault:
+    def test_no_result_default_used(self) -> None:
+        spec = CountPairsSumSpec(
+            target=100,
+            counting_mode=CountingMode.ALL_INDICES,
+            no_result_default=-1,
+        )
+        assert eval_count_pairs_sum(spec, [1, 2, 3]) == -1
+
+    def test_no_result_default_not_used_when_pairs_found(self) -> None:
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+            no_result_default=-1,
+        )
+        assert eval_count_pairs_sum(spec, [3, 7]) == 1
+
+
+class TestShortListDefault:
+    def test_short_list_default_empty(self) -> None:
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+            short_list_default=-5,
+        )
+        assert eval_count_pairs_sum(spec, []) == -5
+
+    def test_short_list_default_single(self) -> None:
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+            short_list_default=-5,
+        )
+        assert eval_count_pairs_sum(spec, [5]) == -5
+
+
+class TestEmptyDefault:
+    def test_empty_default_used(self) -> None:
+        spec = MaxWindowSumSpec(
+            k=3,
+            invalid_k_default=-1,
+            empty_default=-99,
+        )
+        assert eval_max_window_sum(spec, []) == -99
+
+    def test_empty_default_none_falls_to_invalid_k(self) -> None:
+        spec = MaxWindowSumSpec(
+            k=3,
+            invalid_k_default=-1,
+            empty_default=None,
+        )
+        # Empty list with no empty_default -> falls through to len < k check
+        assert eval_max_window_sum(spec, []) == -1
+
+
+class TestPreprocessRenderRoundtrip:
+    def test_most_frequent_with_filter_roundtrip(self) -> None:
+        spec = MostFrequentSpec(
+            tie_break=TieBreakMode.SMALLEST,
+            empty_default=-1,
+            pre_filter=PredicateGt(value=0),
+            tie_default=-99,
+        )
+        code = render_simple_algorithms(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = [[], [1], [-1, 2, -3, 2], [1, 2, 1, 2], [5]]
+        for xs in test_inputs:
+            assert f(xs) == eval_simple_algorithms(spec, xs), f"xs={xs}"
+
+    def test_count_pairs_with_transform_roundtrip(self) -> None:
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.UNIQUE_VALUES,
+            pre_transform=TransformShift(offset=5),
+            no_result_default=-1,
+            short_list_default=-5,
+        )
+        code = render_simple_algorithms(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = [[], [1], [0, 5], [2, 3, 2, 3]]
+        for xs in test_inputs:
+            assert f(xs) == eval_simple_algorithms(spec, xs), f"xs={xs}"
+
+    def test_max_window_with_filter_roundtrip(self) -> None:
+        spec = MaxWindowSumSpec(
+            k=2,
+            invalid_k_default=-1,
+            pre_filter=PredicateModEq(divisor=2, remainder=0),
+            empty_default=-99,
+        )
+        code = render_simple_algorithms(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = [[], [1, 3, 5], [2, 4, 6], [1, 2, 3, 4, 5, 6]]
+        for xs in test_inputs:
+            assert f(xs) == eval_simple_algorithms(spec, xs), f"xs={xs}"

@@ -30,7 +30,9 @@ class ValidationResult(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    decoder_name: str = Field(description="Name of the decoder (extracted from filename)")
+    decoder_name: str = Field(
+        description="Name of the decoder (extracted from filename)"
+    )
     raw_output: str | None = None
     extracted_code: str | None = None
     has_code_fences: bool | None = None
@@ -49,12 +51,15 @@ class RunData(BaseModel):
     task_prompt: str | None = None
     system_prompt: str | None = None
     output: str | None = None
-    eval: dict | None = Field(default=None, description="output.eval.json if present")
+    eval: dict | None = Field(
+        default=None, description="output.eval.json if present"
+    )
     validations: list[ValidationResult] = Field(
         default_factory=list, description="All validation_*.json files"
     )
     decoder_outputs: dict[str, str] = Field(
-        default_factory=dict, description="output_*.txt files keyed by decoder name"
+        default_factory=dict,
+        description="output_*.txt files keyed by decoder name",
     )
 
 
@@ -94,7 +99,9 @@ class RunStore:
         if not tag_path.exists():
             return []
         return sorted(
-            d.name for d in tag_path.iterdir() if d.is_dir() and not d.name.startswith(".")
+            d.name
+            for d in tag_path.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
         )
 
     def get_runs(self, tag: str, model: str) -> list[RunSummary]:
