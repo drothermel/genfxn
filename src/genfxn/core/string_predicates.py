@@ -47,6 +47,48 @@ class StringPredicateLengthCmp(BaseModel):
         return self
 
 
+_AtomicStringPredUnion = (
+    StringPredicateStartsWith
+    | StringPredicateEndsWith
+    | StringPredicateContains
+    | StringPredicateIsAlpha
+    | StringPredicateIsDigit
+    | StringPredicateIsUpper
+    | StringPredicateIsLower
+    | StringPredicateLengthCmp
+)
+StringPredicateAtom = Annotated[
+    _AtomicStringPredUnion, Field(discriminator="kind")
+]
+
+
+class StringPredicateNot(BaseModel):
+    kind: Literal["not"] = "not"
+    operand: StringPredicateAtom
+
+
+class StringPredicateAnd(BaseModel):
+    kind: Literal["and"] = "and"
+    operands: list[StringPredicateAtom]
+
+    @model_validator(mode="after")
+    def validate_operand_count(self) -> "StringPredicateAnd":
+        if not (2 <= len(self.operands) <= 3):
+            raise ValueError(f"and requires 2-3 operands, got {len(self.operands)}")
+        return self
+
+
+class StringPredicateOr(BaseModel):
+    kind: Literal["or"] = "or"
+    operands: list[StringPredicateAtom]
+
+    @model_validator(mode="after")
+    def validate_operand_count(self) -> "StringPredicateOr":
+        if not (2 <= len(self.operands) <= 3):
+            raise ValueError(f"or requires 2-3 operands, got {len(self.operands)}")
+        return self
+
+
 class StringPredicateType(str, Enum):
     STARTS_WITH = "starts_with"
     ENDS_WITH = "ends_with"
@@ -66,7 +108,10 @@ StringPredicate = Annotated[
     | StringPredicateIsDigit
     | StringPredicateIsUpper
     | StringPredicateIsLower
-    | StringPredicateLengthCmp,
+    | StringPredicateLengthCmp
+    | StringPredicateNot
+    | StringPredicateAnd
+    | StringPredicateOr,
     Field(discriminator="kind"),
 ]
 
@@ -102,6 +147,12 @@ def eval_string_predicate(pred: StringPredicate, s: str) -> bool:
                     return length == v
                 case _:
                     return False
+        case StringPredicateNot(operand=op):
+            return not eval_string_predicate(op, s)
+        case StringPredicateAnd(operands=ops):
+            return all(eval_string_predicate(op, s) for op in ops)
+        case StringPredicateOr(operands=ops):
+            return any(eval_string_predicate(op, s) for op in ops)
         case _:
             raise ValueError(f"Unknown string predicate: {pred}")
 
@@ -125,5 +176,11 @@ def render_string_predicate(pred: StringPredicate, var: str = "s") -> str:
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}
             return f"len({var}) {op_map[op]} {v}"
+        case StringPredicateNot(operand=op):
+            return f"not ({render_string_predicate(op, var)})"
+        case StringPredicateAnd(operands=ops):
+            return f"({' and '.join(render_string_predicate(op, var) for op in ops)})"
+        case StringPredicateOr(operands=ops):
+            return f"({' or '.join(render_string_predicate(op, var) for op in ops)})"
         case _:
             raise ValueError(f"Unknown string predicate: {pred}")

@@ -3,6 +3,7 @@ import pytest
 from genfxn.core.codegen import render_tests, task_id_from_spec
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
+    PredicateAnd,
     PredicateEven,
     PredicateGe,
     PredicateGt,
@@ -10,7 +11,9 @@ from genfxn.core.predicates import (
     PredicateLe,
     PredicateLt,
     PredicateModEq,
+    PredicateNot,
     PredicateOdd,
+    PredicateOr,
     ThresholdInfo,
     eval_predicate,
     get_threshold,
@@ -21,6 +24,7 @@ from genfxn.core.transforms import (
     TransformClip,
     TransformIdentity,
     TransformNegate,
+    TransformPipeline,
     TransformScale,
     TransformShift,
     eval_transform,
@@ -99,6 +103,83 @@ class TestPredicates:
         assert eval_predicate(p, 0) is False
         assert eval_predicate(p, 4) is False
         assert render_predicate(p) == "x in {1, 2, 3}"
+
+
+class TestComposedPredicates:
+    def test_not_eval(self) -> None:
+        p = PredicateNot(operand=PredicateEven())
+        assert eval_predicate(p, 3) is True
+        assert eval_predicate(p, 4) is False
+
+    def test_not_render(self) -> None:
+        p = PredicateNot(operand=PredicateGt(value=5))
+        assert render_predicate(p) == "not (x > 5)"
+
+    def test_and_eval(self) -> None:
+        p = PredicateAnd(operands=[PredicateGt(value=0), PredicateEven()])
+        assert eval_predicate(p, 4) is True
+        assert eval_predicate(p, 3) is False
+        assert eval_predicate(p, -2) is False
+
+    def test_and_render(self) -> None:
+        p = PredicateAnd(operands=[PredicateGt(value=0), PredicateLt(value=10)])
+        assert render_predicate(p) == "(x > 0 and x < 10)"
+
+    def test_or_eval(self) -> None:
+        p = PredicateOr(operands=[PredicateEven(), PredicateGt(value=10)])
+        assert eval_predicate(p, 4) is True
+        assert eval_predicate(p, 11) is True
+        assert eval_predicate(p, 3) is False
+
+    def test_or_render(self) -> None:
+        p = PredicateOr(operands=[PredicateEven(), PredicateOdd()])
+        assert render_predicate(p) == "(x % 2 == 0 or x % 2 == 1)"
+
+    def test_serialization_roundtrip(self) -> None:
+        p = PredicateNot(operand=PredicateEven())
+        data = p.model_dump()
+        assert data == {"kind": "not", "operand": {"kind": "even"}}
+        restored = PredicateNot.model_validate(data)
+        assert restored == p
+
+    def test_and_serialization(self) -> None:
+        p = PredicateAnd(operands=[PredicateGt(value=0), PredicateLt(value=10)])
+        data = p.model_dump()
+        restored = PredicateAnd.model_validate(data)
+        assert restored == p
+
+    def test_and_rejects_one_operand(self) -> None:
+        with pytest.raises(ValueError, match="and requires 2-3 operands"):
+            PredicateAnd(operands=[PredicateEven()])
+
+    def test_and_rejects_four_operands(self) -> None:
+        with pytest.raises(ValueError, match="and requires 2-3 operands"):
+            PredicateAnd(
+                operands=[
+                    PredicateEven(),
+                    PredicateOdd(),
+                    PredicateGt(value=0),
+                    PredicateLt(value=10),
+                ]
+            )
+
+    def test_or_rejects_one_operand(self) -> None:
+        with pytest.raises(ValueError, match="or requires 2-3 operands"):
+            PredicateOr(operands=[PredicateEven()])
+
+    def test_get_threshold_returns_none(self) -> None:
+        assert get_threshold(PredicateNot(operand=PredicateGt(value=5))) is None
+        assert get_threshold(PredicateAnd(operands=[PredicateGt(value=0), PredicateEven()])) is None
+        assert get_threshold(PredicateOr(operands=[PredicateEven(), PredicateOdd()])) is None
+
+    def test_three_operand_and(self) -> None:
+        p = PredicateAnd(
+            operands=[PredicateGt(value=0), PredicateLt(value=100), PredicateEven()]
+        )
+        assert eval_predicate(p, 50) is True
+        assert eval_predicate(p, 51) is False
+        assert eval_predicate(p, -2) is False
+        assert render_predicate(p) == "(x > 0 and x < 100 and x % 2 == 0)"
 
 
 class TestGetThreshold:
@@ -208,6 +289,44 @@ class TestTransforms:
         assert eval_transform(t, -2) == -6
         assert eval_transform(t, 0) == 0
         assert render_transform(t) == "x * 3"
+
+
+class TestTransformPipeline:
+    def test_pipeline_eval(self) -> None:
+        p = TransformPipeline(steps=[TransformShift(offset=3), TransformScale(factor=2)])
+        assert eval_transform(p, 5) == 16  # (5 + 3) * 2
+
+    def test_pipeline_render(self) -> None:
+        p = TransformPipeline(steps=[TransformShift(offset=3), TransformScale(factor=2)])
+        assert render_transform(p) == "(x + 3) * 2"
+
+    def test_three_step_pipeline(self) -> None:
+        p = TransformPipeline(
+            steps=[TransformAbs(), TransformShift(offset=1), TransformScale(factor=3)]
+        )
+        assert eval_transform(p, -5) == 18  # abs(-5)=5, 5+1=6, 6*3=18
+        assert render_transform(p) == "((abs(x)) + 1) * 3"
+
+    def test_pipeline_rejects_one_step(self) -> None:
+        with pytest.raises(ValueError, match="pipeline requires 2-3 steps"):
+            TransformPipeline(steps=[TransformAbs()])
+
+    def test_pipeline_rejects_four_steps(self) -> None:
+        with pytest.raises(ValueError, match="pipeline requires 2-3 steps"):
+            TransformPipeline(
+                steps=[
+                    TransformAbs(),
+                    TransformShift(offset=1),
+                    TransformScale(factor=2),
+                    TransformNegate(),
+                ]
+            )
+
+    def test_serialization_roundtrip(self) -> None:
+        p = TransformPipeline(steps=[TransformShift(offset=3), TransformScale(factor=2)])
+        data = p.model_dump()
+        restored = TransformPipeline.model_validate(data)
+        assert restored == p
 
 
 class TestTaskId:
