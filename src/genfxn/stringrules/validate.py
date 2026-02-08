@@ -40,11 +40,13 @@ CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "UNSAFE_AST"
 CODE_SHADOWED_RULE = "SHADOWED_RULE"
 CODE_EMPTY_RULESET = "EMPTY_RULESET"
+CODE_AXES_INVALID = "AXES_INVALID"
 CURRENT_FAMILY = "stringrules"
 
 DEFAULT_MAX_SEMANTIC_ISSUES = 10
 
 _spec_adapter = TypeAdapter(StringRulesSpec)
+_axes_adapter = TypeAdapter(StringRulesAxes)
 _ALLOWED_BUILTINS = {"len": len, "str": str}
 
 
@@ -236,7 +238,7 @@ def _validate_code_compile(
     task: Task,
 ) -> tuple[list[Issue], Callable[[str], str] | None]:
     try:
-        ast.parse(task.code)
+        ast.parse(task.code["python"])
     except SyntaxError as e:
         return [
             Issue(
@@ -250,7 +252,7 @@ def _validate_code_compile(
 
     namespace: dict[str, object]
     try:
-        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+        namespace = execute_code_restricted(task.code["python"], _ALLOWED_BUILTINS)
     except SafeExecMissingFunctionError as e:
         return [
             Issue(
@@ -357,6 +359,8 @@ def _generate_test_inputs(
 ) -> list[str]:
     """Generate test inputs including edge cases and random samples."""
     charset = _get_charset(axes.charset)
+    if not charset:
+        raise ValueError("axes.charset resolved to an empty character set")
     inputs: list[str] = []
     lo, hi = axes.string_length_range
 
@@ -389,7 +393,18 @@ def _validate_semantics(
     rng: random.Random,
 ) -> list[Issue]:
     issues: list[Issue] = []
-    test_inputs = _generate_test_inputs(axes, rng)
+    try:
+        test_inputs = _generate_test_inputs(axes, rng)
+    except ValueError as e:
+        return [
+            Issue(
+                code=CODE_AXES_INVALID,
+                severity=Severity.ERROR,
+                message=f"Invalid axes for semantic validation: {e}",
+                location="axes.charset",
+                task_id=task.task_id,
+            )
+        ]
 
     for s in test_inputs:
         if max_issues > 0 and len(issues) >= max_issues:
@@ -469,6 +484,29 @@ def validate_stringrules_task(
         ]
     if axes is None:
         axes = StringRulesAxes()
+    else:
+        try:
+            axes = _axes_adapter.validate_python(axes, strict=True)
+        except ValidationError as e:
+            err = e.errors()[0] if e.errors() else {}
+            loc = err.get("loc", ())
+            if isinstance(loc, tuple):
+                loc_part = ".".join(str(part) for part in loc) or "value"
+            elif isinstance(loc, list):
+                loc_part = ".".join(str(part) for part in loc) or "value"
+            else:
+                loc_part = str(loc) if loc else "value"
+            if loc_part == "value" and "charset" in str(e):
+                loc_part = "charset"
+            return [
+                Issue(
+                    code=CODE_AXES_INVALID,
+                    severity=Severity.ERROR,
+                    message=f"Invalid axes: {e}",
+                    location=f"axes.{loc_part}",
+                    task_id=task.task_id,
+                )
+            ]
     if rng is None:
         rng = random.Random(42)
     _ = paranoid
@@ -480,7 +518,7 @@ def validate_stringrules_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    ast_issues, _ = _validate_ast_whitelist(task.code)
+    ast_issues, _ = _validate_ast_whitelist(task.code["python"])
     if ast_issues:
         issues.extend(ast_issues)
         return issues
@@ -494,10 +532,15 @@ def validate_stringrules_task(
         issues.extend(_validate_query_outputs(task, spec))
 
     if spec is not None and func is not None:
-        issues.extend(
-            _validate_semantics(
-                task, func, spec, axes, max_semantic_issues, rng
+        try:
+            issues.extend(
+                _validate_semantics(
+                    task, func, spec, axes, max_semantic_issues, rng
+                )
             )
-        )
+        finally:
+            close = getattr(func, "close", None)
+            if callable(close):
+                close()
 
     return issues

@@ -265,5 +265,28 @@ genfxn info FILE
 ## Tests
 
 ```bash
-uv run pytest tests/ -v
+# Fast feedback (skips slow + full)
+uv run pytest tests/ -v --verification-level=fast
+
+# Standard CI/dev confidence (skips full)
+uv run pytest tests/ -v --verification-level=standard
+
+# Full verification (runs everything)
+uv run pytest tests/ -v --verification-level=full
+```
+
+### Local Performance Budgets
+
+Use the helper runner to apply tuned xdist worker counts and optional
+runtime budget checks.
+
+```bash
+# Standard tier with tuned workers and duration report
+uv run python scripts/run_tests.py --tier standard
+
+# Enforce runtime budget for the selected tier
+uv run python scripts/run_tests.py --tier fast --enforce-budget
+
+# Override workers or pass through extra pytest args
+uv run python scripts/run_tests.py --tier full --workers 2 -- -k validate
 ```

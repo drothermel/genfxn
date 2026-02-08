@@ -1,14 +1,23 @@
 import random
 
+import pytest
+
 from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.predicates import PredicateGt
 from genfxn.core.validate import Severity
-from genfxn.simple_algorithms.models import SimpleAlgorithmsAxes, TemplateType
+from genfxn.simple_algorithms.models import (
+    CountingMode,
+    CountPairsSumSpec,
+    SimpleAlgorithmsAxes,
+    TemplateType,
+)
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.simple_algorithms.validate import (
     CODE_CODE_EXEC_ERROR,
     CODE_CODE_MISSING_FUNC,
     CODE_CODE_PARSE_ERROR,
     CODE_CODE_RUNTIME_ERROR,
+    CODE_COUNTING_MODE_MISMATCH,
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
@@ -17,17 +26,26 @@ from genfxn.simple_algorithms.validate import (
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
     CODE_UNSAFE_AST,
+    _check_counting_mode_consistency,
+    _validate_ast_whitelist,
+    _validate_query_types,
     validate_simple_algorithms_task,
 )
 
 
+@pytest.fixture
+def baseline_task() -> Task:
+    return generate_simple_algorithms_task(rng=random.Random(42))
+
+
 class TestValidTask:
-    def test_generated_task_has_no_errors(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_generated_task_has_no_errors(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         issues = validate_simple_algorithms_task(task)
         errors = [i for i in issues if i.severity == Severity.ERROR]
         assert errors == []
 
+    @pytest.mark.full
     def test_multiple_seeds_valid(self) -> None:
         for seed in [1, 42, 123, 999]:
             task = generate_simple_algorithms_task(rng=random.Random(seed))
@@ -37,8 +55,8 @@ class TestValidTask:
 
 
 class TestTaskIdValidation:
-    def test_corrupted_task_id_detected(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_corrupted_task_id_detected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={"task_id": "simple_algorithms_00000000"}
         )
@@ -51,14 +69,14 @@ class TestTaskIdValidation:
 
 
 class TestSpecDeserialization:
-    def test_invalid_spec_caught(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_invalid_spec_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(update={"spec": {"invalid": "spec"}})
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_SPEC_DESERIALIZE_ERROR for i in issues)
 
-    def test_wrong_template_discriminator(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_wrong_template_discriminator(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={"spec": {"template": "nonexistent_template"}}
         )
@@ -67,40 +85,46 @@ class TestSpecDeserialization:
 
 
 class TestCodeCompilation:
-    def test_syntax_error_caught(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return ("})
+    def test_syntax_error_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": {"python": "def f(xs):\n    return ("}}
+        )
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
 
-    def test_exec_error_caught(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
+    def test_exec_error_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": {"python": "raise ValueError('boom')"}}
+        )
         issues = validate_simple_algorithms_task(corrupted)
         assert any(
             i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
         )
 
-    def test_missing_func_caught(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def g(xs):\n    return 0"})
+    def test_missing_func_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": {"python": "def g(xs):\n    return 0"}}
+        )
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
 
 class TestCodeRuntime:
-    def test_runtime_error_caught(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_runtime_error_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    return 1 % 0"}
+            update={"code": {"python": "def f(xs):\n    return 1 % 0"}}
         )
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
 
 
 class TestQueryTypeValidation:
-    def test_non_list_input_is_error_strict(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_non_list_input_is_error_strict(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]
@@ -110,8 +134,8 @@ class TestQueryTypeValidation:
         type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
         assert len(type_issues) > 0
 
-    def test_non_int_output_is_error_strict(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_non_int_output_is_error_strict(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [
@@ -123,14 +147,14 @@ class TestQueryTypeValidation:
         type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
         assert len(type_issues) > 0
 
-    def test_non_int_element_in_list_input_is_error(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_non_int_element_in_list_input_is_error(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "queries": [
-                    Query(
-                        input=[1, "two", 3], output=0, tag=QueryTag.TYPICAL
-                    )
+                    Query(input=[1, "two", 3], output=0, tag=QueryTag.TYPICAL)
                 ]
             }
         )
@@ -138,8 +162,8 @@ class TestQueryTypeValidation:
         type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
         assert len(type_issues) > 0
 
-    def test_query_type_checks_run_with_bad_spec(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_query_type_checks_run_with_bad_spec(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
                 "spec": {"invalid": "spec"},
@@ -156,9 +180,28 @@ class TestQueryTypeValidation:
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
 
+class TestHelperLevelValidation:
+    def test_query_types_helper_without_full_pipeline(
+        self, baseline_task
+    ) -> None:
+        corrupted = baseline_task.model_copy(
+            update={
+                "queries": [
+                    Query(input=[1, "two", 3], output=0, tag=QueryTag.TYPICAL)
+                ]
+            }
+        )
+        issues = _validate_query_types(corrupted, strict=True)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+
+    def test_ast_whitelist_helper_without_execution(self) -> None:
+        issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+
 class TestQueryOutputValidation:
-    def test_wrong_output_caught(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_wrong_output_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         first_query = task.queries[0]
         wrong_query = Query(
             input=first_query.input,
@@ -171,18 +214,39 @@ class TestQueryOutputValidation:
 
 
 class TestSemanticValidation:
-    def test_code_differing_from_spec_caught(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+    def test_code_differing_from_spec_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": {"python": "def f(xs):\n    return 0"}}
+        )
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
 
+    def test_counting_mode_check_preserves_full_spec(self) -> None:
+        task = generate_simple_algorithms_task(
+            axes=SimpleAlgorithmsAxes(templates=[TemplateType.COUNT_PAIRS_SUM]),
+            rng=random.Random(42),
+        )
+        query = Query(input=[1, 1, 1, -2], output=1, tag=QueryTag.TYPICAL)
+        corrupted = task.model_copy(
+            update={
+                "queries": [query],
+            }
+        )
+        spec = CountPairsSumSpec(
+            target=2,
+            counting_mode=CountingMode.ALL_INDICES,
+            pre_filter=PredicateGt(value=0),
+        )
+        issues = _check_counting_mode_consistency(corrupted, spec)
+        assert any(i.code == CODE_COUNTING_MODE_MISMATCH for i in issues)
+
 
 class TestSemanticIssueCapping:
-    def test_caps_semantic_mismatch_issues(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_caps_semantic_mismatch_issues(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    return 999999"}
+            update={"code": {"python": "def f(xs):\n    return 999999"}}
         )
         issues = validate_simple_algorithms_task(corrupted)
         semantic_issues = [
@@ -191,9 +255,11 @@ class TestSemanticIssueCapping:
         assert len(semantic_issues) == 10
         assert any(i.code == CODE_SEMANTIC_ISSUES_CAPPED for i in issues)
 
-    def test_custom_cap_respected(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
-        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
+    def test_custom_cap_respected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={"code": {"python": "def f(xs):\n    return 0"}}
+        )
         issues = validate_simple_algorithms_task(
             corrupted, max_semantic_issues=3
         )
@@ -205,12 +271,13 @@ class TestSemanticIssueCapping:
 
 def _make_task_with_code(code: str) -> Task:
     task = generate_simple_algorithms_task(rng=random.Random(42))
-    return task.model_copy(update={"code": code})
+    return task.model_copy(update={"code": {"python": code}})
 
 
+@pytest.mark.slow
 class TestParanoidMode:
-    def test_valid_generated_code_passes(self) -> None:
-        task = generate_simple_algorithms_task(rng=random.Random(42))
+    def test_valid_generated_code_passes(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
         issues = validate_simple_algorithms_task(task, paranoid=True)
         assert not any(i.code == CODE_UNSAFE_AST for i in issues)
 
@@ -230,6 +297,7 @@ class TestParanoidMode:
         issues = validate_simple_algorithms_task(task, paranoid=False)
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
+    @pytest.mark.full
     def test_multiple_seeds_pass_paranoid(self) -> None:
         for seed in [1, 42, 123, 999]:
             task = generate_simple_algorithms_task(rng=random.Random(seed))

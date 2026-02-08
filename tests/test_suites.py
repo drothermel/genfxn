@@ -191,6 +191,51 @@ class TestStringrulesFeatures:
         assert stringrules_features(make_spec(8))["n_rules_bucket"] == "8-10"
         assert stringrules_features(make_spec(10))["n_rules_bucket"] == "8-10"
 
+    def test_pred_majority_recurses_all_composed_operands(self) -> None:
+        spec = {
+            "rules": [
+                {
+                    "predicate": {
+                        "kind": "and",
+                        "operands": [
+                            {"kind": "is_alpha"},
+                            {"kind": "length_cmp", "op": "gt", "n": 5},
+                            {"kind": "length_cmp", "op": "eq", "n": 2},
+                        ],
+                    },
+                    "transform": {"kind": "identity"},
+                },
+                {
+                    "predicate": {"kind": "starts_with", "prefix": "a"},
+                    "transform": {"kind": "identity"},
+                },
+            ],
+            "default_transform": {"kind": "identity"},
+        }
+        f = stringrules_features(spec)
+        assert f["pred_majority"] == "length"
+
+    def test_transform_majority_recurses_all_pipeline_steps(self) -> None:
+        spec = {
+            "rules": [
+                {
+                    "predicate": {"kind": "is_alpha"},
+                    "transform": {
+                        "kind": "pipeline",
+                        "steps": [
+                            {"kind": "identity"},
+                            {"kind": "replace", "old": "a", "new": "b"},
+                            {"kind": "append", "suffix": "x"},
+                            {"kind": "prepend", "prefix": "y"},
+                        ],
+                    },
+                }
+            ],
+            "default_transform": {"kind": "lowercase"},
+        }
+        f = stringrules_features(spec)
+        assert f["transform_majority"] == "param"
+
 
 class TestStatefulFeatures:
     def test_conditional_comparison(self) -> None:
@@ -656,6 +701,7 @@ class TestDeterminism:
 # ── Integration test (marked slow) ──────────────────────────────────────
 
 
+@pytest.mark.full
 class TestIntegration:
     @pytest.mark.slow
     @pytest.mark.parametrize(

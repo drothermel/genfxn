@@ -28,7 +28,15 @@ python-version = "3.12"
 [tool.ty.src]
 
 [dependency-groups]
-dev = ["ty>=0.0.14", "pytest>=9.0.2", "ruff>=0.14.14"]
+dev = [
+    "ty>=0.0.14",
+    "pytest>=9.0.2",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.14.14",
+]
 
 [tool.pytest.ini_options]
-markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
+markers = [
+    "slow: longer-running tests for expanded confidence",
+    "full: exhaustive validation tests (slowest, highest confidence)",
+]

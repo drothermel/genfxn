@@ -167,7 +167,7 @@ def _validate_code_compile(
     task: Task,
 ) -> tuple[list[Issue], Callable[[list[int]], int] | None]:
     try:
-        ast.parse(task.code)
+        ast.parse(task.code["python"])
     except SyntaxError as e:
         return [
             Issue(
@@ -181,7 +181,7 @@ def _validate_code_compile(
 
     namespace: dict[str, object]
     try:
-        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+        namespace = execute_code_restricted(task.code["python"], _ALLOWED_BUILTINS)
     except SafeExecMissingFunctionError as e:
         return [
             Issue(
@@ -431,7 +431,7 @@ def validate_stateful_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    ast_issues, _ = _validate_ast_whitelist(task.code)
+    ast_issues, _ = _validate_ast_whitelist(task.code["python"])
     if ast_issues:
         issues.extend(ast_issues)
         return issues  # Bail early, don't exec unsafe code
@@ -445,10 +445,15 @@ def validate_stateful_task(
         issues.extend(_validate_query_outputs(task, spec))
 
     if spec is not None and func is not None:
-        issues.extend(
-            _validate_semantics(
-                task, func, spec, axes, max_semantic_issues, rng
+        try:
+            issues.extend(
+                _validate_semantics(
+                    task, func, spec, axes, max_semantic_issues, rng
+                )
             )
-        )
+        finally:
+            close = getattr(func, "close", None)
+            if callable(close):
+                close()
 
     return issues
