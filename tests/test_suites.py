@@ -1,10 +1,17 @@
 """Tests for balanced suite generation."""
 
 import random
+from collections.abc import Callable
+from typing import cast
 
 import pytest
 
-from genfxn.simple_algorithms.models import TemplateType as SATemplateType
+from genfxn.simple_algorithms.models import (
+    CountingMode,
+)
+from genfxn.simple_algorithms.models import (
+    TemplateType as SATemplateType,
+)
 from genfxn.suites.features import (
     simple_algorithms_features,
     stateful_features,
@@ -13,6 +20,7 @@ from genfxn.suites.features import (
 from genfxn.suites.generate import (
     Candidate,
     PoolStats,
+    _pool_axes_simple_algorithms_d3,
     _pool_axes_simple_algorithms_d4,
     generate_pool,
     generate_suite,
@@ -447,6 +455,22 @@ class _FixedChoiceRng:
         return picked
 
 
+class TestSimpleAlgorithmsD3PoolAxes:
+    def test_zero_target_enables_both_edge_defaults(self) -> None:
+        rng = _FixedChoiceRng([SATemplateType.COUNT_PAIRS_SUM, "zero"])
+
+        axes = _pool_axes_simple_algorithms_d3(cast(random.Random, rng))
+
+        assert axes.templates == [SATemplateType.COUNT_PAIRS_SUM]
+        assert axes.target_range == (0, 0)
+        assert axes.counting_modes == [
+            CountingMode.ALL_INDICES,
+            CountingMode.UNIQUE_VALUES,
+        ]
+        assert axes.no_result_default_range == (-10, 10)
+        assert axes.short_list_default_range == (-5, 5)
+
+
 class TestSimpleAlgorithmsD4PoolAxes:
     def test_most_frequent_uses_only_tie_default_edge(self) -> None:
         rng = _FixedChoiceRng(
@@ -457,7 +481,7 @@ class TestSimpleAlgorithmsD4PoolAxes:
             ]
         )
 
-        axes = _pool_axes_simple_algorithms_d4(rng)
+        axes = _pool_axes_simple_algorithms_d4(cast(random.Random, rng))
 
         assert axes.templates == [SATemplateType.MOST_FREQUENT]
         assert axes.tie_default_range == (-10, 10)
@@ -474,7 +498,7 @@ class TestSimpleAlgorithmsD4PoolAxes:
             ]
         )
 
-        axes = _pool_axes_simple_algorithms_d4(rng)
+        axes = _pool_axes_simple_algorithms_d4(cast(random.Random, rng))
 
         assert axes.templates == [SATemplateType.MAX_WINDOW_SUM]
         assert axes.empty_default_for_empty_range == (-10, 10)
@@ -492,7 +516,7 @@ class TestSimpleAlgorithmsD4PoolAxes:
             ]
         )
 
-        axes = _pool_axes_simple_algorithms_d4(rng)
+        axes = _pool_axes_simple_algorithms_d4(cast(random.Random, rng))
 
         assert axes.templates == [SATemplateType.COUNT_PAIRS_SUM]
         assert axes.no_result_default_range == (-10, 10)
@@ -541,8 +565,15 @@ class TestHardConstraints:
 
 
 class TestGreedySelect:
-    def _make_candidate(self, task_id: str, features: dict[str, str]) -> Candidate:
-        return Candidate(spec=None, spec_dict={}, task_id=task_id, features=features)
+    def _make_candidate(
+        self, task_id: str, features: dict[str, str]
+    ) -> Candidate:
+        return Candidate(
+            spec=None,
+            spec_dict={},
+            task_id=task_id,
+            features=features,
+        )
 
     def _reference_greedy_select(
         self,
@@ -582,7 +613,10 @@ class TestGreedySelect:
                 score = 0.0
                 for bi, bucket in enumerate(quota.buckets):
                     deficit = max(0, bucket.target - filled[bi])
-                    if deficit > 0 and cand.features.get(bucket.axis) == bucket.value:
+                    if (
+                        deficit > 0
+                        and cand.features.get(bucket.axis) == bucket.value
+                    ):
                         if bucket.condition is not None:
                             cond_match = True
                             for key, val in bucket.condition.items():
@@ -763,7 +797,9 @@ class TestPoolGeneration:
         self, family: str, difficulty: int
     ) -> None:
         """Pool produces candidates at correct difficulty."""
-        candidates, stats = generate_pool(family, difficulty, seed=42, pool_size=200)
+        candidates, stats = generate_pool(
+            family, difficulty, seed=42, pool_size=200
+        )
         assert len(candidates) > 0, f"No candidates for {family} D{difficulty}"
         assert stats.candidates == len(candidates)
         assert stats.total_sampled == 200
@@ -779,7 +815,10 @@ class TestPoolGeneration:
         import genfxn.suites.generate as suite_generate
 
         def always_fail(
-            _family: str, _axes: object, _rng: random.Random, trace: object = None,
+            _family: str,
+            _axes: object,
+            _rng: random.Random,
+            trace: object = None,
         ) -> object:
             raise ValueError("forced sampler failure")
 
@@ -832,7 +871,10 @@ class TestDeterminism:
         monkeypatch.setattr(
             suite_generate,
             "generate_pool",
-            lambda *_: (fake_selected, PoolStats(candidates=len(fake_selected))),
+            lambda *_: (
+                fake_selected,
+                PoolStats(candidates=len(fake_selected)),
+            ),
         )
         monkeypatch.setattr(
             suite_generate,
@@ -859,8 +901,13 @@ class TestSuiteGenerationValidation:
             lambda: quota_report([], "bad_family", 3),
         ],
     )
-    def test_invalid_family_raises_value_error(self, call: object) -> None:
-        with pytest.raises(ValueError, match=r"Invalid family 'bad_family'.*Valid options:"):
+    def test_invalid_family_raises_value_error(
+        self, call: Callable[[], object]
+    ) -> None:
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid family 'bad_family'.*Valid options:",
+        ):
             call()
 
     @pytest.mark.parametrize(
@@ -871,7 +918,9 @@ class TestSuiteGenerationValidation:
             lambda: quota_report([], "stringrules", 999),
         ],
     )
-    def test_invalid_difficulty_raises_value_error(self, call: object) -> None:
+    def test_invalid_difficulty_raises_value_error(
+        self, call: Callable[[], object]
+    ) -> None:
         with pytest.raises(
             ValueError,
             match=(

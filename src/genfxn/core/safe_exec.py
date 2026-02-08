@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import atexit
 import ast
+import atexit
 import errno
 import multiprocessing as mp
 import os
+import pickle
 import signal
+import time
 from dataclasses import dataclass
 from queue import Empty
-from typing import Any
+from typing import Any, cast
 
 
 class SafeExecValidationError(ValueError):
@@ -34,6 +36,10 @@ class SafeExecMissingFunctionError(SafeExecExecutionError):
 
 class SafeExecBootstrapError(RuntimeError):
     """Raised when multiprocessing bootstrap requirements are not met."""
+
+
+class SafeExecTrustRequiredError(PermissionError):
+    """Raised when executing untrusted code without explicit trust opt-in."""
 
 
 @dataclass
@@ -210,6 +216,9 @@ def _set_memory_limit(memory_limit_mb: int | None) -> None:
 
 
 _SAFE_EXEC_START_METHOD_ENV = "GENFXN_SAFE_EXEC_START_METHOD"
+_DEFAULT_MAX_RESULT_BYTES = 1_000_000
+_RESULT_QUEUE_GRACE_SEC = 0.25
+_RESULT_QUEUE_POLL_SEC = 0.05
 
 
 def _is_spawn_bootstrap_error(exc: BaseException) -> bool:
@@ -245,12 +254,13 @@ def _get_mp_context() -> mp.context.BaseContext:
             )
         return mp.get_context(configured)
 
-    # Avoid spawn bootstrap fragility in normal POSIX script usage.
+    # Default to spawn/forkserver to avoid fork-safety issues in
+    # multi-threaded hosts.
     if os.name == "posix":
-        if "fork" in allowed:
-            return mp.get_context("fork")
         if "forkserver" in allowed:
             return mp.get_context("forkserver")
+        if "spawn" in allowed:
+            return mp.get_context("spawn")
     return mp.get_context("spawn")
 
 
@@ -260,6 +270,7 @@ def _exec_worker(
     allowed_builtins: dict[str, Any],
     call_args: tuple[Any, ...] | None,
     memory_limit_mb: int | None,
+    max_result_bytes: int | None,
 ) -> None:
     _set_process_group()
     _set_memory_limit(memory_limit_mb)
@@ -275,18 +286,64 @@ def _exec_worker(
             raise TypeError(f"Function 'f' is not callable: {type(func)}")
 
         if call_args is None:
-            queue.put(_WorkerResult(ok=True, value=None))
+            _put_worker_result(
+                queue,
+                _WorkerResult(ok=True, value=None),
+                max_result_bytes,
+            )
             return
 
-        queue.put(_WorkerResult(ok=True, value=func(*call_args)))
+        _put_worker_result(
+            queue,
+            _WorkerResult(ok=True, value=func(*call_args)),
+            max_result_bytes,
+        )
     except Exception as exc:
-        queue.put(
+        _put_worker_result(
+            queue,
             _WorkerResult(
                 ok=False,
                 error_type=type(exc).__name__,
                 error_message=str(exc),
-            )
+            ),
+            max_result_bytes,
         )
+
+
+def _put_worker_result(
+    queue: mp.Queue,
+    result: _WorkerResult,
+    max_result_bytes: int | None,
+) -> None:
+    if max_result_bytes is not None:
+        try:
+            payload = pickle.dumps(result, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception as exc:
+            queue.put(
+                _WorkerResult(
+                    ok=False,
+                    error_type="RuntimeError",
+                    error_message=(
+                        "Failed to serialize worker result: "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                )
+            )
+            return
+        payload_size = len(payload)
+        if payload_size > max_result_bytes:
+            queue.put(
+                _WorkerResult(
+                    ok=False,
+                    error_type="RuntimeError",
+                    error_message=(
+                        "Worker result exceeded max_result_bytes "
+                        f"({payload_size} > {max_result_bytes})"
+                    ),
+                )
+            )
+            return
+    queue.put(result)
 
 
 def _run_isolated(
@@ -295,14 +352,23 @@ def _run_isolated(
     call_args: tuple[Any, ...] | None,
     timeout_sec: float,
     memory_limit_mb: int | None,
+    max_result_bytes: int | None = _DEFAULT_MAX_RESULT_BYTES,
 ) -> Any:
     _validate_untrusted_code(code)
     ctx = _get_mp_context()
+    ctx_runtime = cast(Any, ctx)
     method = ctx.get_start_method()
-    queue: mp.Queue = ctx.Queue()
-    process = ctx.Process(
+    queue: mp.Queue = ctx_runtime.Queue()
+    process = ctx_runtime.Process(
         target=_exec_worker,
-        args=(queue, code, allowed_builtins, call_args, memory_limit_mb),
+        args=(
+            queue,
+            code,
+            allowed_builtins,
+            call_args,
+            memory_limit_mb,
+            max_result_bytes,
+        ),
     )
     try:
         process.start()
@@ -318,9 +384,18 @@ def _run_isolated(
             f"Code execution timed out after {timeout_sec} seconds"
         )
 
-    try:
-        result: _WorkerResult = queue.get(timeout=0.1)
-    except Empty:
+    deadline = time.monotonic() + _RESULT_QUEUE_GRACE_SEC
+    result: _WorkerResult | None = None
+    while result is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        timeout = min(_RESULT_QUEUE_POLL_SEC, remaining)
+        try:
+            result = queue.get(timeout=timeout)
+        except Empty:
+            continue
+    if result is None:
         if process.exitcode not in (None, 0):
             raise RuntimeError(
                 f"Execution worker crashed with exit code {process.exitcode}"
@@ -344,6 +419,7 @@ class _IsolatedFunction:
         allowed_builtins: dict[str, Any],
         timeout_sec: float,
         memory_limit_mb: int | None,
+        max_result_bytes: int | None = _DEFAULT_MAX_RESULT_BYTES,
     ) -> None:
         self._closed = False
         self._worker = _PersistentWorker(
@@ -351,6 +427,7 @@ class _IsolatedFunction:
             allowed_builtins=allowed_builtins,
             memory_limit_mb=memory_limit_mb,
             timeout_sec=timeout_sec,
+            max_result_bytes=max_result_bytes,
         )
         self._timeout_sec = timeout_sec
         atexit.register(self.close)
@@ -381,6 +458,7 @@ def _persistent_worker(
     code: str,
     allowed_builtins: dict[str, Any],
     memory_limit_mb: int | None,
+    max_result_bytes: int | None,
 ) -> None:
     _set_process_group()
     _set_memory_limit(memory_limit_mb)
@@ -394,14 +472,20 @@ def _persistent_worker(
             raise NameError("Function 'f' not found in code namespace")
         if not callable(func):
             raise TypeError(f"Function 'f' is not callable: {type(func)}")
-        response_queue.put(_WorkerResult(ok=True, value=None))
+        _put_worker_result(
+            response_queue,
+            _WorkerResult(ok=True, value=None),
+            max_result_bytes,
+        )
     except Exception as exc:
-        response_queue.put(
+        _put_worker_result(
+            response_queue,
             _WorkerResult(
                 ok=False,
                 error_type=type(exc).__name__,
                 error_message=str(exc),
-            )
+            ),
+            max_result_bytes,
         )
         return
 
@@ -410,25 +494,33 @@ def _persistent_worker(
         if req.kind == "shutdown":
             return
         if req.kind != "call":
-            response_queue.put(
+            _put_worker_result(
+                response_queue,
                 _WorkerResult(
                     ok=False,
                     error_type="RuntimeError",
                     error_message=f"Unknown request kind: {req.kind}",
-                )
+                ),
+                max_result_bytes,
             )
             continue
 
         try:
             args = req.call_args if req.call_args is not None else ()
-            response_queue.put(_WorkerResult(ok=True, value=func(*args)))
+            _put_worker_result(
+                response_queue,
+                _WorkerResult(ok=True, value=func(*args)),
+                max_result_bytes,
+            )
         except Exception as exc:
-            response_queue.put(
+            _put_worker_result(
+                response_queue,
                 _WorkerResult(
                     ok=False,
                     error_type=type(exc).__name__,
                     error_message=str(exc),
-                )
+                ),
+                max_result_bytes,
             )
 
 
@@ -449,12 +541,14 @@ class _PersistentWorker:
         allowed_builtins: dict[str, Any],
         memory_limit_mb: int | None,
         timeout_sec: float,
+        max_result_bytes: int | None = _DEFAULT_MAX_RESULT_BYTES,
     ) -> None:
         self._ctx = _get_mp_context()
+        ctx_runtime = cast(Any, self._ctx)
         self._start_method = self._ctx.get_start_method()
-        self._request_queue: mp.Queue = self._ctx.Queue()
-        self._response_queue: mp.Queue = self._ctx.Queue()
-        self._process = self._ctx.Process(
+        self._request_queue: mp.Queue = ctx_runtime.Queue()
+        self._response_queue: mp.Queue = ctx_runtime.Queue()
+        self._process = ctx_runtime.Process(
             target=_persistent_worker,
             args=(
                 self._request_queue,
@@ -462,6 +556,7 @@ class _PersistentWorker:
                 code,
                 allowed_builtins,
                 memory_limit_mb,
+                max_result_bytes,
             ),
         )
         try:
@@ -543,6 +638,9 @@ def execute_code_restricted(
     allowed_builtins: dict[str, Any],
     timeout_sec: float = 1.0,
     memory_limit_mb: int | None = 256,
+    *,
+    trust_untrusted_code: bool = False,
+    max_result_bytes: int | None = _DEFAULT_MAX_RESULT_BYTES,
 ) -> dict[str, Any]:
     """Execute untrusted code in a constrained subprocess and return namespace.
 
@@ -552,6 +650,12 @@ def execute_code_restricted(
     Important: this is defense-in-depth for robustness, not a true security
     sandbox. Do not run adversarial code without OS/container isolation.
     """
+    if not trust_untrusted_code:
+        raise SafeExecTrustRequiredError(
+            "Refusing to execute untrusted code without explicit trust. "
+            "Pass trust_untrusted_code=True only for trusted inputs."
+        )
+
     _validate_untrusted_code(code)
     return {
         "f": _IsolatedFunction(
@@ -559,5 +663,6 @@ def execute_code_restricted(
             allowed_builtins=allowed_builtins,
             timeout_sec=timeout_sec,
             memory_limit_mb=memory_limit_mb,
+            max_result_bytes=max_result_bytes,
         )
     }

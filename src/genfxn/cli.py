@@ -5,6 +5,7 @@ from typing import Annotated, Any, cast
 
 import srsly
 import typer
+from pydantic import TypeAdapter
 
 from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
@@ -13,11 +14,14 @@ from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
-from genfxn.piecewise.models import ExprType, PiecewiseAxes
+from genfxn.langs.registry import get_render_fn
+from genfxn.langs.types import Language
+from genfxn.piecewise.models import ExprType, PiecewiseAxes, PiecewiseSpec
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.simple_algorithms.models import (
     CountingMode,
     SimpleAlgorithmsAxes,
+    SimpleAlgorithmsSpec,
     TieBreakMode,
 )
 from genfxn.simple_algorithms.models import (
@@ -25,12 +29,18 @@ from genfxn.simple_algorithms.models import (
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.splits import AxisHoldout, HoldoutType
-from genfxn.stateful.models import StatefulAxes, TemplateType
+from genfxn.stateful.models import StatefulAxes, StatefulSpec, TemplateType
 from genfxn.stateful.task import generate_stateful_task
-from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
+from genfxn.stringrules.models import (
+    OverlapLevel,
+    StringRulesAxes,
+    StringRulesSpec,
+)
 from genfxn.stringrules.task import generate_stringrules_task
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
+_stateful_spec_adapter = TypeAdapter(StatefulSpec)
+_simple_algorithms_spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -94,11 +104,68 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
 
 def _count_nonempty_jsonl_lines(input_file: Path) -> int:
     count = 0
-    with input_file.open("r", encoding="utf-8") as handle:
+    with input_file.open("rb") as handle:
         for line in handle:
             if line.strip():
                 count += 1
     return count
+
+
+def _parse_single_language(language: str) -> Language:
+    tokens = [token.strip().lower() for token in language.split(",")]
+    parsed = [token for token in tokens if token]
+    if not parsed:
+        raise typer.BadParameter(
+            "Expected exactly one language value (python, java, or rust)."
+        )
+    if len(parsed) > 1:
+        raise typer.BadParameter(
+            "Expected exactly one language value (python, java, or rust); "
+            "comma-separated values are not supported."
+        )
+    if parsed[0] == "all":
+        raise typer.BadParameter(
+            "Language 'all' is not supported. "
+            "Choose one of: python, java, rust."
+        )
+    try:
+        return Language(parsed[0])
+    except ValueError as err:
+        raise typer.BadParameter(
+            f"Unknown language '{parsed[0]}'. "
+            "Expected one of: python, java, rust."
+        ) from err
+
+
+def _render_task_for_language(task: Task, language: Language) -> Task:
+    if language == Language.PYTHON:
+        return task
+
+    try:
+        render_fn = get_render_fn(language, task.family)
+    except (ImportError, ModuleNotFoundError, ValueError) as err:
+        raise typer.BadParameter(
+            f"Language '{language.value}' is not available for '{task.family}'."
+        ) from err
+
+    match task.family:
+        case "piecewise":
+            spec_obj = PiecewiseSpec.model_validate(task.spec, strict=True)
+        case "stateful":
+            spec_obj = _stateful_spec_adapter.validate_python(
+                task.spec, strict=True
+            )
+        case "simple_algorithms":
+            spec_obj = _simple_algorithms_spec_adapter.validate_python(
+                task.spec, strict=True
+            )
+        case "stringrules":
+            spec_obj = StringRulesSpec.model_validate(task.spec, strict=True)
+        case _:
+            raise typer.BadParameter(f"Unknown family: {task.family}")
+
+    rendered_code = render_fn(spec_obj, func_name="f")
+    return task.model_copy(update={"code": rendered_code})
 
 
 def _build_stateful_axes(
@@ -256,6 +323,14 @@ def generate(
     seed: Annotated[
         int | None, typer.Option("--seed", "-s", help="Random seed")
     ] = None,
+    language: Annotated[
+        str,
+        typer.Option(
+            "--language",
+            "-l",
+            help="Single language to render: python, java, or rust.",
+        ),
+    ] = "python",
     # Difficulty presets
     difficulty: Annotated[
         int | None,
@@ -381,7 +456,12 @@ def generate(
 ) -> None:
     """Generate tasks to JSONL file."""
     rng = random.Random(seed)
-    tasks: list[Task] = []
+    generated_count = 0
+    try:
+        selected_language = _parse_single_language(language)
+    except typer.BadParameter as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
 
     # Validate difficulty/variant options
     if difficulty is not None:
@@ -488,87 +568,95 @@ def generate(
             string_length_range=string_length_range,
         )
 
-    if family == "all":
-        # Split count as evenly as possible across all families.
-        family_order = [
-            "piecewise",
-            "stateful",
-            "simple_algorithms",
-            "stringrules",
-        ]
-        base = count // len(family_order)
-        remainder = count % len(family_order)
-        family_counts = {
-            fam: base + (1 if idx < remainder else 0)
-            for idx, fam in enumerate(family_order)
-        }
+    with output.open("w", encoding="utf-8") as output_handle:
 
-        for _ in range(family_counts["piecewise"]):
-            tasks.append(generate_piecewise_task(
-                axes=piecewise_axes, rng=rng,
-            ))
-        for _ in range(family_counts["stateful"]):
-            tasks.append(generate_stateful_task(
-                axes=stateful_axes, rng=rng,
-            ))
-        for _ in range(family_counts["simple_algorithms"]):
-            t = generate_simple_algorithms_task(
-                axes=simple_algo_axes, rng=rng,
-            )
-            tasks.append(t)
-        for _ in range(family_counts["stringrules"]):
-            task = generate_stringrules_task(
-                axes=stringrules_axes, rng=rng,
-            )
-            tasks.append(task)
-    elif family == "piecewise":
-        for _ in range(count):
-            if difficulty is not None:
-                axes = get_difficulty_axes(family, difficulty, variant, rng)
-            else:
-                axes = piecewise_axes
-            tasks.append(
-                generate_piecewise_task(
-                    axes=cast(PiecewiseAxes, axes), rng=rng,
-                )
-            )
-    elif family == "stateful":
-        for _ in range(count):
-            if difficulty is not None:
-                axes = get_difficulty_axes(family, difficulty, variant, rng)
-            else:
-                axes = stateful_axes
-            tasks.append(
-                generate_stateful_task(
-                    axes=cast(StatefulAxes, axes), rng=rng,
-                )
-            )
-    elif family == "simple_algorithms":
-        for _ in range(count):
-            if difficulty is not None:
-                axes = get_difficulty_axes(family, difficulty, variant, rng)
-            else:
-                axes = simple_algo_axes
-            t = generate_simple_algorithms_task(
-                axes=cast(SimpleAlgorithmsAxes, axes), rng=rng,
-            )
-            tasks.append(t)
-    elif family == "stringrules":
-        for _ in range(count):
-            if difficulty is not None:
-                axes = get_difficulty_axes(family, difficulty, variant, rng)
-            else:
-                axes = stringrules_axes
-            task = generate_stringrules_task(
-                axes=cast(StringRulesAxes, axes), rng=rng,
-            )
-            tasks.append(task)
-    else:
-        typer.echo(f"Unknown family: {family}", err=True)
-        raise typer.Exit(1)
+        def emit(task: Task) -> None:
+            nonlocal generated_count
+            rendered_task = _render_task_for_language(task, selected_language)
+            _write_task_line(output_handle, rendered_task)
+            generated_count += 1
 
-    srsly.write_jsonl(output, [t.model_dump() for t in tasks])
-    typer.echo(f"Generated {len(tasks)} tasks to {output}")
+        if family == "all":
+            # Split count as evenly as possible across all families.
+            family_order = [
+                "piecewise",
+                "stateful",
+                "simple_algorithms",
+                "stringrules",
+            ]
+            base = count // len(family_order)
+            remainder = count % len(family_order)
+            family_counts = {
+                fam: base + (1 if idx < remainder else 0)
+                for idx, fam in enumerate(family_order)
+            }
+
+            for _ in range(family_counts["piecewise"]):
+                emit(generate_piecewise_task(axes=piecewise_axes, rng=rng))
+            for _ in range(family_counts["stateful"]):
+                emit(generate_stateful_task(axes=stateful_axes, rng=rng))
+            for _ in range(family_counts["simple_algorithms"]):
+                emit(
+                    generate_simple_algorithms_task(
+                        axes=simple_algo_axes,
+                        rng=rng,
+                    )
+                )
+            for _ in range(family_counts["stringrules"]):
+                emit(generate_stringrules_task(axes=stringrules_axes, rng=rng))
+        elif family == "piecewise":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = piecewise_axes
+                emit(
+                    generate_piecewise_task(
+                        axes=cast(PiecewiseAxes, axes),
+                        rng=rng,
+                    )
+                )
+        elif family == "stateful":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = stateful_axes
+                emit(
+                    generate_stateful_task(
+                        axes=cast(StatefulAxes, axes),
+                        rng=rng,
+                    )
+                )
+        elif family == "simple_algorithms":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = simple_algo_axes
+                emit(
+                    generate_simple_algorithms_task(
+                        axes=cast(SimpleAlgorithmsAxes, axes),
+                        rng=rng,
+                    )
+                )
+        elif family == "stringrules":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = stringrules_axes
+                emit(
+                    generate_stringrules_task(
+                        axes=cast(StringRulesAxes, axes),
+                        rng=rng,
+                    )
+                )
+        else:
+            typer.echo(f"Unknown family: {family}", err=True)
+            raise typer.Exit(1)
+
+    typer.echo(f"Generated {generated_count} tasks to {output}")
 
 
 @app.command()
@@ -644,8 +732,8 @@ def split(
                 elif remaining_train == remaining_total:
                     send_to_train = True
                 else:
-                    send_to_train = (
-                        rng.random() < (remaining_train / remaining_total)
+                    send_to_train = rng.random() < (
+                        remaining_train / remaining_total
                     )
 
                 if send_to_train:

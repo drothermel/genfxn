@@ -1,4 +1,5 @@
 import random
+from typing import Any
 
 import pytest
 
@@ -29,8 +30,15 @@ from genfxn.simple_algorithms.validate import (
     _check_counting_mode_consistency,
     _validate_ast_whitelist,
     _validate_query_types,
-    validate_simple_algorithms_task,
 )
+from genfxn.simple_algorithms.validate import (
+    validate_simple_algorithms_task as _validate_simple_algorithms_task,
+)
+
+
+def validate_simple_algorithms_task(*args: Any, **kwargs: Any):
+    kwargs.setdefault("execute_untrusted_code", True)
+    return _validate_simple_algorithms_task(*args, **kwargs)
 
 
 @pytest.fixture
@@ -87,17 +95,13 @@ class TestSpecDeserialization:
 class TestCodeCompilation:
     def test_syntax_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    return ("}
-        )
+        corrupted = task.model_copy(update={"code": "def f(xs):\n    return ("})
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
 
     def test_exec_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "raise ValueError('boom')"}
-        )
+        corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
         issues = validate_simple_algorithms_task(corrupted)
         assert any(
             i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
@@ -105,11 +109,41 @@ class TestCodeCompilation:
 
     def test_missing_func_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "def g(xs):\n    return 0"}
-        )
+        corrupted = task.model_copy(update={"code": "def g(xs):\n    return 0"})
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
+
+    def test_python_code_map_validates_python_entry(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        assert isinstance(task.code, str)
+        mapped = task.model_copy(
+            update={
+                "code": {
+                    "python": task.code,
+                    "java": "public static int f(int[] xs) { return 0; }",
+                }
+            }
+        )
+        issues = validate_simple_algorithms_task(mapped)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
+    def test_non_python_code_map_skips_python_validation(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        mapped = task.model_copy(
+            update={
+                "code": {
+                    "java": "public static int f(int[] xs) { return 0; }"
+                }
+            }
+        )
+        issues = validate_simple_algorithms_task(mapped)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+        assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert not any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
 
 class TestCodeRuntime:
@@ -198,6 +232,16 @@ class TestHelperLevelValidation:
         issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
+    def test_ast_whitelist_allows_annotation_names(self) -> None:
+        code = "def f(xs: list[int]) -> int:\n    return 0"
+        issues, _ = _validate_ast_whitelist(code)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_rejects_dunder_attribute_read(self) -> None:
+        code = "def f(xs):\n    return xs.__class__"
+        issues, _ = _validate_ast_whitelist(code)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
 
 class TestQueryOutputValidation:
     def test_wrong_output_caught(self, baseline_task) -> None:
@@ -216,9 +260,7 @@ class TestQueryOutputValidation:
 class TestSemanticValidation:
     def test_code_differing_from_spec_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    return 0"}
-        )
+        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
         issues = validate_simple_algorithms_task(corrupted)
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
 
@@ -257,9 +299,7 @@ class TestSemanticIssueCapping:
 
     def test_custom_cap_respected(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "def f(xs):\n    return 0"}
-        )
+        corrupted = task.model_copy(update={"code": "def f(xs):\n    return 0"})
         issues = validate_simple_algorithms_task(
             corrupted, max_semantic_issues=3
         )

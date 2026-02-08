@@ -1,4 +1,5 @@
 import random
+from typing import Any
 
 import pytest
 
@@ -41,8 +42,15 @@ from genfxn.stringrules.validate import (
     _validate_ast_whitelist,
     _validate_query_types,
     _validate_rule_diagnostics,
-    validate_stringrules_task,
 )
+from genfxn.stringrules.validate import (
+    validate_stringrules_task as _validate_stringrules_task,
+)
+
+
+def validate_stringrules_task(*args: Any, **kwargs: Any):
+    kwargs.setdefault("execute_untrusted_code", True)
+    return _validate_stringrules_task(*args, **kwargs)
 
 
 @pytest.fixture
@@ -97,17 +105,37 @@ class TestSpecDeserialization:
 class TestCodeCompilation:
     def test_syntax_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(update={"code": "def f(s):\n    return ("})
+        issues = validate_stringrules_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
+    def test_python_code_in_map_syntax_error_caught(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": "def f(s):\n    return ("}
+            update={"code": {"python": "def f(s):\n    return ("}}
         )
         issues = validate_stringrules_task(corrupted)
         assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
 
-    def test_exec_error_caught(self, baseline_task) -> None:
+    def test_non_python_code_map_skips_python_parse_error(
+        self, baseline_task
+    ) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
-            update={"code": "raise ValueError('boom')"}
+            update={
+                "code": {
+                    "java": "public static String f(String s) { return s; }"
+                }
+            }
         )
+        issues = validate_stringrules_task(corrupted)
+        assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
+    def test_exec_error_caught(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})
         issues = validate_stringrules_task(corrupted)
         assert any(
             i.code in {CODE_CODE_EXEC_ERROR, CODE_UNSAFE_AST} for i in issues
@@ -115,9 +143,7 @@ class TestCodeCompilation:
 
     def test_missing_func_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
-        corrupted = task.model_copy(
-            update={"code": "def g(s):\n    return s"}
-        )
+        corrupted = task.model_copy(update={"code": "def g(s):\n    return s"})
         issues = validate_stringrules_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
@@ -176,6 +202,10 @@ class TestHelperLevelValidation:
 
     def test_ast_whitelist_helper_without_execution(self) -> None:
         issues, _ = _validate_ast_whitelist("import os\ndef f(s): return s")
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_rejects_dunder_attribute_read(self) -> None:
+        issues, _ = _validate_ast_whitelist("def f(s):\n    return s.__class__")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
 
@@ -390,9 +420,7 @@ class TestDiagnostics:
             overlap_level=OverlapLevel.HIGH,
         )
 
-        issues = _validate_rule_diagnostics(
-            task, spec, axes, random.Random(42)
-        )
+        issues = _validate_rule_diagnostics(task, spec, axes, random.Random(42))
         assert any(
             i.code == CODE_INVALID_CHARSET
             and i.severity == Severity.ERROR

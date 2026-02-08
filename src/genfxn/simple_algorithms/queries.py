@@ -103,6 +103,8 @@ def _fit_length_bounds(
     target_len = min(max(len(values), lower), len_hi)
     if target_len <= 0:
         return []
+    if not values:
+        return None
     if len(values) >= target_len:
         return values[:target_len]
     repeats = (target_len + len(values) - 1) // len(values)
@@ -114,25 +116,37 @@ def _generate_most_frequent_queries(
 ) -> list[Query]:
     queries: list[Query] = []
     lo, hi = axes.value_range
+    length_bounds = axes.list_length_range
 
     # Empty list - edge case
-    queries.append(
-        Query(input=[], output=spec.empty_default, tag=QueryTag.COVERAGE)
-    )
+    empty = _fit_length_bounds([], length_bounds, min_len=0)
+    if empty is not None:
+        queries.append(
+            Query(
+                input=empty,
+                output=eval_simple_algorithms(spec, empty),
+                tag=QueryTag.COVERAGE,
+            )
+        )
 
     # Single element
-    single = [rng.randint(lo, hi)]
-    queries.append(
-        Query(
-            input=single,
-            output=eval_simple_algorithms(spec, single),
-            tag=QueryTag.COVERAGE,
+    single = _fit_length_bounds([rng.randint(lo, hi)], length_bounds, min_len=1)
+    if single is not None:
+        queries.append(
+            Query(
+                input=single,
+                output=eval_simple_algorithms(spec, single),
+                tag=QueryTag.COVERAGE,
+            )
         )
-    )
 
     # All unique - tests tie break
-    unique_vals = list(range(lo, min(lo + 5, hi + 1)))
-    if unique_vals:
+    unique_vals = _fit_length_bounds(
+        list(range(lo, min(lo + 5, hi + 1))),
+        length_bounds,
+        min_len=1,
+    )
+    if unique_vals is not None:
         queries.append(
             Query(
                 input=unique_vals,
@@ -145,63 +159,80 @@ def _generate_most_frequent_queries(
     three_vals = _distinct_in_range(lo, hi, 3)
     if len(three_vals) >= 3:
         a, b, c = three_vals[0], three_vals[1], three_vals[2]
-        clear_winner = [a, a, a, b, c]
-        queries.append(
-            Query(
-                input=clear_winner,
-                output=eval_simple_algorithms(spec, clear_winner),
-                tag=QueryTag.TYPICAL,
-            )
+        clear_winner = _fit_length_bounds(
+            [a, a, a, b, c],
+            length_bounds,
+            min_len=1,
         )
+        if clear_winner is not None:
+            queries.append(
+                Query(
+                    input=clear_winner,
+                    output=eval_simple_algorithms(spec, clear_winner),
+                    tag=QueryTag.TYPICAL,
+                )
+            )
 
     # Tie between values - tests tie_break semantics
     # [b,a,b,a] vs [a,b,a,b] - first_seen differs; need 2 distinct in [lo, hi]
     two_vals = _distinct_in_range(lo, hi, 2)
     if len(two_vals) >= 2:
         a, b = two_vals[0], two_vals[1]
-        tie_a = [b, a, b, a]
-        tie_b = [a, b, a, b]
-        queries.append(
-            Query(
-                input=tie_a,
-                output=eval_simple_algorithms(spec, tie_a),
-                tag=QueryTag.BOUNDARY,
+        tie_a = _fit_length_bounds([b, a, b, a], length_bounds, min_len=2)
+        tie_b = _fit_length_bounds([a, b, a, b], length_bounds, min_len=2)
+        if tie_a is not None:
+            queries.append(
+                Query(
+                    input=tie_a,
+                    output=eval_simple_algorithms(spec, tie_a),
+                    tag=QueryTag.BOUNDARY,
+                )
             )
-        )
-        queries.append(
-            Query(
-                input=tie_b,
-                output=eval_simple_algorithms(spec, tie_b),
-                tag=QueryTag.BOUNDARY,
+        if tie_b is not None:
+            queries.append(
+                Query(
+                    input=tie_b,
+                    output=eval_simple_algorithms(spec, tie_b),
+                    tag=QueryTag.BOUNDARY,
+                )
             )
-        )
 
     # Multi-way tie (3 distinct values, each 2x)
     three_for_tie = _distinct_in_range(lo, hi, 3)
     if len(three_for_tie) >= 3:
         a, b, c = three_for_tie[0], three_for_tie[1], three_for_tie[2]
-        multi_tie = [a, b, c, a, b, c]
-        queries.append(
-            Query(
-                input=multi_tie,
-                output=eval_simple_algorithms(spec, multi_tie),
-                tag=QueryTag.ADVERSARIAL,
-            )
+        multi_tie = _fit_length_bounds(
+            [a, b, c, a, b, c],
+            length_bounds,
+            min_len=2,
         )
+        if multi_tie is not None:
+            queries.append(
+                Query(
+                    input=multi_tie,
+                    output=eval_simple_algorithms(spec, multi_tie),
+                    tag=QueryTag.ADVERSARIAL,
+                )
+            )
 
     # All same value (within [lo, hi])
     mid = _mid(lo, hi)
-    all_same = [mid, mid, mid, mid]
-    queries.append(
-        Query(
-            input=all_same,
-            output=eval_simple_algorithms(spec, all_same),
-            tag=QueryTag.TYPICAL,
-        )
+    all_same = _fit_length_bounds(
+        [mid, mid, mid, mid],
+        length_bounds,
+        min_len=1,
     )
+    if all_same is not None:
+        queries.append(
+            Query(
+                input=all_same,
+                output=eval_simple_algorithms(spec, all_same),
+                tag=QueryTag.TYPICAL,
+            )
+        )
 
     # Typical random
-    len_lo, len_hi = axes.list_length_range
+    len_lo, len_hi = length_bounds
     for _ in range(2):
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
@@ -222,25 +253,30 @@ def _generate_count_pairs_queries(
     queries: list[Query] = []
     target = spec.target
     lo, hi = axes.value_range
+    length_bounds = axes.list_length_range
 
     # Empty list
-    queries.append(
-        Query(
-            input=[],
-            output=eval_simple_algorithms(spec, []),
-            tag=QueryTag.COVERAGE,
+    empty = _fit_length_bounds([], length_bounds, min_len=0)
+    if empty is not None:
+        queries.append(
+            Query(
+                input=empty,
+                output=eval_simple_algorithms(spec, empty),
+                tag=QueryTag.COVERAGE,
+            )
         )
-    )
 
     # Single element - no pairs (value in [lo, hi])
     single_val = _clamp(target // 2, lo, hi)
-    queries.append(
-        Query(
-            input=[single_val],
-            output=eval_simple_algorithms(spec, [single_val]),
-            tag=QueryTag.COVERAGE,
+    single = _fit_length_bounds([single_val], length_bounds, min_len=1)
+    if single is not None:
+        queries.append(
+            Query(
+                input=single,
+                output=eval_simple_algorithms(spec, single),
+                tag=QueryTag.COVERAGE,
+            )
         )
-    )
 
     # Two elements that sum to target (both in [lo, hi])
     pair_lo = max(lo, target - hi)
@@ -248,14 +284,19 @@ def _generate_count_pairs_queries(
     if pair_lo <= pair_hi:
         half = (pair_lo + pair_hi) // 2
         other_half = target - half
-        pair_list = [half, other_half]
-        queries.append(
-            Query(
-                input=pair_list,
-                output=eval_simple_algorithms(spec, pair_list),
-                tag=QueryTag.BOUNDARY,
-            )
+        pair_list = _fit_length_bounds(
+            [half, other_half],
+            length_bounds,
+            min_len=2,
         )
+        if pair_list is not None:
+            queries.append(
+                Query(
+                    input=pair_list,
+                    output=eval_simple_algorithms(spec, pair_list),
+                    tag=QueryTag.BOUNDARY,
+                )
+            )
 
     # Two elements that don't sum to target (both in [lo, hi])
     two_distinct = _distinct_in_range(lo, hi, 3)
@@ -264,14 +305,19 @@ def _generate_count_pairs_queries(
         if na + nb == target and len(two_distinct) >= 3:
             nb = two_distinct[2]
         if na + nb != target:
-            no_pair = [na, nb]
-            queries.append(
-                Query(
-                    input=no_pair,
-                    output=eval_simple_algorithms(spec, no_pair),
-                    tag=QueryTag.BOUNDARY,
-                )
+            no_pair = _fit_length_bounds(
+                [na, nb],
+                length_bounds,
+                min_len=2,
             )
+            if no_pair is not None:
+                queries.append(
+                    Query(
+                        input=no_pair,
+                        output=eval_simple_algorithms(spec, no_pair),
+                        tag=QueryTag.BOUNDARY,
+                    )
+                )
 
     # Duplicates - distinguishes ALL_INDICES from UNIQUE_VALUES
     # [v, v, target-v] -> ALL_INDICES=2 pairs, UNIQUE_VALUES=1
@@ -279,40 +325,55 @@ def _generate_count_pairs_queries(
     dup_v_hi = min(hi, target - lo)
     if dup_v_lo <= dup_v_hi:
         v = (dup_v_lo + dup_v_hi) // 2
-        dups = [v, v, target - v]
-        queries.append(
-            Query(
-                input=dups,
-                output=eval_simple_algorithms(spec, dups),
-                tag=QueryTag.ADVERSARIAL,
-            )
+        dups = _fit_length_bounds(
+            [v, v, target - v],
+            length_bounds,
+            min_len=3,
         )
+        if dups is not None:
+            queries.append(
+                Query(
+                    input=dups,
+                    output=eval_simple_algorithms(spec, dups),
+                    tag=QueryTag.ADVERSARIAL,
+                )
+            )
 
     # More duplicates: [a, a, b, b] where a+b=target (a, b in [lo, hi])
     if pair_lo <= pair_hi:
         a = (pair_lo + pair_hi) // 2
         b = target - a
-        more_dups = [a, a, b, b]
-        queries.append(
-            Query(
-                input=more_dups,
-                output=eval_simple_algorithms(spec, more_dups),
-                tag=QueryTag.ADVERSARIAL,
-            )
+        more_dups = _fit_length_bounds(
+            [a, a, b, b],
+            length_bounds,
+            min_len=4,
         )
+        if more_dups is not None:
+            queries.append(
+                Query(
+                    input=more_dups,
+                    output=eval_simple_algorithms(spec, more_dups),
+                    tag=QueryTag.ADVERSARIAL,
+                )
+            )
 
     # Self-pairing: target=2v -> [v,v,v] (only when target//2 in [lo, hi])
     if target % 2 == 0:
         self_val = target // 2
         if lo <= self_val <= hi:
-            self_pairs = [self_val, self_val, self_val]
-            queries.append(
-                Query(
-                    input=self_pairs,
-                    output=eval_simple_algorithms(spec, self_pairs),
-                    tag=QueryTag.ADVERSARIAL,
-                )
+            self_pairs = _fit_length_bounds(
+                [self_val, self_val, self_val],
+                length_bounds,
+                min_len=3,
             )
+            if self_pairs is not None:
+                queries.append(
+                    Query(
+                        input=self_pairs,
+                        output=eval_simple_algorithms(spec, self_pairs),
+                        tag=QueryTag.ADVERSARIAL,
+                    )
+                )
 
     # No pairs: explicitly enforce zero valid pair sums after preprocessing.
     no_pairs = _find_no_pairs_input(spec, axes, rng)

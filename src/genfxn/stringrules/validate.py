@@ -46,6 +46,7 @@ CODE_INVALID_CHARSET = "INVALID_CHARSET"
 CURRENT_FAMILY = "stringrules"
 
 DEFAULT_MAX_SEMANTIC_ISSUES = 10
+PYTHON_CODE_KEY = "python"
 
 _spec_adapter = TypeAdapter(StringRulesSpec)
 _axes_adapter = TypeAdapter(StringRulesAxes)
@@ -87,7 +88,7 @@ def _validate_ast_whitelist(
 
     try:
         tree = ast.parse(code)
-    except SyntaxError:
+    except (SyntaxError, TypeError):
         return [], None
 
     annotation_positions = _annotation_positions(tree)
@@ -179,6 +180,32 @@ def _validate_ast_whitelist(
         # Name check: only Load-context names (runtime use). Names in type
         # annotations (e.g. def f(s: str) -> str:) are allowed if in
         # ALLOWED_ANNOTATION_NAMES.
+        elif isinstance(node, ast.Attribute):
+            attr = node.attr
+            if attr.startswith("__") and attr.endswith("__"):
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
+            elif attr not in ALLOWED_METHOD_NAMES:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             in_annotation = (
                 node.lineno,
@@ -238,23 +265,46 @@ def _validate_spec_deserialize(
 
 def _validate_code_compile(
     task: Task,
+    code: str | None = None,
+    parsed_tree: ast.Module | None = None,
+    execute_untrusted_code: bool = True,
 ) -> tuple[list[Issue], Callable[[str], str] | None]:
-    try:
-        ast.parse(task.code)
-    except SyntaxError as e:
-        return [
-            Issue(
-                code=CODE_CODE_PARSE_ERROR,
-                severity=Severity.ERROR,
-                message=f"Syntax error in code: {e}",
-                location="code",
-                task_id=task.task_id,
-            )
-        ], None
+    if code is None:
+        if isinstance(task.code, str):
+            code = task.code
+        elif isinstance(task.code, dict):
+            code = task.code.get(PYTHON_CODE_KEY)
+
+    # Multi-language maps without Python source are valid inputs for this
+    # validator; skip code compile/exec validation in that case.
+    if code is None:
+        return [], None
+
+    if parsed_tree is None:
+        try:
+            parsed_tree = ast.parse(code)
+        except SyntaxError as e:
+            return [
+                Issue(
+                    code=CODE_CODE_PARSE_ERROR,
+                    severity=Severity.ERROR,
+                    message=f"Syntax error in code: {e}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
+    _ = parsed_tree
+
+    if not execute_untrusted_code:
+        return [], None
 
     namespace: dict[str, object]
     try:
-        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+        namespace = execute_code_restricted(
+            code,
+            _ALLOWED_BUILTINS,
+            trust_untrusted_code=True,
+        )
     except SafeExecMissingFunctionError as e:
         return [
             Issue(
@@ -497,13 +547,17 @@ def _validate_rule_diagnostics(
         )
         return issues
 
+    first_match_by_candidate = {
+        s: _first_matching_rule_index(spec, s) for s in candidates
+    }
+
     for i, rule in enumerate(spec.rules):
         reachable = False
         blockers: set[int] = set()
         for s in candidates:
             if not eval_string_predicate(rule.predicate, s):
                 continue
-            first_index = _first_matching_rule_index(spec, s)
+            first_index = first_match_by_candidate[s]
             if first_index == i:
                 reachable = True
                 break
@@ -539,6 +593,7 @@ def validate_stringrules_task(
     emit_diagnostics: bool = True,  # noqa: ARG001 - kept for API parity
     paranoid: bool = False,
     rng: random.Random | None = None,
+    execute_untrusted_code: bool = False,
 ) -> list[Issue]:
     """Validate a stringrules task for correctness.
 
@@ -551,6 +606,8 @@ def validate_stringrules_task(
         emit_diagnostics: Emit non-fatal spec diagnostics.
         paranoid: Deprecated; AST whitelist validation is always enforced.
         rng: Random generator for semantic testing. Random(42) if None.
+        execute_untrusted_code: If True, execute task code in the restricted
+            runner to obtain ``f`` for semantic validation.
 
     Returns:
         List of validation issues found.
@@ -601,12 +658,25 @@ def validate_stringrules_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    ast_issues, _ = _validate_ast_whitelist(task.code)
-    if ast_issues:
-        issues.extend(ast_issues)
-        return issues
+    tree: ast.Module | None = None
+    code_to_validate: str | None = None
+    if isinstance(task.code, str):
+        code_to_validate = task.code
+    elif isinstance(task.code, dict):
+        code_to_validate = task.code.get(PYTHON_CODE_KEY)
 
-    code_issues, func = _validate_code_compile(task)
+    if code_to_validate is not None:
+        ast_issues, tree = _validate_ast_whitelist(code_to_validate)
+        if ast_issues:
+            issues.extend(ast_issues)
+            return issues
+
+    code_issues, func = _validate_code_compile(
+        task,
+        code=code_to_validate,
+        parsed_tree=tree,
+        execute_untrusted_code=execute_untrusted_code,
+    )
     issues.extend(code_issues)
 
     issues.extend(_validate_query_types(task, strict))
@@ -614,13 +684,14 @@ def validate_stringrules_task(
     if spec is not None:
         issues.extend(_validate_query_outputs(task, spec))
 
-    if spec is not None and func is not None:
+    if func is not None:
         try:
-            issues.extend(
-                _validate_semantics(
-                    task, func, spec, axes, max_semantic_issues, rng
+            if spec is not None:
+                issues.extend(
+                    _validate_semantics(
+                        task, func, spec, axes, max_semantic_issues, rng
+                    )
                 )
-            )
         finally:
             close = getattr(func, "close", None)
             if callable(close):

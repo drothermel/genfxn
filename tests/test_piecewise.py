@@ -227,6 +227,7 @@ class TestTaskGeneration:
         assert task.task_id.startswith("piecewise_")
         assert len(task.queries) > 0
 
+        assert isinstance(task.code, str)
         namespace: dict = {}
         exec(task.code, namespace)  # noqa: S102
         f = namespace["f"]

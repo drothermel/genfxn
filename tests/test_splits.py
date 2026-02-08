@@ -420,6 +420,12 @@ class TestRandomSplit:
         train_ids = {t.task_id for t in result.train}
         assert train_ids != original_first_40_ids
 
+    def test_in_place_shuffle_updates_input_order(self) -> None:
+        tasks = [_make_task(f"t{i}", {"x": i}) for i in range(20)]
+        original_order = [t.task_id for t in tasks]
+        random_split(tasks, train_ratio=0.5, seed=42, in_place=True)
+        assert [t.task_id for t in tasks] != original_order
+
     def test_contains_holdout_non_iterable_value_does_not_raise(self) -> None:
         tasks = [
             _make_task("t1", {"threshold": 5}),

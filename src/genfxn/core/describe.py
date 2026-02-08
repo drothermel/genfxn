@@ -431,8 +431,7 @@ def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
             "value."
         )
         empty_clause = (
-            f"If the list is empty after preprocessing, return "
-            f"{default_text}."
+            f"If the list is empty after preprocessing, return {default_text}."
         )
         return _join_description_parts(
             intro,
@@ -463,13 +462,10 @@ def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
             no_result_text = _format_number(no_result_default)
             if short_list_default is not None:
                 default_clause += (
-                    " "
-                    f"Otherwise, if no pairs match, return {no_result_text}."
+                    f" Otherwise, if no pairs match, return {no_result_text}."
                 )
             else:
-                default_clause = (
-                    f"If no pairs match, return {no_result_text}."
-                )
+                default_clause = f"If no pairs match, return {no_result_text}."
 
         intro = (
             f"Given a list of integers, count the number of pairs that sum to "

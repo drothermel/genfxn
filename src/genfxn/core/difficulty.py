@@ -30,7 +30,7 @@ def _piecewise_difficulty(spec: dict[str, Any]) -> int:
     branches = spec.get("branches", [])
     default_expr = spec.get("default_expr", {})
 
-    n_branches = len(branches) + 1
+    n_branches = max(1, len(branches))
     branch_score = min(n_branches, 5)
 
     branch_exprs = [b.get("expr") for b in branches]
@@ -49,7 +49,11 @@ def _piecewise_difficulty(spec: dict[str, Any]) -> int:
         coeff_score = 1
 
     w = PIECEWISE_WEIGHTS
-    raw = w["branches"] * branch_score + w["expr_type"] * expr_score + w["coeff"] * coeff_score
+    raw = (
+        w["branches"] * branch_score
+        + w["expr_type"] * expr_score
+        + w["coeff"] * coeff_score
+    )
     return max(1, min(5, round(raw)))
 
 
@@ -121,7 +125,11 @@ def _stateful_difficulty(spec: dict[str, Any]) -> int:
         transform_score = 1
 
     w = STATEFUL_WEIGHTS
-    raw = w["template"] * template_score + w["predicate"] * pred_score + w["transform"] * transform_score
+    raw = (
+        w["template"] * template_score
+        + w["predicate"] * pred_score
+        + w["transform"] * transform_score
+    )
     return max(1, min(5, round(raw)))
 
 
@@ -287,7 +295,11 @@ def _simple_algorithms_difficulty(spec: dict[str, Any]) -> int:
     edge_score = 1 + edge_count
 
     w = SIMPLE_ALGORITHMS_WEIGHTS
-    raw = w["template"] * template_score + w["mode"] * mode_score + w["edge"] * edge_score
+    raw = (
+        w["template"] * template_score
+        + w["mode"] * mode_score
+        + w["edge"] * edge_score
+    )
     return max(1, min(5, round(raw)))
 
 
@@ -326,7 +338,11 @@ def _stringrules_difficulty(spec: dict[str, Any]) -> int:
     trans_score = sum(trans_scores) / len(trans_scores) if trans_scores else 1
 
     w = STRINGRULES_WEIGHTS
-    raw = w["rules"] * rule_score + w["predicate"] * pred_score + w["transform"] * trans_score
+    raw = (
+        w["rules"] * rule_score
+        + w["predicate"] * pred_score
+        + w["transform"] * trans_score
+    )
     return max(1, min(5, round(raw)))
 
 

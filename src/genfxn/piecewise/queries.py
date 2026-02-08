@@ -104,5 +104,3 @@ def _get_coverage_points(spec: PiecewiseSpec, lo: int, hi: int) -> list[int]:
         points.append((last_thresh + hi) // 2)
 
     return [p for p in points if lo <= p <= hi]
-
-

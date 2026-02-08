@@ -285,6 +285,25 @@ class TestPresetVariety:
             "Different variants should have different configurations"
         )
 
+    def test_piecewise_difficulty4_variants_differ(self) -> None:
+        axes_a = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 4, variant="4A"),
+        )
+        axes_b = cast(
+            PiecewiseAxes,
+            get_difficulty_axes("piecewise", 4, variant="4B"),
+        )
+
+        differs = (
+            axes_a.n_branches != axes_b.n_branches
+            or axes_a.expr_types != axes_b.expr_types
+            or axes_a.coeff_range != axes_b.coeff_range
+        )
+        assert differs, (
+            "piecewise difficulty-4 variants 4A and 4B should differ"
+        )
+
 
 class TestPresetCompleteness:
     """Test that preset dictionaries are well-formed."""

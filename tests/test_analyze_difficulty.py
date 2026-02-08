@@ -4,9 +4,7 @@ from pathlib import Path
 from typing import Any, cast
 
 _SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "analyze_difficulty.py"
+    Path(__file__).resolve().parents[1] / "scripts" / "analyze_difficulty.py"
 )
 _SCRIPT_NS = runpy.run_path(str(_SCRIPT))
 analyze_family = cast(Callable[[str], Any], _SCRIPT_NS["analyze_family"])

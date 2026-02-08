@@ -35,6 +35,7 @@ CODE_SEMANTIC_ISSUES_CAPPED = "SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "UNSAFE_AST"
 CURRENT_FAMILY = "stateful"
+PYTHON_CODE_KEY = "python"
 
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
 _ALLOWED_BUILTINS = {
@@ -61,7 +62,7 @@ def _validate_ast_whitelist(
 
     try:
         tree = ast.parse(code)
-    except SyntaxError:
+    except (SyntaxError, TypeError):
         return [], None  # Let _validate_code_compile handle syntax errors
 
     issues: list[Issue] = []
@@ -165,23 +166,46 @@ def _validate_spec_deserialize(
 
 def _validate_code_compile(
     task: Task,
+    code: str | None = None,
+    parsed_tree: ast.Module | None = None,
+    execute_untrusted_code: bool = True,
 ) -> tuple[list[Issue], Callable[[list[int]], int] | None]:
-    try:
-        ast.parse(task.code)
-    except SyntaxError as e:
-        return [
-            Issue(
-                code=CODE_CODE_PARSE_ERROR,
-                severity=Severity.ERROR,
-                message=f"Syntax error in code: {e}",
-                location="code",
-                task_id=task.task_id,
-            )
-        ], None
+    if code is None:
+        if isinstance(task.code, str):
+            code = task.code
+        elif isinstance(task.code, dict):
+            code = task.code.get(PYTHON_CODE_KEY)
+
+    # Multi-language maps without Python source are valid inputs for this
+    # validator; skip code compile/exec validation in that case.
+    if code is None:
+        return [], None
+
+    if parsed_tree is None:
+        try:
+            parsed_tree = ast.parse(code)
+        except SyntaxError as e:
+            return [
+                Issue(
+                    code=CODE_CODE_PARSE_ERROR,
+                    severity=Severity.ERROR,
+                    message=f"Syntax error in code: {e}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
+    _ = parsed_tree
+
+    if not execute_untrusted_code:
+        return [], None
 
     namespace: dict[str, object]
     try:
-        namespace = execute_code_restricted(task.code, _ALLOWED_BUILTINS)
+        namespace = execute_code_restricted(
+            code,
+            _ALLOWED_BUILTINS,
+            trust_untrusted_code=True,
+        )
     except SafeExecMissingFunctionError as e:
         return [
             Issue(
@@ -389,6 +413,7 @@ def validate_stateful_task(
     emit_diagnostics: bool = True,  # noqa: ARG001 - kept for API parity
     paranoid: bool = False,
     rng: random.Random | None = None,
+    execute_untrusted_code: bool = False,
 ) -> list[Issue]:
     """Validate a stateful task for correctness.
 
@@ -431,12 +456,25 @@ def validate_stateful_task(
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)
 
-    ast_issues, _ = _validate_ast_whitelist(task.code)
-    if ast_issues:
-        issues.extend(ast_issues)
-        return issues  # Bail early, don't exec unsafe code
+    tree: ast.Module | None = None
+    code_to_validate: str | None = None
+    if isinstance(task.code, str):
+        code_to_validate = task.code
+    elif isinstance(task.code, dict):
+        code_to_validate = task.code.get(PYTHON_CODE_KEY)
 
-    code_issues, func = _validate_code_compile(task)
+    if code_to_validate is not None:
+        ast_issues, tree = _validate_ast_whitelist(code_to_validate)
+        if ast_issues:
+            issues.extend(ast_issues)
+            return issues  # Bail early, don't exec unsafe code
+
+    code_issues, func = _validate_code_compile(
+        task,
+        code=code_to_validate,
+        parsed_tree=tree,
+        execute_untrusted_code=execute_untrusted_code,
+    )
     issues.extend(code_issues)
 
     issues.extend(_validate_query_types(task, strict))
@@ -444,13 +482,14 @@ def validate_stateful_task(
     if spec is not None:
         issues.extend(_validate_query_outputs(task, spec))
 
-    if spec is not None and func is not None:
+    if func is not None:
         try:
-            issues.extend(
-                _validate_semantics(
-                    task, func, spec, axes, max_semantic_issues, rng
+            if spec is not None:
+                issues.extend(
+                    _validate_semantics(
+                        task, func, spec, axes, max_semantic_issues, rng
+                    )
                 )
-            )
         finally:
             close = getattr(func, "close", None)
             if callable(close):

@@ -1,6 +1,9 @@
 # genfxn
 
-Synthetic function dataset generator for code reasoning research. Generates executable Python functions with structured test cases across four function families.
+Synthetic function dataset generator for code reasoning research. Generates
+executable function tasks with structured test cases across four function
+families. CLI output is single-language (Python by default, or Java/Rust via
+`--language`).
 
 ## Installation
 
@@ -104,6 +107,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-s, --seed INT` | Random seed for reproducibility |
+| `-l, --language` | Single language output: `python`, `java`, or `rust` |
 
 ### Piecewise Options
 
@@ -164,6 +168,9 @@ genfxn generate -o tasks.jsonl -f all -n 100
 # Generate with seed for reproducibility
 genfxn generate -o tasks.jsonl -f stateful -n 50 -s 42
 
+# Generate Java output
+genfxn generate -o tasks_java.jsonl -f piecewise -n 25 --language java
+
 # Only longest_run with small lists
 genfxn generate -o tasks.jsonl -f stateful -n 50 \
     --templates longest_run --list-length-range 3,10
@@ -192,7 +199,7 @@ Each generated task contains:
     "task_id": "sha256-hash",
     "family": "stateful",
     "spec": { ... },           # Structured specification
-    "code": "def f(xs): ...",  # Executable Python
+    "code": "def f(xs): ...",  # Executable code for selected language
     "queries": [               # Test cases
         {"input": [1, 2, 3], "output": 6, "tag": "COVERAGE"},
         {"input": [], "output": 0, "tag": "BOUNDARY"},
@@ -216,6 +223,17 @@ print(task.code)
 print(task.queries)
 ```
 
+You can also request multiple languages from the Python API:
+
+```python
+from genfxn.langs.types import Language
+from genfxn.piecewise.task import generate_piecewise_task
+
+task = generate_piecewise_task(languages=[Language.PYTHON, Language.JAVA])
+print(task.code["python"])
+print(task.code["java"])
+```
+
 ## Splitting
 
 Split datasets for train/test with random or axis-based holdouts.
@@ -236,7 +254,7 @@ genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
 
 **Holdout types**: `exact` (default), `range`, `contains`
 
-Axis paths use dot notation for nested fields: `predicate.type`, `rules.0.transform.kind`
+Axis paths use dot notation for nested fields: `predicate.kind`, `rules.0.transform.kind`
 
 See [AXES.md](AXES.md) for all spec field paths.
 

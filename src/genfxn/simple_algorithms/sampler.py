@@ -49,17 +49,32 @@ def sample_simple_algorithms_spec(
         rng = random.Random()
 
     template = rng.choice(axes.templates)
-    trace_step(trace, "sample_template", f"Selected template: {template.value}", template.value)
+    trace_step(
+        trace,
+        "sample_template",
+        f"Selected template: {template.value}",
+        template.value,
+    )
 
     pre_filter, pre_transform = _sample_preprocess(axes, rng)
 
     match template:
         case TemplateType.MOST_FREQUENT:
             tie_break = rng.choice(axes.tie_break_modes)
-            trace_step(trace, "sample_tie_break", f"Tie break mode: {tie_break.value}", tie_break.value)
+            trace_step(
+                trace,
+                "sample_tie_break",
+                f"Tie break mode: {tie_break.value}",
+                tie_break.value,
+            )
 
             empty_default = rng.randint(*axes.empty_default_range)
-            trace_step(trace, "sample_empty_default", f"Empty default: {empty_default}", empty_default)
+            trace_step(
+                trace,
+                "sample_empty_default",
+                f"Empty default: {empty_default}",
+                empty_default,
+            )
 
             tie_default = None
             if axes.tie_default_range is not None:
@@ -78,7 +93,12 @@ def sample_simple_algorithms_spec(
             trace_step(trace, "sample_target", f"Target sum: {target}", target)
 
             counting_mode = rng.choice(axes.counting_modes)
-            trace_step(trace, "sample_counting_mode", f"Counting mode: {counting_mode.value}", counting_mode.value)
+            trace_step(
+                trace,
+                "sample_counting_mode",
+                f"Counting mode: {counting_mode.value}",
+                counting_mode.value,
+            )
 
             no_result_default = None
             if axes.no_result_default_range is not None:
@@ -102,7 +122,12 @@ def sample_simple_algorithms_spec(
             trace_step(trace, "sample_window_size", f"Window size k: {k}", k)
 
             invalid_k_default = rng.randint(*axes.empty_default_range)
-            trace_step(trace, "sample_invalid_k_default", f"Invalid k default: {invalid_k_default}", invalid_k_default)
+            trace_step(
+                trace,
+                "sample_invalid_k_default",
+                f"Invalid k default: {invalid_k_default}",
+                invalid_k_default,
+            )
 
             empty_default = None
             if axes.empty_default_for_empty_range is not None:

@@ -11,6 +11,7 @@ from genfxn.core.predicates import (
 from genfxn.core.string_predicates import (
     StringPredicateContains,
     StringPredicateIsAlpha,
+    StringPredicateIsUpper,
     StringPredicateStartsWith,
     StringPredicateType,
     eval_string_predicate,
@@ -43,13 +44,18 @@ from genfxn.stringrules.queries import generate_stringrules_queries
 
 
 class TestComposedPredicateBoundaryQueries:
-    def test_unsatisfiable_composed_predicate_produces_valid_queries(self) -> None:
+    def test_unsatisfiable_composed_predicate_produces_valid_queries(
+        self,
+    ) -> None:
         """AND(mod_eq(97,0), gt(50)) with value_range=(-10,10) is unsatisfiable.
 
         Boundary queries should either be absent or have outputs matching eval.
         """
         pred = PredicateAnd(
-            operands=[PredicateModEq(divisor=97, remainder=0), PredicateGt(value=50)]
+            operands=[
+                PredicateModEq(divisor=97, remainder=0),
+                PredicateGt(value=50),
+            ]
         )
         spec = ConditionalLinearSumSpec(
             predicate=pred,
@@ -71,7 +77,7 @@ class TestComposedPredicateBoundaryQueries:
 
 class TestContainsLongSubstring:
     def test_contains_long_substring_no_crash(self) -> None:
-        """Contains predicate with substring longer than string_length_range doesn't crash."""
+        """Longer-than-range substring in `contains` should not crash."""
         long_sub = "abcdefghijklmnopqrstuvwxyz"
         spec = StringRulesSpec(
             rules=[
@@ -85,7 +91,10 @@ class TestContainsLongSubstring:
         axes = StringRulesAxes(
             n_rules=1,
             predicate_types=[StringPredicateType.CONTAINS],
-            transform_types=[StringTransformType.IDENTITY, StringTransformType.UPPERCASE],
+            transform_types=[
+                StringTransformType.IDENTITY,
+                StringTransformType.UPPERCASE,
+            ],
             string_length_range=(1, 10),
             substring_length_range=(1, 3),
         )
@@ -113,7 +122,10 @@ class TestContainsLongSubstring:
         axes = StringRulesAxes(
             n_rules=1,
             predicate_types=[StringPredicateType.CONTAINS],
-            transform_types=[StringTransformType.IDENTITY, StringTransformType.LOWERCASE],
+            transform_types=[
+                StringTransformType.IDENTITY,
+                StringTransformType.LOWERCASE,
+            ],
             string_length_range=(1, 5),
             substring_length_range=(1, 3),
         )
@@ -135,7 +147,7 @@ class TestCoverageQueriesCoverAllRules:
         return None
 
     def test_coverage_queries_exercise_each_rule(self) -> None:
-        """Coverage queries should include at least one input triggering each rule."""
+        """Coverage queries include at least one input for each rule."""
         spec = StringRulesSpec(
             rules=[
                 StringRule(
@@ -218,11 +230,16 @@ class TestCoverageQueriesCoverAllRules:
         if len(coverage_queries) >= 1:
             # First coverage query should trigger rule 0 (starts_with "test")
             first_input = coverage_queries[0].input
-            assert eval_string_predicate(spec.rules[0].predicate, first_input), (
-                f"First coverage query input '{first_input}' doesn't match rule 0 predicate"
+            assert eval_string_predicate(
+                spec.rules[0].predicate, first_input
+            ), (
+                "First coverage query input "
+                f"'{first_input}' doesn't match rule 0 predicate"
             )
 
-    def test_coverage_queries_do_not_include_shadowed_rule_fallbacks(self) -> None:
+    def test_coverage_queries_do_not_include_shadowed_rule_fallbacks(
+        self,
+    ) -> None:
         spec = StringRulesSpec(
             rules=[
                 StringRule(
@@ -266,9 +283,64 @@ class TestCoverageQueriesCoverAllRules:
         assert len(first_match_indices) == len(set(first_match_indices))
 
 
+class TestCharsetAwareStringQueries:
+    def test_alpha_queries_respect_digit_charset(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsAlpha(),
+                    transform=StringTransformUppercase(),
+                )
+            ],
+            default_transform=StringTransformIdentity(),
+        )
+        axes = StringRulesAxes(
+            n_rules=1,
+            predicate_types=[StringPredicateType.IS_ALPHA],
+            transform_types=[
+                StringTransformType.IDENTITY,
+                StringTransformType.UPPERCASE,
+            ],
+            string_length_range=(1, 8),
+            charset="digits",
+        )
+
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        assert queries
+        assert all(all(ch.isdigit() for ch in q.input) for q in queries)
+
+    def test_upper_queries_respect_lowercase_charset(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsUpper(),
+                    transform=StringTransformUppercase(),
+                )
+            ],
+            default_transform=StringTransformIdentity(),
+        )
+        axes = StringRulesAxes(
+            n_rules=1,
+            predicate_types=[StringPredicateType.IS_UPPER],
+            transform_types=[
+                StringTransformType.IDENTITY,
+                StringTransformType.UPPERCASE,
+            ],
+            string_length_range=(1, 8),
+            charset="ascii_lowercase",
+        )
+
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        assert queries
+        assert all(all(ch.islower() for ch in q.input) for q in queries)
+
+
 class TestCountPairsNoPairsInvariant:
     def test_no_pairs_fixture_has_zero_pairs(self) -> None:
-        spec = CountPairsSumSpec(target=7, counting_mode=CountingMode.ALL_INDICES)
+        spec = CountPairsSumSpec(
+            target=7,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
         axes = SimpleAlgorithmsAxes(
             value_range=(0, 12),
             list_length_range=(2, 5),
@@ -281,7 +353,8 @@ class TestCountPairsNoPairsInvariant:
         no_pair_candidates = [
             q
             for q in queries
-            if q.tag == QueryTag.TYPICAL and eval_count_pairs_sum(spec, q.input) == 0
+            if q.tag == QueryTag.TYPICAL
+            and eval_count_pairs_sum(spec, q.input) == 0
         ]
         assert no_pair_candidates
         for q in no_pair_candidates:
@@ -290,3 +363,20 @@ class TestCountPairsNoPairsInvariant:
                 for i in range(len(q.input))
                 for j in range(i + 1, len(q.input))
             )
+
+    def test_queries_respect_tight_length_bounds(self) -> None:
+        spec = CountPairsSumSpec(
+            target=7,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
+        axes = SimpleAlgorithmsAxes(
+            value_range=(0, 12),
+            list_length_range=(1, 2),
+            window_size_range=(1, 2),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        assert queries
+        assert all(q.input != [] for q in queries), "Unexpected empty input"
+        assert all(1 <= len(q.input) <= 2 for q in queries)

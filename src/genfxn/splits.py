@@ -67,14 +67,19 @@ def random_split(
     tasks: list[Task],
     train_ratio: float,
     seed: int | None = None,
+    *,
+    in_place: bool = False,
 ) -> SplitResult:
-    """Randomly split tasks into train/test."""
+    """Randomly split tasks into train/test.
+
+    If in_place is True, the input list is shuffled in place.
+    """
     if not (0.0 <= train_ratio <= 1.0):
         raise ValueError(
             f"train_ratio must be in [0.0, 1.0], got {train_ratio!r}"
         )
     rng = random.Random(seed)
-    shuffled = tasks.copy()
+    shuffled = tasks if in_place else tasks.copy()
     rng.shuffle(shuffled)
     split_idx = int(len(shuffled) * train_ratio)
     return SplitResult(

@@ -131,9 +131,7 @@ class SimpleAlgorithmsAxes(BaseModel):
             )
 
         if self.pre_filter_types is not None and not self.pre_filter_types:
-            raise ValueError(
-                "pre_filter_types must not be empty when provided"
-            )
+            raise ValueError("pre_filter_types must not be empty when provided")
         if (
             self.pre_transform_types is not None
             and not self.pre_transform_types
@@ -166,8 +164,7 @@ class SimpleAlgorithmsAxes(BaseModel):
 
         if self.pre_transform_types is not None:
             unsupported_transform_types = sorted(
-                set(self.pre_transform_types)
-                - _SUPPORTED_PRE_TRANSFORM_TYPES,
+                set(self.pre_transform_types) - _SUPPORTED_PRE_TRANSFORM_TYPES,
                 key=lambda trans_type: trans_type.value,
             )
             if unsupported_transform_types:

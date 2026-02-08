@@ -1,8 +1,10 @@
 import random
+from typing import cast
 
 from genfxn.core.string_predicates import (
     StringPredicate,
     StringPredicateAnd,
+    StringPredicateAtom,
     StringPredicateContains,
     StringPredicateEndsWith,
     StringPredicateIsAlpha,
@@ -18,6 +20,7 @@ from genfxn.core.string_predicates import (
 from genfxn.core.string_transforms import (
     StringTransform,
     StringTransformAppend,
+    StringTransformAtom,
     StringTransformCapitalize,
     StringTransformIdentity,
     StringTransformLowercase,
@@ -44,6 +47,65 @@ _COMPOSED_PREDICATE_TYPES = {
     StringPredicateType.AND,
     StringPredicateType.OR,
 }
+
+_ATOMIC_PREDICATE_TYPES = [
+    StringPredicateType.STARTS_WITH,
+    StringPredicateType.ENDS_WITH,
+    StringPredicateType.CONTAINS,
+    StringPredicateType.IS_ALPHA,
+    StringPredicateType.IS_DIGIT,
+    StringPredicateType.IS_UPPER,
+    StringPredicateType.IS_LOWER,
+    StringPredicateType.LENGTH_CMP,
+]
+
+_ATOMIC_TRANSFORM_TYPES = [
+    StringTransformType.IDENTITY,
+    StringTransformType.LOWERCASE,
+    StringTransformType.UPPERCASE,
+    StringTransformType.CAPITALIZE,
+    StringTransformType.SWAPCASE,
+    StringTransformType.REVERSE,
+    StringTransformType.REPLACE,
+    StringTransformType.STRIP,
+    StringTransformType.PREPEND,
+    StringTransformType.APPEND,
+]
+
+_PARAMETERIZED_TRANSFORM_TYPES = [
+    StringTransformType.REPLACE,
+    StringTransformType.STRIP,
+    StringTransformType.PREPEND,
+    StringTransformType.APPEND,
+]
+
+
+def _sample_atomic_predicate_type(
+    axes: StringRulesAxes, rng: random.Random
+) -> StringPredicateType:
+    atom_types = [
+        t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
+    ]
+    if not atom_types:
+        atom_types = _ATOMIC_PREDICATE_TYPES
+    return rng.choice(atom_types)
+
+
+def _sample_pipeline_step_types(
+    axes: StringRulesAxes, n_steps: int, rng: random.Random
+) -> list[StringTransformType]:
+    atom_types = [
+        t for t in axes.transform_types if t != StringTransformType.PIPELINE
+    ]
+    if atom_types:
+        return [rng.choice(atom_types) for _ in range(n_steps)]
+
+    # Pipeline-only configs still need meaningful internal step variety.
+    first = rng.choice(_PARAMETERIZED_TRANSFORM_TYPES)
+    rest = [rng.choice(_ATOMIC_TRANSFORM_TYPES) for _ in range(n_steps - 1)]
+    steps = [first, *rest]
+    rng.shuffle(steps)
+    return steps
 
 
 def sample_string_predicate(
@@ -87,36 +149,38 @@ def sample_string_predicate(
             return StringPredicateLengthCmp(op=op, value=value)
 
         case StringPredicateType.NOT:
-            atom_types = [
-                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
-            ]
-            if not atom_types:
-                atom_types = [StringPredicateType.IS_ALPHA]
-            operand = sample_string_predicate(rng.choice(atom_types), axes, rng)
-            return StringPredicateNot(operand=operand)
+            operand_type = _sample_atomic_predicate_type(axes, rng)
+            operand = sample_string_predicate(operand_type, axes, rng)
+            return StringPredicateNot(
+                operand=cast(StringPredicateAtom, operand)
+            )
 
         case StringPredicateType.AND:
-            atom_types = [
-                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
-            ]
-            if not atom_types:
-                atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
             operands = [
-                sample_string_predicate(rng.choice(atom_types), axes, rng)
+                cast(
+                    StringPredicateAtom,
+                    sample_string_predicate(
+                        _sample_atomic_predicate_type(axes, rng),
+                        axes,
+                        rng,
+                    ),
+                )
                 for _ in range(n)
             ]
             return StringPredicateAnd(operands=operands)
 
         case StringPredicateType.OR:
-            atom_types = [
-                t for t in axes.predicate_types if t not in _COMPOSED_PREDICATE_TYPES
-            ]
-            if not atom_types:
-                atom_types = [StringPredicateType.IS_ALPHA]
             n = rng.choice([2, 3])
             operands = [
-                sample_string_predicate(rng.choice(atom_types), axes, rng)
+                cast(
+                    StringPredicateAtom,
+                    sample_string_predicate(
+                        _sample_atomic_predicate_type(axes, rng),
+                        axes,
+                        rng,
+                    ),
+                )
                 for _ in range(n)
             ]
             return StringPredicateOr(operands=operands)
@@ -176,16 +240,13 @@ def sample_string_transform(
 
         case StringTransformType.PIPELINE:
             n = rng.choice([2, 3])
-            atom_types = [
-                t
-                for t in axes.transform_types
-                if t != StringTransformType.PIPELINE
-            ]
-            if not atom_types:
-                atom_types = [StringTransformType.LOWERCASE]
+            step_types = _sample_pipeline_step_types(axes, n, rng)
             steps = [
-                sample_string_transform(rng.choice(atom_types), axes, rng)
-                for _ in range(n)
+                cast(
+                    StringTransformAtom,
+                    sample_string_transform(step_type, axes, rng),
+                )
+                for step_type in step_types
             ]
             return StringTransformPipeline(steps=steps)
 
@@ -214,7 +275,12 @@ def sample_stringrules_spec(
     rng: random.Random,
     trace: list[TraceStep] | None = None,
 ) -> StringRulesSpec:
-    trace_step(trace, "sample_n_rules", f"Number of rules: {axes.n_rules}", axes.n_rules)
+    trace_step(
+        trace,
+        "sample_n_rules",
+        f"Number of rules: {axes.n_rules}",
+        axes.n_rules,
+    )
 
     rules: list[StringRule] = []
     used_pred_types: set[StringPredicateType] = set()
@@ -242,12 +308,22 @@ def sample_stringrules_spec(
                 for op in predicate.operands:
                     used_pred_types.add(StringPredicateType(op.kind))
 
-        trace_step(trace, f"sample_rule_{i}_predicate", f"Rule {i} predicate: {pred_type.value}", predicate.model_dump())
+        trace_step(
+            trace,
+            f"sample_rule_{i}_predicate",
+            f"Rule {i} predicate: {pred_type.value}",
+            predicate.model_dump(),
+        )
 
         trans_type = rng.choice(axes.transform_types)
         transform = sample_string_transform(trans_type, axes, rng)
 
-        trace_step(trace, f"sample_rule_{i}_transform", f"Rule {i} transform: {trans_type.value}", transform.model_dump())
+        trace_step(
+            trace,
+            f"sample_rule_{i}_transform",
+            f"Rule {i} transform: {trans_type.value}",
+            transform.model_dump(),
+        )
 
         rules.append(StringRule(predicate=predicate, transform=transform))
 
@@ -255,6 +331,11 @@ def sample_stringrules_spec(
     default_trans_type = rng.choice(axes.transform_types)
     default_transform = sample_string_transform(default_trans_type, axes, rng)
 
-    trace_step(trace, "sample_default_transform", f"Default transform: {default_trans_type.value}", default_transform.model_dump())
+    trace_step(
+        trace,
+        "sample_default_transform",
+        f"Default transform: {default_trans_type.value}",
+        default_transform.model_dump(),
+    )
 
     return StringRulesSpec(rules=rules, default_transform=default_transform)

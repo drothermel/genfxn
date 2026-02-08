@@ -254,7 +254,6 @@ class TestDescribeStateful:
         assert "otherwise, add 2 times the element to the running sum" in result
         assert "update best sum if running sum is larger" in result
 
-
     def test_toggle_sum(self) -> None:
         spec = {
             "template": "toggle_sum",
@@ -510,8 +509,7 @@ class TestDescribeStringPredicate:
             }
         )
         assert (
-            result
-            == "(the string ends with 'z') or "
+            result == "(the string ends with 'z') or "
             "(the string contains only digits)"
         )
 
