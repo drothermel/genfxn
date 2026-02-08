@@ -11,6 +11,7 @@ from genfxn.core.safe_exec import (
     SafeExecMissingFunctionError,
     execute_code_restricted,
 )
+from genfxn.core.string_predicates import eval_string_predicate
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.stringrules.ast_safety import (
     ALLOWED_ANNOTATION_NAMES,
@@ -448,6 +449,70 @@ def _validate_semantics(
     return issues
 
 
+def _first_matching_rule_index(spec: StringRulesSpec, s: str) -> int | None:
+    for i, rule in enumerate(spec.rules):
+        if eval_string_predicate(rule.predicate, s):
+            return i
+    return None
+
+
+def _validate_rule_diagnostics(
+    task: Task,
+    spec: StringRulesSpec,
+    axes: StringRulesAxes,
+    rng: random.Random,
+) -> list[Issue]:
+    issues: list[Issue] = []
+
+    if not spec.rules:
+        issues.append(
+            Issue(
+                code=CODE_EMPTY_RULESET,
+                severity=Severity.WARNING,
+                message=(
+                    "Spec has no rules; default transform handles all inputs"
+                ),
+                location="spec.rules",
+                task_id=task.task_id,
+            )
+        )
+        return issues
+
+    candidates = _generate_test_inputs(axes, rng, num_samples=100)
+    for i, rule in enumerate(spec.rules):
+        reachable = False
+        blockers: set[int] = set()
+        for s in candidates:
+            if not eval_string_predicate(rule.predicate, s):
+                continue
+            first_index = _first_matching_rule_index(spec, s)
+            if first_index == i:
+                reachable = True
+                break
+            if first_index is not None and first_index < i:
+                blockers.add(first_index)
+
+        if not reachable:
+            blocker_text = (
+                f"blocked by earlier rule(s) {sorted(blockers)}"
+                if blockers
+                else "unreachable on sampled inputs"
+            )
+            issues.append(
+                Issue(
+                    code=CODE_SHADOWED_RULE,
+                    severity=Severity.WARNING,
+                    message=(
+                        f"Rule {i} is shadowed/unreachable ({blocker_text})"
+                    ),
+                    location=f"spec.rules[{i}]",
+                    task_id=task.task_id,
+                )
+            )
+
+    return issues
+
+
 def validate_stringrules_task(
     task: Task,
     axes: StringRulesAxes | None = None,
@@ -465,7 +530,7 @@ def validate_stringrules_task(
         strict: If True, type issues are errors; if False, warnings.
         max_semantic_issues: Stop semantic testing after this many issues.
             Use 0 for unlimited.
-        emit_diagnostics: Kept for API parity. No diagnostics for this family.
+        emit_diagnostics: Emit non-fatal spec diagnostics.
         paranoid: Deprecated; AST whitelist validation is always enforced.
         rng: Random generator for semantic testing. Random(42) if None.
 
@@ -542,5 +607,8 @@ def validate_stringrules_task(
             close = getattr(func, "close", None)
             if callable(close):
                 close()
+
+    if spec is not None and emit_diagnostics:
+        issues.extend(_validate_rule_diagnostics(task, spec, axes, rng))
 
     return issues

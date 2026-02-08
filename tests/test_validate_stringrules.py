@@ -3,8 +3,21 @@ import random
 import pytest
 
 from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.string_predicates import (
+    StringPredicateStartsWith,
+)
+from genfxn.core.string_transforms import (
+    StringTransformIdentity,
+    StringTransformLowercase,
+    StringTransformUppercase,
+)
 from genfxn.core.validate import Severity
-from genfxn.stringrules.models import OverlapLevel, StringRulesAxes
+from genfxn.stringrules.models import (
+    OverlapLevel,
+    StringRule,
+    StringRulesAxes,
+    StringRulesSpec,
+)
 from genfxn.stringrules.task import generate_stringrules_task
 from genfxn.stringrules.validate import (
     CODE_AXES_INVALID,
@@ -12,11 +25,13 @@ from genfxn.stringrules.validate import (
     CODE_CODE_MISSING_FUNC,
     CODE_CODE_PARSE_ERROR,
     CODE_CODE_RUNTIME_ERROR,
+    CODE_EMPTY_RULESET,
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
     CODE_SEMANTIC_ISSUES_CAPPED,
     CODE_SEMANTIC_MISMATCH,
+    CODE_SHADOWED_RULE,
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
     CODE_UNSAFE_AST,
@@ -289,3 +304,64 @@ class TestDifferentConfigurations:
             i.code == CODE_AXES_INVALID and i.location == "axes.charset"
             for i in issues
         )
+
+
+class TestDiagnostics:
+    def test_empty_ruleset_emits_diagnostic(self, baseline_task) -> None:
+        task = baseline_task.model_copy(
+            update={
+                "spec": StringRulesSpec(
+                    rules=[],
+                    default_transform=StringTransformIdentity(),
+                ).model_dump()
+            }
+        )
+        issues = validate_stringrules_task(task, emit_diagnostics=True)
+        assert any(i.code == CODE_EMPTY_RULESET for i in issues)
+
+    def test_shadowed_rule_emits_diagnostic(self, baseline_task) -> None:
+        task = baseline_task.model_copy(
+            update={
+                "spec": StringRulesSpec(
+                    rules=[
+                        StringRule(
+                            predicate=StringPredicateStartsWith(prefix="a"),
+                            transform=StringTransformUppercase(),
+                        ),
+                        StringRule(
+                            predicate=StringPredicateStartsWith(prefix="a"),
+                            transform=StringTransformLowercase(),
+                        ),
+                    ],
+                    default_transform=StringTransformIdentity(),
+                ).model_dump()
+            }
+        )
+        issues = validate_stringrules_task(task, emit_diagnostics=True)
+        assert any(
+            i.code == CODE_SHADOWED_RULE and i.location == "spec.rules[1]"
+            for i in issues
+        )
+
+    def test_shadowed_rule_diagnostic_can_be_disabled(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(
+            update={
+                "spec": StringRulesSpec(
+                    rules=[
+                        StringRule(
+                            predicate=StringPredicateStartsWith(prefix="a"),
+                            transform=StringTransformUppercase(),
+                        ),
+                        StringRule(
+                            predicate=StringPredicateStartsWith(prefix="a"),
+                            transform=StringTransformLowercase(),
+                        ),
+                    ],
+                    default_transform=StringTransformIdentity(),
+                ).model_dump()
+            }
+        )
+        issues = validate_stringrules_task(task, emit_diagnostics=False)
+        assert not any(i.code == CODE_SHADOWED_RULE for i in issues)

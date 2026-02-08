@@ -8,7 +8,6 @@ from genfxn.core.predicates import (
     PredicateGt,
     PredicateModEq,
 )
-from genfxn.core.transforms import TransformIdentity, TransformShift
 from genfxn.core.string_predicates import (
     StringPredicateContains,
     StringPredicateIsAlpha,
@@ -22,7 +21,7 @@ from genfxn.core.string_transforms import (
     StringTransformType,
     StringTransformUppercase,
 )
-from genfxn.stateful.eval import eval_stateful
+from genfxn.core.transforms import TransformIdentity, TransformShift
 from genfxn.simple_algorithms.eval import eval_count_pairs_sum
 from genfxn.simple_algorithms.models import (
     CountingMode,
@@ -30,6 +29,7 @@ from genfxn.simple_algorithms.models import (
     SimpleAlgorithmsAxes,
 )
 from genfxn.simple_algorithms.queries import generate_simple_algorithms_queries
+from genfxn.stateful.eval import eval_stateful
 from genfxn.stateful.models import ConditionalLinearSumSpec, StatefulAxes
 from genfxn.stateful.queries import generate_stateful_queries
 from genfxn.stringrules.eval import eval_stringrules
@@ -127,6 +127,13 @@ class TestContainsLongSubstring:
 
 
 class TestCoverageQueriesCoverAllRules:
+    @staticmethod
+    def _first_matching_rule_index(spec: StringRulesSpec, s: str) -> int | None:
+        for i, rule in enumerate(spec.rules):
+            if eval_string_predicate(rule.predicate, s):
+                return i
+        return None
+
     def test_coverage_queries_exercise_each_rule(self) -> None:
         """Coverage queries should include at least one input triggering each rule."""
         spec = StringRulesSpec(
@@ -214,6 +221,49 @@ class TestCoverageQueriesCoverAllRules:
             assert eval_string_predicate(spec.rules[0].predicate, first_input), (
                 f"First coverage query input '{first_input}' doesn't match rule 0 predicate"
             )
+
+    def test_coverage_queries_do_not_include_shadowed_rule_fallbacks(self) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="a"),
+                    transform=StringTransformUppercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="a"),
+                    transform=StringTransformLowercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="b"),
+                    transform=StringTransformIdentity(),
+                ),
+            ],
+            default_transform=StringTransformIdentity(),
+        )
+        axes = StringRulesAxes(
+            n_rules=3,
+            predicate_types=[StringPredicateType.STARTS_WITH],
+            transform_types=[
+                StringTransformType.IDENTITY,
+                StringTransformType.UPPERCASE,
+                StringTransformType.LOWERCASE,
+            ],
+            overlap_level=OverlapLevel.NONE,
+            string_length_range=(1, 8),
+        )
+        rng = random.Random(42)
+
+        queries = generate_stringrules_queries(spec, axes, rng)
+        coverage_queries = [q for q in queries if q.tag == QueryTag.COVERAGE]
+        first_match_indices = [
+            self._first_matching_rule_index(spec, q.input)
+            for q in coverage_queries
+        ]
+
+        assert first_match_indices
+        assert all(i is not None for i in first_match_indices)
+        assert sorted(set(first_match_indices)) == [0, 2]
+        assert len(first_match_indices) == len(set(first_match_indices))
 
 
 class TestCountPairsNoPairsInvariant:

@@ -92,17 +92,13 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
     return False
 
 
-def _collect_jsonl_offsets(input_file: Path) -> list[int]:
-    offsets: list[int] = []
+def _count_nonempty_jsonl_lines(input_file: Path) -> int:
+    count = 0
     with input_file.open("r", encoding="utf-8") as handle:
-        while True:
-            offset = handle.tell()
-            line = handle.readline()
-            if line == "":
-                break
+        for line in handle:
             if line.strip():
-                offsets.append(offset)
-    return offsets
+                count += 1
+    return count
 
 
 def _build_stateful_axes(
@@ -631,31 +627,36 @@ def split(
         if random_ratio < 0 or random_ratio > 1:
             typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
-        offsets = _collect_jsonl_offsets(input_file)
-        shuffled = offsets.copy()
+        total_count = _count_nonempty_jsonl_lines(input_file)
+        target_train_count = int(total_count * random_ratio)
         rng = random.Random(split_seed)
-        rng.shuffle(shuffled)
-        split_idx = int(len(shuffled) * random_ratio)
-        train_offsets = shuffled[:split_idx]
-        test_offsets = shuffled[split_idx:]
-
         with (
-            input_file.open("r", encoding="utf-8") as input_handle,
             train.open("w", encoding="utf-8") as train_handle,
             test.open("w", encoding="utf-8") as test_handle,
         ):
-            for offset in train_offsets:
-                input_handle.seek(offset)
-                raw_line = input_handle.readline()
-                task = Task.model_validate(srsly.json_loads(raw_line))
-                _write_task_line(train_handle, task)
-            for offset in test_offsets:
-                input_handle.seek(offset)
-                raw_line = input_handle.readline()
-                task = Task.model_validate(srsly.json_loads(raw_line))
-                _write_task_line(test_handle, task)
-        train_count = len(train_offsets)
-        test_count = len(test_offsets)
+            remaining_total = total_count
+            remaining_train = target_train_count
+            train_count = 0
+            test_count = 0
+            for task in _iter_validated_tasks(input_file):
+                if remaining_train == 0:
+                    send_to_train = False
+                elif remaining_train == remaining_total:
+                    send_to_train = True
+                else:
+                    send_to_train = (
+                        rng.random() < (remaining_train / remaining_total)
+                    )
+
+                if send_to_train:
+                    _write_task_line(train_handle, task)
+                    train_count += 1
+                    remaining_train -= 1
+                else:
+                    _write_task_line(test_handle, task)
+                    test_count += 1
+
+                remaining_total -= 1
     else:
         if holdout_axis is None or holdout_value is None:
             typer.echo(

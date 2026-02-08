@@ -579,10 +579,54 @@ class TestSplit:
             list[dict[str, Any]], list(srsly.read_jsonl(test_file_2))
         )
 
+        assert len(train_1) == 10
+        assert len(test_1) == 10
         assert [t["task_id"] for t in train_1] == [
             t["task_id"] for t in train_2
         ]
         assert [t["task_id"] for t in test_1] == [t["task_id"] for t in test_2]
+
+    def test_split_random_ratio_uses_floor_count(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "7",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0.4",
+                "--seed",
+                "123",
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert len(train) == 2
+        assert len(test) == 5
 
 
 class TestInfo:

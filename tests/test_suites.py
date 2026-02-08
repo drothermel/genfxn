@@ -15,7 +15,9 @@ from genfxn.suites.generate import (
     PoolStats,
     _pool_axes_simple_algorithms_d4,
     generate_pool,
+    generate_suite,
     greedy_select,
+    quota_report,
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
 
@@ -739,6 +741,42 @@ class TestDeterminism:
             suite_generate.generate_suite(
                 "stringrules", 3, seed=7, pool_size=20, max_retries=0
             )
+
+
+class TestSuiteGenerationValidation:
+    def test_generate_suite_rejects_negative_max_retries(self) -> None:
+        with pytest.raises(ValueError, match="max_retries must be >= 0"):
+            generate_suite("stringrules", 3, seed=7, max_retries=-1)
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda: generate_pool("bad_family", 3, seed=42, pool_size=10),
+            lambda: generate_suite("bad_family", 3, seed=42),
+            lambda: quota_report([], "bad_family", 3),
+        ],
+    )
+    def test_invalid_family_raises_value_error(self, call: object) -> None:
+        with pytest.raises(ValueError, match=r"Invalid family 'bad_family'.*Valid options:"):
+            call()
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda: generate_pool("stringrules", 999, seed=42, pool_size=10),
+            lambda: generate_suite("stringrules", 999, seed=42),
+            lambda: quota_report([], "stringrules", 999),
+        ],
+    )
+    def test_invalid_difficulty_raises_value_error(self, call: object) -> None:
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Invalid difficulty '999' for family 'stringrules'.*"
+                r"Valid options: 3, 4, 5"
+            ),
+        ):
+            call()
 
 
 # ── Integration test (marked slow) ──────────────────────────────────────

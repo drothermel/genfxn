@@ -160,3 +160,36 @@ def test_timeout_terminates_descendant_processes(tmp_path) -> None:
     finally:
         if _pid_exists(child_pid):
             os.kill(child_pid, signal.SIGKILL)
+
+
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="Process-group descendant cleanup requires POSIX killpg",
+)
+def test_close_terminates_descendant_processes_after_shutdown(tmp_path) -> None:
+    pid_file = tmp_path / "child.pid"
+    code = "def f(path):\n    spawn(path)\n    return 1"
+    fn = execute_code_restricted(
+        code,
+        {"spawn": _spawn_sleep_and_record},
+        timeout_sec=1.0,
+    )["f"]
+
+    try:
+        assert fn(str(pid_file)) == 1
+        assert pid_file.exists()
+        child_pid = int(pid_file.read_text(encoding="utf-8"))
+    finally:
+        fn.close()
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        if not _pid_exists(child_pid):
+            break
+        time.sleep(0.05)
+
+    try:
+        assert not _pid_exists(child_pid)
+    finally:
+        if _pid_exists(child_pid):
+            os.kill(child_pid, signal.SIGKILL)

@@ -23,6 +23,13 @@ from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
 from genfxn.stringrules.utils import _get_charset, _random_string
 
 
+def _first_matching_rule_index(spec: StringRulesSpec, s: str) -> int | None:
+    for i, rule in enumerate(spec.rules):
+        if eval_string_predicate(rule.predicate, s):
+            return i
+    return None
+
+
 def _generate_matching_string(
     pred: StringPredicate, axes: StringRulesAxes, rng: random.Random
 ) -> str | None:
@@ -276,19 +283,13 @@ def _generate_coverage_queries(
     queries: list[Query] = []
 
     for i, rule in enumerate(spec.rules):
-        # Generate a string that matches rule i but not rules 0..i-1
+        # Generate a string that first-matches exactly rule i.
         attempts = 0
         while attempts < 20:
             s = _generate_matching_string(rule.predicate, axes, rng)
             if s is None:
-                break  # Can't generate matching string for this predicate
-            # Check it doesn't match earlier rules
-            matches_earlier = False
-            for earlier_rule in spec.rules[:i]:
-                if eval_string_predicate(earlier_rule.predicate, s):
-                    matches_earlier = True
-                    break
-            if not matches_earlier:
+                break
+            if _first_matching_rule_index(spec, s) == i:
                 queries.append(
                     Query(
                         input=s,
@@ -298,17 +299,8 @@ def _generate_coverage_queries(
                 )
                 break
             attempts += 1
-        else:
-            # Fallback: just use a matching string (skip if None)
-            s = _generate_matching_string(rule.predicate, axes, rng)
-            if s is not None:
-                queries.append(
-                    Query(
-                        input=s,
-                        output=eval_stringrules(spec, s),
-                        tag=QueryTag.COVERAGE,
-                    )
-                )
+        # Fallback: skip if we could not find a first-match sample for rule i.
+        # Do not mislabel shadowed samples as COVERAGE.
 
     return queries
 

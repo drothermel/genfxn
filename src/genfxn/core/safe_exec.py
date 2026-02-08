@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import errno
 import multiprocessing as mp
 import os
 import signal
@@ -148,21 +149,32 @@ def _set_process_group() -> None:
 
 
 def _terminate_process_tree(process: mp.Process) -> None:
-    if not process.is_alive():
-        return
+    pid = process.pid
+
+    def _killpg(sig: signal.Signals) -> None:
+        if pid is None or pid <= 0:
+            return
+        try:
+            os.killpg(pid, sig)
+        except ProcessLookupError:
+            return
+        except OSError as exc:
+            if exc.errno == errno.ESRCH:
+                return
+        except Exception:
+            return
 
     if os.name == "posix":
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except Exception:
-            pass
-        process.join(timeout=0.2)
+        # On POSIX, always attempt process-group termination by PID to clean
+        # descendants even if the worker parent has already exited.
+        _killpg(signal.SIGTERM)
         if process.is_alive():
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except Exception:
-                pass
             process.join(timeout=0.2)
+        if process.is_alive():
+            _killpg(signal.SIGKILL)
+            process.join(timeout=0.2)
+    elif not process.is_alive():
+        return
 
     if process.is_alive():
         try:

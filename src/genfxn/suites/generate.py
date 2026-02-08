@@ -508,6 +508,40 @@ _FEATURE_FNS = {
 }
 
 
+def _format_valid_options(options: list[str | int]) -> str:
+    return ", ".join(str(option) for option in options)
+
+
+def _validate_family_key(
+    *,
+    family: str,
+    family_keys: set[str],
+    context: str,
+) -> None:
+    if family not in family_keys:
+        valid_options = _format_valid_options(sorted(family_keys))
+        raise ValueError(
+            f"Invalid family '{family}' for {context}. "
+            f"Valid options: {valid_options}"
+        )
+
+
+def _validate_difficulty_key(
+    *,
+    family: str,
+    difficulty: int,
+    family_to_difficulties: dict[str, dict[int, Any]],
+    context: str,
+) -> None:
+    valid_difficulties = sorted(family_to_difficulties[family].keys())
+    if difficulty not in family_to_difficulties[family]:
+        valid_options = _format_valid_options(valid_difficulties)
+        raise ValueError(
+            f"Invalid difficulty '{difficulty}' for family '{family}' "
+            f"in {context}. Valid options: {valid_options}"
+        )
+
+
 def _sample_spec(
     family: str,
     axes: Any,
@@ -533,6 +567,23 @@ def generate_pool(
     pool_size: int,
 ) -> tuple[list[Candidate], PoolStats]:
     """Generate a candidate pool of specs at the target difficulty."""
+    _validate_family_key(
+        family=family,
+        family_keys=set(_POOL_AXES_FNS.keys()),
+        context="generate_pool",
+    )
+    _validate_difficulty_key(
+        family=family,
+        difficulty=difficulty,
+        family_to_difficulties=_POOL_AXES_FNS,
+        context="generate_pool",
+    )
+    _validate_family_key(
+        family=family,
+        family_keys=set(_FEATURE_FNS.keys()),
+        context="generate_pool",
+    )
+
     axes_fn = _POOL_AXES_FNS[family][difficulty]
     feature_fn = _FEATURE_FNS[family]
     candidates: list[Candidate] = []
@@ -744,7 +795,26 @@ def generate_suite(
     max_retries: int = 2,
 ) -> list[Task]:
     """Generate a balanced 50-task suite for (family, difficulty)."""
+    if max_retries < 0:
+        raise ValueError(
+            f"max_retries must be >= 0, got {max_retries}"
+        )
+
+    _validate_family_key(
+        family=family,
+        family_keys=set(QUOTAS.keys()),
+        context="generate_suite",
+    )
+    _validate_difficulty_key(
+        family=family,
+        difficulty=difficulty,
+        family_to_difficulties=QUOTAS,
+        context="generate_suite",
+    )
+
     quota = QUOTAS[family][difficulty]
+    selected: list[Candidate] = []
+    current_pool_size = pool_size
 
     for attempt in range(max_retries + 1):
         current_pool_size = pool_size * (2**attempt)
@@ -797,6 +867,23 @@ def quota_report(
 
     Returns list of (axis, value, target, achieved, status) tuples.
     """
+    _validate_family_key(
+        family=family,
+        family_keys=set(QUOTAS.keys()),
+        context="quota_report",
+    )
+    _validate_difficulty_key(
+        family=family,
+        difficulty=difficulty,
+        family_to_difficulties=QUOTAS,
+        context="quota_report",
+    )
+    _validate_family_key(
+        family=family,
+        family_keys=set(_FEATURE_FNS.keys()),
+        context="quota_report",
+    )
+
     quota = QUOTAS[family][difficulty]
     feature_fn = _FEATURE_FNS[family]
 
