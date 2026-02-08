@@ -367,7 +367,7 @@ def _generate_max_window_queries(
             queries.append(
                 Query(
                     input=short,
-                    output=spec.invalid_k_default,
+                    output=eval_simple_algorithms(spec, short),
                     tag=QueryTag.BOUNDARY,
                 )
             )

@@ -9,6 +9,7 @@ import pytest
 
 from genfxn.core import safe_exec
 from genfxn.core.safe_exec import (
+    SafeExecBootstrapError,
     SafeExecTimeoutError,
     SafeExecValidationError,
     execute_code_restricted,
@@ -64,6 +65,9 @@ def test_run_isolated_reports_worker_crash_exit_code(monkeypatch) -> None:
             return False
 
     class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
         def Queue(self) -> _FakeQueue:
             return _FakeQueue()
 
@@ -96,6 +100,9 @@ def test_run_isolated_reports_missing_result_without_crash(monkeypatch) -> None:
             return False
 
     class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
         def Queue(self) -> _FakeQueue:
             return _FakeQueue()
 
@@ -108,6 +115,70 @@ def test_run_isolated_reports_missing_result_without_crash(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="exited without a result"):
         safe_exec._run_isolated("def f(x):\n    return x", {}, (), 1.0, None)
+
+
+def test_persistent_worker_raises_bootstrap_error(monkeypatch) -> None:
+    class _FakeProcess:
+        def start(self) -> None:
+            raise RuntimeError(
+                "An attempt has been made to start a new process before the "
+                "current process has finished its bootstrapping phase."
+            )
+
+    class _FakeQueue:
+        def close(self) -> None:
+            return
+
+        def join_thread(self) -> None:
+            return
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_get_mp_context", lambda: _FakeCtx())
+
+    with pytest.raises(SafeExecBootstrapError, match="__main__"):
+        safe_exec._PersistentWorker(
+            code="def f(x):\n    return x",
+            allowed_builtins={},
+            memory_limit_mb=None,
+            timeout_sec=1.0,
+        )
+
+
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX start-method preference is only relevant on POSIX",
+)
+def test_execute_code_restricted_works_in_script_without_main_guard(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "script.py"
+    script.write_text(
+        "from genfxn.core.safe_exec import execute_code_restricted\n"
+        "fn = execute_code_restricted('def f(x):\\n    return x + 1', {}, "
+        "timeout_sec=1.0)['f']\n"
+        "print(fn(2))\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    proc = subprocess.run(  # noqa: S603
+        [sys.executable, str(script)],  # noqa: S607
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "3"
 
 
 @pytest.mark.parametrize(

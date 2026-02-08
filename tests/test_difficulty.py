@@ -1,3 +1,5 @@
+import pytest
+
 from genfxn.core.difficulty import (
     _expr_type_score,
     _piecewise_difficulty,
@@ -639,5 +641,6 @@ class TestComputeDifficulty:
         difficulty = compute_difficulty("stringrules", spec)
         assert 1 <= difficulty <= 5
 
-    def test_unknown_family_defaults_to_3(self) -> None:
-        assert compute_difficulty("unknown", {}) == 3
+    def test_unknown_family_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown family: unknown"):
+            compute_difficulty("unknown", {})

@@ -302,6 +302,28 @@ class TestQueryGeneration:
         assert queries
         assert all(len(q.input) <= axes.list_length_range[1] for q in queries)
 
+    def test_max_window_k_minus_one_query_uses_eval_with_empty_default(self) -> None:
+        spec = MaxWindowSumSpec(
+            k=3,
+            invalid_k_default=-1,
+            empty_default=-99,
+            pre_filter=PredicateGt(value=100),
+            pre_transform=TransformShift(offset=1),
+        )
+        axes = SimpleAlgorithmsAxes()
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        k_minus_one_queries = [
+            q
+            for q in queries
+            if len(q.input) == spec.k - 1 and q.tag == QueryTag.BOUNDARY
+        ]
+        assert k_minus_one_queries
+        for q in k_minus_one_queries:
+            assert q.output == eval_simple_algorithms(spec, q.input)
+            assert q.output == -99
+
     def test_count_pairs_no_pairs_query_has_no_valid_pair(self) -> None:
         spec = CountPairsSumSpec(target=10, counting_mode=CountingMode.ALL_INDICES)
         axes = SimpleAlgorithmsAxes(

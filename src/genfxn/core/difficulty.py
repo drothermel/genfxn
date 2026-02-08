@@ -16,7 +16,7 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _simple_algorithms_difficulty(spec)
     elif family == "stringrules":
         return _stringrules_difficulty(spec)
-    return 3
+    raise ValueError(f"Unknown family: {family}")
 
 
 def _piecewise_difficulty(spec: dict[str, Any]) -> int:

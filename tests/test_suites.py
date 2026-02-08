@@ -544,6 +544,77 @@ class TestGreedySelect:
     def _make_candidate(self, task_id: str, features: dict[str, str]) -> Candidate:
         return Candidate(spec=None, spec_dict={}, task_id=task_id, features=features)
 
+    def _reference_greedy_select(
+        self,
+        candidates: list[Candidate],
+        quota: QuotaSpec,
+        rng: random.Random,
+    ) -> list[Candidate]:
+        """Reference implementation matching pre-refactor behavior."""
+        filtered = []
+        for cand in candidates:
+            match = True
+            for key, val in quota.hard_constraints.items():
+                if cand.features.get(key) != val:
+                    match = False
+                    break
+            if match:
+                filtered.append(cand)
+
+        rng.shuffle(filtered)
+
+        selected: list[Candidate] = []
+        filled: dict[int, int] = {i: 0 for i in range(len(quota.buckets))}
+        used_ids: set[str] = set()
+
+        for _ in range(quota.total):
+            deficits_remaining = any(
+                filled[bi] < bucket.target
+                for bi, bucket in enumerate(quota.buckets)
+            )
+            best_cand = None
+            best_score = -1.0
+
+            for cand in filtered:
+                if cand.task_id in used_ids:
+                    continue
+
+                score = 0.0
+                for bi, bucket in enumerate(quota.buckets):
+                    deficit = max(0, bucket.target - filled[bi])
+                    if deficit > 0 and cand.features.get(bucket.axis) == bucket.value:
+                        if bucket.condition is not None:
+                            cond_match = True
+                            for key, val in bucket.condition.items():
+                                if cand.features.get(key) != val:
+                                    cond_match = False
+                                    break
+                            if not cond_match:
+                                continue
+                        score += deficit / bucket.target
+
+                if score > best_score:
+                    best_score = score
+                    best_cand = cand
+
+            if best_cand is None:
+                break
+            if deficits_remaining and best_score <= 0.0:
+                break
+
+            selected.append(best_cand)
+            used_ids.add(best_cand.task_id)
+            for bi, bucket in enumerate(quota.buckets):
+                if best_cand.features.get(bucket.axis) == bucket.value:
+                    if bucket.condition is not None and any(
+                        best_cand.features.get(k) != v
+                        for k, v in bucket.condition.items()
+                    ):
+                        continue
+                    filled[bi] += 1
+
+        return selected
+
     def test_simple_selection(self) -> None:
         """Small synthetic pool, verify greedy fills buckets."""
         quota = QuotaSpec(
@@ -636,6 +707,38 @@ class TestGreedySelect:
         selected = greedy_select(candidates, quota, random.Random(42))
         assert len(selected) == 2
         assert all(c.features["color"] == "red" for c in selected)
+
+    def test_matches_reference_behavior_across_seeds(self) -> None:
+        quota = QuotaSpec(
+            hard_constraints={"material": "metal"},
+            buckets=[
+                Bucket("shape", "circle", 4),
+                Bucket("shape", "square", 3),
+                Bucket("color", "red", 2, condition={"shape": "circle"}),
+                Bucket("size", "large", 2, condition={"shape": "square"}),
+                Bucket("color", "blue", 3),
+            ],
+            total=10,
+        )
+        candidates = [
+            self._make_candidate(
+                f"id_{i}",
+                {
+                    "shape": ["circle", "square", "triangle"][i % 3],
+                    "color": ["red", "blue", "green"][(i // 2) % 3],
+                    "size": "large" if i % 4 in (0, 1) else "small",
+                    "material": "metal" if i % 5 != 0 else "wood",
+                },
+            )
+            for i in range(40)
+        ]
+
+        for seed in range(12):
+            actual = greedy_select(candidates, quota, random.Random(seed))
+            expected = self._reference_greedy_select(
+                candidates, quota, random.Random(seed)
+            )
+            assert [c.task_id for c in actual] == [c.task_id for c in expected]
 
 
 # ── Pool generation smoke test ───────────────────────────────────────────

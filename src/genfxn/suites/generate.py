@@ -16,8 +16,6 @@ from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.core.transforms import TransformType
-
-logger = logging.getLogger(__name__)
 from genfxn.simple_algorithms.models import (
     SimpleAlgorithmsAxes,
 )
@@ -40,6 +38,8 @@ from genfxn.suites.features import (
     stringrules_features,
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
+
+logger = logging.getLogger(__name__)
 
 # ── Candidate + PoolStats ────────────────────────────────────────────────
 
@@ -694,44 +694,78 @@ def greedy_select(
     # Shuffle for tie-breaking
     rng.shuffle(filtered)
 
+    # Precompute candidate <-> bucket applicability once.
+    candidate_to_buckets: list[list[int]] = [[] for _ in filtered]
+    bucket_to_candidates: list[list[int]] = [
+        [] for _ in range(len(quota.buckets))
+    ]
+    for ci, cand in enumerate(filtered):
+        for bi, bucket in enumerate(quota.buckets):
+            if _bucket_applies(bucket, cand.features):
+                candidate_to_buckets[ci].append(bi)
+                bucket_to_candidates[bi].append(ci)
+
     selected: list[Candidate] = []
-    filled: dict[int, int] = {i: 0 for i in range(len(quota.buckets))}
+    deficits: list[int] = [bucket.target for bucket in quota.buckets]
+    deficit_weights: list[float] = [
+        0.0 if bucket.target <= 0 else deficit / bucket.target
+        for deficit, bucket in zip(deficits, quota.buckets, strict=True)
+    ]
+    candidate_scores: list[float] = [
+        sum(deficit_weights[bi] for bi in candidate_to_buckets[ci])
+        for ci in range(len(filtered))
+    ]
     used_ids: set[str] = set()
 
     for _ in range(quota.total):
-        deficits_remaining = any(
-            filled[bi] < bucket.target for bi, bucket in enumerate(quota.buckets)
-        )
-        best_cand = None
+        deficits_remaining = any(deficit > 0 for deficit in deficits)
+        best_idx: int | None = None
         best_score = -1.0
 
-        for cand in filtered:
-            if cand.task_id in used_ids:
+        for ci in range(len(filtered)):
+            if filtered[ci].task_id in used_ids:
                 continue
 
-            # Weight by deficit fraction: larger deficits are more urgent
-            score = 0.0
-            for bi, bucket in enumerate(quota.buckets):
-                deficit = max(0, bucket.target - filled[bi])
-                if deficit > 0 and _bucket_applies(bucket, cand.features):
-                    score += deficit / bucket.target
+            score = candidate_scores[ci]
 
             if score > best_score:
                 best_score = score
-                best_cand = cand
+                best_idx = ci
 
-        if best_cand is None:
+        if best_idx is None:
             break
         if deficits_remaining and best_score <= 0.0:
             # Do not consume quota slots with zero-contribution picks while
             # any bucket target is still underfilled.
             break
 
+        best_cand = filtered[best_idx]
         selected.append(best_cand)
         used_ids.add(best_cand.task_id)
-        for bi, bucket in enumerate(quota.buckets):
-            if _bucket_applies(bucket, best_cand.features):
-                filled[bi] += 1
+
+        # Update deficit-derived weights incrementally for affected buckets.
+        changed_candidates: set[int] = set()
+        for bi in candidate_to_buckets[best_idx]:
+            if deficits[bi] <= 0:
+                continue
+
+            deficits[bi] -= 1
+            bucket_target = quota.buckets[bi].target
+            new_weight = (
+                deficits[bi] / bucket_target
+                if deficits[bi] > 0 and bucket_target > 0
+                else 0.0
+            )
+            if new_weight == deficit_weights[bi]:
+                continue
+            deficit_weights[bi] = new_weight
+            changed_candidates.update(bucket_to_candidates[bi])
+
+        # Recompute impacted candidate scores using current deficit weights.
+        for ci in changed_candidates:
+            candidate_scores[ci] = sum(
+                deficit_weights[bi] for bi in candidate_to_buckets[ci]
+            )
 
     return selected
 

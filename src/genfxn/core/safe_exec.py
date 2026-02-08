@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import ast
 import errno
 import multiprocessing as mp
@@ -29,6 +30,10 @@ class SafeExecExecutionError(RuntimeError):
 
 class SafeExecMissingFunctionError(SafeExecExecutionError):
     """Raised when function ``f`` is missing from the executed code."""
+
+
+class SafeExecBootstrapError(RuntimeError):
+    """Raised when multiprocessing bootstrap requirements are not met."""
 
 
 @dataclass
@@ -204,6 +209,51 @@ def _set_memory_limit(memory_limit_mb: int | None) -> None:
         return
 
 
+_SAFE_EXEC_START_METHOD_ENV = "GENFXN_SAFE_EXEC_START_METHOD"
+
+
+def _is_spawn_bootstrap_error(exc: BaseException) -> bool:
+    msg = str(exc)
+    return (
+        isinstance(exc, RuntimeError)
+        and "start a new process before the" in msg
+        and "bootstrapping phase" in msg
+    )
+
+
+def _bootstrap_error(method: str, exc: BaseException) -> SafeExecBootstrapError:
+    return SafeExecBootstrapError(
+        "safe_exec multiprocessing bootstrap failed while using "
+        f"start method '{method}'. If this is a script entry point, wrap "
+        "execution in `if __name__ == '__main__':` (plus "
+        "`freeze_support()` when needed), or on POSIX use "
+        f"`{_SAFE_EXEC_START_METHOD_ENV}=fork`. Original error: {exc}"
+    )
+
+
+def _get_mp_context() -> mp.context.BaseContext:
+    """Return multiprocessing context suitable for safe_exec workers."""
+    configured = os.environ.get(_SAFE_EXEC_START_METHOD_ENV)
+    allowed = set(mp.get_all_start_methods())
+
+    if configured:
+        if configured not in allowed:
+            valid = ", ".join(sorted(allowed))
+            raise ValueError(
+                f"Invalid {_SAFE_EXEC_START_METHOD_ENV}={configured!r}. "
+                f"Valid values: {valid}"
+            )
+        return mp.get_context(configured)
+
+    # Avoid spawn bootstrap fragility in normal POSIX script usage.
+    if os.name == "posix":
+        if "fork" in allowed:
+            return mp.get_context("fork")
+        if "forkserver" in allowed:
+            return mp.get_context("forkserver")
+    return mp.get_context("spawn")
+
+
 def _exec_worker(
     queue: mp.Queue,
     code: str,
@@ -247,13 +297,19 @@ def _run_isolated(
     memory_limit_mb: int | None,
 ) -> Any:
     _validate_untrusted_code(code)
-    ctx = mp.get_context("spawn")
+    ctx = _get_mp_context()
+    method = ctx.get_start_method()
     queue: mp.Queue = ctx.Queue()
     process = ctx.Process(
         target=_exec_worker,
         args=(queue, code, allowed_builtins, call_args, memory_limit_mb),
     )
-    process.start()
+    try:
+        process.start()
+    except Exception as exc:
+        if _is_spawn_bootstrap_error(exc):
+            raise _bootstrap_error(method, exc) from exc
+        raise
     process.join(timeout_sec)
 
     if process.is_alive():
@@ -289,6 +345,7 @@ class _IsolatedFunction:
         timeout_sec: float,
         memory_limit_mb: int | None,
     ) -> None:
+        self._closed = False
         self._worker = _PersistentWorker(
             code=code,
             allowed_builtins=allowed_builtins,
@@ -296,11 +353,19 @@ class _IsolatedFunction:
             timeout_sec=timeout_sec,
         )
         self._timeout_sec = timeout_sec
+        atexit.register(self.close)
 
     def __call__(self, *args: Any) -> Any:
         return self._worker.call(args, self._timeout_sec)
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            atexit.unregister(self.close)
+        except Exception:
+            pass
         self._worker.close()
 
     def __del__(self) -> None:
@@ -385,7 +450,8 @@ class _PersistentWorker:
         memory_limit_mb: int | None,
         timeout_sec: float,
     ) -> None:
-        self._ctx = mp.get_context("spawn")
+        self._ctx = _get_mp_context()
+        self._start_method = self._ctx.get_start_method()
         self._request_queue: mp.Queue = self._ctx.Queue()
         self._response_queue: mp.Queue = self._ctx.Queue()
         self._process = self._ctx.Process(
@@ -398,7 +464,12 @@ class _PersistentWorker:
                 memory_limit_mb,
             ),
         )
-        self._process.start()
+        try:
+            self._process.start()
+        except Exception as exc:
+            if _is_spawn_bootstrap_error(exc):
+                raise _bootstrap_error(self._start_method, exc) from exc
+            raise
 
         try:
             init_result: _WorkerResult = self._response_queue.get(
@@ -406,6 +477,11 @@ class _PersistentWorker:
             )
         except Empty:
             self._terminate()
+            if self._process.exitcode not in (None, 0):
+                raise RuntimeError(
+                    "Execution worker crashed during startup with "
+                    f"exit code {self._process.exitcode}"
+                )
             raise SafeExecTimeoutError(
                 f"Code execution timed out after {timeout_sec} seconds"
             )
