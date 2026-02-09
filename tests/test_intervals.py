@@ -7,6 +7,8 @@ from genfxn.core.models import QueryTag
 
 intervals_models = pytest.importorskip("genfxn.intervals.models")
 intervals_eval = pytest.importorskip("genfxn.intervals.eval")
+intervals_queries = pytest.importorskip("genfxn.intervals.queries")
+intervals_render = pytest.importorskip("genfxn.intervals.render")
 intervals_sampler = pytest.importorskip("genfxn.intervals.sampler")
 intervals_task = pytest.importorskip("genfxn.intervals.task")
 
@@ -16,6 +18,8 @@ BoundaryMode = intervals_models.BoundaryMode
 OperationType = intervals_models.OperationType
 
 eval_intervals = intervals_eval.eval_intervals
+generate_intervals_queries = intervals_queries.generate_intervals_queries
+render_intervals = intervals_render.render_intervals
 sample_intervals_spec = intervals_sampler.sample_intervals_spec
 generate_intervals_task = intervals_task.generate_intervals_task
 
@@ -34,6 +38,19 @@ def _call_task(generate_task_fn: Any, axes: Any, seed: int) -> Any:
         return generate_task_fn(axes=axes, rng=rng)
     except TypeError:
         return generate_task_fn(axes, rng)
+
+
+def _call_queries(
+    generate_queries_fn: Any,
+    spec: Any,
+    axes: Any,
+    seed: int,
+) -> list[Any]:
+    rng = random.Random(seed)
+    try:
+        return generate_queries_fn(spec=spec, axes=axes, rng=rng)
+    except TypeError:
+        return generate_queries_fn(spec, axes, rng)
 
 
 def _normalize_axes_for_deterministic_sampling(axes: Any, axes_cls: Any) -> Any:
@@ -192,6 +209,25 @@ class TestEvaluatorSemantics:
             assert eval_intervals(spec, intervals) == expected
 
 
+class TestModels:
+    def test_spec_and_axes_roundtrip_model_validation(self) -> None:
+        spec, axes = _sample_spec_and_axes(seed=57)
+        assert IntervalsSpec.model_validate(spec.model_dump()).model_dump() == (
+            spec.model_dump()
+        )
+        assert IntervalsAxes.model_validate(axes.model_dump()).model_dump() == (
+            axes.model_dump()
+        )
+
+    def test_axes_reject_empty_operation_types(self) -> None:
+        with pytest.raises(Exception):
+            IntervalsAxes(operation_types=[])
+
+    def test_axes_reject_invalid_probability_range(self) -> None:
+        with pytest.raises(Exception):
+            IntervalsAxes(degenerate_interval_prob_range=(-0.1, 0.2))
+
+
 class TestSampler:
     def test_sampler_is_deterministic_for_seed(self) -> None:
         axes = _normalize_axes_for_deterministic_sampling(
@@ -218,3 +254,22 @@ class TestTaskGeneration:
         spec = IntervalsSpec.model_validate(task.spec)
         for query in task.queries:
             assert query.output == eval_intervals(spec, query.input)
+
+    def test_rendered_python_matches_evaluator(self) -> None:
+        spec, axes = _sample_spec_and_axes(seed=333)
+        code = render_intervals(spec, func_name="f")
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        fn_obj = namespace["f"]
+        assert callable(fn_obj)
+
+        queries = _call_queries(
+            generate_intervals_queries,
+            spec,
+            axes,
+            seed=333,
+        )
+        for query in queries:
+            expected = eval_intervals(spec, query.input)
+            actual = fn_obj(query.input)  # type: ignore[misc]
+            assert actual == expected

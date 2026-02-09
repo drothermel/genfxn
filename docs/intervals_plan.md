@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0 complete; M1-M5 remaining)
+Status: In progress (M0-M1 complete; M2-M5 remaining)
 
 ## Goal
 
@@ -337,7 +337,7 @@ This family is not complete until all are true:
 ## Execution Checklist
 
 - [x] M0 complete
-- [ ] M1 complete
+- [x] M1 complete
 - [ ] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
@@ -360,3 +360,10 @@ This family is not complete until all are true:
   Focused verification passed:
   `uv run ruff check src/genfxn/intervals tests/test_intervals.py`
   `uv run pytest tests/test_intervals.py -q` (6 passed).
+- 2026-02-09: M1 completed. Hardened model and renderer/evaluator parity
+  coverage in `tests/test_intervals.py`, including model roundtrip validation,
+  invalid-axes rejection checks, and rendered Python equivalence against
+  canonical evaluator outputs for sampled interval inputs.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/intervals tests/test_intervals.py`
+  `uv run pytest tests/test_intervals.py -q` (10 passed).
