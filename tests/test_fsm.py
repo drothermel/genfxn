@@ -2,6 +2,8 @@ import random
 
 import pytest
 
+from genfxn.core.difficulty import compute_difficulty
+from genfxn.core.models import QueryTag
 from genfxn.core.predicates import (
     PredicateEven,
     PredicateLt,
@@ -18,6 +20,7 @@ from genfxn.fsm.models import (
     Transition,
     UndefinedTransitionPolicy,
 )
+from genfxn.fsm.queries import generate_fsm_queries
 from genfxn.fsm.render import render_fsm
 from genfxn.fsm.sampler import sample_fsm_spec
 from genfxn.fsm.task import generate_fsm_task
@@ -187,6 +190,45 @@ class TestSampler:
         spec1 = sample_fsm_spec(axes, random.Random(42))
         spec2 = sample_fsm_spec(axes, random.Random(42))
         assert spec1.model_dump() == spec2.model_dump()
+
+    def test_sampler_respects_target_difficulty_axis(self) -> None:
+        def _sample_difficulty_average(target: int) -> float:
+            axes = FsmAxes(target_difficulty=target)
+            rng = random.Random(1000 + target)
+            scores = [
+                compute_difficulty(
+                    "fsm",
+                    sample_fsm_spec(axes, rng).model_dump(),
+                )
+                for _ in range(120)
+            ]
+            return sum(scores) / len(scores)
+
+        averages = {
+            target: _sample_difficulty_average(target) for target in range(1, 6)
+        }
+
+        for target in range(1, 5):
+            assert averages[target + 1] >= averages[target] + 0.15
+        assert averages[5] >= averages[1] + 0.8
+
+
+class TestQueries:
+    def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
+        axes = FsmAxes(
+            target_difficulty=3,
+            value_range=(-7, 7),
+            n_states_range=(3, 4),
+            transitions_per_state_range=(1, 2),
+        )
+        spec = sample_fsm_spec(axes, random.Random(41))
+        queries = generate_fsm_queries(spec, axes, random.Random(41))
+
+        assert queries
+        assert {q.tag for q in queries} == set(QueryTag)
+        assert len({tuple(q.input) for q in queries}) == len(queries)
+        for q in queries:
+            assert q.output == eval_fsm(spec, q.input)
 
 
 class TestTaskGeneration:

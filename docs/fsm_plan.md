@@ -2,7 +2,7 @@
 
 Date: 2026-02-09  
 Owner: Codex + Danielle  
-Status: In Progress (M1 complete)
+Status: In Progress (M1-M2 complete)
 
 ## Goal
 
@@ -143,7 +143,7 @@ Use this after memory compaction:
 ## Execution Checklist
 
 - [x] M1 complete
-- [ ] M2 complete
+- [x] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
 - [x] Full `ruff` and full `pytest` pass
@@ -155,3 +155,7 @@ Use this after memory compaction:
 - 2026-02-09: M1 implemented (`src/genfxn/fsm/*` + `tests/test_fsm.py`).
   Added `fsm` support in `core/difficulty.py` and `core/describe.py`.
   Full suite check passed locally (`1223 passed, 22 skipped`).
+- 2026-02-09: M2 implemented. Added `target_difficulty` axis and
+  difficulty-aware FSM sampling in `src/genfxn/fsm/sampler.py`, plus
+  monotonic-target and query-quality tests in `tests/test_fsm.py`.
+  Full suite check passed locally (`1225 passed, 22 skipped`).
