@@ -17,6 +17,7 @@ from genfxn.sequence_dp.queries import generate_sequence_dp_queries
 from genfxn.sequence_dp.render import render_sequence_dp
 from genfxn.sequence_dp.sampler import sample_sequence_dp_spec
 from genfxn.sequence_dp.task import generate_sequence_dp_task
+from genfxn.sequence_dp.validate import validate_sequence_dp_task
 
 __all__ = [
     "OutputMode",
@@ -34,4 +35,5 @@ __all__ = [
     "generate_sequence_dp_task",
     "render_sequence_dp",
     "sample_sequence_dp_spec",
+    "validate_sequence_dp_task",
 ]

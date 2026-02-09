@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0-M2 complete)
+Status: In progress (M0-M3 complete)
 
 ## Goal
 
@@ -341,7 +341,7 @@ Required completion gate for this family:
 - [x] M0 complete
 - [x] M1 complete
 - [x] M2 complete
-- [ ] M3 complete
+- [x] M3 complete
 - [ ] M4 complete
 - [ ] M5 complete
 - [ ] Full `ruff` and full `pytest` pass
@@ -371,3 +371,19 @@ Required completion gate for this family:
   `uv run ruff check src/genfxn/core/difficulty.py src/genfxn/sequence_dp tests/test_difficulty.py tests/test_sequence_dp.py`
   and `uv run pytest tests/test_difficulty.py tests/test_sequence_dp.py -q`
   (88 passed).
+- 2026-02-09: M3 completed via parallel subagents + orchestration. Added
+  AST safety + validator for `sequence_dp`
+  (`src/genfxn/sequence_dp/ast_safety.py`,
+  `src/genfxn/sequence_dp/validate.py`) with tests in
+  `tests/test_validate_sequence_dp.py`. Added Java/Rust renderers
+  (`src/genfxn/langs/java/sequence_dp.py`,
+  `src/genfxn/langs/rust/sequence_dp.py`), registry wiring in
+  `src/genfxn/langs/registry.py`, and language-aware task rendering in
+  `src/genfxn/sequence_dp/task.py`. Added executable runtime parity harness in
+  `tests/test_sequence_dp_runtime_parity.py`, plus render/registry integration
+  updates in `tests/test_java_render.py` and `tests/test_rust_render.py`.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/sequence_dp src/genfxn/langs/java/sequence_dp.py src/genfxn/langs/rust/sequence_dp.py src/genfxn/langs/registry.py tests/test_sequence_dp.py tests/test_validate_sequence_dp.py tests/test_sequence_dp_runtime_parity.py tests/test_java_render.py tests/test_rust_render.py`
+  `uv run pytest tests/test_sequence_dp.py tests/test_validate_sequence_dp.py tests/test_difficulty.py -q` (95 passed)
+  `uv run pytest tests/test_java_render.py tests/test_rust_render.py -q` (294 passed)
+  `uv run pytest tests/test_sequence_dp_runtime_parity.py -q --verification-level=full` (3 passed)

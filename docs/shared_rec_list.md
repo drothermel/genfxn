@@ -9,7 +9,7 @@ Date: 2026-02-09
 - Completed: `Finite-State Transducer (FSM/Mealy/Moore)`
 - Completed: `Bit Manipulation Pipelines` (implemented as `bitops`)
 - Implementation plans: `docs/fsm_plan.md`, `docs/bitops_plan.md`
-- Next up (planned): `Sequence DP With Custom Scoring` (implementation plan:
+- Next up (in progress): `Sequence DP With Custom Scoring` (implementation plan:
   `docs/sequence_dp_plan.md`)
 
 1. Stack/Bytecode Interpreter
