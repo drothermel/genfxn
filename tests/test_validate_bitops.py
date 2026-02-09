@@ -13,8 +13,11 @@ from genfxn.bitops.validate import (
     CODE_QUERY_OUTPUT_TYPE,
     CODE_SEMANTIC_MISMATCH,
     CODE_UNSAFE_AST,
+    _validate_ast_whitelist,
 )
-from genfxn.bitops.validate import validate_bitops_task as _validate_bitops_task
+from genfxn.bitops.validate import (
+    validate_bitops_task as _validate_bitops_task,
+)
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import Severity
 
@@ -96,3 +99,29 @@ def test_execute_untrusted_code_true_reports_exec_error(
     corrupted = baseline_task.model_copy(update={"code": "raise ValueError(1)"})
     issues = _validate_bitops_task(corrupted, execute_untrusted_code=True)
     assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+
+
+def test_unsafe_ast_short_circuits_execution(
+    baseline_task: Task, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called = False
+
+    def _spy(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        nonlocal called
+        called = True
+        return {}
+
+    monkeypatch.setattr("genfxn.bitops.validate.execute_code_restricted", _spy)
+    corrupted = baseline_task.model_copy(
+        update={"code": "while True:\n    pass\ndef f(x):\n    return x"}
+    )
+    issues = _validate_bitops_task(corrupted, execute_untrusted_code=True)
+    assert any(i.code == CODE_UNSAFE_AST for i in issues)
+    assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+    assert called is False
+
+
+def test_ast_whitelist_allows_negative_literals() -> None:
+    code = "def f(x):\n    arg = -1\n    return x ^ arg"
+    issues, _ = _validate_ast_whitelist(code)
+    assert not any(i.code == CODE_UNSAFE_AST for i in issues)

@@ -357,6 +357,15 @@ def _build_fsm_axes(
     return FsmAxes(**kwargs)
 
 
+def _build_bitops_axes(
+    value_range: str | None,
+) -> BitopsAxes:
+    kwargs: dict[str, Any] = {}
+    if value_range:
+        kwargs["value_range"] = _parse_range(value_range)
+    return BitopsAxes(**kwargs)
+
+
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
     return render_stack_bytecode(spec)
 
@@ -666,7 +675,7 @@ def generate(
             threshold_range=threshold_range,
             divisor_range=divisor_range,
         )
-        bitops_axes = BitopsAxes()
+        bitops_axes = _build_bitops_axes(value_range=value_range)
 
     with output.open("w", encoding="utf-8") as output_handle:
 

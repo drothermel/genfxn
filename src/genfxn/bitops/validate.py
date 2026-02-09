@@ -448,18 +448,22 @@ def validate_bitops_task(
     elif isinstance(task.code, dict):
         code = task.code.get(PYTHON_CODE_KEY)
 
+    ast_issues: list[Issue] = []
     parsed_tree: ast.Module | None = None
     if code is not None:
         ast_issues, parsed_tree = _validate_ast_whitelist(code)
         issues.extend(ast_issues)
 
-    compile_issues, fn = _validate_code_compile(
-        task,
-        code=code,
-        parsed_tree=parsed_tree,
-        execute_untrusted_code=execute_untrusted_code,
-    )
-    issues.extend(compile_issues)
+    fn = None
+    has_unsafe_ast = any(i.code == CODE_UNSAFE_AST for i in ast_issues)
+    if not has_unsafe_ast:
+        compile_issues, fn = _validate_code_compile(
+            task,
+            code=code,
+            parsed_tree=parsed_tree,
+            execute_untrusted_code=execute_untrusted_code,
+        )
+        issues.extend(compile_issues)
 
     issues.extend(_validate_query_outputs(task, spec, strict=strict))
 

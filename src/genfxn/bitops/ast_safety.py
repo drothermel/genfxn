@@ -38,6 +38,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.LShift,
         ast.RShift,
         ast.Sub,
+        ast.USub,
         ast.Mod,
         ast.Invert,
         ast.Not,
