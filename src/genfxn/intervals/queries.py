@@ -128,7 +128,11 @@ def generate_intervals_queries(
         [(lo, lo + 1)],
     ]
     for case in boundary_cases:
-        _append(case, QueryTag.BOUNDARY)
+        adjusted = [
+            (_clamp(a, endpoint_range), _clamp(b, endpoint_range))
+            for a, b in case
+        ]
+        _append(adjusted, QueryTag.BOUNDARY)
 
     for _ in range(n_typical):
         count = rng.randint(max(0, n_lo), max(max(0, n_lo), n_hi))

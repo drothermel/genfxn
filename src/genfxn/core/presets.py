@@ -1133,6 +1133,7 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
             "1A",
             "closed intervals with coverage/merge counting",
             {
+                "target_difficulty": 1,
                 "operation_types": [
                     OperationType.TOTAL_COVERAGE,
                 ],
@@ -1148,6 +1149,7 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
             "2A",
             "total coverage with open-open boundary variants",
             {
+                "target_difficulty": 2,
                 "operation_types": [OperationType.TOTAL_COVERAGE],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [False, True],
@@ -1161,6 +1163,7 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
             "3A",
             "merged count with open-open and touching merge",
             {
+                "target_difficulty": 3,
                 "operation_types": [OperationType.MERGED_COUNT],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [True],
@@ -1174,6 +1177,7 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
             "4A",
             "max-overlap with open-open boundary variants",
             {
+                "target_difficulty": 4,
                 "operation_types": [OperationType.MAX_OVERLAP_COUNT],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [False, True],
@@ -1187,6 +1191,7 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
             "5A",
             "gap counting with open boundaries and touching merge",
             {
+                "target_difficulty": 5,
                 "operation_types": [OperationType.GAP_COUNT],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [True],

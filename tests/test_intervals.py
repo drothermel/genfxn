@@ -316,6 +316,24 @@ class TestQueries:
             for query in queries:
                 assert query.output == eval_intervals(spec, query.input)
 
+    def test_queries_respect_narrow_endpoint_range(self) -> None:
+        axes = IntervalsAxes(
+            n_intervals_range=(1, 4),
+            endpoint_range=(0, 0),
+            max_span_range=(0, 2),
+        )
+        spec = _call_sample(sample_intervals_spec, axes, seed=501)
+        queries = _call_queries(
+            generate_intervals_queries,
+            spec,
+            axes,
+            seed=501,
+        )
+        for query in queries:
+            for start, end in query.input:
+                assert 0 <= start <= 0
+                assert 0 <= end <= 0
+
 
 class TestTaskGeneration:
     def test_generate_intervals_task_smoke(self) -> None:

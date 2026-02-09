@@ -148,6 +148,18 @@ class TestGetDifficultyAxes:
         axes = get_difficulty_axes("intervals", 3)
         assert isinstance(axes, IntervalsAxes)
 
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_intervals_sets_target_difficulty(self, difficulty: int) -> None:
+        axes = cast(
+            IntervalsAxes,
+            get_difficulty_axes(
+                "intervals",
+                difficulty,
+                variant=f"{difficulty}A",
+            ),
+        )
+        assert axes.target_difficulty == difficulty
+
     def test_variant_selects_specific_preset(self) -> None:
         axes_a = cast(
             PiecewiseAxes,
