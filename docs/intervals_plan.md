@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0-M3 complete; M4-M5 remaining)
+Status: In progress (M0-M4 complete; M5 remaining)
 
 ## Goal
 
@@ -340,7 +340,7 @@ This family is not complete until all are true:
 - [x] M1 complete
 - [x] M2 complete
 - [x] M3 complete
-- [ ] M4 complete
+- [x] M4 complete
 - [ ] M5 complete
 - [ ] Full `ruff` and full `pytest` pass
 - [ ] Calibration script strict mode pass
@@ -388,3 +388,17 @@ This family is not complete until all are true:
   `uv run pytest tests/test_validate_intervals.py tests/test_intervals.py -q` (19 passed)
   `uv run pytest tests/test_difficulty.py tests/test_intervals.py tests/test_validate_intervals.py -q` (99 passed)
   `uv run ty check src/genfxn/intervals tests/test_validate_intervals.py` (pass).
+- 2026-02-09: M4 completed. Added Java/Rust intervals renderers in
+  `src/genfxn/langs/java/intervals.py` and
+  `src/genfxn/langs/rust/intervals.py`, wired the family in
+  `src/genfxn/langs/registry.py`, and updated
+  `src/genfxn/intervals/task.py` to use registry-based multi-language
+  dispatch. Added render integration coverage in
+  `tests/test_java_render.py` and `tests/test_rust_render.py`, plus the
+  executable cross-language parity harness in
+  `tests/test_intervals_runtime_parity.py`.
+  Focused verification passed:
+  `uv run ruff check --fix src/genfxn/langs/java/intervals.py src/genfxn/langs/rust/intervals.py src/genfxn/langs/registry.py src/genfxn/intervals/task.py tests/test_java_render.py tests/test_rust_render.py tests/test_intervals_runtime_parity.py`
+  `uv run pytest tests/test_java_render.py tests/test_rust_render.py tests/test_intervals_runtime_parity.py -q` (298 passed, 3 skipped)
+  `uv run pytest tests/test_difficulty.py tests/test_intervals.py tests/test_validate_intervals.py -q` (99 passed)
+  `uv run ty check src/genfxn/langs/java/intervals.py src/genfxn/langs/rust/intervals.py src/genfxn/langs/registry.py src/genfxn/intervals/task.py tests/test_java_render.py tests/test_rust_render.py tests/test_intervals_runtime_parity.py` (pass).

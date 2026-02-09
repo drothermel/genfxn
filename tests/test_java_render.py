@@ -58,6 +58,7 @@ from genfxn.core.transforms import (
     TransformShift,
 )
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.java._helpers import (
     _regex_char_class_escape,
     java_string_literal,
@@ -825,6 +826,17 @@ class TestMultiLanguageGeneration:
         assert "def f(" in code["python"]
         assert "public static long f(long[] a, long[] b)" in code["java"]
 
+    def test_intervals_generates_java(self) -> None:
+        task = generate_intervals_task(
+            rng=random.Random(42),
+            languages=[Language.PYTHON, Language.JAVA],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static long f(long[][] intervals)" in code["java"]
+
     def test_stack_bytecode_generates_java_when_available(self) -> None:
         if not _supports_stack_bytecode_java():
             pytest.skip("stack_bytecode Java rendering is not available")
@@ -870,6 +882,10 @@ class TestMultiLanguageGeneration:
     def test_sequence_dp_rejects_empty_languages(self) -> None:
         with pytest.raises(ValueError, match="languages list is empty"):
             generate_sequence_dp_task(rng=random.Random(42), languages=[])
+
+    def test_intervals_rejects_empty_languages(self) -> None:
+        with pytest.raises(ValueError, match="languages list is empty"):
+            generate_intervals_task(rng=random.Random(42), languages=[])
 
     @pytest.mark.parametrize("seed", range(10))
     def test_piecewise_java_renders_non_empty(self, seed: int) -> None:
@@ -966,6 +982,13 @@ class TestLangsInfra:
         assert callable(get_render_fn(Language.PYTHON, "sequence_dp"))
         assert callable(get_render_fn(Language.JAVA, "sequence_dp"))
         assert callable(get_render_fn(Language.RUST, "sequence_dp"))
+
+    def test_registry_intervals(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "intervals"))
+        assert callable(get_render_fn(Language.JAVA, "intervals"))
+        assert callable(get_render_fn(Language.RUST, "intervals"))
 
     def test_available_languages_includes_python_and_java(self) -> None:
         from genfxn.langs.render import _available_languages

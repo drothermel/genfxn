@@ -10,6 +10,7 @@ from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
 from genfxn.intervals.queries import generate_intervals_queries
 from genfxn.intervals.render import render_intervals
 from genfxn.intervals.sampler import sample_intervals_spec
+from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
 
 
@@ -38,12 +39,8 @@ def _render_intervals_for_languages(
 
     rendered: dict[str, str] = {}
     for language in dict.fromkeys(languages):
-        if language == Language.PYTHON:
-            rendered[language.value] = render_intervals(spec, func_name="f")
-            continue
-        raise ValueError(
-            f"Language {language.value} is not available for intervals yet"
-        )
+        render_fn = get_render_fn(language, "intervals")
+        rendered[language.value] = render_fn(spec, func_name="f")
     return rendered
 
 
