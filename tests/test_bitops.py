@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 
 bitops_models = pytest.importorskip("genfxn.bitops.models")
@@ -193,16 +194,43 @@ class TestSampler:
         spec2 = _call_sample(sample_bitops_spec, axes, seed=99)
         assert spec1.model_dump() == spec2.model_dump()
 
+    def test_sampler_respects_target_difficulty_axis(self) -> None:
+        def _sample_difficulty_average(target: int) -> float:
+            axes = AxesCls(target_difficulty=target)
+            rng = random.Random(2000 + target)
+            scores = []
+            for _ in range(120):
+                spec = _call_sample(
+                    sample_bitops_spec,
+                    axes,
+                    seed=rng.randint(0, 10**9),
+                )
+                scores.append(compute_difficulty("bitops", spec.model_dump()))
+            return sum(scores) / len(scores)
+
+        averages = {
+            target: _sample_difficulty_average(target) for target in range(1, 6)
+        }
+
+        for target in range(1, 5):
+            assert averages[target + 1] >= averages[target] + 0.1
+        assert averages[5] >= averages[1] + 0.7
+
 
 class TestQueries:
-    def test_queries_outputs_match_evaluator(self) -> None:
-        spec, axes = _sample_spec_and_axes(seed=45)
+    def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
+        axes = AxesCls(
+            width_choices=[8, 16],
+            n_ops_range=(3, 4),
+            value_range=(-7, 7),
+            mask_range=(0, 255),
+            shift_range=(0, 7),
+        )
+        spec = _call_sample(sample_bitops_spec, axes, seed=45)
         queries = _call_queries(generate_bitops_queries, spec, axes, seed=45)
         assert queries
 
-        tags = {q.tag for q in queries if hasattr(q, "tag")}
-        if tags:
-            assert tags <= set(QueryTag)
+        assert {q.tag for q in queries} == set(QueryTag)
 
         for q in queries:
             assert q.output == eval_bitops(spec, q.input)

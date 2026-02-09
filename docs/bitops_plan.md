@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M1 complete, M2-M4 pending)
+Status: In progress (M1-M2 complete, M3-M4 pending)
 
 ## Goal
 
@@ -145,7 +145,7 @@ Use this after memory compaction:
 ## Execution Checklist
 
 - [x] M1 complete
-- [ ] M2 complete
+- [x] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
 - [ ] Suite integration follow-up complete
@@ -164,3 +164,12 @@ Use this after memory compaction:
   Focused verification passed:
   `uv run ruff check src/genfxn/bitops src/genfxn/langs/registry.py src/genfxn/core/describe.py tests/test_bitops.py`
   and `uv run pytest tests/test_bitops.py -v` (7 passed).
+- 2026-02-09: M2 implemented. Added `bitops` difficulty scoring in
+  `src/genfxn/core/difficulty.py` and wired `compute_difficulty("bitops", ...)`.
+  Strengthened tests in `tests/test_bitops.py` for
+  target-difficulty monotonicity and full query-tag coverage, and added bitops
+  family coverage in `tests/test_difficulty.py`.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/core/difficulty.py tests/test_bitops.py tests/test_difficulty.py`
+  and `uv run pytest tests/test_bitops.py tests/test_difficulty.py -v`
+  (82 passed).
