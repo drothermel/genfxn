@@ -179,10 +179,10 @@ These apply to multiple families:
 
 | Option | Families | Default | Description |
 |--------|----------|---------|-------------|
-| `--value-range LO,HI` | all | `-100,100` | Range for input/element values |
-| `--threshold-range LO,HI` | piecewise, stateful, fsm | `-50,50` | Range for predicate thresholds |
-| `--divisor-range LO,HI` | piecewise, stateful, fsm, sequence_dp | `2,10` | Range for mod divisors |
-| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp | `5,20` | Range for test list lengths |
+| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-1024,1024` for bitops) |
+| `--threshold-range LO,HI` | piecewise, stateful, fsm | family-specific | Range for predicate thresholds (`-50,50` for piecewise/stateful, `-10,10` for fsm) |
+| `--divisor-range LO,HI` | piecewise, stateful, fsm, sequence_dp | family-specific | Range for mod divisors (`2,10` for piecewise/stateful/fsm, `1,10` for sequence_dp) |
+| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp | family-specific | Range for test list lengths (`5,20` for stateful/simple_algorithms, `0,8` for stack_bytecode, `2,10` for sequence_dp) |
 
 ### Examples
 

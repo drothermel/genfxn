@@ -304,6 +304,47 @@ Finite-state machines over integer sequences: `f(xs: list[int]) -> int`
 
 ---
 
+## Bitops
+
+Fixed-width bit-operation pipelines over integer inputs: `f(x: int) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
+| `width_choices` | list[int] | `[8, 16, 32]` | — | Allowed output bit widths |
+| `n_ops_range` | (lo, hi) | (2, 6) | — | Range for sampled operation count |
+| `value_range` | (lo, hi) | (-1024, 1024) | `--value-range` | Range for sampled integer inputs in queries |
+| `mask_range` | (lo, hi) | (0, 65535) | — | Range for sampled mask arguments |
+| `shift_range` | (lo, hi) | (0, 63) | — | Range for shift/rotate amounts |
+| `allowed_ops` | list | all | — | Operations allowed during sampling |
+
+### Operation Types
+
+| Value | Description |
+|-------|-------------|
+| `and_mask` | `x & mask` |
+| `or_mask` | `x \| mask` |
+| `xor_mask` | `x ^ mask` |
+| `shl` | Left shift |
+| `shr_logical` | Logical right shift |
+| `rotl` | Rotate left (within configured width) |
+| `rotr` | Rotate right (within configured width) |
+| `not` | Bitwise NOT (masked to configured width) |
+| `popcount` | Number of set bits |
+| `parity` | `popcount % 2` |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `width_bits` | integer | Active output width |
+| `operations.N.op` | operation values | Opcode at instruction index N |
+| `operations.N.arg` | integer | Immediate argument (when required by op) |
+
+---
+
 ## Sequence DP
 
 Sequence dynamic-programming alignment tasks:
