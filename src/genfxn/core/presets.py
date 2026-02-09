@@ -8,6 +8,7 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
+from genfxn.bitops.models import BitOp, BitopsAxes
 from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
@@ -902,6 +903,104 @@ FSM_PRESETS: dict[int, list[DifficultyPreset]] = {
     ],
 }
 
+# =============================================================================
+# Bitops Presets
+# Difficulty maps directly from target_difficulty in bitops axes.
+# =============================================================================
+
+BITOPS_PRESETS: dict[int, list[DifficultyPreset]] = {
+    1: [
+        DifficultyPreset(
+            "1A",
+            "tiny bit pipelines at lowest target difficulty",
+            {
+                "target_difficulty": 1,
+                "width_choices": [8],
+                "n_ops_range": (1, 2),
+                "allowed_ops": [
+                    BitOp.AND_MASK,
+                    BitOp.OR_MASK,
+                    BitOp.XOR_MASK,
+                    BitOp.NOT,
+                ],
+            },
+        )
+    ],
+    2: [
+        DifficultyPreset(
+            "2A",
+            "small bit pipelines at target difficulty 2",
+            {
+                "target_difficulty": 2,
+                "width_choices": [16],
+                "n_ops_range": (3, 3),
+                "allowed_ops": [
+                    BitOp.AND_MASK,
+                    BitOp.OR_MASK,
+                    BitOp.XOR_MASK,
+                    BitOp.NOT,
+                    BitOp.SHL,
+                    BitOp.SHR_LOGICAL,
+                ],
+            },
+        )
+    ],
+    3: [
+        DifficultyPreset(
+            "3A",
+            "moderate bit pipelines at target difficulty 3",
+            {
+                "target_difficulty": 3,
+                "width_choices": [24],
+                "n_ops_range": (4, 4),
+                "allowed_ops": [
+                    BitOp.SHL,
+                    BitOp.SHR_LOGICAL,
+                    BitOp.ROTL,
+                    BitOp.ROTR,
+                    BitOp.NOT,
+                ],
+            },
+        )
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "complex bit pipelines at target difficulty 4",
+            {
+                "target_difficulty": 4,
+                "width_choices": [32],
+                "n_ops_range": (5, 5),
+                "allowed_ops": [
+                    BitOp.ROTL,
+                    BitOp.ROTR,
+                    BitOp.POPCOUNT,
+                    BitOp.PARITY,
+                    BitOp.XOR_MASK,
+                ],
+            },
+        )
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "advanced bit pipelines at highest target difficulty",
+            {
+                "target_difficulty": 5,
+                "width_choices": [16],
+                "n_ops_range": (6, 7),
+                "allowed_ops": [
+                    BitOp.POPCOUNT,
+                    BitOp.PARITY,
+                    BitOp.ROTL,
+                    BitOp.ROTR,
+                    BitOp.SHR_LOGICAL,
+                ],
+            },
+        )
+    ],
+}
+
 
 # =============================================================================
 # Lookup Functions
@@ -914,6 +1013,7 @@ _FAMILY_PRESETS: dict[str, dict[int, list[DifficultyPreset]]] = {
     "stringrules": STRINGRULES_PRESETS,
     "stack_bytecode": STACK_BYTECODE_PRESETS,
     "fsm": FSM_PRESETS,
+    "bitops": BITOPS_PRESETS,
 }
 
 
@@ -954,6 +1054,7 @@ def get_difficulty_axes(
     | StringRulesAxes
     | StackBytecodeAxes
     | FsmAxes
+    | BitopsAxes
 ):
     """Return axes for target difficulty.
 
@@ -997,6 +1098,7 @@ def _build_axes(
     | StringRulesAxes
     | StackBytecodeAxes
     | FsmAxes
+    | BitopsAxes
 ):
     """Build axes object from overrides."""
     match family:
@@ -1012,5 +1114,7 @@ def _build_axes(
             return StackBytecodeAxes(**overrides)
         case "fsm":
             return FsmAxes(**overrides)
+        case "bitops":
+            return BitopsAxes(**overrides)
         case _:
             raise ValueError(f"Unknown family: {family}")

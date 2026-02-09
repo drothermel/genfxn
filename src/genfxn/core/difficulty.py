@@ -24,6 +24,8 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _stringrules_difficulty(spec)
     elif family == "fsm":
         return _fsm_difficulty(spec)
+    elif family == "bitops":
+        return _bitops_difficulty(spec)
     elif family == "stack_bytecode":
         return _stack_bytecode_difficulty(spec)
     raise ValueError(f"Unknown family: {family}")
@@ -583,6 +585,62 @@ def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:
         step_score,
     )
     return max(1, min(5, int(composite)))
+
+
+def _bitops_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for fixed-width bit operation pipelines."""
+    operations = spec.get("operations", [])
+    if not isinstance(operations, list):
+        return 1
+
+    n_ops = len(operations)
+    if n_ops <= 2:
+        length_score = 1
+    elif n_ops <= 3:
+        length_score = 2
+    elif n_ops <= 4:
+        length_score = 3
+    elif n_ops <= 5:
+        length_score = 4
+    else:
+        length_score = 5
+
+    width_bits = spec.get("width_bits", 8)
+    if not isinstance(width_bits, int):
+        width_bits = 8
+    if width_bits <= 8:
+        width_score = 1
+    elif width_bits <= 16:
+        width_score = 2
+    elif width_bits <= 24:
+        width_score = 3
+    elif width_bits <= 32:
+        width_score = 4
+    else:
+        width_score = 5
+
+    op_score = max(
+        (
+            _bitops_opcode_score(op.get("op", ""))
+            for op in operations
+            if isinstance(op, dict)
+        ),
+        default=1,
+    )
+
+    return max(1, min(5, max(length_score, width_score, op_score)))
+
+
+def _bitops_opcode_score(op: str) -> int:
+    if op in {"and_mask", "or_mask", "xor_mask", "not"}:
+        return 1
+    if op in {"shl", "shr_logical"}:
+        return 2
+    if op in {"rotl", "rotr"}:
+        return 3
+    if op in {"popcount", "parity"}:
+        return 4
+    return 1
 
 
 def _stack_opcode_score(op: str) -> int:

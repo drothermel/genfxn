@@ -293,6 +293,33 @@ _FSM_D5 = QuotaSpec(
     buckets=[Bucket("n_states_bucket", "5-6", 50)],
 )
 
+# ── Bitops quotas ───────────────────────────────────────────────────────
+
+_BITOPS_D1 = QuotaSpec(
+    hard_constraints={"width_bucket": "8", "op_complexity": "basic"},
+    buckets=[Bucket("n_ops_bucket", "1-2", 50)],
+)
+
+_BITOPS_D2 = QuotaSpec(
+    hard_constraints={"op_complexity": "shift"},
+    buckets=[Bucket("n_ops_bucket", "2-3", 50)],
+)
+
+_BITOPS_D3 = QuotaSpec(
+    hard_constraints={"op_complexity": "rotate"},
+    buckets=[Bucket("n_ops_bucket", "3-4", 50)],
+)
+
+_BITOPS_D4 = QuotaSpec(
+    hard_constraints={"op_complexity": "aggregate"},
+    buckets=[Bucket("n_ops_bucket", "4-5", 50)],
+)
+
+_BITOPS_D5 = QuotaSpec(
+    hard_constraints={"op_complexity": "aggregate"},
+    buckets=[Bucket("n_ops_bucket", "6+", 50)],
+)
+
 # ── Combined lookup ──────────────────────────────────────────────────────
 
 QUOTAS: dict[str, dict[int, QuotaSpec]] = {
@@ -316,5 +343,12 @@ QUOTAS: dict[str, dict[int, QuotaSpec]] = {
         3: _FSM_D3,
         4: _FSM_D4,
         5: _FSM_D5,
+    },
+    "bitops": {
+        1: _BITOPS_D1,
+        2: _BITOPS_D2,
+        3: _BITOPS_D3,
+        4: _BITOPS_D4,
+        5: _BITOPS_D5,
     },
 }

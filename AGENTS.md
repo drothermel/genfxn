@@ -22,6 +22,13 @@ Target Python is 3.12 with `ruff` enforcing style (`line-length = 80`, import so
 ## Testing Guidelines
 Use `pytest`; add tests under `tests/` as `test_<feature>.py`. Prefer focused unit tests near touched behavior and include CLI coverage when changing `src/genfxn/cli.py`. For generators/validators, test both valid and invalid cases plus deterministic behavior with fixed seeds.
 
+### Required Gate For New Families
+Any new family must include an executable cross-language runtime parity test
+harness (Python vs Java vs Rust) before the family is considered complete or
+merge-ready. Renderer-only string tests are not sufficient. The parity harness
+must execute generated/runtime code and assert equal outputs for the same specs
+and inputs across supported languages.
+
 ## Commit & Pull Request Guidelines
 Recent commits use short, imperative summaries (for example: `fix hashing to ensure reproducibility`, `balanced sampling script`). Keep subject lines concise and specific; optionally include PR references like `(#11)`. PRs should include:
 - What changed and why.

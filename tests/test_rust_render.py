@@ -5,6 +5,8 @@ import random
 
 import pytest
 
+from genfxn.bitops.models import BitInstruction, BitOp, BitopsSpec
+from genfxn.bitops.task import generate_bitops_task
 from genfxn.core.models import Task
 from genfxn.core.predicates import (
     PredicateAnd,
@@ -482,6 +484,39 @@ class TestPiecewiseRust:
         assert "[1, 2].contains(&x)" in code
 
 
+class TestBitopsRust:
+    def test_renders_fixed_width_operations(self) -> None:
+        from genfxn.langs.rust.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=8,
+            operations=[
+                BitInstruction(op=BitOp.SHR_LOGICAL, arg=3),
+                BitInstruction(op=BitOp.ROTL, arg=9),
+                BitInstruction(op=BitOp.POPCOUNT),
+                BitInstruction(op=BitOp.PARITY),
+            ],
+        )
+        code = render_bitops(spec)
+        assert "fn f(x: i64) -> i64" in code
+        assert "let mask: u64 = (1u64 << width_bits) - 1;" in code
+        assert "arg.rem_euclid(width_bits as i64)" in code
+        assert ">> amt" in code
+        assert ".count_ones()" in code
+        assert "& 1;" in code
+
+    def test_custom_signature(self) -> None:
+        from genfxn.langs.rust.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=16,
+            operations=[BitInstruction(op=BitOp.NOT)],
+        )
+        code = render_bitops(spec, func_name="g", var="n")
+        assert "fn g(n: i64) -> i64" in code
+        assert "value = (!value) & mask;" in code
+
+
 class TestStatefulRust:
     def test_conditional_linear_sum(self) -> None:
         from genfxn.langs.rust.stateful import render_stateful
@@ -776,6 +811,17 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
 
+    def test_bitops_generates_rust(self) -> None:
+        task = generate_bitops_task(
+            rng=seeded_rng(42),
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(x: i64) -> i64" in code["rust"]
+
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
             pytest.skip("stack_bytecode Rust rendering is not available")
@@ -857,6 +903,7 @@ class TestRustRegistry:
         from genfxn.langs.registry import get_render_fn
 
         families = [
+            "bitops",
             "piecewise",
             "stateful",
             "simple_algorithms",

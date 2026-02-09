@@ -672,6 +672,21 @@ class TestComputeDifficulty:
         difficulty = compute_difficulty("stack_bytecode", spec)
         assert 1 <= difficulty <= 5
 
+    def test_bitops_family_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.bitops.task") is None:
+            pytest.skip("bitops family is not available")
+        spec = {
+            "width_bits": 16,
+            "operations": [
+                {"op": "xor_mask", "arg": 255},
+                {"op": "shl", "arg": 2},
+                {"op": "rotr", "arg": 3},
+                {"op": "parity", "arg": None},
+            ],
+        }
+        difficulty = compute_difficulty("bitops", spec)
+        assert 1 <= difficulty <= 5
+
     def test_stack_bytecode_monotonic_examples_when_available(self) -> None:
         if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
             pytest.skip("stack_bytecode family is not available")
