@@ -12,7 +12,7 @@ from genfxn.core.safe_exec import (
     execute_code_restricted,
 )
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
-from genfxn.fsm.ast_safety import (
+from genfxn.sequence_dp.ast_safety import (
     ALLOWED_ANNOTATION_NAMES,
     ALLOWED_AST_NODES,
     ALLOWED_CALL_NAMES,
@@ -21,8 +21,8 @@ from genfxn.fsm.ast_safety import (
     CALL_ARITIES,
     METHOD_ARITIES,
 )
-from genfxn.fsm.eval import eval_fsm
-from genfxn.fsm.models import FsmAxes, FsmSpec
+from genfxn.sequence_dp.eval import eval_sequence_dp
+from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -37,23 +37,25 @@ CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "CODE_UNSAFE_AST"
-CURRENT_FAMILY = "fsm"
+CURRENT_FAMILY = "sequence_dp"
 PYTHON_CODE_KEY = "python"
 
-_spec_adapter = TypeAdapter(FsmSpec)
+_spec_adapter = TypeAdapter(SequenceDpSpec)
 _ALLOWED_BUILTINS = {
+    "RuntimeError": RuntimeError,
+    "ValueError": ValueError,
     "abs": abs,
     "len": len,
     "max": max,
-    "min": min,
     "range": range,
 }
 
 
 def _validate_ast_whitelist(
-    code: str, param_name: str = "xs"
+    code: str,
+    param_names: tuple[str, ...] = ("a", "b"),
 ) -> tuple[list[Issue], ast.Module | None]:
-    allowed_names = ALLOWED_CALL_NAMES | ALLOWED_VAR_NAMES | {param_name}
+    allowed_names = ALLOWED_CALL_NAMES | ALLOWED_VAR_NAMES | set(param_names)
     issues: list[Issue] = []
 
     try:
@@ -65,16 +67,13 @@ def _validate_ast_whitelist(
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
             for arg in node.args.args:
-                if arg.annotation is not None:
-                    for n in ast.walk(arg.annotation):
-                        if hasattr(n, "lineno") and hasattr(
-                            n, "col_offset"
-                        ):
-                            annotation_positions.add(
-                                cast(
-                                    tuple[int, int], (n.lineno, n.col_offset)
-                                )
-                            )
+                if arg.annotation is None:
+                    continue
+                for n in ast.walk(arg.annotation):
+                    if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                        annotation_positions.add(
+                            cast(tuple[int, int], (n.lineno, n.col_offset))
+                        )
             if node.returns is not None:
                 for n in ast.walk(node.returns):
                     if hasattr(n, "lineno") and hasattr(n, "col_offset"):
@@ -163,7 +162,8 @@ def _validate_ast_whitelist(
                         code=CODE_UNSAFE_AST,
                         severity=Severity.ERROR,
                         message=(
-                            f"Disallowed name '{node.id}' at line {node.lineno}"
+                            f"Disallowed name '{node.id}' at line "
+                            f"{node.lineno}"
                         ),
                         location="code",
                     )
@@ -174,25 +174,25 @@ def _validate_ast_whitelist(
 
 def _validate_task_id(task: Task) -> list[Issue]:
     expected = task_id_from_spec(family=task.family, spec=task.spec)
-    if task.task_id != expected:
-        return [
-            Issue(
-                code=CODE_TASK_ID_MISMATCH,
-                severity=Severity.ERROR,
-                message=(
-                    f"task_id '{task.task_id}' does not match spec hash "
-                    f"'{expected}'"
-                ),
-                location="task_id",
-                task_id=task.task_id,
-            )
-        ]
-    return []
+    if task.task_id == expected:
+        return []
+    return [
+        Issue(
+            code=CODE_TASK_ID_MISMATCH,
+            severity=Severity.ERROR,
+            message=(
+                f"task_id '{task.task_id}' does not match spec hash "
+                f"'{expected}'"
+            ),
+            location="task_id",
+            task_id=task.task_id,
+        )
+    ]
 
 
 def _validate_spec_deserialize(
     task: Task,
-) -> tuple[list[Issue], FsmSpec | None]:
+) -> tuple[list[Issue], SequenceDpSpec | None]:
     try:
         spec = _spec_adapter.validate_python(task.spec, strict=True)
         return [], spec
@@ -213,7 +213,7 @@ def _validate_code_compile(
     code: str | None = None,
     parsed_tree: ast.Module | None = None,
     execute_untrusted_code: bool = True,
-) -> tuple[list[Issue], Callable[[list[int]], int] | None]:
+) -> tuple[list[Issue], Callable[[list[int], list[int]], int] | None]:
     if code is None:
         if isinstance(task.code, str):
             code = task.code
@@ -239,7 +239,6 @@ def _validate_code_compile(
     if not execute_untrusted_code:
         return [], None
 
-    namespace: dict[str, object]
     try:
         namespace = execute_code_restricted(
             code,
@@ -256,7 +255,7 @@ def _validate_code_compile(
                 task_id=task.task_id,
             )
         ], None
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - defensive fallback
         return [
             Issue(
                 code=CODE_CODE_EXEC_ERROR,
@@ -267,8 +266,8 @@ def _validate_code_compile(
             )
         ], None
 
-    f = namespace.get("f")
-    if f is None:
+    fn_obj = namespace.get("f")
+    if fn_obj is None:
         return [
             Issue(
                 code=CODE_CODE_MISSING_FUNC,
@@ -279,39 +278,64 @@ def _validate_code_compile(
             )
         ], None
 
-    if not callable(f):
+    if not callable(fn_obj):
         return [
             Issue(
                 code=CODE_FUNC_NOT_CALLABLE,
                 severity=Severity.ERROR,
-                message=f"Function 'f' is not callable: {type(f)}",
+                message=f"Function 'f' is not callable: {type(fn_obj)}",
                 location="code.f",
                 task_id=task.task_id,
             )
         ], None
 
-    return [], cast(Callable[[list[int]], int], f)
+    return [], cast(Callable[[list[int], list[int]], int], fn_obj)
+
+
+def _coerce_query_input(
+    input_value: object,
+) -> tuple[list[int], list[int]] | None:
+    if not isinstance(input_value, dict):
+        return None
+
+    keys = set(input_value)
+    if keys != {"a", "b"}:
+        return None
+
+    typed_input_value = cast(dict[str, object], input_value)
+    a_value = typed_input_value.get("a")
+    b_value = typed_input_value.get("b")
+    if not isinstance(a_value, list) or not all(
+        isinstance(x, int) for x in a_value
+    ):
+        return None
+    if not isinstance(b_value, list) or not all(
+        isinstance(x, int) for x in b_value
+    ):
+        return None
+
+    return cast(list[int], a_value), cast(list[int], b_value)
 
 
 def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
 
-    for i, q in enumerate(task.queries):
-        if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
-        ):
+    for i, query in enumerate(task.queries):
+        if _coerce_query_input(query.input) is None:
             issues.append(
                 Issue(
                     code=CODE_QUERY_INPUT_TYPE,
                     severity=severity,
-                    message="Query input must be list[int]",
+                    message=(
+                        "Query input must be dict{'a': list[int], "
+                        "'b': list[int]}"
+                    ),
                     location=f"queries[{i}].input",
                     task_id=task.task_id,
                 )
             )
-
-        if not isinstance(q.output, int):
+        if not isinstance(query.output, int):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -327,44 +351,43 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
 
 def _validate_query_outputs(
     task: Task,
-    spec: FsmSpec,
+    spec: SequenceDpSpec,
     strict: bool,
 ) -> list[Issue]:
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
 
-    for i, q in enumerate(task.queries):
-        if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
-        ):
+    for i, query in enumerate(task.queries):
+        coerced = _coerce_query_input(query.input)
+        if coerced is None:
             continue
-        if not isinstance(q.output, int):
+        if not isinstance(query.output, int):
             continue
-        try:
-            expected = eval_fsm(spec, q.input)
-        except ValueError:
-            continue
-        if q.output != expected:
+
+        a, b = coerced
+        expected = eval_sequence_dp(spec, a, b)
+        if query.output != expected:
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_MISMATCH,
                     severity=severity,
                     message=(
-                        f"Expected output {expected} but found {q.output} "
-                        f"for input {q.input}"
+                        f"Expected output {expected} but found "
+                        f"{query.output} for input {query.input}"
                     ),
                     location=f"queries[{i}].output",
                     task_id=task.task_id,
                 )
             )
+
     return issues
 
 
 def _validate_semantics(
     task: Task,
-    spec: FsmSpec,
-    fn: Callable[[list[int]], int] | None,
-    axes: FsmAxes,
+    spec: SequenceDpSpec,
+    fn: Callable[[list[int], list[int]], int] | None,
+    axes: SequenceDpAxes,
     strict: bool,
     semantic_trials: int,
     max_semantic_issues: int,
@@ -375,25 +398,28 @@ def _validate_semantics(
 
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
+    len_a_lo, len_a_hi = axes.len_a_range
+    len_b_lo, len_b_hi = axes.len_b_range
     val_lo, val_hi = axes.value_range
-    max_len = max(2, len(spec.states) + 2)
 
     for _ in range(semantic_trials):
-        n = rng.randint(0, max_len)
-        xs = [rng.randint(val_lo, val_hi) for _ in range(n)]
-        try:
-            expected = eval_fsm(spec, xs)
-        except ValueError:
-            continue
+        a_len = rng.randint(len_a_lo, len_a_hi)
+        b_len = rng.randint(len_b_lo, len_b_hi)
+        a = [rng.randint(val_lo, val_hi) for _ in range(a_len)]
+        b = [rng.randint(val_lo, val_hi) for _ in range(b_len)]
+        expected = eval_sequence_dp(spec, a, b)
 
         try:
-            actual = fn(xs)
+            actual = fn(a, b)
         except Exception as e:
             issues.append(
                 Issue(
                     code=CODE_CODE_RUNTIME_ERROR,
                     severity=severity,
-                    message=f"Code raised runtime error for input {xs}: {e}",
+                    message=(
+                        "Code raised runtime error for input "
+                        f"{{'a': {a}, 'b': {b}}}: {e}"
+                    ),
                     location="code",
                     task_id=task.task_id,
                 )
@@ -406,8 +432,9 @@ def _validate_semantics(
                     code=CODE_SEMANTIC_MISMATCH,
                     severity=severity,
                     message=(
-                        f"Semantic mismatch for input {xs}: expected "
-                        f"{expected}, got {actual}"
+                        "Semantic mismatch for input "
+                        f"{{'a': {a}, 'b': {b}}}: expected {expected}, "
+                        f"got {actual}"
                     ),
                     location="code",
                     task_id=task.task_id,
@@ -431,16 +458,15 @@ def _validate_semantics(
     return issues
 
 
-def validate_fsm_task(
+def validate_sequence_dp_task(
     task: Task,
-    axes: FsmAxes | None = None,
+    axes: SequenceDpAxes | None = None,
     strict: bool = True,
     execute_untrusted_code: bool = True,
     max_semantic_issues: int = 10,
     semantic_trials: int = 16,
     random_seed: int = 0,
 ) -> list[Issue]:
-    """Validate an FSM task for consistency and semantics."""
     if task.family != CURRENT_FAMILY:
         return [
             Issue(
@@ -455,7 +481,7 @@ def validate_fsm_task(
         ]
 
     if axes is None:
-        axes = FsmAxes()
+        axes = SequenceDpAxes()
 
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
@@ -472,18 +498,22 @@ def validate_fsm_task(
     elif isinstance(task.code, dict):
         code = task.code.get(PYTHON_CODE_KEY)
 
+    ast_issues: list[Issue] = []
     parsed_tree: ast.Module | None = None
     if code is not None:
         ast_issues, parsed_tree = _validate_ast_whitelist(code)
         issues.extend(ast_issues)
 
-    compile_issues, fn = _validate_code_compile(
-        task,
-        code=code,
-        parsed_tree=parsed_tree,
-        execute_untrusted_code=execute_untrusted_code,
-    )
-    issues.extend(compile_issues)
+    fn = None
+    has_unsafe_ast = any(i.code == CODE_UNSAFE_AST for i in ast_issues)
+    if not has_unsafe_ast:
+        compile_issues, fn = _validate_code_compile(
+            task,
+            code=code,
+            parsed_tree=parsed_tree,
+            execute_untrusted_code=execute_untrusted_code,
+        )
+        issues.extend(compile_issues)
 
     issues.extend(_validate_query_outputs(task, spec, strict=strict))
 

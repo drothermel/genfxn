@@ -25,6 +25,8 @@ from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
 from genfxn.piecewise.models import ExprType, PiecewiseAxes, PiecewiseSpec
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
+from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.simple_algorithms.models import (
     CountingMode,
     SimpleAlgorithmsAxes,
@@ -57,6 +59,7 @@ _stateful_spec_adapter = TypeAdapter(StatefulSpec)
 _simple_algorithms_spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 _fsm_spec_adapter = TypeAdapter(FsmSpec)
 _bitops_spec_adapter = TypeAdapter(BitopsSpec)
+_sequence_dp_spec_adapter = TypeAdapter(SequenceDpSpec)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -185,6 +188,10 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
             )
         case "bitops":
             spec_obj = _bitops_spec_adapter.validate_python(
+                task.spec, strict=True
+            )
+        case "sequence_dp":
+            spec_obj = _sequence_dp_spec_adapter.validate_python(
                 task.spec, strict=True
             )
         case _:
@@ -366,6 +373,23 @@ def _build_bitops_axes(
     return BitopsAxes(**kwargs)
 
 
+def _build_sequence_dp_axes(
+    value_range: str | None,
+    divisor_range: str | None,
+    list_length_range: str | None,
+) -> SequenceDpAxes:
+    kwargs: dict[str, Any] = {}
+    if value_range:
+        kwargs["value_range"] = _parse_range(value_range)
+    if divisor_range:
+        kwargs["divisor_range"] = _parse_range(divisor_range)
+    if list_length_range:
+        parsed = _parse_range(list_length_range)
+        kwargs["len_a_range"] = parsed
+        kwargs["len_b_range"] = parsed
+    return SequenceDpAxes(**kwargs)
+
+
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
     return render_stack_bytecode(spec)
 
@@ -412,7 +436,7 @@ def generate(
             "-f",
             help=(
                 "piecewise, stateful, simple_algorithms, stringrules, "
-                "bitops, stack_bytecode, fsm, or all"
+                "bitops, sequence_dp, stack_bytecode, fsm, or all"
             ),
         ),
     ] = "all",
@@ -676,6 +700,11 @@ def generate(
             divisor_range=divisor_range,
         )
         bitops_axes = _build_bitops_axes(value_range=value_range)
+        sequence_dp_axes = _build_sequence_dp_axes(
+            value_range=value_range,
+            divisor_range=divisor_range,
+            list_length_range=list_length_range,
+        )
 
     with output.open("w", encoding="utf-8") as output_handle:
 
@@ -693,6 +722,7 @@ def generate(
                 "simple_algorithms",
                 "stringrules",
                 "bitops",
+                "sequence_dp",
                 "stack_bytecode",
                 "fsm",
             ]
@@ -718,6 +748,8 @@ def generate(
                 emit(generate_stringrules_task(axes=stringrules_axes, rng=rng))
             for _ in range(family_counts["bitops"]):
                 emit(generate_bitops_task(axes=bitops_axes, rng=rng))
+            for _ in range(family_counts["sequence_dp"]):
+                emit(generate_sequence_dp_task(axes=sequence_dp_axes, rng=rng))
             for _ in range(family_counts["stack_bytecode"]):
                 emit(_build_stack_bytecode_task(stack_bytecode_axes, rng))
             for _ in range(family_counts["fsm"]):
@@ -729,6 +761,18 @@ def generate(
                 else:
                     axes = bitops_axes
                 emit(generate_bitops_task(axes=cast(BitopsAxes, axes), rng=rng))
+        elif family == "sequence_dp":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = sequence_dp_axes
+                emit(
+                    generate_sequence_dp_task(
+                        axes=cast(SequenceDpAxes, axes),
+                        rng=rng,
+                    )
+                )
         elif family == "piecewise":
             for _ in range(count):
                 if difficulty is not None:

@@ -23,6 +23,19 @@ from genfxn.fsm.models import (
     PredicateType as FsmPredicateType,
 )
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
+from genfxn.sequence_dp.models import (
+    OutputMode as SequenceDpOutputMode,
+)
+from genfxn.sequence_dp.models import (
+    PredicateType as SequenceDpPredicateType,
+)
+from genfxn.sequence_dp.models import (
+    SequenceDpAxes,
+    TieBreakOrder,
+)
+from genfxn.sequence_dp.models import (
+    TemplateType as SequenceDpTemplateType,
+)
 from genfxn.simple_algorithms.models import (
     CountingMode,
     SimpleAlgorithmsAxes,
@@ -1001,6 +1014,113 @@ BITOPS_PRESETS: dict[int, list[DifficultyPreset]] = {
     ],
 }
 
+# =============================================================================
+# Sequence DP Presets
+# Difficulty maps directly from target_difficulty in sequence_dp axes.
+# =============================================================================
+
+SEQUENCE_DP_PRESETS: dict[int, list[DifficultyPreset]] = {
+    1: [
+        DifficultyPreset(
+            "1A",
+            "global score with equality and large positive margin",
+            {
+                "target_difficulty": 1,
+                "templates": [SequenceDpTemplateType.GLOBAL],
+                "output_modes": [SequenceDpOutputMode.SCORE],
+                "predicate_types": [SequenceDpPredicateType.EQ],
+                "tie_break_orders": [TieBreakOrder.DIAG_UP_LEFT],
+                "len_a_range": (2, 4),
+                "len_b_range": (2, 4),
+                "value_range": (-10, 10),
+                "match_score_range": (7, 7),
+                "mismatch_score_range": (-5, -5),
+                "gap_score_range": (-5, -5),
+            },
+        )
+    ],
+    2: [
+        DifficultyPreset(
+            "2A",
+            "global alignment length with strict abs-diff predicate",
+            {
+                "target_difficulty": 2,
+                "templates": [SequenceDpTemplateType.GLOBAL],
+                "output_modes": [SequenceDpOutputMode.ALIGNMENT_LEN],
+                "predicate_types": [SequenceDpPredicateType.ABS_DIFF_LE],
+                "tie_break_orders": [TieBreakOrder.DIAG_LEFT_UP],
+                "len_a_range": (3, 6),
+                "len_b_range": (3, 6),
+                "value_range": (-15, 15),
+                "abs_diff_range": (0, 0),
+                "match_score_range": (5, 5),
+                "mismatch_score_range": (0, 0),
+                "gap_score_range": (-1, -1),
+            },
+        )
+    ],
+    3: [
+        DifficultyPreset(
+            "3A",
+            "global alignment length with medium abs-diff and tie complexity",
+            {
+                "target_difficulty": 3,
+                "templates": [SequenceDpTemplateType.GLOBAL],
+                "output_modes": [SequenceDpOutputMode.ALIGNMENT_LEN],
+                "predicate_types": [SequenceDpPredicateType.ABS_DIFF_LE],
+                "tie_break_orders": [TieBreakOrder.UP_DIAG_LEFT],
+                "len_a_range": (4, 8),
+                "len_b_range": (4, 8),
+                "value_range": (-20, 20),
+                "abs_diff_range": (2, 2),
+                "match_score_range": (3, 3),
+                "mismatch_score_range": (1, 1),
+                "gap_score_range": (-1, -1),
+            },
+        )
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "local alignment with modular matching and advanced tie-break",
+            {
+                "target_difficulty": 4,
+                "templates": [SequenceDpTemplateType.LOCAL],
+                "output_modes": [SequenceDpOutputMode.ALIGNMENT_LEN],
+                "predicate_types": [SequenceDpPredicateType.MOD_EQ],
+                "tie_break_orders": [TieBreakOrder.UP_LEFT_DIAG],
+                "len_a_range": (6, 10),
+                "len_b_range": (6, 10),
+                "value_range": (-25, 25),
+                "divisor_range": (3, 5),
+                "match_score_range": (3, 3),
+                "mismatch_score_range": (2, 2),
+                "gap_score_range": (-1, -1),
+            },
+        )
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "local gap-count objective with mod predicate and dense ties",
+            {
+                "target_difficulty": 5,
+                "templates": [SequenceDpTemplateType.LOCAL],
+                "output_modes": [SequenceDpOutputMode.GAP_COUNT],
+                "predicate_types": [SequenceDpPredicateType.MOD_EQ],
+                "tie_break_orders": [TieBreakOrder.LEFT_UP_DIAG],
+                "len_a_range": (8, 12),
+                "len_b_range": (8, 12),
+                "value_range": (-30, 30),
+                "divisor_range": (6, 10),
+                "match_score_range": (1, 1),
+                "mismatch_score_range": (1, 1),
+                "gap_score_range": (1, 1),
+            },
+        )
+    ],
+}
+
 
 # =============================================================================
 # Lookup Functions
@@ -1014,6 +1134,7 @@ _FAMILY_PRESETS: dict[str, dict[int, list[DifficultyPreset]]] = {
     "stack_bytecode": STACK_BYTECODE_PRESETS,
     "fsm": FSM_PRESETS,
     "bitops": BITOPS_PRESETS,
+    "sequence_dp": SEQUENCE_DP_PRESETS,
 }
 
 
@@ -1055,6 +1176,7 @@ def get_difficulty_axes(
     | StackBytecodeAxes
     | FsmAxes
     | BitopsAxes
+    | SequenceDpAxes
 ):
     """Return axes for target difficulty.
 
@@ -1099,6 +1221,7 @@ def _build_axes(
     | StackBytecodeAxes
     | FsmAxes
     | BitopsAxes
+    | SequenceDpAxes
 ):
     """Build axes object from overrides."""
     match family:
@@ -1116,5 +1239,7 @@ def _build_axes(
             return FsmAxes(**overrides)
         case "bitops":
             return BitopsAxes(**overrides)
+        case "sequence_dp":
+            return SequenceDpAxes(**overrides)
         case _:
             raise ValueError(f"Unknown family: {family}")

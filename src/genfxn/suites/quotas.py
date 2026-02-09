@@ -320,6 +320,74 @@ _BITOPS_D5 = QuotaSpec(
     buckets=[Bucket("n_ops_bucket", "6+", 50)],
 )
 
+# ── Sequence DP quotas ───────────────────────────────────────────────────
+
+_SEQUENCE_DP_D1 = QuotaSpec(
+    hard_constraints={
+        "template": "global",
+        "output_mode": "score",
+        "predicate_kind": "eq",
+        "tie_break_bucket": "diag_first",
+        "score_profile": "wide",
+    },
+    buckets=[Bucket("score_profile", "wide", 50)],
+)
+
+_SEQUENCE_DP_D2 = QuotaSpec(
+    hard_constraints={
+        "template": "global",
+        "output_mode": "alignment_len",
+        "predicate_kind": "abs_diff_le",
+        "score_profile": "wide",
+    },
+    buckets=[
+        Bucket("abs_diff_bucket", "0-1", 34),
+        Bucket("abs_diff_bucket", "2-3", 16),
+        Bucket("tie_break_order", "diag_up_left", 25),
+        Bucket("tie_break_order", "diag_left_up", 25),
+    ],
+)
+
+_SEQUENCE_DP_D3 = QuotaSpec(
+    hard_constraints={
+        "template": "global",
+        "output_mode": "alignment_len",
+    },
+    buckets=[
+        Bucket("predicate_kind", "abs_diff_le", 20),
+        Bucket("predicate_kind", "mod_eq", 30),
+        Bucket("tie_break_order", "up_diag_left", 25),
+        Bucket("tie_break_order", "left_diag_up", 25),
+    ],
+)
+
+_SEQUENCE_DP_D4 = QuotaSpec(
+    hard_constraints={
+        "template": "local",
+        "predicate_kind": "mod_eq",
+    },
+    buckets=[
+        Bucket("output_mode", "alignment_len", 30),
+        Bucket("output_mode", "gap_count", 20),
+        Bucket("tie_break_order", "up_left_diag", 25),
+        Bucket("tie_break_order", "left_up_diag", 25),
+    ],
+)
+
+_SEQUENCE_DP_D5 = QuotaSpec(
+    hard_constraints={
+        "template": "local",
+        "output_mode": "gap_count",
+        "predicate_kind": "mod_eq",
+    },
+    buckets=[
+        Bucket("score_profile", "tie_heavy", 35),
+        Bucket("score_profile", "narrow", 15),
+        Bucket("tie_break_order", "left_up_diag", 28),
+        Bucket("tie_break_order", "up_left_diag", 22),
+    ],
+)
+
 # ── Combined lookup ──────────────────────────────────────────────────────
 
 QUOTAS: dict[str, dict[int, QuotaSpec]] = {
@@ -350,5 +418,12 @@ QUOTAS: dict[str, dict[int, QuotaSpec]] = {
         3: _BITOPS_D3,
         4: _BITOPS_D4,
         5: _BITOPS_D5,
+    },
+    "sequence_dp": {
+        1: _SEQUENCE_DP_D1,
+        2: _SEQUENCE_DP_D2,
+        3: _SEQUENCE_DP_D3,
+        4: _SEQUENCE_DP_D4,
+        5: _SEQUENCE_DP_D5,
     },
 }

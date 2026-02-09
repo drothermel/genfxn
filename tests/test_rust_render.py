@@ -2,6 +2,7 @@
 
 import importlib.util
 import random
+from typing import Literal
 
 import pytest
 
@@ -66,6 +67,7 @@ from genfxn.langs.rust.transforms import render_transform_rust
 from genfxn.langs.types import Language
 from genfxn.piecewise.models import ExprAbs, ExprAffine, ExprMod, ExprQuadratic
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
@@ -290,7 +292,11 @@ class TestStringPredicateRust:
             ("eq", "=="),
         ],
     )
-    def test_length_cmp(self, op: str, expected_op: str) -> None:
+    def test_length_cmp(
+        self,
+        op: Literal["lt", "le", "gt", "ge", "eq"],
+        expected_op: str,
+    ) -> None:
         result = render_string_predicate_rust(
             StringPredicateLengthCmp(op=op, value=5)
         )
@@ -822,6 +828,17 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(x: i64) -> i64" in code["rust"]
 
+    def test_sequence_dp_generates_rust(self) -> None:
+        task = generate_sequence_dp_task(
+            rng=seeded_rng(42),
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(a: &[i64], b: &[i64]) -> i64" in code["rust"]
+
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
             pytest.skip("stack_bytecode Rust rendering is not available")
@@ -904,6 +921,7 @@ class TestRustRegistry:
 
         families = [
             "bitops",
+            "sequence_dp",
             "piecewise",
             "stateful",
             "simple_algorithms",

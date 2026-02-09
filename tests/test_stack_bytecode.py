@@ -1,4 +1,6 @@
 import random
+from collections.abc import Callable
+from typing import cast
 
 import pytest
 
@@ -19,6 +21,8 @@ from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.sampler import sample_stack_bytecode_spec
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
 from genfxn.stack_bytecode.templates import stack_template_program
+
+RenderedStackFn = Callable[[list[int]], tuple[int, int]]
 
 
 def _spec(
@@ -446,8 +450,9 @@ class TestRenderRoundtrip:
         code = render_stack_bytecode(spec)
         namespace: dict[str, object] = {}
         exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        assert callable(f)
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(RenderedStackFn, f_obj)
 
         for xs in ([], [0], [7], [-3]):
             rendered_out = f(xs)
@@ -488,8 +493,9 @@ class TestDifferentialProperty:
             code = render_stack_bytecode(spec)
             namespace: dict[str, object] = {}
             exec(code, namespace)  # noqa: S102
-            f = namespace["f"]
-            assert callable(f)
+            f_obj = namespace["f"]
+            assert callable(f_obj)
+            f = cast(RenderedStackFn, f_obj)
 
             for _ in range(8):
                 length = rng.randint(

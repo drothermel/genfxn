@@ -1,15 +1,21 @@
-import runpy
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
+from helpers import load_script_module
+
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_tests.py"
-_SCRIPT_NS = runpy.run_path(str(_SCRIPT))
+
+
+_SCRIPT_MODULE = load_script_module(_SCRIPT, "tests.run_tests_script_module")
 parse_duration_seconds = cast(
-    Callable[[str], float | None], _SCRIPT_NS["_parse_duration_seconds"]
+    Callable[[str], float | None],
+    _SCRIPT_MODULE._parse_duration_seconds,
 )
-run_tests_main = cast(Callable[[], int], _SCRIPT_NS["main"])
+run_tests_main = cast(Callable[[], int], _SCRIPT_MODULE.main)
+script_subprocess = cast(ModuleType, _SCRIPT_MODULE.subprocess)
 
 
 def test_parse_duration_seconds_uses_last_match() -> None:
@@ -35,9 +41,11 @@ def test_main_enforces_runtime_budget(monkeypatch) -> None:
         return _Proc()
 
     monkeypatch.setattr(
-        run_tests_main.__globals__["subprocess"], "run", _fake_run
+        script_subprocess,
+        "run",
+        _fake_run,
     )
-    monkeypatch.setitem(run_tests_main.__globals__, "_has_xdist", lambda: False)
+    monkeypatch.setattr(_SCRIPT_MODULE, "_has_xdist", lambda: False)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -73,9 +81,11 @@ def test_main_adds_xdist_workers_when_available(monkeypatch) -> None:
         return _Proc()
 
     monkeypatch.setattr(
-        run_tests_main.__globals__["subprocess"], "run", _fake_run
+        script_subprocess,
+        "run",
+        _fake_run,
     )
-    monkeypatch.setitem(run_tests_main.__globals__, "_has_xdist", lambda: True)
+    monkeypatch.setattr(_SCRIPT_MODULE, "_has_xdist", lambda: True)
     monkeypatch.setattr(
         sys,
         "argv",

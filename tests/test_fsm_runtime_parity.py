@@ -1,10 +1,10 @@
 import random
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 import pytest
+from helpers import require_java_runtime, require_rust_runtime
 
 from genfxn.fsm.eval import eval_fsm
 from genfxn.fsm.models import FsmAxes, FsmSpec
@@ -12,21 +12,6 @@ from genfxn.fsm.sampler import sample_fsm_spec
 from genfxn.fsm.task import generate_fsm_task
 from genfxn.langs.java.fsm import render_fsm as render_fsm_java
 from genfxn.langs.rust.fsm import render_fsm as render_fsm_rust
-
-
-def _require_java_runtime() -> tuple[str, str]:
-    javac = shutil.which("javac")
-    java = shutil.which("java")
-    if not javac or not java:
-        pytest.skip("Java runtime tools (javac/java) not available")
-    return javac, java
-
-
-def _require_rust_runtime() -> str:
-    rustc = shutil.which("rustc")
-    if not rustc:
-        pytest.skip("Rust compiler (rustc) not available")
-    return rustc
 
 
 def _run_java_f(
@@ -96,7 +81,7 @@ def _run_rust_f(rustc: str, code: str, xs: list[int]) -> int:
 
 @pytest.mark.full
 def test_fsm_java_runtime_parity() -> None:
-    javac, java = _require_java_runtime()
+    javac, java = require_java_runtime()
     task = generate_fsm_task(rng=random.Random(42))
     spec = FsmSpec.model_validate(task.spec)
     java_code = render_fsm_java(spec, func_name="f")
@@ -109,7 +94,7 @@ def test_fsm_java_runtime_parity() -> None:
 
 @pytest.mark.full
 def test_fsm_rust_runtime_parity() -> None:
-    rustc = _require_rust_runtime()
+    rustc = require_rust_runtime()
     task = generate_fsm_task(rng=random.Random(99))
     spec = FsmSpec.model_validate(task.spec)
     rust_code = render_fsm_rust(spec, func_name="f")
@@ -122,8 +107,8 @@ def test_fsm_rust_runtime_parity() -> None:
 
 @pytest.mark.full
 def test_fsm_runtime_parity_across_sampled_specs() -> None:
-    javac, java = _require_java_runtime()
-    rustc = _require_rust_runtime()
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
 
     rng = random.Random(77)
     for _ in range(8):

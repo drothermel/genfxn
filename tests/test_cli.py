@@ -11,6 +11,12 @@ from genfxn.fsm.models import FsmSpec
 from genfxn.fsm.render import render_fsm
 from genfxn.fsm.validate import CODE_UNSAFE_AST as FSM_CODE_UNSAFE_AST
 from genfxn.fsm.validate import validate_fsm_task
+from genfxn.sequence_dp.models import SequenceDpSpec
+from genfxn.sequence_dp.render import render_sequence_dp
+from genfxn.sequence_dp.validate import (
+    CODE_UNSAFE_AST as SEQUENCE_DP_CODE_UNSAFE_AST,
+)
+from genfxn.sequence_dp.validate import validate_sequence_dp_task
 from genfxn.stack_bytecode.models import StackBytecodeSpec
 from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.validate import (
@@ -38,6 +44,7 @@ def _expected_all_families() -> set[str]:
         "simple_algorithms",
         "stringrules",
         "fsm",
+        "sequence_dp",
     }
     if _supports_bitops_family():
         families.add("bitops")
@@ -109,6 +116,70 @@ class TestGenerate:
             )
             issues = validate_fsm_task(task_obj)
             assert not any(i.code == FSM_CODE_UNSAFE_AST for i in issues)
+
+    def test_generate_sequence_dp(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "sequence_dp", "-n", "5"]
+        )
+
+        assert result.exit_code == 0
+        assert "Generated 5 tasks" in result.stdout
+
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 5
+        assert all(t["family"] == "sequence_dp" for t in tasks)
+        for task in tasks:
+            spec = SequenceDpSpec.model_validate(task["spec"])
+            assert task["code"] == render_sequence_dp(spec)
+            task_obj = Task.model_validate(task).model_copy(
+                update={"spec": spec.model_dump()}
+            )
+            issues = validate_sequence_dp_task(task_obj)
+            assert not any(
+                i.code == SEQUENCE_DP_CODE_UNSAFE_AST for i in issues
+            )
+
+    def test_generate_sequence_dp_honors_shared_ranges(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "sequence_dp",
+                "-n",
+                "2",
+                "--value-range",
+                "17,19",
+                "--divisor-range",
+                "5,5",
+                "--list-length-range",
+                "10,10",
+                "-s",
+                "11",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert tasks
+        for task in tasks:
+            assert task["family"] == "sequence_dp"
+            assert task["axes"]["value_range"] == [17, 19]
+            assert task["axes"]["divisor_range"] == [5, 5]
+            assert task["axes"]["len_a_range"] == [10, 10]
+            assert task["axes"]["len_b_range"] == [10, 10]
+            for query in cast(list[dict[str, Any]], task["queries"]):
+                if query["tag"] != "typical":
+                    continue
+                query_input = cast(dict[str, list[int]], query["input"])
+                assert len(query_input["a"]) == 10
+                assert len(query_input["b"]) == 10
 
     def test_generate_bitops_when_available(self, tmp_path) -> None:
         if not _supports_bitops_family():
@@ -550,6 +621,76 @@ class TestGenerate:
         )
         assert result.exit_code == 1
         assert "Invalid difficulty 6 for fsm" in result.output
+
+    def test_generate_sequence_dp_with_difficulty(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "sequence_dp",
+                "-n",
+                "4",
+                "--difficulty",
+                "4",
+                "-s",
+                "123",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 4
+        assert all(t["family"] == "sequence_dp" for t in tasks)
+        assert all(t["difficulty"] in {3, 4, 5} for t in tasks)
+
+    def test_generate_sequence_dp_with_variant(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "sequence_dp",
+                "-n",
+                "2",
+                "--difficulty",
+                "3",
+                "--variant",
+                "3A",
+                "-s",
+                "12",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 2
+        assert all(t["family"] == "sequence_dp" for t in tasks)
+
+    def test_generate_sequence_dp_invalid_difficulty(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "sequence_dp",
+                "-n",
+                "1",
+                "--difficulty",
+                "6",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Invalid difficulty 6 for sequence_dp" in result.output
 
     def test_generate_stack_bytecode_invalid_difficulty(self, tmp_path) -> None:
         if not _supports_stack_bytecode_family():
@@ -1425,6 +1566,7 @@ class TestInfo:
         assert "simple_algorithms:" in result.stdout
         assert "stringrules:" in result.stdout
         assert "fsm:" in result.stdout
+        assert "sequence_dp:" in result.stdout
         if _supports_stack_bytecode_family():
             assert "stack_bytecode:" in result.stdout
 

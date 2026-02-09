@@ -1,19 +1,20 @@
-import runpy
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
 import srsly
+from helpers import load_script_module
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]
     / "scripts"
     / "generate_balanced_suites.py"
 )
-_SCRIPT_NS = runpy.run_path(str(_SCRIPT))
-generate_balanced_suites_main = cast(
-    Callable[..., None], _SCRIPT_NS["main"]
+
+_SCRIPT_MODULE = load_script_module(
+    _SCRIPT, "tests.generate_balanced_suites_script_module"
 )
+generate_balanced_suites_main = cast(Callable[..., None], _SCRIPT_MODULE.main)
 
 
 class _FakeTask:
@@ -41,13 +42,13 @@ def test_main_parses_filters_and_writes_output(tmp_path, monkeypatch) -> None:
         assert tasks
         return [("axis", "value", 1, 1, "OK")]
 
-    monkeypatch.setitem(
-        generate_balanced_suites_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "generate_suite",
         _fake_generate_suite,
     )
-    monkeypatch.setitem(
-        generate_balanced_suites_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "quota_report",
         _fake_quota_report,
     )

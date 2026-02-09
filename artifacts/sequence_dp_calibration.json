@@ -1,0 +1,252 @@
+{
+  "difficulties": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "family": "sequence_dp",
+  "monotonic_means": {
+    "is_monotonic": true,
+    "means": {
+      "D1": 1.0,
+      "D2": 2.0,
+      "D3": 3.0,
+      "D4": 4.0,
+      "D5": 5.0
+    },
+    "violations": []
+  },
+  "pool_size": 3000,
+  "reachability": {
+    "D1": {
+      "difficulty": 1,
+      "distribution": {
+        "1": 200
+      },
+      "exact": 1.0,
+      "mean": 1.0,
+      "samples": 200,
+      "within_one": 1.0
+    },
+    "D2": {
+      "difficulty": 2,
+      "distribution": {
+        "2": 200
+      },
+      "exact": 1.0,
+      "mean": 2.0,
+      "samples": 200,
+      "within_one": 1.0
+    },
+    "D3": {
+      "difficulty": 3,
+      "distribution": {
+        "3": 200
+      },
+      "exact": 1.0,
+      "mean": 3.0,
+      "samples": 200,
+      "within_one": 1.0
+    },
+    "D4": {
+      "difficulty": 4,
+      "distribution": {
+        "4": 200
+      },
+      "exact": 1.0,
+      "mean": 4.0,
+      "samples": 200,
+      "within_one": 1.0
+    },
+    "D5": {
+      "difficulty": 5,
+      "distribution": {
+        "5": 200
+      },
+      "exact": 1.0,
+      "mean": 5.0,
+      "samples": 200,
+      "within_one": 1.0
+    }
+  },
+  "samples_per_difficulty": 200,
+  "seed": 42,
+  "strict": {
+    "enabled": true,
+    "failures": [],
+    "passed": true,
+    "thresholds": {
+      "exact_min": 0.5,
+      "under_rows_allowed": 0,
+      "within_one_min": 0.9
+    }
+  },
+  "suite_quota_checks": {
+    "D1": {
+      "difficulty": 1,
+      "error": null,
+      "generated_count": 50,
+      "quota_rows": [
+        {
+          "achieved": 50,
+          "axis": "score_profile",
+          "status": "OK",
+          "target": 50,
+          "value": "wide"
+        }
+      ],
+      "seed": 10042,
+      "under_rows": []
+    },
+    "D2": {
+      "difficulty": 2,
+      "error": null,
+      "generated_count": 50,
+      "quota_rows": [
+        {
+          "achieved": 34,
+          "axis": "abs_diff_bucket",
+          "status": "OK",
+          "target": 34,
+          "value": "0-1"
+        },
+        {
+          "achieved": 16,
+          "axis": "abs_diff_bucket",
+          "status": "OK",
+          "target": 16,
+          "value": "2-3"
+        },
+        {
+          "achieved": 25,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 25,
+          "value": "diag_up_left"
+        },
+        {
+          "achieved": 25,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 25,
+          "value": "diag_left_up"
+        }
+      ],
+      "seed": 20042,
+      "under_rows": []
+    },
+    "D3": {
+      "difficulty": 3,
+      "error": null,
+      "generated_count": 50,
+      "quota_rows": [
+        {
+          "achieved": 20,
+          "axis": "predicate_kind",
+          "status": "OK",
+          "target": 20,
+          "value": "abs_diff_le"
+        },
+        {
+          "achieved": 30,
+          "axis": "predicate_kind",
+          "status": "OK",
+          "target": 30,
+          "value": "mod_eq"
+        },
+        {
+          "achieved": 25,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 25,
+          "value": "up_diag_left"
+        },
+        {
+          "achieved": 25,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 25,
+          "value": "left_diag_up"
+        }
+      ],
+      "seed": 30042,
+      "under_rows": []
+    },
+    "D4": {
+      "difficulty": 4,
+      "error": null,
+      "generated_count": 50,
+      "quota_rows": [
+        {
+          "achieved": 30,
+          "axis": "output_mode",
+          "status": "OK",
+          "target": 30,
+          "value": "alignment_len"
+        },
+        {
+          "achieved": 20,
+          "axis": "output_mode",
+          "status": "OK",
+          "target": 20,
+          "value": "gap_count"
+        },
+        {
+          "achieved": 25,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 25,
+          "value": "up_left_diag"
+        },
+        {
+          "achieved": 25,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 25,
+          "value": "left_up_diag"
+        }
+      ],
+      "seed": 40042,
+      "under_rows": []
+    },
+    "D5": {
+      "difficulty": 5,
+      "error": null,
+      "generated_count": 50,
+      "quota_rows": [
+        {
+          "achieved": 35,
+          "axis": "score_profile",
+          "status": "OK",
+          "target": 35,
+          "value": "tie_heavy"
+        },
+        {
+          "achieved": 15,
+          "axis": "score_profile",
+          "status": "OK",
+          "target": 15,
+          "value": "narrow"
+        },
+        {
+          "achieved": 28,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 28,
+          "value": "left_up_diag"
+        },
+        {
+          "achieved": 22,
+          "axis": "tie_break_order",
+          "status": "OK",
+          "target": 22,
+          "value": "up_left_diag"
+        }
+      ],
+      "seed": 50042,
+      "under_rows": []
+    }
+  }
+}

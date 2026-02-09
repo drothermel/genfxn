@@ -250,6 +250,7 @@ class TestTaskGeneration:
 
         assert task.task_id
         assert task.family == "fsm"
+        assert task.difficulty is not None
         assert 1 <= task.difficulty <= 5
         assert task.description
 

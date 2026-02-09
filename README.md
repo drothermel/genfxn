@@ -1,7 +1,7 @@
 # genfxn
 
 Synthetic function dataset generator for code reasoning research. Generates
-executable function tasks with structured test cases across seven function
+executable function tasks with structured test cases across eight function
 families. CLI output is single-language (Python by default, or Java/Rust via
 `--language`).
 
@@ -22,6 +22,7 @@ uv sync
 | **stack_bytecode** | `f(xs: list[int]) -> int` | Small stack-machine programs with controlled runtime semantics |
 | **fsm** | `f(xs: list[int]) -> int` | Finite-state machine execution over integer sequences |
 | **bitops** | `f(x: int) -> int` | Fixed-width bit-operation pipelines over integer inputs |
+| **sequence_dp** | `f(a: list[int], b: list[int]) -> int` | Sequence dynamic-programming alignment variants with custom scoring |
 
 ### Piecewise
 
@@ -104,6 +105,12 @@ transitions and configurable behavior when no transition matches.
 Fixed-width pipelines over integer inputs using bitwise and shift/rotate
 operations, with output masked to the configured width.
 
+### Sequence DP
+
+Alignment-style dynamic programming over two integer sequences with
+configurable matching predicates, scoring profile, tie-break order, and output
+mode (`score`, `alignment_len`, or `gap_count`).
+
 ## Generation
 
 Generate tasks to JSONL files.
@@ -117,7 +124,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-o, --output PATH` | Output JSONL file |
-| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, or `all` |
+| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, `sequence_dp`, or `all` |
 | `-n, --count INT` | Number of tasks to generate |
 
 ### General Options
@@ -172,10 +179,10 @@ These apply to multiple families:
 
 | Option | Families | Default | Description |
 |--------|----------|---------|-------------|
-| `--value-range LO,HI` | all | `-100,100` | Range for input/element values |
-| `--threshold-range LO,HI` | piecewise, stateful, fsm | `-50,50` | Range for predicate thresholds |
-| `--divisor-range LO,HI` | piecewise, stateful, fsm | `2,10` | Range for mod divisors |
-| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode | `5,20` | Range for test list lengths |
+| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-1024,1024` for bitops) |
+| `--threshold-range LO,HI` | piecewise, stateful, fsm | family-specific | Range for predicate thresholds (`-50,50` for piecewise/stateful, `-10,10` for fsm) |
+| `--divisor-range LO,HI` | piecewise, stateful, fsm, sequence_dp | family-specific | Range for mod divisors (`2,10` for piecewise/stateful/fsm, `1,10` for sequence_dp) |
+| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp | family-specific | Range for test list lengths (`5,20` for stateful/simple_algorithms, `0,8` for stack_bytecode, `2,10` for sequence_dp) |
 
 ### Examples
 
@@ -207,6 +214,9 @@ genfxn generate -o tasks.jsonl -f stringrules -n 50 \
 
 # Bitops tasks at target difficulty 4
 genfxn generate -o tasks.jsonl -f bitops -n 50 --difficulty 4
+
+# Sequence DP tasks at target difficulty 5
+genfxn generate -o tasks.jsonl -f sequence_dp -n 50 --difficulty 5
 ```
 
 See [AXES.md](AXES.md) for complete axis documentation.

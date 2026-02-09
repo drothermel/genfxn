@@ -1,0 +1,141 @@
+from genfxn.sequence_dp.models import SequenceDpSpec, TieBreakOrder
+
+_TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
+    TieBreakOrder.DIAG_UP_LEFT: ("diag", "up", "left"),
+    TieBreakOrder.DIAG_LEFT_UP: ("diag", "left", "up"),
+    TieBreakOrder.UP_DIAG_LEFT: ("up", "diag", "left"),
+    TieBreakOrder.UP_LEFT_DIAG: ("up", "left", "diag"),
+    TieBreakOrder.LEFT_DIAG_UP: ("left", "diag", "up"),
+    TieBreakOrder.LEFT_UP_DIAG: ("left", "up", "diag"),
+}
+
+
+def _i64_literal(value: int) -> str:
+    if value == -(1 << 63):
+        return "i64::MIN"
+    return f"{value}i64"
+
+
+def render_sequence_dp(
+    spec: SequenceDpSpec,
+    func_name: str = "f",
+    a_var: str = "a",
+    b_var: str = "b",
+) -> str:
+    tie_break = _TIE_BREAK_MOVES[spec.step_tie_break]
+    tie_values = ", ".join(f'"{move}"' for move in tie_break)
+
+    predicate = spec.match_predicate.model_dump()
+    kind = predicate["kind"]
+    max_diff = int(predicate.get("max_diff", 0))
+    divisor = int(predicate.get("divisor", 1))
+    remainder = int(predicate.get("remainder", 0))
+
+    lines = [
+        f"fn {func_name}({a_var}: &[i64], {b_var}: &[i64]) -> i64 {{",
+        f'    let template = "{spec.template.value}";',
+        f'    let output_mode = "{spec.output_mode.value}";',
+        f'    let predicate_kind = "{kind}";',
+        f"    let max_diff: i64 = {_i64_literal(max_diff)};",
+        f"    let divisor: i64 = {_i64_literal(divisor)};",
+        f"    let remainder: i64 = {_i64_literal(remainder)};",
+        f"    let match_score: i64 = {_i64_literal(spec.match_score)};",
+        f"    let mismatch_score: i64 = {_i64_literal(spec.mismatch_score)};",
+        f"    let gap_score: i64 = {_i64_literal(spec.gap_score)};",
+        "    let tie_order: [&str; 3] = [" + tie_values + "];",
+        "",
+        f"    let n = {a_var}.len();",
+        f"    let m = {b_var}.len();",
+        "    let zero: [i64; 3] = [0, 0, 0];",
+        "    let mut dp = vec![vec![zero; m + 1]; n + 1];",
+        "",
+        "    if template == \"global\" {",
+        "        for i in 1..=n {",
+        "            let prev = dp[i - 1][0];",
+        (
+            "            dp[i][0] = [prev[0] + gap_score, prev[1] + 1, "
+            "prev[2] + 1];"
+        ),
+        "        }",
+        "        for j in 1..=m {",
+        "            let prev = dp[0][j - 1];",
+        (
+            "            dp[0][j] = [prev[0] + gap_score, prev[1] + 1, "
+            "prev[2] + 1];"
+        ),
+        "        }",
+        "    }",
+        "",
+        "    let mut best = zero;",
+        "",
+        "    for i in 1..=n {",
+        "        for j in 1..=m {",
+        f"            let ai = {a_var}[i - 1];",
+        f"            let bj = {b_var}[j - 1];",
+        "            let is_match = if predicate_kind == \"eq\" {",
+        "                ai == bj",
+        "            } else if predicate_kind == \"abs_diff_le\" {",
+        "                ai.abs_diff(bj) <= max_diff as u64",
+        "            } else {",
+        "                (ai - bj).rem_euclid(divisor) == remainder",
+        "            };",
+        "",
+        "            let prev_diag = dp[i - 1][j - 1];",
+        "            let delta = if is_match {",
+        "                match_score",
+        "            } else {",
+        "                mismatch_score",
+        "            };",
+        "            let diag = [prev_diag[0] + delta, prev_diag[1] + 1, "
+        "prev_diag[2]];",
+        "",
+        "            let prev_up = dp[i - 1][j];",
+        "            let up = [prev_up[0] + gap_score, prev_up[1] + 1, "
+        "prev_up[2] + 1];",
+        "",
+        "            let prev_left = dp[i][j - 1];",
+        "            let left = [prev_left[0] + gap_score, prev_left[1] + 1, "
+        "prev_left[2] + 1];",
+        "",
+        "            let best_score = diag[0].max(up[0]).max(left[0]);",
+        "            let mut chosen = diag;",
+        "            for move_name in tie_order {",
+        "                let candidate = if move_name == \"diag\" {",
+        "                    diag",
+        "                } else if move_name == \"up\" {",
+        "                    up",
+        "                } else {",
+        "                    left",
+        "                };",
+        "                if candidate[0] == best_score {",
+        "                    chosen = candidate;",
+        "                    break;",
+        "                }",
+        "            }",
+        "",
+        "            if template == \"local\" && chosen[0] <= 0 {",
+        "                dp[i][j] = zero;",
+        "            } else {",
+        "                dp[i][j] = chosen;",
+        "            }",
+        "",
+        "            if template == \"local\" && dp[i][j][0] > best[0] {",
+        "                best = dp[i][j];",
+        "            }",
+        "        }",
+        "    }",
+        "",
+        (
+            "    let result = if template == \"global\" { dp[n][m] } else { "
+            "best };"
+        ),
+        "    if output_mode == \"score\" {",
+        "        result[0]",
+        "    } else if output_mode == \"alignment_len\" {",
+        "        result[1]",
+        "    } else {",
+        "        result[2]",
+        "    }",
+        "}",
+    ]
+    return "\n".join(lines)

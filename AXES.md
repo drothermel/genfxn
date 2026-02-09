@@ -304,6 +304,95 @@ Finite-state machines over integer sequences: `f(xs: list[int]) -> int`
 
 ---
 
+## Bitops
+
+Fixed-width bit-operation pipelines over integer inputs: `f(x: int) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
+| `width_choices` | list[int] | `[8, 16, 32]` | — | Allowed output bit widths |
+| `n_ops_range` | (lo, hi) | (2, 6) | — | Range for sampled operation count |
+| `value_range` | (lo, hi) | (-1024, 1024) | `--value-range` | Range for sampled integer inputs in queries |
+| `mask_range` | (lo, hi) | (0, 65535) | — | Range for sampled mask arguments |
+| `shift_range` | (lo, hi) | (0, 63) | — | Range for shift/rotate amounts |
+| `allowed_ops` | list | all | — | Operations allowed during sampling |
+
+### Operation Types
+
+| Value | Description |
+|-------|-------------|
+| `and_mask` | `x & mask` |
+| `or_mask` | `x \| mask` |
+| `xor_mask` | `x ^ mask` |
+| `shl` | Left shift |
+| `shr_logical` | Logical right shift |
+| `rotl` | Rotate left (within configured width) |
+| `rotr` | Rotate right (within configured width) |
+| `not` | Bitwise NOT (masked to configured width) |
+| `popcount` | Number of set bits |
+| `parity` | `popcount % 2` |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `width_bits` | integer | Active output width |
+| `operations.N.op` | operation values | Opcode at instruction index N |
+| `operations.N.arg` | integer | Immediate argument (when required by op) |
+
+---
+
+## Sequence DP
+
+Sequence dynamic-programming alignment tasks:
+`f(a: list[int], b: list[int]) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
+| `templates` | list | all | — | DP template (`global`, `local`) |
+| `output_modes` | list | all | — | Output selection (`score`, `alignment_len`, `gap_count`) |
+| `predicate_types` | list | all | — | Matching predicate family |
+| `len_a_range` | (lo, hi) | (2, 10) | `--list-length-range` | Range for sampled `a` lengths |
+| `len_b_range` | (lo, hi) | (2, 10) | `--list-length-range` | Range for sampled `b` lengths |
+| `value_range` | (lo, hi) | (-20, 20) | `--value-range` | Range for sampled values in both sequences |
+| `match_score_range` | (lo, hi) | (1, 6) | — | Range for match score |
+| `mismatch_score_range` | (lo, hi) | (-4, 1) | — | Range for mismatch score |
+| `gap_score_range` | (lo, hi) | (-4, 0) | — | Range for gap score |
+| `abs_diff_range` | (lo, hi) | (0, 5) | — | `max_diff` range for `abs_diff_le` predicates |
+| `divisor_range` | (lo, hi) | (1, 10) | `--divisor-range` | Divisor range for `mod_eq` predicates |
+| `tie_break_orders` | list | all | — | Priority order over `diag`, `up`, `left` moves |
+
+### Predicate Types
+
+| Value | Description |
+|-------|-------------|
+| `eq` | Pair matches when `a_i == b_j` |
+| `abs_diff_le` | Pair matches when `abs(a_i - b_j) <= max_diff` |
+| `mod_eq` | Pair matches when `(a_i - b_j) % divisor == remainder` |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `template` | `global`, `local` | DP initialization/reset semantics |
+| `output_mode` | `score`, `alignment_len`, `gap_count` | Return value projection |
+| `match_predicate.kind` | predicate types | Matching predicate type |
+| `match_predicate.max_diff` | integer | Present for `abs_diff_le` |
+| `match_predicate.divisor` | integer | Present for `mod_eq` |
+| `match_predicate.remainder` | integer | Present for `mod_eq` |
+| `match_score` | integer | Match transition delta |
+| `mismatch_score` | integer | Mismatch transition delta |
+| `gap_score` | integer | Gap transition delta |
+| `step_tie_break` | tie-break enum values | Move priority under equal score |
+
+---
+
 ## Using Spec Field Paths
 
 Spec field paths use dot notation to access nested fields. List indices are supported.

@@ -687,6 +687,108 @@ class TestComputeDifficulty:
         difficulty = compute_difficulty("bitops", spec)
         assert 1 <= difficulty <= 5
 
+    def test_sequence_dp_family(self) -> None:
+        spec = {
+            "template": "global",
+            "output_mode": "score",
+            "match_predicate": {"kind": "eq"},
+            "match_score": 4,
+            "mismatch_score": -2,
+            "gap_score": -2,
+            "step_tie_break": "diag_up_left",
+        }
+        difficulty = compute_difficulty("sequence_dp", spec)
+        assert 1 <= difficulty <= 5
+
+    def test_sequence_dp_monotonic_examples(self) -> None:
+        specs = [
+            {
+                "template": "global",
+                "output_mode": "score",
+                "match_predicate": {"kind": "eq"},
+                "match_score": 5,
+                "mismatch_score": -3,
+                "gap_score": -3,
+                "step_tie_break": "diag_up_left",
+            },
+            {
+                "template": "global",
+                "output_mode": "score",
+                "match_predicate": {"kind": "abs_diff_le", "max_diff": 1},
+                "match_score": 4,
+                "mismatch_score": -2,
+                "gap_score": -2,
+                "step_tie_break": "diag_left_up",
+            },
+            {
+                "template": "global",
+                "output_mode": "alignment_len",
+                "match_predicate": {"kind": "abs_diff_le", "max_diff": 3},
+                "match_score": 3,
+                "mismatch_score": -1,
+                "gap_score": -1,
+                "step_tie_break": "up_diag_left",
+            },
+            {
+                "template": "local",
+                "output_mode": "gap_count",
+                "match_predicate": {
+                    "kind": "mod_eq",
+                    "divisor": 3,
+                    "remainder": 1,
+                },
+                "match_score": 2,
+                "mismatch_score": 0,
+                "gap_score": -1,
+                "step_tie_break": "up_left_diag",
+            },
+            {
+                "template": "local",
+                "output_mode": "gap_count",
+                "match_predicate": {
+                    "kind": "mod_eq",
+                    "divisor": 9,
+                    "remainder": 2,
+                },
+                "match_score": 1,
+                "mismatch_score": 1,
+                "gap_score": 1,
+                "step_tie_break": "left_up_diag",
+            },
+        ]
+        scores = [compute_difficulty("sequence_dp", spec) for spec in specs]
+        assert scores == sorted(scores)
+
+    def test_sequence_dp_difficulty_clamped(self) -> None:
+        very_simple = {
+            "template": "global",
+            "output_mode": "score",
+            "match_predicate": {"kind": "eq"},
+            "match_score": 100,
+            "mismatch_score": -100,
+            "gap_score": -100,
+            "step_tie_break": "diag_up_left",
+        }
+        tie_heavy = {
+            "template": "local",
+            "output_mode": "gap_count",
+            "match_predicate": {
+                "kind": "mod_eq",
+                "divisor": 50,
+                "remainder": 0,
+            },
+            "match_score": 0,
+            "mismatch_score": 0,
+            "gap_score": 0,
+            "step_tie_break": "left_up_diag",
+        }
+        easy_score = compute_difficulty("sequence_dp", very_simple)
+        hard_score = compute_difficulty("sequence_dp", tie_heavy)
+        assert easy_score == 1
+        assert hard_score == 5
+        assert 1 <= easy_score <= 5
+        assert 1 <= hard_score <= 5
+
     def test_stack_bytecode_monotonic_examples_when_available(self) -> None:
         if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
             pytest.skip("stack_bytecode family is not available")
