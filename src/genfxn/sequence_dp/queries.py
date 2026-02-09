@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.models import Query, QueryTag
 from genfxn.sequence_dp.eval import eval_sequence_dp
 from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
 
@@ -12,6 +12,11 @@ def _rand_list(
 ) -> list[int]:
     lo, hi = value_range
     return [rng.randint(lo, hi) for _ in range(length)]
+
+
+def _clamp(value: int, bounds: tuple[int, int]) -> int:
+    lo, hi = bounds
+    return min(max(value, lo), hi)
 
 
 def _patterned_list(length: int, pattern: list[int]) -> list[int]:
@@ -38,15 +43,17 @@ def generate_sequence_dp_queries(
     v_mid = (v_lo + v_hi) // 2
 
     queries: list[Query] = []
-    seen_inputs: set[tuple[tuple[int, ...], tuple[int, ...]]] = set()
+    seen_inputs_by_tag: set[
+        tuple[QueryTag, tuple[int, ...], tuple[int, ...]]
+    ] = set()
 
     def _append_query(
         a_vals: list[int], b_vals: list[int], tag: QueryTag
     ) -> None:
-        key = (tuple(a_vals), tuple(b_vals))
-        if key in seen_inputs:
+        key = (tag, tuple(a_vals), tuple(b_vals))
+        if key in seen_inputs_by_tag:
             return
-        seen_inputs.add(key)
+        seen_inputs_by_tag.add(key)
         queries.append(
             Query(
                 input=_query_input(a_vals, b_vals),
@@ -77,8 +84,14 @@ def generate_sequence_dp_queries(
     typical_a_len = max(1, a_lo)
     typical_b_len = max(1, b_lo)
     _append_query(
-        [v_mid + idx for idx in range(typical_a_len)],
-        [v_mid - idx for idx in range(typical_b_len)],
+        [
+            _clamp(v_mid + idx, axes.value_range)
+            for idx in range(typical_a_len)
+        ],
+        [
+            _clamp(v_mid - idx, axes.value_range)
+            for idx in range(typical_b_len)
+        ],
         QueryTag.TYPICAL,
     )
 
@@ -93,12 +106,36 @@ def generate_sequence_dp_queries(
     adv_b_len = max(b_lo, min(b_hi, 8))
     adversarial_inputs = [
         (
-            _patterned_list(adv_a_len, [v_lo, v_hi, v_mid]),
-            _patterned_list(adv_b_len, [v_hi, v_lo, v_mid]),
+            _patterned_list(
+                adv_a_len,
+                [
+                    _clamp(v_lo, axes.value_range),
+                    _clamp(v_hi, axes.value_range),
+                    _clamp(v_mid, axes.value_range),
+                ],
+            ),
+            _patterned_list(
+                adv_b_len,
+                [
+                    _clamp(v_hi, axes.value_range),
+                    _clamp(v_lo, axes.value_range),
+                    _clamp(v_mid, axes.value_range),
+                ],
+            ),
         ),
         (
-            _patterned_list(max(a_lo, min(a_hi, 12)), [0, 1, -1]),
-            _patterned_list(max(b_lo, min(b_hi, 3)), [0]),
+            _patterned_list(
+                max(1, max(a_lo, min(a_hi, 12)) - 1),
+                [
+                    _clamp(0, axes.value_range),
+                    _clamp(1, axes.value_range),
+                    _clamp(-1, axes.value_range),
+                ],
+            ),
+            _patterned_list(
+                max(1, b_lo),
+                [_clamp(0, axes.value_range)],
+            ),
         ),
     ]
     for a_vals, b_vals in adversarial_inputs:
@@ -109,8 +146,14 @@ def generate_sequence_dp_queries(
             continue
         tag_shift = list(QueryTag).index(tag) + 1
         _append_query(
-            [v_mid + tag_shift + idx for idx in range(max(1, a_lo))],
-            [v_mid - tag_shift - idx for idx in range(max(1, b_lo))],
+            [
+                _clamp(v_mid + tag_shift + idx, axes.value_range)
+                for idx in range(max(1, a_lo))
+            ],
+            [
+                _clamp(v_mid - tag_shift - idx, axes.value_range)
+                for idx in range(max(1, b_lo))
+            ],
             tag,
         )
         if any(query.tag == tag for query in queries):
@@ -125,4 +168,4 @@ def generate_sequence_dp_queries(
             if len(queries) > prev_count:
                 break
 
-    return dedupe_queries(queries)
+    return queries

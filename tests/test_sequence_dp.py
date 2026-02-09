@@ -485,6 +485,26 @@ class TestQueries:
                 a, b = _pair_from_input(q.input)
                 assert q.output == eval_sequence_dp(spec, a, b)
 
+    def test_queries_respect_value_range_for_narrow_axes(self) -> None:
+        axes = SequenceDpAxes(
+            len_a_range=(12, 12),
+            len_b_range=(12, 12),
+            value_range=(17, 19),
+        )
+        spec = _call_sample(sample_sequence_dp_spec, axes, seed=901)
+        queries = _call_queries(
+            generate_sequence_dp_queries,
+            spec,
+            axes,
+            seed=901,
+        )
+
+        lo, hi = axes.value_range
+        for q in queries:
+            a, b = _pair_from_input(q.input)
+            assert all(lo <= v <= hi for v in a)
+            assert all(lo <= v <= hi for v in b)
+
 
 class TestTaskGeneration:
     def test_generate_sequence_dp_task_basics_and_query_outputs(self) -> None:
