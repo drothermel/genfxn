@@ -17,6 +17,11 @@ SEQUENCE_DP_WEIGHTS = {
     "scores": 0.25,
     "tie_break": 0.15,
 }
+INTERVALS_WEIGHTS = {
+    "operation": 0.45,
+    "boundary": 0.35,
+    "merge": 0.2,
+}
 
 
 def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
@@ -37,6 +42,8 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _stack_bytecode_difficulty(spec)
     elif family == "sequence_dp":
         return _sequence_dp_difficulty(spec)
+    elif family == "intervals":
+        return _intervals_difficulty(spec)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -636,6 +643,76 @@ def _sequence_dp_tie_break_score(step_tie_break: Any) -> int:
     if value == "left_up_diag":
         return 5
     return 3
+
+
+def _intervals_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for intervals tasks."""
+    operation_value = _enum_or_str_value(spec.get("operation"))
+    boundary_value = _enum_or_str_value(spec.get("boundary_mode"))
+    merge_touching = bool(spec.get("merge_touching", False))
+
+    operation_score = _intervals_operation_score(operation_value)
+    boundary_score = _intervals_boundary_score(boundary_value)
+    merge_score = 3 if merge_touching else 1
+
+    w = INTERVALS_WEIGHTS
+    raw = (
+        w["operation"] * operation_score
+        + w["boundary"] * boundary_score
+        + w["merge"] * merge_score
+    )
+    raw += _intervals_interaction_bonus(
+        operation_value,
+        boundary_value,
+        merge_touching,
+    )
+
+    return max(1, min(5, round(raw)))
+
+
+def _intervals_operation_score(operation: str) -> int:
+    if operation == "total_coverage":
+        return 1
+    if operation == "merged_count":
+        return 2
+    if operation == "max_overlap_count":
+        return 4
+    if operation == "gap_count":
+        return 5
+    return 2
+
+
+def _intervals_boundary_score(boundary_mode: str) -> int:
+    if boundary_mode == "closed_closed":
+        return 1
+    if boundary_mode in {"closed_open", "open_closed"}:
+        return 3
+    if boundary_mode == "open_open":
+        return 4
+    return 2
+
+
+def _intervals_interaction_bonus(
+    operation: str, boundary_mode: str, merge_touching: bool
+) -> float:
+    bonus = 0.0
+
+    if merge_touching and boundary_mode in {"closed_open", "open_closed"}:
+        bonus += 0.5
+    if operation in {"max_overlap_count", "gap_count"} and boundary_mode in {
+        "closed_open",
+        "open_closed",
+        "open_open",
+    }:
+        bonus += 0.5
+    if (
+        operation == "gap_count"
+        and boundary_mode == "open_open"
+        and merge_touching
+    ):
+        bonus += 0.5
+
+    return bonus
 
 
 def _enum_or_str_value(value: Any) -> str:

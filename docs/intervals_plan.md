@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0-M1 complete; M2-M5 remaining)
+Status: In progress (M0-M2 complete; M3-M5 remaining)
 
 ## Goal
 
@@ -338,7 +338,7 @@ This family is not complete until all are true:
 
 - [x] M0 complete
 - [x] M1 complete
-- [ ] M2 complete
+- [x] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
 - [ ] M5 complete
@@ -367,3 +367,13 @@ This family is not complete until all are true:
   Focused verification passed:
   `uv run ruff check src/genfxn/intervals tests/test_intervals.py`
   `uv run pytest tests/test_intervals.py -q` (10 passed).
+- 2026-02-09: M2 completed. Added `intervals` difficulty scoring in
+  `src/genfxn/core/difficulty.py` and targeted-difficulty sampling preferences
+  in `src/genfxn/intervals/sampler.py`. Updated task difficulty wiring in
+  `src/genfxn/intervals/task.py` to use `compute_difficulty("intervals", ...)`
+  directly. Expanded tests in `tests/test_intervals.py` for target-difficulty
+  monotonicity and cross-seed query quality, and in `tests/test_difficulty.py`
+  for intervals family coverage, monotonic examples, and clamped extremes.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/core/difficulty.py src/genfxn/intervals/sampler.py src/genfxn/intervals/task.py tests/test_intervals.py tests/test_difficulty.py`
+  `uv run pytest tests/test_intervals.py tests/test_difficulty.py -q` (92 passed).

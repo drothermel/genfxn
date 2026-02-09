@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 
 intervals_models = pytest.importorskip("genfxn.intervals.models")
@@ -237,6 +238,52 @@ class TestSampler:
         spec2 = _call_sample(sample_intervals_spec, axes, seed=99)
         assert spec1.model_dump() == spec2.model_dump()
 
+    def test_sampler_respects_target_difficulty_axis(self) -> None:
+        def _sample_difficulty_average(target: int) -> float:
+            axes = IntervalsAxes(target_difficulty=target)
+            rng = random.Random(3000 + target)
+            scores: list[int] = []
+            for _ in range(120):
+                spec = _call_sample(
+                    sample_intervals_spec,
+                    axes,
+                    seed=rng.randint(0, 10**9),
+                )
+                scores.append(
+                    compute_difficulty("intervals", spec.model_dump())
+                )
+            return sum(scores) / len(scores)
+
+        averages = {
+            target: _sample_difficulty_average(target) for target in range(1, 6)
+        }
+
+        for target in range(1, 5):
+            assert averages[target + 1] >= averages[target] + 0.05
+        assert averages[5] >= averages[1] + 1.0
+
+
+class TestQueries:
+    def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
+        axes = IntervalsAxes(
+            n_intervals_range=(1, 7),
+            endpoint_range=(-12, 12),
+            max_span_range=(0, 8),
+        )
+
+        for seed in range(410, 422):
+            spec = _call_sample(sample_intervals_spec, axes, seed=seed)
+            queries = _call_queries(
+                generate_intervals_queries,
+                spec,
+                axes,
+                seed=seed,
+            )
+            assert queries
+            assert {q.tag for q in queries} == set(QueryTag)
+            for query in queries:
+                assert query.output == eval_intervals(spec, query.input)
+
 
 class TestTaskGeneration:
     def test_generate_intervals_task_smoke(self) -> None:
@@ -252,6 +299,7 @@ class TestTaskGeneration:
         assert {q.tag for q in task.queries} == set(QueryTag)
 
         spec = IntervalsSpec.model_validate(task.spec)
+        assert task.difficulty == compute_difficulty("intervals", task.spec)
         for query in task.queries:
             assert query.output == eval_intervals(spec, query.input)
 

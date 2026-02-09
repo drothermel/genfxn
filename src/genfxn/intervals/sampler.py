@@ -1,13 +1,51 @@
 import random
 
 from genfxn.core.trace import TraceStep, trace_step
-from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.models import (
+    BoundaryMode,
+    IntervalsAxes,
+    IntervalsSpec,
+    OperationType,
+)
+
+_TARGET_OPERATION_PREFS: dict[int, list[OperationType]] = {
+    1: [OperationType.TOTAL_COVERAGE],
+    2: [OperationType.MERGED_COUNT, OperationType.TOTAL_COVERAGE],
+    3: [OperationType.MERGED_COUNT, OperationType.MAX_OVERLAP_COUNT],
+    4: [OperationType.MAX_OVERLAP_COUNT, OperationType.GAP_COUNT],
+    5: [OperationType.GAP_COUNT],
+}
+
+_TARGET_BOUNDARY_PREFS: dict[int, list[BoundaryMode]] = {
+    1: [BoundaryMode.CLOSED_CLOSED],
+    2: [BoundaryMode.CLOSED_OPEN, BoundaryMode.CLOSED_CLOSED],
+    3: [BoundaryMode.OPEN_CLOSED, BoundaryMode.CLOSED_OPEN],
+    4: [BoundaryMode.OPEN_OPEN, BoundaryMode.OPEN_CLOSED],
+    5: [BoundaryMode.OPEN_OPEN],
+}
+
+_TARGET_MERGE_TOUCHING_PREFS: dict[int, list[bool]] = {
+    1: [False],
+    2: [False, True],
+    3: [True, False],
+    4: [True],
+    5: [True],
+}
 
 
 def _sample_probability(
     prob_range: tuple[float, float], rng: random.Random
 ) -> float:
     return rng.uniform(prob_range[0], prob_range[1])
+
+
+def _pick_from_preferred[T](
+    available: list[T], preferred: list[T], rng: random.Random
+) -> T:
+    preferred_available = [value for value in preferred if value in available]
+    if preferred_available:
+        return rng.choice(preferred_available)
+    return rng.choice(available)
 
 
 def sample_intervals_spec(
@@ -18,9 +56,28 @@ def sample_intervals_spec(
     if rng is None:
         rng = random.Random()
 
-    operation = rng.choice(axes.operation_types)
-    boundary_mode = rng.choice(axes.boundary_modes)
-    merge_touching = rng.choice(axes.merge_touching_choices)
+    target_difficulty = axes.target_difficulty
+
+    if target_difficulty is None:
+        operation = rng.choice(axes.operation_types)
+        boundary_mode = rng.choice(axes.boundary_modes)
+        merge_touching = rng.choice(axes.merge_touching_choices)
+    else:
+        operation = _pick_from_preferred(
+            axes.operation_types,
+            _TARGET_OPERATION_PREFS[target_difficulty],
+            rng,
+        )
+        boundary_mode = _pick_from_preferred(
+            axes.boundary_modes,
+            _TARGET_BOUNDARY_PREFS[target_difficulty],
+            rng,
+        )
+        merge_touching = _pick_from_preferred(
+            axes.merge_touching_choices,
+            _TARGET_MERGE_TOUCHING_PREFS[target_difficulty],
+            rng,
+        )
 
     trace_step(
         trace,

@@ -60,11 +60,7 @@ def generate_intervals_task(
     trace_steps: list[TraceStep] = []
     spec = sample_intervals_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
-
-    try:
-        difficulty = compute_difficulty("intervals", spec_dict)
-    except ValueError:
-        difficulty = None
+    difficulty = compute_difficulty("intervals", spec_dict)
 
     try:
         description = describe_task("intervals", spec_dict)
