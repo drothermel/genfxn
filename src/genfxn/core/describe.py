@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Any
 
 
@@ -406,6 +407,13 @@ def _join_description_parts(*parts: str) -> str:
     return " ".join(part for part in parts if part)
 
 
+def _enum_text(value: Any) -> str:
+    """Return stable text for enum-like or string values."""
+    if isinstance(value, Enum):
+        return str(value.value)
+    return str(value)
+
+
 def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
     """Generate natural language description for simple_algorithms functions."""
     template = spec.get("template", "")
@@ -651,8 +659,8 @@ def _describe_string_transform(trans: dict[str, Any]) -> str:
 def _describe_stack_bytecode(spec: dict[str, Any]) -> str:
     program = spec.get("program", [])
     n_instr = len(program) if isinstance(program, list) else 0
-    input_mode = spec.get("input_mode", "direct")
-    jump_mode = spec.get("jump_target_mode", "error")
+    input_mode = _enum_text(spec.get("input_mode", "direct"))
+    jump_mode = _enum_text(spec.get("jump_target_mode", "error"))
     max_steps = spec.get("max_step_count", 64)
     has_conditional = any(
         isinstance(instr, dict)
@@ -677,19 +685,62 @@ def _describe_stack_bytecode(spec: dict[str, Any]) -> str:
     ):
         flow_text = "unconditional jumps"
 
-    return (
-        "Execute a stack-based bytecode program over a list of integers. "
-        f"The program has {n_instr} instructions with {flow_text}, "
-        f"input mode '{input_mode}', jump handling '{jump_mode}', and "
-        f"a max step count of {max_steps}. Return the final top-of-stack "
-        "value, or a runtime status code when execution fails."
+    if input_mode == "direct":
+        input_text = (
+            "For load_input i, push xs[i]; if i is out of range, return "
+            "status 5."
+        )
+    else:
+        input_text = (
+            "For load_input i, push xs[i % len(xs)] in cyclic mode; when xs "
+            "is empty, return status 5."
+        )
+
+    if jump_mode == "error":
+        jump_text = (
+            "For jumps, out-of-range targets are invalid and return status 3."
+        )
+    elif jump_mode == "clamp":
+        jump_text = (
+            "For jumps, out-of-range targets are clamped into [0, n-1], "
+            "where n is the program length."
+        )
+    else:
+        jump_text = (
+            "For jumps, targets are wrapped modulo n, where n is the "
+            "program length."
+        )
+
+    return _join_description_parts(
+        (
+            "Implement f(xs: list[int]) -> tuple[int, int] for a stack-based "
+            "bytecode machine."
+        ),
+        (
+            f"The program has {n_instr} instructions with {flow_text}, "
+            f"input_mode '{input_mode}', jump_target_mode '{jump_mode}', "
+            f"and max_step_count {max_steps}."
+        ),
+        "Start at instruction 0 with an empty stack.",
+        input_text,
+        jump_text,
+        (
+            "Return (status, value) with status codes "
+            "0=ok, 1=step_limit, 2=stack_underflow, 3=bad_jump_target, "
+            "4=div_or_mod_by_zero, 5=invalid_input_index, "
+            "6=empty_stack_on_halt."
+        ),
+        (
+            "On status 0, value is the top of stack at halt; on nonzero "
+            "status, value is 0."
+        ),
     )
 
 
 def _describe_fsm(spec: dict[str, Any]) -> str:
-    machine_type = spec.get("machine_type", "moore")
-    output_mode = spec.get("output_mode", "final_state_id")
-    policy = spec.get("undefined_transition_policy", "stay")
+    machine_type = _enum_text(spec.get("machine_type", "moore"))
+    output_mode = _enum_text(spec.get("output_mode", "final_state_id"))
+    policy = _enum_text(spec.get("undefined_transition_policy", "stay"))
     start_state_id = spec.get("start_state_id", 0)
     states = spec.get("states", [])
 
@@ -724,11 +775,36 @@ def _describe_fsm(spec: dict[str, Any]) -> str:
     else:
         output_text = "return the final state id"
 
-    return (
-        f"Run a deterministic {machine_type} finite-state machine over a "
-        f"list of integers. The machine has {n_states} states and "
-        f"{n_transitions} transitions, and starts in state {start_state_id}. "
-        f"For each input value, use the first matching transition in the "
-        f"current state's ordered transition list; if none match, apply "
-        f"undefined-transition policy '{policy}'. Finally, {output_text}."
+    if policy == "stay":
+        policy_text = (
+            "If no transition matches, stay in the current state and do not "
+            "increment transition_count."
+        )
+    elif policy == "sink":
+        policy_text = (
+            "If no transition matches, move to sink state "
+            "(max_state_id + 1) and increment transition_count."
+        )
+    else:
+        policy_text = (
+            "If no transition matches, raise an undefined-transition error."
+        )
+
+    return _join_description_parts(
+        (
+            "Implement f(xs: list[int]) -> int for a deterministic "
+            f"{machine_type} finite-state machine."
+        ),
+        (
+            f"The machine has {n_states} states, {n_transitions} transitions, "
+            f"and starts in state {start_state_id}."
+        ),
+        (
+            "For each x in xs, scan the current state's transitions in listed "
+            "order and take the first predicate that matches."
+        ),
+        policy_text,
+        (
+            f"Use output_mode '{output_mode}': {output_text}."
+        ),
     )

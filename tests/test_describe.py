@@ -11,6 +11,12 @@ from genfxn.core.describe import (
     _format_number,
     describe_task,
 )
+from genfxn.fsm.models import (
+    MachineType,
+    OutputMode,
+    UndefinedTransitionPolicy,
+)
+from genfxn.stack_bytecode.models import InputMode, JumpTargetMode
 
 
 class TestFormatNumber:
@@ -821,3 +827,38 @@ class TestDescribeTask:
 
     def test_unknown_family_returns_empty(self) -> None:
         assert describe_task("unknown", {}) == ""
+
+    def test_stack_bytecode_family_is_self_contained(self) -> None:
+        spec = {
+            "program": [
+                {"op": "load_input", "index": 0},
+                {"op": "halt"},
+            ],
+            "input_mode": InputMode.DIRECT,
+            "jump_target_mode": JumpTargetMode.ERROR,
+            "max_step_count": 90,
+        }
+        result = describe_task("stack_bytecode", spec)
+        assert "Implement f(xs: list[int]) -> tuple[int, int]" in result
+        assert "input_mode 'direct'" in result
+        assert "jump_target_mode 'error'" in result
+        assert "status codes 0=ok, 1=step_limit" in result
+        assert "On status 0, value is the top of stack at halt" in result
+
+    def test_fsm_family_is_self_contained(self) -> None:
+        spec = {
+            "machine_type": MachineType.MOORE,
+            "output_mode": OutputMode.ACCEPT_BOOL,
+            "undefined_transition_policy": UndefinedTransitionPolicy.SINK,
+            "start_state_id": 0,
+            "states": [
+                {"id": 0, "transitions": [], "is_accept": True},
+                {"id": 1, "transitions": [], "is_accept": False},
+            ],
+        }
+        result = describe_task("fsm", spec)
+        assert "Implement f(xs: list[int]) -> int" in result
+        assert "deterministic moore finite-state machine" in result
+        assert "move to sink state (max_state_id + 1)" in result
+        assert "Use output_mode 'accept_bool'" in result
+        assert "accepting states: 0" in result
