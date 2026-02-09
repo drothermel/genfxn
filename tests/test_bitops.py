@@ -141,8 +141,8 @@ class TestModels:
         _assert_has_invalid_rejected(AxesCls, axes)
 
     def test_width_bits_rejects_64_for_signed_backend_parity(self) -> None:
-        bit_instruction_cls = getattr(bitops_models, "BitInstruction")
-        bit_op = getattr(bitops_models, "BitOp")
+        bit_instruction_cls = bitops_models.BitInstruction
+        bit_op = bitops_models.BitOp
         with pytest.raises(Exception):
             SpecCls(
                 width_bits=64,
@@ -156,8 +156,8 @@ class TestModels:
 
 class TestEvaluatorSemantics:
     def test_evaluator_applies_fixed_width_semantics(self) -> None:
-        bit_instruction_cls = getattr(bitops_models, "BitInstruction")
-        bit_op = getattr(bitops_models, "BitOp")
+        bit_instruction_cls = bitops_models.BitInstruction
+        bit_op = bitops_models.BitOp
 
         spec = SpecCls(
             width_bits=8,

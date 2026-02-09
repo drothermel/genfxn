@@ -1,4 +1,5 @@
 from genfxn.core.describe import (
+    _describe_bitops,
     _describe_expression,
     _describe_piecewise,
     _describe_predicate,
@@ -787,6 +788,39 @@ class TestDescribeStringrules:
 
 
 class TestDescribeTask:
+    def test_bitops_family_mentions_masking_after_each_operation(self) -> None:
+        spec = {
+            "width_bits": 8,
+            "operations": [
+                {"op": "xor_mask", "arg": 255},
+                {"op": "rotl", "arg": 3},
+            ],
+        }
+        result = describe_task("bitops", spec)
+        assert (
+            "apply operations in order: xor_mask(255), then rotl(3)"
+            in result
+        )
+        assert (
+            "after each operation mask the intermediate result to 8 bits"
+            in result
+        )
+
+    def test_describe_bitops_fallback_mentions_per_operation_masking(
+        self,
+    ) -> None:
+        result = _describe_bitops(
+            {
+                "width_bits": 12,
+                "operations": [123, "bad-op"],
+            }
+        )
+        assert "with 2 listed operation(s)" in result
+        assert (
+            "After each operation, mask the intermediate result to 12 bits"
+            in result
+        )
+
     def test_piecewise_family(self) -> None:
         spec = {
             "branches": [],

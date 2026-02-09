@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M1-M4 complete)
+Status: Complete (M1-M4 + suite integration + runtime parity harness)
 
 ## Goal
 
@@ -199,3 +199,8 @@ Use this after memory compaction:
   Additional balancing check passed for 50-task suites:
   `generate_suite("bitops", d)` and `quota_report(..., "bitops", d)` for
   d=1..5 each returned 50 tasks with zero under-target buckets.
+- 2026-02-09: Added executable cross-language runtime parity harness for
+  `bitops` in `tests/test_bitops_runtime_parity.py` (Python vs Java vs Rust,
+  including sampled-spec parity). Validation passed:
+  `uv run pytest tests/test_bitops_runtime_parity.py -q --verification-level=full`
+  (3 passed). Family marked complete.

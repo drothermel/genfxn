@@ -499,7 +499,7 @@ class TestBitopsRust:
         )
         code = render_bitops(spec)
         assert "fn f(x: i64) -> i64" in code
-        assert "let mask: u64 = if width_bits == 64" in code
+        assert "let mask: u64 = (1u64 << width_bits) - 1;" in code
         assert "arg.rem_euclid(width_bits as i64)" in code
         assert ">> amt" in code
         assert ".count_ones()" in code

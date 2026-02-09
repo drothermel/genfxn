@@ -760,15 +760,19 @@ def _describe_bitops(spec: dict[str, Any]) -> str:
         rendered_ops.append(name if arg is None else f"{name}({arg})")
 
     if not rendered_ops:
+        n_operations = len(operations)
         return (
             f"Implement f(x: int) -> int using fixed-width ({width_bits}-bit) "
-            "bit arithmetic."
+            f"bit arithmetic with {n_operations} listed operation(s). "
+            f"After each operation, mask the intermediate result to "
+            f"{width_bits} bits."
         )
 
     return (
         f"Implement f(x: int) -> int. Treat x as a {width_bits}-bit pattern, "
         f"apply operations in order: {', then '.join(rendered_ops)}, and "
-        "return the resulting integer."
+        f"after each operation mask the intermediate result to {width_bits} "
+        "bits. Return the resulting integer."
     )
 
 

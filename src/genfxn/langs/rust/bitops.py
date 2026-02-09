@@ -24,11 +24,7 @@ def render_bitops(
     lines = [
         f"fn {func_name}({var}: i64) -> i64 {{",
         f"    let width_bits: usize = {spec.width_bits};",
-        "    let mask: u64 = if width_bits == 64 {",
-        "        u64::MAX",
-        "    } else {",
-        "        (1u64 << width_bits) - 1",
-        "    };",
+        "    let mask: u64 = (1u64 << width_bits) - 1;",
         "    let ops: [&str; " + str(n_ops) + "] = [" + ops + "];",
         "    let args: [i64; " + str(n_ops) + "] = [" + args + "];",
         f"    let mut value: u64 = ({var} as u64) & mask;",
