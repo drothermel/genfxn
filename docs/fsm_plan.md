@@ -2,7 +2,7 @@
 
 Date: 2026-02-09  
 Owner: Codex + Danielle  
-Status: In Progress (M1-M3 complete)
+Status: In Progress (M1-M4 complete)
 
 ## Goal
 
@@ -145,7 +145,7 @@ Use this after memory compaction:
 - [x] M1 complete
 - [x] M2 complete
 - [x] M3 complete
-- [ ] M4 complete
+- [x] M4 complete
 - [x] Full `ruff` and full `pytest` pass
 - [ ] PR updated with behavior notes + test evidence
 
@@ -167,3 +167,10 @@ Use this after memory compaction:
   (`tests/test_validate_fsm.py`, updates in `tests/test_java_render.py`
   and `tests/test_rust_render.py`). Full suite check passed locally
   (`1241 passed, 23 skipped`).
+- 2026-02-09: M4 implemented. Added CLI support for `fsm` family
+  (generation, language rendering, difficulty presets) and FSM difficulty
+  presets in `src/genfxn/core/presets.py`. Updated docs (`README.md`,
+  `AXES.md`) and CLI/preset tests (`tests/test_cli.py`,
+  `tests/test_presets.py`). Full suite check passed locally
+  (`1254 passed, 23 skipped`). Suite-balancing integration for `fsm`
+  is deferred to a follow-up milestone.

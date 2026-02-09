@@ -12,6 +12,15 @@ from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
+from genfxn.fsm.models import (
+    FsmAxes,
+    MachineType,
+    OutputMode,
+    UndefinedTransitionPolicy,
+)
+from genfxn.fsm.models import (
+    PredicateType as FsmPredicateType,
+)
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.simple_algorithms.models import (
     CountingMode,
@@ -761,6 +770,138 @@ STACK_BYTECODE_PRESETS: dict[int, list[DifficultyPreset]] = {
     ],
 }
 
+# =============================================================================
+# FSM Presets
+# Difficulty maps directly from target_difficulty in FSM axes.
+# =============================================================================
+
+FSM_PRESETS: dict[int, list[DifficultyPreset]] = {
+    1: [
+        DifficultyPreset(
+            "1A",
+            "small moore machines with simple predicates and stay policy",
+            {
+                "target_difficulty": 1,
+                "machine_types": [MachineType.MOORE],
+                "output_modes": [OutputMode.FINAL_STATE_ID],
+                "undefined_transition_policies": [
+                    UndefinedTransitionPolicy.STAY
+                ],
+                "predicate_types": [
+                    FsmPredicateType.EVEN,
+                    FsmPredicateType.ODD,
+                ],
+                "n_states_range": (2, 2),
+                "transitions_per_state_range": (0, 1),
+            },
+        )
+    ],
+    2: [
+        DifficultyPreset(
+            "2A",
+            "slightly larger moore machines with comparison predicates",
+            {
+                "target_difficulty": 2,
+                "machine_types": [MachineType.MOORE],
+                "output_modes": [
+                    OutputMode.FINAL_STATE_ID,
+                    OutputMode.ACCEPT_BOOL,
+                ],
+                "undefined_transition_policies": [
+                    UndefinedTransitionPolicy.STAY,
+                    UndefinedTransitionPolicy.SINK,
+                ],
+                "predicate_types": [
+                    FsmPredicateType.EVEN,
+                    FsmPredicateType.ODD,
+                    FsmPredicateType.LT,
+                    FsmPredicateType.GT,
+                ],
+                "n_states_range": (2, 3),
+                "transitions_per_state_range": (1, 2),
+            },
+        )
+    ],
+    3: [
+        DifficultyPreset(
+            "3A",
+            "mixed machine/output styles with moderate branching",
+            {
+                "target_difficulty": 3,
+                "machine_types": [MachineType.MOORE, MachineType.MEALY],
+                "output_modes": [
+                    OutputMode.FINAL_STATE_ID,
+                    OutputMode.ACCEPT_BOOL,
+                ],
+                "undefined_transition_policies": [
+                    UndefinedTransitionPolicy.STAY,
+                    UndefinedTransitionPolicy.SINK,
+                ],
+                "predicate_types": [
+                    FsmPredicateType.LT,
+                    FsmPredicateType.LE,
+                    FsmPredicateType.GT,
+                    FsmPredicateType.GE,
+                    FsmPredicateType.EVEN,
+                    FsmPredicateType.ODD,
+                ],
+                "n_states_range": (3, 4),
+                "transitions_per_state_range": (1, 3),
+            },
+        )
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "mealy-heavy machines with sink/error handling",
+            {
+                "target_difficulty": 4,
+                "machine_types": [MachineType.MEALY, MachineType.MOORE],
+                "output_modes": [
+                    OutputMode.TRANSITION_COUNT,
+                    OutputMode.ACCEPT_BOOL,
+                ],
+                "undefined_transition_policies": [
+                    UndefinedTransitionPolicy.SINK,
+                    UndefinedTransitionPolicy.ERROR,
+                ],
+                "predicate_types": [
+                    FsmPredicateType.MOD_EQ,
+                    FsmPredicateType.LT,
+                    FsmPredicateType.LE,
+                    FsmPredicateType.GT,
+                    FsmPredicateType.GE,
+                ],
+                "n_states_range": (4, 5),
+                "transitions_per_state_range": (2, 3),
+            },
+        )
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "larger mealy machines with error policy and mod predicates",
+            {
+                "target_difficulty": 5,
+                "machine_types": [MachineType.MEALY],
+                "output_modes": [OutputMode.TRANSITION_COUNT],
+                "undefined_transition_policies": [
+                    UndefinedTransitionPolicy.ERROR
+                ],
+                "predicate_types": [
+                    FsmPredicateType.MOD_EQ,
+                    FsmPredicateType.LE,
+                    FsmPredicateType.GE,
+                    FsmPredicateType.LT,
+                    FsmPredicateType.GT,
+                ],
+                "n_states_range": (5, 6),
+                "transitions_per_state_range": (3, 4),
+            },
+        )
+    ],
+}
+
 
 # =============================================================================
 # Lookup Functions
@@ -772,6 +913,7 @@ _FAMILY_PRESETS: dict[str, dict[int, list[DifficultyPreset]]] = {
     "simple_algorithms": SIMPLE_ALGORITHMS_PRESETS,
     "stringrules": STRINGRULES_PRESETS,
     "stack_bytecode": STACK_BYTECODE_PRESETS,
+    "fsm": FSM_PRESETS,
 }
 
 
@@ -811,6 +953,7 @@ def get_difficulty_axes(
     | SimpleAlgorithmsAxes
     | StringRulesAxes
     | StackBytecodeAxes
+    | FsmAxes
 ):
     """Return axes for target difficulty.
 
@@ -853,6 +996,7 @@ def _build_axes(
     | SimpleAlgorithmsAxes
     | StringRulesAxes
     | StackBytecodeAxes
+    | FsmAxes
 ):
     """Build axes object from overrides."""
     match family:
@@ -866,5 +1010,7 @@ def _build_axes(
             return StringRulesAxes(**overrides)
         case "stack_bytecode":
             return StackBytecodeAxes(**overrides)
+        case "fsm":
+            return FsmAxes(**overrides)
         case _:
             raise ValueError(f"Unknown family: {family}")

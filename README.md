@@ -1,7 +1,7 @@
 # genfxn
 
 Synthetic function dataset generator for code reasoning research. Generates
-executable function tasks with structured test cases across five function
+executable function tasks with structured test cases across six function
 families. CLI output is single-language (Python by default, or Java/Rust via
 `--language`).
 
@@ -20,6 +20,7 @@ uv sync
 | **simple_algorithms** | `f(xs: list[int]) -> int` | Algorithms with subtle edge cases (frequency, pairs, windows) |
 | **stringrules** | `f(s: str) -> str` | Ordered pattern matching with first-match-wins precedence |
 | **stack_bytecode** | `f(xs: list[int]) -> int` | Small stack-machine programs with controlled runtime semantics |
+| **fsm** | `f(xs: list[int]) -> int` | Finite-state machine execution over integer sequences |
 
 ### Piecewise
 
@@ -92,6 +93,11 @@ def f(s: str) -> str:
 Programs are sampled as instruction sequences for a tiny stack VM with bounded
 execution and explicit runtime status codes.
 
+### FSM
+
+Finite-state machines process each integer input step-by-step using ordered
+transitions and configurable behavior when no transition matches.
+
 ## Generation
 
 Generate tasks to JSONL files.
@@ -105,7 +111,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-o, --output PATH` | Output JSONL file |
-| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, or `all` |
+| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, or `all` |
 | `-n, --count INT` | Number of tasks to generate |
 
 ### General Options
@@ -161,8 +167,8 @@ These apply to multiple families:
 | Option | Families | Default | Description |
 |--------|----------|---------|-------------|
 | `--value-range LO,HI` | all | `-100,100` | Range for input/element values |
-| `--threshold-range LO,HI` | piecewise, stateful | `-50,50` | Range for predicate thresholds |
-| `--divisor-range LO,HI` | piecewise, stateful | `2,10` | Range for mod divisors |
+| `--threshold-range LO,HI` | piecewise, stateful, fsm | `-50,50` | Range for predicate thresholds |
+| `--divisor-range LO,HI` | piecewise, stateful, fsm | `2,10` | Range for mod divisors |
 | `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode | `5,20` | Range for test list lengths |
 
 ### Examples

@@ -12,6 +12,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.AnnAssign,
         ast.AugAssign,
         ast.Return,
+        ast.Raise,
         ast.If,
         ast.For,
         ast.Continue,
@@ -20,6 +21,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.BinOp,
         ast.UnaryOp,
         ast.BoolOp,
+        ast.IfExp,
         ast.Compare,
         ast.Call,
         ast.Name,
@@ -62,6 +64,7 @@ ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
         "min",
         "range",
         "predicate",
+        "ValueError",
     }
 )
 
@@ -89,6 +92,7 @@ CALL_ARITIES: dict[str, set[int]] = {
     "min": {2},
     "range": {1, 2, 3},
     "predicate": {1},
+    "ValueError": {1},
 }
 
 METHOD_ARITIES: dict[str, set[int]] = {
