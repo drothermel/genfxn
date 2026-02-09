@@ -800,3 +800,31 @@ class TestComputeDifficulty:
     def test_unknown_family_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown family: unknown"):
             compute_difficulty("unknown", {})
+
+
+class TestFsmDifficulty:
+    def test_fsm_difficulty_reaches_level_five_for_hard_specs(self) -> None:
+        spec = {
+            "machine_type": "mealy",
+            "output_mode": "transition_count",
+            "undefined_transition_policy": "error",
+            "states": [
+                {
+                    "id": state_id,
+                    "is_accept": state_id == 0,
+                    "transitions": [
+                        {
+                            "predicate": {
+                                "kind": "mod_eq",
+                                "divisor": 7,
+                                "remainder": (state_id + i) % 7,
+                            },
+                            "target_state_id": (state_id + i + 1) % 6,
+                        }
+                        for i in range(5)
+                    ],
+                }
+                for state_id in range(6)
+            ],
+        }
+        assert compute_difficulty("fsm", spec) == 5

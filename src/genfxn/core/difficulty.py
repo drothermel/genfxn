@@ -5,10 +5,10 @@ STATEFUL_WEIGHTS = {"template": 0.4, "predicate": 0.3, "transform": 0.3}
 SIMPLE_ALGORITHMS_WEIGHTS = {"template": 0.5, "mode": 0.3, "edge": 0.2}
 STRINGRULES_WEIGHTS = {"rules": 0.4, "predicate": 0.3, "transform": 0.3}
 FSM_WEIGHTS = {
-    "states": 0.35,
+    "states": 0.3,
     "transitions": 0.25,
     "predicate": 0.2,
-    "mode": 0.2,
+    "mode": 0.25,
 }
 
 
@@ -436,7 +436,7 @@ def _fsm_difficulty(spec: dict[str, Any]) -> int:
                 continue
             predicate = transition.get("predicate")
             if isinstance(predicate, dict):
-                predicate_scores.append(_predicate_score(predicate))
+                predicate_scores.append(_fsm_predicate_score(predicate))
 
     if n_states > 0:
         avg_transitions = total_transitions / n_states
@@ -472,23 +472,32 @@ def _fsm_mode_score(spec: dict[str, Any]) -> float:
     output_mode = spec.get("output_mode", "final_state_id")
     policy = spec.get("undefined_transition_policy", "stay")
 
-    machine_score = 2 if machine_type == "mealy" else 1
+    score = 1.0
+    if machine_type == "mealy":
+        score += 1.0
 
     if output_mode == "accept_bool":
-        output_score = 2
+        score += 1.0
     elif output_mode == "transition_count":
-        output_score = 3
-    else:
-        output_score = 1
+        score += 2.0
 
     if policy == "sink":
-        policy_score = 2
+        score += 1.0
     elif policy == "error":
-        policy_score = 3
-    else:
-        policy_score = 1
+        score += 2.0
 
-    return (machine_score + output_score + policy_score) / 3
+    return max(1.0, min(5.0, score))
+
+
+def _fsm_predicate_score(pred: dict[str, Any]) -> int:
+    kind = pred.get("kind", "")
+    if kind in ("even", "odd"):
+        return 1
+    if kind in ("lt", "le", "gt", "ge"):
+        return 2
+    if kind == "mod_eq":
+        return 5
+    return 2
 
 
 def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:

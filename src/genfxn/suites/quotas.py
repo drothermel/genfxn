@@ -252,6 +252,47 @@ _STACK_BYTECODE_D5 = QuotaSpec(
     buckets=[Bucket("size_bucket", "11+", 50)],
 )
 
+# ── FSM quotas ───────────────────────────────────────────────────────────
+
+_FSM_D1 = QuotaSpec(
+    hard_constraints={
+        "machine_type": "moore",
+        "output_mode": "final_state_id",
+        "undefined_policy": "stay",
+    },
+    buckets=[Bucket("n_states_bucket", "2", 50)],
+)
+
+_FSM_D2 = QuotaSpec(
+    hard_constraints={"machine_type": "moore"},
+    buckets=[Bucket("n_states_bucket", "2-3", 50)],
+)
+
+_FSM_D3 = QuotaSpec(
+    hard_constraints={},
+    buckets=[Bucket("n_states_bucket", "3-4", 50)],
+)
+
+_FSM_D4 = QuotaSpec(
+    hard_constraints={
+        "machine_type": "mealy",
+        "output_mode": "transition_count",
+        "undefined_policy": "error",
+        "transition_density_bucket": "high",
+    },
+    buckets=[Bucket("n_states_bucket", "4-5", 50)],
+)
+
+_FSM_D5 = QuotaSpec(
+    hard_constraints={
+        "machine_type": "mealy",
+        "output_mode": "transition_count",
+        "undefined_policy": "error",
+        "transition_density_bucket": "very_high",
+    },
+    buckets=[Bucket("n_states_bucket", "5-6", 50)],
+)
+
 # ── Combined lookup ──────────────────────────────────────────────────────
 
 QUOTAS: dict[str, dict[int, QuotaSpec]] = {
@@ -268,5 +309,12 @@ QUOTAS: dict[str, dict[int, QuotaSpec]] = {
         3: _STACK_BYTECODE_D3,
         4: _STACK_BYTECODE_D4,
         5: _STACK_BYTECODE_D5,
+    },
+    "fsm": {
+        1: _FSM_D1,
+        2: _FSM_D2,
+        3: _FSM_D3,
+        4: _FSM_D4,
+        5: _FSM_D5,
     },
 }

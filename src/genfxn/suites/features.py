@@ -481,3 +481,79 @@ def stack_bytecode_features(spec: dict[str, Any]) -> dict[str, str]:
         "input_mode": str(spec.get("input_mode", "direct")),
         "jump_mode": str(spec.get("jump_target_mode", "error")),
     }
+
+
+def fsm_features(spec: dict[str, Any]) -> dict[str, str]:
+    def _enum_or_str(value: Any, default: str) -> str:
+        if value is None:
+            return default
+        if hasattr(value, "value"):
+            enum_value = getattr(value, "value")
+            if isinstance(enum_value, str):
+                return enum_value
+        if isinstance(value, str):
+            return value
+        return str(value)
+
+    states = spec.get("states", [])
+    n_states = len(states) if isinstance(states, list) else 0
+
+    if n_states <= 2:
+        n_states_bucket = "2"
+    elif n_states <= 3:
+        n_states_bucket = "2-3"
+    elif n_states <= 4:
+        n_states_bucket = "3-4"
+    elif n_states <= 5:
+        n_states_bucket = "4-5"
+    elif n_states <= 6:
+        n_states_bucket = "5-6"
+    else:
+        n_states_bucket = "7+"
+
+    total_transitions = 0
+    predicate_scores: list[int] = []
+    if isinstance(states, list):
+        for state in states:
+            if not isinstance(state, dict):
+                continue
+            transitions = state.get("transitions", [])
+            if not isinstance(transitions, list):
+                continue
+            total_transitions += len(transitions)
+            for transition in transitions:
+                if not isinstance(transition, dict):
+                    continue
+                predicate = transition.get("predicate", {})
+                if isinstance(predicate, dict):
+                    predicate_scores.append(_predicate_score(predicate))
+
+    avg_transitions = total_transitions / n_states if n_states > 0 else 0.0
+    if avg_transitions <= 1:
+        transition_density_bucket = "low"
+    elif avg_transitions <= 2:
+        transition_density_bucket = "medium"
+    elif avg_transitions <= 3:
+        transition_density_bucket = "high"
+    else:
+        transition_density_bucket = "very_high"
+
+    max_pred_score = max(predicate_scores, default=1)
+    if max_pred_score <= 1:
+        predicate_complexity = "basic"
+    elif max_pred_score <= 2:
+        predicate_complexity = "comparison"
+    else:
+        predicate_complexity = "modular"
+
+    return {
+        "n_states_bucket": n_states_bucket,
+        "transition_density_bucket": transition_density_bucket,
+        "predicate_complexity": predicate_complexity,
+        "machine_type": _enum_or_str(spec.get("machine_type"), "moore"),
+        "output_mode": _enum_or_str(spec.get("output_mode"), "final_state_id"),
+        "undefined_policy": _enum_or_str(
+            spec.get("undefined_transition_policy"),
+            "stay",
+        ),
+    }

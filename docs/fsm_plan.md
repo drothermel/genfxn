@@ -2,7 +2,7 @@
 
 Date: 2026-02-09  
 Owner: Codex + Danielle  
-Status: In Progress (M1-M4 complete)
+Status: Complete (M1-M4 + suite integration)
 
 ## Goal
 
@@ -146,6 +146,7 @@ Use this after memory compaction:
 - [x] M2 complete
 - [x] M3 complete
 - [x] M4 complete
+- [x] Suite integration follow-up complete
 - [x] Full `ruff` and full `pytest` pass
 - [ ] PR updated with behavior notes + test evidence
 
@@ -174,3 +175,10 @@ Use this after memory compaction:
   `tests/test_presets.py`). Full suite check passed locally
   (`1254 passed, 23 skipped`). Suite-balancing integration for `fsm`
   is deferred to a follow-up milestone.
+- 2026-02-09: Suite integration follow-up completed. Added `fsm` to
+  balanced suites pipeline (`src/genfxn/suites/features.py`,
+  `src/genfxn/suites/quotas.py`, `src/genfxn/suites/generate.py`) and
+  updated FSM difficulty modeling in `src/genfxn/core/difficulty.py` so
+  D5 is genuinely reachable. Added suite + difficulty tests
+  (`tests/test_suites.py`, `tests/test_difficulty.py`).
+  Full suite check passed locally (`1263 passed, 25 skipped`).
