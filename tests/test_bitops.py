@@ -140,6 +140,19 @@ class TestModels:
         _assert_has_invalid_rejected(SpecCls, spec)
         _assert_has_invalid_rejected(AxesCls, axes)
 
+    def test_width_bits_rejects_64_for_signed_backend_parity(self) -> None:
+        bit_instruction_cls = getattr(bitops_models, "BitInstruction")
+        bit_op = getattr(bitops_models, "BitOp")
+        with pytest.raises(Exception):
+            SpecCls(
+                width_bits=64,
+                operations=[bit_instruction_cls(op=bit_op.NOT)],
+            )
+
+    def test_width_choices_rejects_64(self) -> None:
+        with pytest.raises(Exception):
+            AxesCls(width_choices=[8, 64])
+
 
 class TestEvaluatorSemantics:
     def test_evaluator_applies_fixed_width_semantics(self) -> None:
@@ -234,6 +247,22 @@ class TestQueries:
 
         for q in queries:
             assert q.output == eval_bitops(spec, q.input)
+
+    def test_queries_stay_within_signed_i64_bounds(self) -> None:
+        axes = AxesCls(
+            width_choices=[63],
+            value_range=(-(1 << 80), (1 << 80)),
+        )
+        spec = SpecCls.model_validate(
+            {
+                "width_bits": 63,
+                "operations": [{"op": "not"}],
+            }
+        )
+        queries = _call_queries(generate_bitops_queries, spec, axes, seed=123)
+        assert queries
+        for q in queries:
+            assert -(1 << 63) <= q.input <= (1 << 63) - 1
 
 
 class TestTaskGeneration:

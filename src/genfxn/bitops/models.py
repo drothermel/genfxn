@@ -37,7 +37,7 @@ class BitInstruction(BaseModel):
 
 
 class BitopsSpec(BaseModel):
-    width_bits: int = Field(default=8, ge=1, le=64)
+    width_bits: int = Field(default=8, ge=1, le=63)
     operations: list[BitInstruction] = Field(min_length=1)
 
 
@@ -58,8 +58,8 @@ class BitopsAxes(BaseModel):
             raise ValueError("allowed_ops must not be empty")
 
         for width in self.width_choices:
-            if width < 1 or width > 64:
-                raise ValueError("width_choices values must be in [1, 64]")
+            if width < 1 or width > 63:
+                raise ValueError("width_choices values must be in [1, 63]")
 
         for name in (
             "n_ops_range",

@@ -4,6 +4,13 @@ from genfxn.bitops.eval import eval_bitops
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 
+I64_MIN = -(1 << 63)
+I64_MAX = (1 << 63) - 1
+
+
+def _clamp_i64(x: int) -> int:
+    return min(max(x, I64_MIN), I64_MAX)
+
 
 def generate_bitops_queries(
     spec: BitopsSpec,
@@ -15,6 +22,10 @@ def generate_bitops_queries(
 
     mask = (1 << spec.width_bits) - 1
     v_lo, v_hi = axes.value_range
+    bounded_lo = max(v_lo, I64_MIN)
+    bounded_hi = min(v_hi, I64_MAX)
+    if bounded_lo > bounded_hi:
+        bounded_lo, bounded_hi = I64_MIN, I64_MAX
 
     queries: list[Query] = []
 
@@ -31,23 +42,23 @@ def generate_bitops_queries(
         0,
         1,
         -1,
-        mask,
-        mask + 1,
+        _clamp_i64(mask),
+        _clamp_i64(mask + 1),
     ]
     for x in coverage_inputs:
         _append_query(x, QueryTag.COVERAGE)
 
     boundary_inputs = [
-        v_lo,
-        v_hi,
-        -mask,
-        -(mask + 1),
+        bounded_lo,
+        bounded_hi,
+        _clamp_i64(-mask),
+        _clamp_i64(-(mask + 1)),
     ]
     for x in boundary_inputs:
         _append_query(x, QueryTag.BOUNDARY)
 
     for _ in range(4):
-        _append_query(rng.randint(v_lo, v_hi), QueryTag.TYPICAL)
+        _append_query(rng.randint(bounded_lo, bounded_hi), QueryTag.TYPICAL)
 
     adversarial_inputs = [
         0xAAAAAAAA,
