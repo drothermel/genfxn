@@ -1,5 +1,4 @@
 import random
-from typing import Any
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
@@ -12,20 +11,6 @@ from genfxn.intervals.render import render_intervals
 from genfxn.intervals.sampler import sample_intervals_spec
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
-
-
-def _local_description(spec_dict: dict[str, Any]) -> str:
-    operation = spec_dict.get("operation", "total_coverage")
-    boundary_mode = spec_dict.get("boundary_mode", "closed_closed")
-    merge_touching = spec_dict.get("merge_touching", True)
-
-    op_text = getattr(operation, "value", operation)
-    boundary_text = getattr(boundary_mode, "value", boundary_mode)
-    return (
-        "Given integer intervals, normalize reversed endpoints, apply "
-        f"{boundary_text} boundaries, merge touching={merge_touching}, and "
-        f"return {op_text}."
-    )
 
 
 def _render_intervals_for_languages(
@@ -58,13 +43,7 @@ def generate_intervals_task(
     spec = sample_intervals_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
     difficulty = compute_difficulty("intervals", spec_dict)
-
-    try:
-        description = describe_task("intervals", spec_dict)
-    except ValueError:
-        description = _local_description(spec_dict)
-    if not description:
-        description = _local_description(spec_dict)
+    description = describe_task("intervals", spec_dict)
 
     return Task(
         task_id=task_id_from_spec("intervals", spec_dict),

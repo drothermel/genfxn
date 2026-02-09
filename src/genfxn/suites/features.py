@@ -711,3 +711,34 @@ def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
         "abs_diff_bucket": abs_diff_bucket,
         "divisor_bucket": divisor_bucket,
     }
+
+
+def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
+    def _enum_or_str(value: Any, default: str) -> str:
+        if value is None:
+            return default
+        if hasattr(value, "value"):
+            enum_value = value.value
+            if isinstance(enum_value, str):
+                return enum_value
+        if isinstance(value, str):
+            return value
+        return str(value)
+
+    operation = _enum_or_str(spec.get("operation"), "total_coverage")
+    boundary_mode = _enum_or_str(spec.get("boundary_mode"), "closed_closed")
+    merge_touching = str(bool(spec.get("merge_touching", False))).lower()
+
+    if boundary_mode == "closed_closed":
+        boundary_bucket = "closed"
+    elif boundary_mode == "open_open":
+        boundary_bucket = "open"
+    else:
+        boundary_bucket = "mixed"
+
+    return {
+        "operation": operation,
+        "boundary_mode": boundary_mode,
+        "boundary_bucket": boundary_bucket,
+        "merge_touching": merge_touching,
+    }

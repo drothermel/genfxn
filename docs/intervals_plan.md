@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0-M4 complete; M5 remaining)
+Status: Near-complete (M0-M5 complete; full-suite verification pending)
 
 ## Goal
 
@@ -341,7 +341,7 @@ This family is not complete until all are true:
 - [x] M2 complete
 - [x] M3 complete
 - [x] M4 complete
-- [ ] M5 complete
+- [x] M5 complete
 - [ ] Full `ruff` and full `pytest` pass
 - [ ] Calibration script strict mode pass
 - [ ] PR updated with behavior notes + test evidence
@@ -402,3 +402,32 @@ This family is not complete until all are true:
   `uv run pytest tests/test_java_render.py tests/test_rust_render.py tests/test_intervals_runtime_parity.py -q` (298 passed, 3 skipped)
   `uv run pytest tests/test_difficulty.py tests/test_intervals.py tests/test_validate_intervals.py -q` (99 passed)
   `uv run ty check src/genfxn/langs/java/intervals.py src/genfxn/langs/rust/intervals.py src/genfxn/langs/registry.py src/genfxn/intervals/task.py tests/test_java_render.py tests/test_rust_render.py tests/test_intervals_runtime_parity.py` (pass).
+- 2026-02-09: M5 completed. Integrated intervals into CLI/presets/suites/docs:
+  - CLI + language rendering path:
+    `src/genfxn/cli.py`, `src/genfxn/core/describe.py`,
+    `src/genfxn/intervals/task.py`
+  - Difficulty presets:
+    `src/genfxn/core/presets.py`
+  - Balanced suite integration:
+    `src/genfxn/suites/features.py`, `src/genfxn/suites/quotas.py`,
+    `src/genfxn/suites/generate.py`
+  - Calibration tooling:
+    `scripts/calibrate_intervals.py`,
+    `tests/test_calibrate_intervals_script.py`
+  - Docs:
+    `README.md`, `AXES.md`
+  - Integration test updates:
+    `tests/test_cli.py`, `tests/test_presets.py`, `tests/test_suites.py`
+
+  Note: `intervals` currently has a finite semantic spec space (32 unique
+  operation/boundary/merge combinations), so suite quota totals are set per
+  difficulty to the reachable exact-difficulty counts (D1=3, D2=9, D3=8,
+  D4=9, D5=3) rather than 50.
+
+  Focused verification passed:
+  `uv run ruff check src/genfxn/cli.py src/genfxn/core/describe.py src/genfxn/core/presets.py src/genfxn/intervals/task.py src/genfxn/suites/features.py src/genfxn/suites/generate.py src/genfxn/suites/quotas.py scripts/calibrate_intervals.py tests/test_calibrate_intervals_script.py tests/test_cli.py tests/test_presets.py tests/test_suites.py --fix`
+  `uv run pytest tests/test_calibrate_intervals_script.py tests/test_cli.py tests/test_presets.py tests/test_suites.py tests/test_generate_balanced_suites_script.py -q` (229 passed, 14 skipped)
+  `uv run pytest tests/test_java_render.py tests/test_rust_render.py tests/test_intervals_runtime_parity.py -q` (298 passed, 3 skipped)
+  `uv run pytest tests/test_difficulty.py tests/test_intervals.py tests/test_validate_intervals.py -q` (99 passed)
+  `uv run ty check src/genfxn/cli.py src/genfxn/core/describe.py src/genfxn/core/presets.py src/genfxn/intervals/task.py src/genfxn/suites/features.py src/genfxn/suites/generate.py src/genfxn/suites/quotas.py scripts/calibrate_intervals.py tests/test_calibrate_intervals_script.py tests/test_cli.py tests/test_presets.py tests/test_suites.py` (pass)
+  `uv run python scripts/calibrate_intervals.py --samples 40 --pool-size 1500 --output /tmp/intervals_calibration_test.json --strict` (pass).

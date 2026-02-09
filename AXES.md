@@ -393,6 +393,54 @@ Sequence dynamic-programming alignment tasks:
 
 ---
 
+## Intervals
+
+Interval-statistics tasks over integer endpoints:
+`f(intervals: list[tuple[int, int]]) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
+| `operation_types` | list | all | — | Allowed operation outputs |
+| `boundary_modes` | list | all | — | Boundary interpretation mode |
+| `merge_touching_choices` | list[bool] | `[False, True]` | — | Whether touching spans can merge |
+| `n_intervals_range` | (lo, hi) | (0, 10) | `--list-length-range` | Range for sampled interval-counts in queries |
+| `endpoint_range` | (lo, hi) | (-20, 20) | `--value-range` | Range for sampled interval endpoints |
+| `max_span_range` | (lo, hi) | (0, 20) | — | Max absolute span used when sampling endpoints |
+| `allow_reversed_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for reversed endpoint sampling |
+| `degenerate_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for zero-length intervals |
+| `nested_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for nested interval structures |
+
+### Operation Types
+
+| Value | Description |
+|-------|-------------|
+| `total_coverage` | Count covered integer points after normalization/merge |
+| `merged_count` | Count merged spans after normalization/merge |
+| `max_overlap_count` | Max active overlap multiplicity at any integer point |
+| `gap_count` | Count uncovered integer gaps between merged spans |
+
+### Boundary Modes
+
+| Value | Description |
+|-------|-------------|
+| `closed_closed` | `[lo, hi]` |
+| `closed_open` | `[lo, hi)` mapped to integer points |
+| `open_closed` | `(lo, hi]` mapped to integer points |
+| `open_open` | `(lo, hi)` mapped to integer points |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `operation` | operation values | Output operation family |
+| `boundary_mode` | boundary mode values | Endpoint inclusion policy |
+| `merge_touching` | `true`, `false` | Whether adjacent spans are merged |
+
+---
+
 ## Using Spec Field Paths
 
 Spec field paths use dot notation to access nested fields. List indices are supported.
