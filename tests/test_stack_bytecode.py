@@ -1,9 +1,9 @@
-import inspect
 import random
-from typing import Any
 
 import pytest
 
+from genfxn.core.models import QueryTag
+from genfxn.stack_bytecode.eval import eval_stack_bytecode
 from genfxn.stack_bytecode.models import (
     InputMode,
     Instruction,
@@ -13,76 +13,25 @@ from genfxn.stack_bytecode.models import (
     StackBytecodeAxes,
     StackBytecodeSpec,
 )
+from genfxn.stack_bytecode.queries import generate_stack_bytecode_queries
+from genfxn.stack_bytecode.render import render_stack_bytecode
+from genfxn.stack_bytecode.sampler import sample_stack_bytecode_spec
+from genfxn.stack_bytecode.task import generate_stack_bytecode_task
 
 
-def _import_optional(module_path: str):
-    return pytest.importorskip(module_path)
-
-
-def _get_callable(module: Any, *names: str):
-    for name in names:
-        fn = getattr(module, name, None)
-        if callable(fn):
-            return fn
-    pytest.skip(f"No callable found in {module.__name__}: {names}")
-
-
-def _call_eval(eval_fn: Any, spec: Any, xs: list[int]) -> Any:
-    attempts = [
-        lambda: eval_fn(spec, xs),
-        lambda: eval_fn(spec=spec, xs=xs),
-        lambda: eval_fn(spec=spec, inputs=xs),
-        lambda: eval_fn(program=spec, xs=xs),
-        lambda: eval_fn(program=spec, inputs=xs),
-    ]
-    for attempt in attempts:
-        try:
-            return attempt()
-        except TypeError:
-            continue
-    sig = inspect.signature(eval_fn)
-    raise AssertionError(f"Could not call evaluator with signature {sig}")
-
-
-def _result_output_and_status(result: Any) -> tuple[int, Any | None]:
-    if isinstance(result, int):
-        return result, None
-
-    if isinstance(result, tuple):
-        if len(result) >= 2 and all(isinstance(x, int) for x in result[:2]):
-            # stack_bytecode returns (status, value)
-            return result[1], result[0]
-
-    for out_name in ("output", "value", "result", "top"):
-        out = getattr(result, out_name, None)
-        if isinstance(out, int):
-            status = getattr(result, "status", None)
-            if status is None:
-                status = getattr(result, "runtime_status", None)
-            return out, status
-
-    raise AssertionError(
-        f"Unsupported evaluator result shape: {type(result)!r}"
+def _spec(
+    program: list[Instruction],
+    *,
+    max_step_count: int = 64,
+    jump_target_mode: JumpTargetMode = JumpTargetMode.ERROR,
+    input_mode: InputMode = InputMode.DIRECT,
+) -> StackBytecodeSpec:
+    return StackBytecodeSpec(
+        program=program,
+        max_step_count=max_step_count,
+        jump_target_mode=jump_target_mode,
+        input_mode=input_mode,
     )
-
-
-def _call_sample(sample_fn: Any, axes: StackBytecodeAxes, rng: random.Random):
-    try:
-        return sample_fn(axes, rng)
-    except TypeError:
-        return sample_fn(axes=axes, rng=rng)
-
-
-def _call_generate_queries(
-    queries_fn: Any,
-    spec: StackBytecodeSpec,
-    axes: StackBytecodeAxes,
-    rng: random.Random,
-):
-    try:
-        return queries_fn(spec, axes, rng)
-    except TypeError:
-        return queries_fn(spec=spec, axes=axes, rng=rng)
 
 
 class TestModels:
@@ -100,151 +49,342 @@ class TestModels:
 
     def test_spec_requires_halt_instruction(self) -> None:
         with pytest.raises(ValueError, match="halt"):
-            StackBytecodeSpec(
-                program=[Instruction(op=InstructionOp.PUSH_CONST, value=1)]
-            )
+            _spec([Instruction(op=InstructionOp.PUSH_CONST, value=1)])
 
     def test_axes_validate_ranges(self) -> None:
         with pytest.raises(ValueError, match="value_range"):
             StackBytecodeAxes(value_range=(2, -2))
 
-    def test_axes_reject_empty_modes(self) -> None:
-        with pytest.raises(ValueError, match="jump_target_modes"):
-            StackBytecodeAxes(jump_target_modes=[])
 
-    def test_axes_reject_negative_list_length_low(self) -> None:
-        with pytest.raises(ValueError, match="list_length_range"):
-            StackBytecodeAxes(list_length_range=(-1, 3))
-
-
-class TestEvaluatorSemantics:
-    def test_arithmetic_program(self) -> None:
-        eval_module = _import_optional("genfxn.stack_bytecode.eval")
-        eval_fn = _get_callable(
-            eval_module,
-            "eval_stack_bytecode",
-            "eval_program",
-            "eval_stack_program",
-        )
-
-        spec = StackBytecodeSpec(
-            program=[
-                Instruction(op=InstructionOp.PUSH_CONST, value=3),
+class TestEvaluatorArithmeticAndComparison:
+    def test_add_sub_mul_pipeline(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=9),
                 Instruction(op=InstructionOp.PUSH_CONST, value=4),
+                Instruction(op=InstructionOp.SUB),
+                Instruction(op=InstructionOp.PUSH_CONST, value=3),
                 Instruction(op=InstructionOp.MUL),
                 Instruction(op=InstructionOp.HALT),
             ]
         )
-        result = _call_eval(eval_fn, spec, [])
-        output, status = _result_output_and_status(result)
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, 15)
 
-        assert output == 12
-        if status is not None:
-            assert status in (RuntimeStatus.OK, int(RuntimeStatus.OK), "ok")
+    def test_sub_operand_order(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=2),
+                Instruction(op=InstructionOp.PUSH_CONST, value=5),
+                Instruction(op=InstructionOp.SUB),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, -3)
 
-    def test_input_and_unary_ops(self) -> None:
-        eval_module = _import_optional("genfxn.stack_bytecode.eval")
-        eval_fn = _get_callable(
-            eval_module,
-            "eval_stack_bytecode",
-            "eval_program",
-            "eval_stack_program",
+    @pytest.mark.parametrize(
+        "a,b,expected",
+        [(-7, 3, -2), (7, -3, -2), (-7, -3, 2), (7, 3, 2)],
+    )
+    def test_division_truncates_toward_zero(
+        self, a: int, b: int, expected: int
+    ) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=a),
+                Instruction(op=InstructionOp.PUSH_CONST, value=b),
+                Instruction(op=InstructionOp.DIV),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, expected)
+
+    @pytest.mark.parametrize(
+        "a,b,expected",
+        [(-7, 3, -1), (7, -3, 1), (-7, -3, -1), (7, 3, 1)],
+    )
+    def test_modulo_matches_trunc_zero_division(
+        self, a: int, b: int, expected: int
+    ) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=a),
+                Instruction(op=InstructionOp.PUSH_CONST, value=b),
+                Instruction(op=InstructionOp.MOD),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, expected)
+
+    def test_div_by_zero_returns_status(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=7),
+                Instruction(op=InstructionOp.PUSH_CONST, value=0),
+                Instruction(op=InstructionOp.DIV),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec, []) == (
+            RuntimeStatus.DIV_OR_MOD_BY_ZERO,
+            0,
         )
 
-        spec = StackBytecodeSpec(
-            program=[
-                Instruction(op=InstructionOp.LOAD_INPUT, index=0),
+    def test_mod_by_zero_returns_status(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=7),
+                Instruction(op=InstructionOp.PUSH_CONST, value=0),
+                Instruction(op=InstructionOp.MOD),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec, []) == (
+            RuntimeStatus.DIV_OR_MOD_BY_ZERO,
+            0,
+        )
+
+    def test_comparison_ops(self) -> None:
+        spec_eq = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=5),
+                Instruction(op=InstructionOp.PUSH_CONST, value=5),
+                Instruction(op=InstructionOp.EQ),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec_eq, []) == (RuntimeStatus.OK, 1)
+
+        spec_gt = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=5),
+                Instruction(op=InstructionOp.PUSH_CONST, value=2),
+                Instruction(op=InstructionOp.GT),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec_gt, []) == (RuntimeStatus.OK, 1)
+
+        spec_lt = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=5),
+                Instruction(op=InstructionOp.PUSH_CONST, value=2),
+                Instruction(op=InstructionOp.LT),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        assert eval_stack_bytecode(spec_lt, []) == (RuntimeStatus.OK, 0)
+
+
+class TestEvaluatorStackOpsAndFaults:
+    def test_dup_swap_pop(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=3),
+                Instruction(op=InstructionOp.PUSH_CONST, value=8),
+                Instruction(op=InstructionOp.SWAP),
                 Instruction(op=InstructionOp.DUP),
-                Instruction(op=InstructionOp.MUL),
-                Instruction(op=InstructionOp.NEG),
-                Instruction(op=InstructionOp.ABS),
+                Instruction(op=InstructionOp.POP),
                 Instruction(op=InstructionOp.HALT),
             ]
         )
-        result = _call_eval(eval_fn, spec, [7])
-        output, _ = _result_output_and_status(result)
-        assert output == 49
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, 3)
+
+    @pytest.mark.parametrize(
+        "op",
+        [
+            InstructionOp.DUP,
+            InstructionOp.POP,
+            InstructionOp.NEG,
+            InstructionOp.ABS,
+            InstructionOp.IS_ZERO,
+            InstructionOp.JUMP_IF_ZERO,
+            InstructionOp.JUMP_IF_NONZERO,
+        ],
+    )
+    def test_single_operand_underflow_returns_status(
+        self, op: InstructionOp
+    ) -> None:
+        if "jump_if" in op.value:
+            instr = Instruction(op=op, target=0)
+        else:
+            instr = Instruction(op=op)
+        spec = _spec([instr, Instruction(op=InstructionOp.HALT)])
+        assert eval_stack_bytecode(spec, []) == (
+            RuntimeStatus.STACK_UNDERFLOW,
+            0,
+        )
+
+    @pytest.mark.parametrize(
+        "op",
+        [
+            InstructionOp.SWAP,
+            InstructionOp.ADD,
+            InstructionOp.SUB,
+            InstructionOp.MUL,
+            InstructionOp.DIV,
+            InstructionOp.MOD,
+            InstructionOp.EQ,
+            InstructionOp.GT,
+            InstructionOp.LT,
+        ],
+    )
+    def test_two_operand_underflow_returns_status(
+        self, op: InstructionOp
+    ) -> None:
+        spec = _spec([Instruction(op=op), Instruction(op=InstructionOp.HALT)])
+        assert eval_stack_bytecode(spec, []) == (
+            RuntimeStatus.STACK_UNDERFLOW,
+            0,
+        )
+
+    def test_halt_with_empty_stack_returns_status(self) -> None:
+        spec = _spec([Instruction(op=InstructionOp.HALT)])
+        assert eval_stack_bytecode(spec, []) == (
+            RuntimeStatus.EMPTY_STACK_ON_HALT,
+            0,
+        )
+
+
+class TestEvaluatorControlFlow:
+    def test_jump_error_mode_invalid_target(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.JUMP, target=10),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            jump_target_mode=JumpTargetMode.ERROR,
+        )
+        assert eval_stack_bytecode(spec, []) == (
+            RuntimeStatus.BAD_JUMP_TARGET,
+            0,
+        )
+
+    def test_jump_clamp_mode(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=4),
+                Instruction(op=InstructionOp.JUMP, target=10),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            jump_target_mode=JumpTargetMode.CLAMP,
+        )
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, 4)
+
+    def test_jump_wrap_mode(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.JUMP, target=6),
+                Instruction(op=InstructionOp.PUSH_CONST, value=0),
+                Instruction(op=InstructionOp.PUSH_CONST, value=9),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            jump_target_mode=JumpTargetMode.WRAP,
+            max_step_count=8,
+        )
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, 9)
+
+    def test_conditional_jumps_consume_condition_value(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=0),
+                Instruction(op=InstructionOp.JUMP_IF_ZERO, target=4),
+                Instruction(op=InstructionOp.PUSH_CONST, value=100),
+                Instruction(op=InstructionOp.JUMP, target=5),
+                Instruction(op=InstructionOp.PUSH_CONST, value=7),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            jump_target_mode=JumpTargetMode.ERROR,
+        )
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.OK, 7)
+
+    def test_step_limit(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.JUMP, target=0),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=5,
+            jump_target_mode=JumpTargetMode.ERROR,
+        )
+        assert eval_stack_bytecode(spec, []) == (RuntimeStatus.STEP_LIMIT, 0)
+
+
+class TestInputModes:
+    def test_load_input_direct_valid(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.LOAD_INPUT, index=1),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            input_mode=InputMode.DIRECT,
+        )
+        assert eval_stack_bytecode(spec, [10, 20, 30]) == (RuntimeStatus.OK, 20)
+
+    def test_load_input_direct_invalid_index(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.LOAD_INPUT, index=-1),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            input_mode=InputMode.DIRECT,
+        )
+        assert eval_stack_bytecode(spec, [10]) == (
+            RuntimeStatus.INVALID_INPUT_INDEX,
+            0,
+        )
+
+    def test_load_input_cyclic_wraps(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.LOAD_INPUT, index=5),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            input_mode=InputMode.CYCLIC,
+        )
+        assert eval_stack_bytecode(spec, [11, 22]) == (RuntimeStatus.OK, 22)
+
+    def test_load_input_cyclic_empty(self) -> None:
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.LOAD_INPUT, index=5),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            input_mode=InputMode.CYCLIC,
+        )
+        assert eval_stack_bytecode(spec, []) == (
+            RuntimeStatus.INVALID_INPUT_INDEX,
+            0,
+        )
 
 
 class TestSamplerAndQueries:
     def test_sampler_reproducible(self) -> None:
-        sampler_module = _import_optional("genfxn.stack_bytecode.sampler")
-        sample_fn = _get_callable(
-            sampler_module,
-            "sample_stack_bytecode_spec",
-            "sample_spec",
-        )
         axes = StackBytecodeAxes(target_difficulty=3)
-
-        spec1 = _call_sample(sample_fn, axes, random.Random(42))
-        spec2 = _call_sample(sample_fn, axes, random.Random(42))
+        spec1 = sample_stack_bytecode_spec(axes, random.Random(42))
+        spec2 = sample_stack_bytecode_spec(axes, random.Random(42))
         assert spec1 == spec2
 
+    def test_sampler_always_emits_halt(self) -> None:
+        axes = StackBytecodeAxes(target_difficulty=3)
+        spec = sample_stack_bytecode_spec(axes, random.Random(42))
+        assert any(instr.op == InstructionOp.HALT for instr in spec.program)
+
     def test_queries_match_evaluator_outputs(self) -> None:
-        sampler_module = _import_optional("genfxn.stack_bytecode.sampler")
-        queries_module = _import_optional("genfxn.stack_bytecode.queries")
-        eval_module = _import_optional("genfxn.stack_bytecode.eval")
-
-        sample_fn = _get_callable(
-            sampler_module,
-            "sample_stack_bytecode_spec",
-            "sample_spec",
-        )
-        queries_fn = _get_callable(
-            queries_module,
-            "generate_stack_bytecode_queries",
-            "generate_queries",
-        )
-        eval_fn = _get_callable(
-            eval_module,
-            "eval_stack_bytecode",
-            "eval_program",
-            "eval_stack_program",
-        )
-
-        axes = StackBytecodeAxes(
-            target_difficulty=2,
-            list_length_range=(0, 5),
-            input_modes=[InputMode.DIRECT, InputMode.CYCLIC],
-            jump_target_modes=[
-                JumpTargetMode.ERROR,
-                JumpTargetMode.CLAMP,
-                JumpTargetMode.WRAP,
-            ],
-        )
-
-        spec = _call_sample(sample_fn, axes, random.Random(42))
-        queries = _call_generate_queries(
-            queries_fn,
-            spec,
-            axes,
-            random.Random(42),
-        )
+        axes = StackBytecodeAxes(target_difficulty=2, list_length_range=(0, 5))
+        spec = sample_stack_bytecode_spec(axes, random.Random(42))
+        queries = generate_stack_bytecode_queries(spec, axes, random.Random(42))
 
         assert len(queries) > 0
+        assert {q.tag for q in queries}.issubset(set(QueryTag))
         for q in queries:
-            assert q.output == _call_eval(eval_fn, spec, list(q.input))
+            assert q.output == eval_stack_bytecode(spec, list(q.input))
 
 
 class TestRenderRoundtrip:
     def test_python_render_executes_and_matches_eval(self) -> None:
-        render_module = _import_optional("genfxn.stack_bytecode.render")
-        eval_module = _import_optional("genfxn.stack_bytecode.eval")
-
-        render_fn = _get_callable(
-            render_module,
-            "render_stack_bytecode",
-            "render_program",
-        )
-        eval_fn = _get_callable(
-            eval_module,
-            "eval_stack_bytecode",
-            "eval_program",
-            "eval_stack_program",
-        )
-
-        spec = StackBytecodeSpec(
-            program=[
+        spec = _spec(
+            [
                 Instruction(op=InstructionOp.LOAD_INPUT, index=0),
                 Instruction(op=InstructionOp.PUSH_CONST, value=5),
                 Instruction(op=InstructionOp.ADD),
@@ -252,29 +392,29 @@ class TestRenderRoundtrip:
             ]
         )
 
-        code = render_fn(spec)
-        namespace: dict[str, Any] = {}
+        code = render_stack_bytecode(spec)
+        namespace: dict[str, object] = {}
         exec(code, namespace)  # noqa: S102
         f = namespace["f"]
+        assert callable(f)
 
         for xs in ([], [0], [7], [-3]):
             rendered_out = f(xs)
-            eval_out = _call_eval(eval_fn, spec, xs)
+            eval_out = eval_stack_bytecode(spec, xs)
             assert rendered_out == eval_out
 
 
 class TestTaskGeneration:
     def test_generate_task_reproducible_with_seed(self) -> None:
-        task_module = _import_optional("genfxn.stack_bytecode.task")
-        generate_fn = _get_callable(
-            task_module,
-            "generate_stack_bytecode_task",
-            "generate_task",
-        )
-
-        task1 = generate_fn(rng=random.Random(42))
-        task2 = generate_fn(rng=random.Random(42))
+        task1 = generate_stack_bytecode_task(rng=random.Random(42))
+        task2 = generate_stack_bytecode_task(rng=random.Random(42))
 
         assert task1.task_id == task2.task_id
         assert task1.spec == task2.spec
         assert task1.queries == task2.queries
+
+    def test_generate_task_has_description_and_difficulty(self) -> None:
+        task = generate_stack_bytecode_task(rng=random.Random(42))
+        assert isinstance(task.description, str)
+        assert task.description
+        assert task.difficulty in {1, 2, 3, 4, 5}

@@ -13,10 +13,13 @@ from genfxn.core.safe_exec import (
 )
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.stack_bytecode.ast_safety import (
+    ALLOWED_ANNOTATION_NAMES,
     ALLOWED_AST_NODES,
     ALLOWED_CALL_NAMES,
+    ALLOWED_METHOD_NAMES,
     ALLOWED_VAR_NAMES,
     CALL_ARITIES,
+    METHOD_ARITIES,
 )
 from genfxn.stack_bytecode.eval import eval_stack_bytecode
 from genfxn.stack_bytecode.models import StackBytecodeAxes, StackBytecodeSpec
@@ -58,6 +61,27 @@ def _validate_ast_whitelist(
     except (SyntaxError, TypeError):
         return [], None
 
+    annotation_positions: set[tuple[int, int]] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            for arg in node.args.args:
+                if arg.annotation is not None:
+                    for n in ast.walk(arg.annotation):
+                        if hasattr(n, "lineno") and hasattr(
+                            n, "col_offset"
+                        ):
+                            annotation_positions.add(
+                                (n.lineno, n.col_offset)
+                            )
+            if node.returns is not None:
+                for n in ast.walk(node.returns):
+                    if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                        annotation_positions.add((n.lineno, n.col_offset))
+        elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
+            for n in ast.walk(node.annotation):
+                if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                    annotation_positions.add((n.lineno, n.col_offset))
+
     for node in ast.walk(tree):
         node_type = type(node)
         if node_type not in ALLOWED_AST_NODES:
@@ -75,27 +99,27 @@ def _validate_ast_whitelist(
             continue
 
         if isinstance(node, ast.Call):
-            if not isinstance(node.func, ast.Name):
-                issues.append(
-                    Issue(
-                        code=CODE_UNSAFE_AST,
-                        severity=Severity.ERROR,
-                        message=(
-                            "Disallowed function call form at line "
-                            f"{getattr(node, 'lineno', '?')}"
-                        ),
-                        location="code",
-                    )
-                )
-                continue
+            valid_call = False
+            if isinstance(node.func, ast.Name):
+                call_name = node.func.id
+                allowed_arities = CALL_ARITIES.get(call_name, set())
+                if (
+                    call_name in ALLOWED_CALL_NAMES
+                    and len(node.args) in allowed_arities
+                    and len(node.keywords) == 0
+                ):
+                    valid_call = True
+            elif isinstance(node.func, ast.Attribute):
+                method_name = node.func.attr
+                allowed_arities = METHOD_ARITIES.get(method_name, set())
+                if (
+                    method_name in ALLOWED_METHOD_NAMES
+                    and len(node.args) in allowed_arities
+                    and len(node.keywords) == 0
+                ):
+                    valid_call = True
 
-            call_name = node.func.id
-            allowed_arities = CALL_ARITIES.get(call_name, set())
-            if (
-                call_name not in ALLOWED_CALL_NAMES
-                or len(node.args) not in allowed_arities
-                or len(node.keywords) != 0
-            ):
+            if not valid_call:
                 issues.append(
                     Issue(
                         code=CODE_UNSAFE_AST,
@@ -107,7 +131,26 @@ def _validate_ast_whitelist(
                         location="code",
                     )
                 )
+        elif isinstance(node, ast.Attribute):
+            if node.attr.startswith("__") and node.attr.endswith("__"):
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{node.attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            in_annotation = (
+                node.lineno,
+                node.col_offset,
+            ) in annotation_positions
+            if in_annotation and node.id in ALLOWED_ANNOTATION_NAMES:
+                continue
             if node.id not in allowed_names:
                 issues.append(
                     Issue(
