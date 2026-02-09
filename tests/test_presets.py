@@ -436,3 +436,37 @@ class TestStackBytecodePresets:
             or axes_a.jump_target_modes != axes_b.jump_target_modes
             or axes_a.input_modes != axes_b.input_modes
         )
+
+    def test_stack_bytecode_means_increase_with_target(self) -> None:
+        StackBytecodeAxes, generate_stack_bytecode_task = (
+            self._require_stack_modules()
+        )
+        means: dict[int, float] = {}
+        for difficulty in [1, 2, 3, 4, 5]:
+            rng = random.Random(123 + difficulty)
+            observed: list[int] = []
+            for _ in range(self.N_SAMPLES):
+                axes = cast(
+                    StackBytecodeAxes,
+                    get_difficulty_axes(
+                        "stack_bytecode",
+                        difficulty,
+                        rng=rng,
+                    ),
+                )
+                task = generate_stack_bytecode_task(axes=axes, rng=rng)
+                observed.append(
+                    compute_difficulty("stack_bytecode", task.spec)
+                )
+            means[difficulty] = sum(observed) / len(observed)
+
+        ordered_means = [means[d] for d in [1, 2, 3, 4, 5]]
+        assert ordered_means == sorted(ordered_means)
+        assert ordered_means[-1] - ordered_means[0] >= 0.5
+
+    def test_stack_bytecode_each_difficulty_has_presets(self) -> None:
+        self._require_stack_modules()
+        for difficulty in [1, 2, 3, 4, 5]:
+            presets = get_difficulty_presets("stack_bytecode", difficulty)
+            assert presets
+            assert all(p.name.startswith(str(difficulty)) for p in presets)

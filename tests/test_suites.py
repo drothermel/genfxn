@@ -840,6 +840,31 @@ class TestPoolGeneration:
                     == difficulty
                 )
 
+    def test_stack_bytecode_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["stack_bytecode"].keys()):
+            candidates, _ = generate_pool(
+                "stack_bytecode",
+                difficulty,
+                seed=43,
+                pool_size=150,
+            )
+            assert candidates
+            quota = QUOTAS["stack_bytecode"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for stack_bytecode "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -917,6 +942,16 @@ class TestDeterminism:
             suite_generate.generate_suite(
                 "stringrules", 3, seed=7, pool_size=20, max_retries=0
             )
+
+    def test_stack_bytecode_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+        difficulty = sorted(QUOTAS["stack_bytecode"].keys())[0]
+        a = generate_suite("stack_bytecode", difficulty, seed=19, pool_size=250)
+        b = generate_suite("stack_bytecode", difficulty, seed=19, pool_size=250)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
 
 
 class TestSuiteGenerationValidation:
@@ -1012,3 +1047,24 @@ class TestIntegration:
         for _, _, target, achieved, _ in report:
             min_acceptable = max(1, int(target * 0.8))
             assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_stack_bytecode_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["stack_bytecode"].keys()):
+            tasks = generate_suite(
+                "stack_bytecode",
+                difficulty,
+                seed=101 + difficulty,
+                pool_size=1600,
+            )
+            quota = QUOTAS["stack_bytecode"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "stack_bytecode", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable

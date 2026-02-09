@@ -763,7 +763,8 @@ class TestMultiLanguageGeneration:
         assert "python" in code
         assert "java" in code
         assert "def f(" in code["python"]
-        assert "public static" in code["java"]
+        assert "public static int[] f(int[] xs)" in code["java"]
+        assert "return new int[] {" in code["java"]
 
     def test_python_only(self) -> None:
         task = generate_piecewise_task(

@@ -418,3 +418,35 @@ class TestTaskGeneration:
         assert isinstance(task.description, str)
         assert task.description
         assert task.difficulty in {1, 2, 3, 4, 5}
+
+
+class TestDifferentialProperty:
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_rendered_python_matches_evaluator_across_random_specs(
+        self, difficulty: int
+    ) -> None:
+        rng = random.Random(1000 + difficulty)
+        axes = StackBytecodeAxes(
+            target_difficulty=difficulty,
+            list_length_range=(0, 8),
+            value_range=(-20, 20),
+        )
+
+        for _ in range(12):
+            spec = sample_stack_bytecode_spec(axes, rng)
+            code = render_stack_bytecode(spec)
+            namespace: dict[str, object] = {}
+            exec(code, namespace)  # noqa: S102
+            f = namespace["f"]
+            assert callable(f)
+
+            for _ in range(8):
+                length = rng.randint(
+                    axes.list_length_range[0],
+                    axes.list_length_range[1],
+                )
+                xs = [
+                    rng.randint(axes.value_range[0], axes.value_range[1])
+                    for _ in range(length)
+                ]
+                assert f(xs) == eval_stack_bytecode(spec, xs)

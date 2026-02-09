@@ -672,6 +672,131 @@ class TestComputeDifficulty:
         difficulty = compute_difficulty("stack_bytecode", spec)
         assert 1 <= difficulty <= 5
 
+    def test_stack_bytecode_monotonic_examples_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
+            pytest.skip("stack_bytecode family is not available")
+
+        specs = [
+            {
+                "program": [
+                    {"op": "push_const", "value": 1},
+                    {"op": "halt"},
+                ],
+                "max_step_count": 20,
+                "jump_target_mode": "error",
+                "input_mode": "direct",
+            },
+            {
+                "program": [
+                    {"op": "load_input", "index": 0},
+                    {"op": "is_zero"},
+                    {"op": "jump_if_zero", "target": 5},
+                    {"op": "push_const", "value": 1},
+                    {"op": "jump", "target": 6},
+                    {"op": "push_const", "value": 2},
+                    {"op": "halt"},
+                ],
+                "max_step_count": 40,
+                "jump_target_mode": "error",
+                "input_mode": "direct",
+            },
+            {
+                "program": [
+                    {"op": "push_const", "value": 3},
+                    {"op": "dup"},
+                    {"op": "is_zero"},
+                    {"op": "jump_if_nonzero", "target": 8},
+                    {"op": "push_const", "value": 1},
+                    {"op": "sub"},
+                    {"op": "jump", "target": 1},
+                    {"op": "push_const", "value": 99},
+                    {"op": "halt"},
+                ],
+                "max_step_count": 70,
+                "jump_target_mode": "error",
+                "input_mode": "direct",
+            },
+            {
+                "program": [
+                    {"op": "load_input", "index": 0},
+                    {"op": "dup"},
+                    {"op": "is_zero"},
+                    {"op": "jump_if_nonzero", "target": 12},
+                    {"op": "push_const", "value": 2},
+                    {"op": "mod"},
+                    {"op": "is_zero"},
+                    {"op": "jump_if_zero", "target": 10},
+                    {"op": "push_const", "value": 3},
+                    {"op": "mul"},
+                    {"op": "jump", "target": 1},
+                    {"op": "push_const", "value": 7},
+                    {"op": "halt"},
+                ],
+                "max_step_count": 110,
+                "jump_target_mode": "clamp",
+                "input_mode": "cyclic",
+            },
+            {
+                "program": [
+                    {"op": "load_input", "index": -2},
+                    {"op": "dup"},
+                    {"op": "push_const", "value": 5},
+                    {"op": "gt"},
+                    {"op": "jump_if_zero", "target": 11},
+                    {"op": "push_const", "value": -3},
+                    {"op": "add"},
+                    {"op": "push_const", "value": 2},
+                    {"op": "div"},
+                    {"op": "jump", "target": 1},
+                    {"op": "push_const", "value": 13},
+                    {"op": "halt"},
+                ],
+                "max_step_count": 160,
+                "jump_target_mode": "wrap",
+                "input_mode": "cyclic",
+            },
+        ]
+
+        scores = [compute_difficulty("stack_bytecode", spec) for spec in specs]
+        assert scores == sorted(scores)
+        assert len(set(scores)) >= 3
+
+    def test_stack_bytecode_difficulty_clamped_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
+            pytest.skip("stack_bytecode family is not available")
+
+        simple = {
+            "program": [{"op": "halt"}],
+            "max_step_count": 5,
+            "jump_target_mode": "error",
+            "input_mode": "direct",
+        }
+        complex_spec = {
+            "program": [
+                {"op": "load_input", "index": -99},
+                {"op": "dup"},
+                {"op": "push_const", "value": 10},
+                {"op": "mod"},
+                {"op": "is_zero"},
+                {"op": "jump_if_zero", "target": 15},
+                {"op": "push_const", "value": -7},
+                {"op": "add"},
+                {"op": "push_const", "value": 3},
+                {"op": "mul"},
+                {"op": "push_const", "value": 2},
+                {"op": "div"},
+                {"op": "jump", "target": 1},
+                {"op": "push_const", "value": 1},
+                {"op": "eq"},
+                {"op": "halt"},
+            ],
+            "max_step_count": 1000,
+            "jump_target_mode": "wrap",
+            "input_mode": "cyclic",
+        }
+        assert 1 <= compute_difficulty("stack_bytecode", simple) <= 5
+        assert 1 <= compute_difficulty("stack_bytecode", complex_spec) <= 5
+
     def test_unknown_family_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown family: unknown"):
             compute_difficulty("unknown", {})

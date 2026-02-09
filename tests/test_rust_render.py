@@ -777,7 +777,8 @@ class TestMultiLanguageRustGeneration:
         assert "python" in code
         assert "rust" in code
         assert "def f(" in code["python"]
-        assert "fn " in code["rust"]
+        assert "fn f(xs: &[i64]) -> (i64, i64)" in code["rust"]
+        assert "return (" in code["rust"]
 
     def test_rust_only(self) -> None:
         task = generate_piecewise_task(
