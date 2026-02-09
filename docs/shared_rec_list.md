@@ -7,6 +7,7 @@ Date: 2026-02-09
 
 - Completed: `Stack/Bytecode Interpreter` (implemented as `stack_bytecode`)
 - In Progress: `Finite-State Transducer (FSM/Mealy/Moore)` (next family)
+- Implementation plan: `docs/fsm_plan.md`
 
 1. Stack/Bytecode Interpreter
 Signature: `f(xs: list[int]) -> int` (program baked into spec; optional `f(program, xs)` variant)
