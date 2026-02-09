@@ -10,6 +10,7 @@ from genfxn.langs.types import Language
 # Python points to existing modules; Java/Rust to langs/ subpackages.
 _FAMILY_MODULES: dict[Language, dict[str, str]] = {
     Language.PYTHON: {
+        "fsm": "genfxn.fsm.render",
         "piecewise": "genfxn.piecewise.render",
         "stateful": "genfxn.stateful.render",
         "simple_algorithms": "genfxn.simple_algorithms.render",
@@ -17,6 +18,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "stringrules": "genfxn.stringrules.render",
     },
     Language.JAVA: {
+        "fsm": "genfxn.langs.java.fsm",
         "piecewise": "genfxn.langs.java.piecewise",
         "stateful": "genfxn.langs.java.stateful",
         "simple_algorithms": "genfxn.langs.java.simple_algorithms",
@@ -24,6 +26,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "stringrules": "genfxn.langs.java.stringrules",
     },
     Language.RUST: {
+        "fsm": "genfxn.langs.rust.fsm",
         "piecewise": "genfxn.langs.rust.piecewise",
         "stateful": "genfxn.langs.rust.stateful",
         "simple_algorithms": "genfxn.langs.rust.simple_algorithms",
@@ -34,6 +37,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
 
 # Canonical render function name per family.
 _RENDER_FUNCTIONS: dict[str, str] = {
+    "fsm": "render_fsm",
     "piecewise": "render_piecewise",
     "stateful": "render_stateful",
     "simple_algorithms": "render_simple_algorithms",

@@ -2,7 +2,7 @@
 
 Date: 2026-02-09  
 Owner: Codex + Danielle  
-Status: In Progress (M1-M2 complete)
+Status: In Progress (M1-M3 complete)
 
 ## Goal
 
@@ -144,7 +144,7 @@ Use this after memory compaction:
 
 - [x] M1 complete
 - [x] M2 complete
-- [ ] M3 complete
+- [x] M3 complete
 - [ ] M4 complete
 - [x] Full `ruff` and full `pytest` pass
 - [ ] PR updated with behavior notes + test evidence
@@ -159,3 +159,11 @@ Use this after memory compaction:
   difficulty-aware FSM sampling in `src/genfxn/fsm/sampler.py`, plus
   monotonic-target and query-quality tests in `tests/test_fsm.py`.
   Full suite check passed locally (`1225 passed, 22 skipped`).
+- 2026-02-09: M3 implemented. Added FSM AST safety + task validator
+  (`src/genfxn/fsm/ast_safety.py`, `src/genfxn/fsm/validate.py`) and
+  wired Java/Rust renderers (`src/genfxn/langs/java/fsm.py`,
+  `src/genfxn/langs/rust/fsm.py`) through `src/genfxn/langs/registry.py`.
+  Added validation + renderer integration tests
+  (`tests/test_validate_fsm.py`, updates in `tests/test_java_render.py`
+  and `tests/test_rust_render.py`). Full suite check passed locally
+  (`1241 passed, 23 skipped`).

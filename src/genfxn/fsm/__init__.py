@@ -15,6 +15,7 @@ from genfxn.fsm.queries import generate_fsm_queries
 from genfxn.fsm.render import render_fsm
 from genfxn.fsm.sampler import sample_fsm_spec
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.fsm.validate import validate_fsm_task
 
 __all__ = [
     "FsmAxes",
@@ -30,4 +31,5 @@ __all__ = [
     "generate_fsm_task",
     "render_fsm",
     "sample_fsm_spec",
+    "validate_fsm_task",
 ]

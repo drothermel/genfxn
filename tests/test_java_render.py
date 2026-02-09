@@ -54,6 +54,7 @@ from genfxn.core.transforms import (
     TransformScale,
     TransformShift,
 )
+from genfxn.fsm.task import generate_fsm_task
 from genfxn.langs.java._helpers import (
     _regex_char_class_escape,
     java_string_literal,
@@ -750,6 +751,17 @@ class TestMultiLanguageGeneration:
         assert "def f(" in code["python"]
         assert "public static int f(int[] xs)" in code["java"]
 
+    def test_fsm_generates_java(self) -> None:
+        task = generate_fsm_task(
+            rng=random.Random(42),
+            languages=[Language.PYTHON, Language.JAVA],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static int f(int[] xs)" in code["java"]
+
     def test_stack_bytecode_generates_java_when_available(self) -> None:
         if not _supports_stack_bytecode_java():
             pytest.skip("stack_bytecode Java rendering is not available")
@@ -868,6 +880,12 @@ class TestLangsInfra:
 
         assert callable(get_render_fn(Language.PYTHON, "stack_bytecode"))
         assert callable(get_render_fn(Language.JAVA, "stack_bytecode"))
+
+    def test_registry_fsm(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "fsm"))
+        assert callable(get_render_fn(Language.JAVA, "fsm"))
 
     def test_available_languages_includes_python_and_java(self) -> None:
         from genfxn.langs.render import _available_languages
