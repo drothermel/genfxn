@@ -16,6 +16,8 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_fsm(spec)
     elif family == "stack_bytecode":
         return _describe_stack_bytecode(spec)
+    elif family == "bitops":
+        return _describe_bitops(spec)
     return ""
 
 
@@ -734,6 +736,39 @@ def _describe_stack_bytecode(spec: dict[str, Any]) -> str:
             "On status 0, value is the top of stack at halt; on nonzero "
             "status, value is 0."
         ),
+    )
+
+
+def _describe_bitops(spec: dict[str, Any]) -> str:
+    width_bits = spec.get("width_bits", 8)
+    operations = spec.get("operations", [])
+    if not isinstance(operations, list):
+        operations = []
+
+    if not operations:
+        return (
+            f"Implement f(x: int) -> int using fixed-width ({width_bits}-bit) "
+            "bit arithmetic; return x masked to the configured width."
+        )
+
+    rendered_ops: list[str] = []
+    for op in operations:
+        if not isinstance(op, dict):
+            continue
+        name = str(op.get("op", "unknown"))
+        arg = op.get("arg")
+        rendered_ops.append(name if arg is None else f"{name}({arg})")
+
+    if not rendered_ops:
+        return (
+            f"Implement f(x: int) -> int using fixed-width ({width_bits}-bit) "
+            "bit arithmetic."
+        )
+
+    return (
+        f"Implement f(x: int) -> int. Treat x as a {width_bits}-bit pattern, "
+        f"apply operations in order: {', then '.join(rendered_ops)}, and "
+        "return the resulting integer."
     )
 
 

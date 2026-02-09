@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: Planned (M1-M4)
+Status: In progress (M1 complete, M2-M4 pending)
 
 ## Goal
 
@@ -144,7 +144,7 @@ Use this after memory compaction:
 
 ## Execution Checklist
 
-- [ ] M1 complete
+- [x] M1 complete
 - [ ] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
@@ -156,3 +156,11 @@ Use this after memory compaction:
 
 - 2026-02-09: Plan drafted. `fsm` completed and merged; `bitops` selected as
   next family.
+- 2026-02-09: M1 implemented. Added `src/genfxn/bitops/*` core package files
+  (models/eval/sampler/queries/render/task plus validator + AST safety),
+  Python renderer registry wiring in `src/genfxn/langs/registry.py`, and
+  initial tests in `tests/test_bitops.py`. Added bitops description support in
+  `src/genfxn/core/describe.py`.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/bitops src/genfxn/langs/registry.py src/genfxn/core/describe.py tests/test_bitops.py`
+  and `uv run pytest tests/test_bitops.py -v` (7 passed).

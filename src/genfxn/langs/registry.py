@@ -10,6 +10,7 @@ from genfxn.langs.types import Language
 # Python points to existing modules; Java/Rust to langs/ subpackages.
 _FAMILY_MODULES: dict[Language, dict[str, str]] = {
     Language.PYTHON: {
+        "bitops": "genfxn.bitops.render",
         "fsm": "genfxn.fsm.render",
         "piecewise": "genfxn.piecewise.render",
         "stateful": "genfxn.stateful.render",
@@ -37,6 +38,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
 
 # Canonical render function name per family.
 _RENDER_FUNCTIONS: dict[str, str] = {
+    "bitops": "render_bitops",
     "fsm": "render_fsm",
     "piecewise": "render_piecewise",
     "stateful": "render_stateful",
