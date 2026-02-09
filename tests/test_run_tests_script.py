@@ -1,15 +1,29 @@
-import runpy
+import importlib.util
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_tests.py"
-_SCRIPT_NS = runpy.run_path(str(_SCRIPT))
+
+
+def _load_script_module(script: Path, module_name: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Failed to load script module from {script}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_SCRIPT_MODULE = _load_script_module(_SCRIPT, "tests.run_tests_script_module")
 parse_duration_seconds = cast(
-    Callable[[str], float | None], _SCRIPT_NS["_parse_duration_seconds"]
+    Callable[[str], float | None],
+    getattr(_SCRIPT_MODULE, "_parse_duration_seconds"),
 )
-run_tests_main = cast(Callable[[], int], _SCRIPT_NS["main"])
+run_tests_main = cast(Callable[[], int], getattr(_SCRIPT_MODULE, "main"))
+script_subprocess = cast(ModuleType, getattr(_SCRIPT_MODULE, "subprocess"))
 
 
 def test_parse_duration_seconds_uses_last_match() -> None:
@@ -35,9 +49,11 @@ def test_main_enforces_runtime_budget(monkeypatch) -> None:
         return _Proc()
 
     monkeypatch.setattr(
-        run_tests_main.__globals__["subprocess"], "run", _fake_run
+        script_subprocess,
+        "run",
+        _fake_run,
     )
-    monkeypatch.setitem(run_tests_main.__globals__, "_has_xdist", lambda: False)
+    monkeypatch.setattr(_SCRIPT_MODULE, "_has_xdist", lambda: False)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -73,9 +89,11 @@ def test_main_adds_xdist_workers_when_available(monkeypatch) -> None:
         return _Proc()
 
     monkeypatch.setattr(
-        run_tests_main.__globals__["subprocess"], "run", _fake_run
+        script_subprocess,
+        "run",
+        _fake_run,
     )
-    monkeypatch.setitem(run_tests_main.__globals__, "_has_xdist", lambda: True)
+    monkeypatch.setattr(_SCRIPT_MODULE, "_has_xdist", lambda: True)
     monkeypatch.setattr(
         sys,
         "argv",

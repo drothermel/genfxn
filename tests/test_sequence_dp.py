@@ -1,6 +1,7 @@
 import random
 import re
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 import pytest
 
@@ -508,8 +509,9 @@ class TestTaskGeneration:
         code = render_sequence_dp(spec, func_name="f")
         namespace: dict[str, object] = {}
         exec(code, namespace)  # noqa: S102
-        fn = namespace["f"]
-        assert callable(fn)
+        fn_obj = namespace["f"]
+        assert callable(fn_obj)
+        fn = cast(Callable[[list[int], list[int]], int], fn_obj)
 
         queries = _call_queries(
             generate_sequence_dp_queries,

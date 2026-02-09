@@ -64,15 +64,21 @@ def _validate_ast_whitelist(
                     continue
                 for n in ast.walk(arg.annotation):
                     if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                        annotation_positions.add((n.lineno, n.col_offset))
+                        annotation_positions.add(
+                            cast(tuple[int, int], (n.lineno, n.col_offset))
+                        )
             if node.returns is not None:
                 for n in ast.walk(node.returns):
                     if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                        annotation_positions.add((n.lineno, n.col_offset))
+                        annotation_positions.add(
+                            cast(tuple[int, int], (n.lineno, n.col_offset))
+                        )
         elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
             for n in ast.walk(node.annotation):
                 if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                    annotation_positions.add((n.lineno, n.col_offset))
+                    annotation_positions.add(
+                        cast(tuple[int, int], (n.lineno, n.col_offset))
+                    )
 
     for node in ast.walk(tree):
         node_type = type(node)

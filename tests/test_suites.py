@@ -33,6 +33,11 @@ from genfxn.suites.generate import (
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
 
+StackBytecodeRenderFn = Callable[[list[int]], tuple[int, int]]
+FsmRenderFn = Callable[[list[int]], int]
+BitopsRenderFn = Callable[[int], int]
+SequenceDpRenderFn = Callable[[list[int], list[int]], int]
+
 
 def _stack_suite_available() -> bool:
     return (
@@ -1381,9 +1386,10 @@ class TestDeterminism:
         code = cast(str, task.code)
         namespace: dict[str, object] = {}
         exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        assert callable(f)
-        out = cast(tuple[int, int], f([1, 2, 3]))
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(StackBytecodeRenderFn, f_obj)
+        out = f([1, 2, 3])
         assert isinstance(out, tuple)
         assert len(out) == 2
 
@@ -1424,9 +1430,10 @@ class TestDeterminism:
         code = cast(str, task.code)
         namespace: dict[str, object] = {}
         exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        assert callable(f)
-        out = cast(int, f([1, 2, 3]))
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(FsmRenderFn, f_obj)
+        out = f([1, 2, 3])
         assert isinstance(out, int)
 
         for q in task.queries:
@@ -1465,9 +1472,10 @@ class TestDeterminism:
         code = cast(str, task.code)
         namespace: dict[str, object] = {}
         exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        assert callable(f)
-        out = cast(int, f(123))
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(BitopsRenderFn, f_obj)
+        out = f(123)
         assert isinstance(out, int)
 
         for q in task.queries:
@@ -1506,9 +1514,10 @@ class TestDeterminism:
         code = cast(str, task.code)
         namespace: dict[str, object] = {}
         exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        assert callable(f)
-        out = cast(int, f([1, 2], [1, 2]))
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(SequenceDpRenderFn, f_obj)
+        out = f([1, 2], [1, 2])
         assert isinstance(out, int)
 
         for q in task.queries:

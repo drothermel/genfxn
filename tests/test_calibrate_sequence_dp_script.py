@@ -1,7 +1,8 @@
+import importlib.util
 import json
-import runpy
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 import pytest
@@ -12,8 +13,23 @@ _SCRIPT = (
     / "scripts"
     / "calibrate_sequence_dp.py"
 )
-_SCRIPT_NS = runpy.run_path(str(_SCRIPT))
-calibrate_sequence_dp_main = cast(Callable[..., None], _SCRIPT_NS["main"])
+
+
+def _load_script_module(script: Path, module_name: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Failed to load script module from {script}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_SCRIPT_MODULE = _load_script_module(
+    _SCRIPT, "tests.calibrate_sequence_dp_script_module"
+)
+calibrate_sequence_dp_main = cast(
+    Callable[..., None], getattr(_SCRIPT_MODULE, "main")
+)
 
 
 class _FakeAxes:
@@ -69,23 +85,23 @@ def test_main_writes_report_when_strict_checks_pass(
         assert difficulty in {1, 2, 3, 4, 5}
         return [("axis", "value", 1, 1, "OK")]
 
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "get_difficulty_axes",
         _fake_get_difficulty_axes,
     )
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "generate_sequence_dp_task",
         _fake_generate_sequence_dp_task,
     )
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "generate_suite",
         _fake_generate_suite,
     )
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "quota_report",
         _fake_quota_report,
     )
@@ -144,23 +160,23 @@ def test_main_raises_exit_when_strict_checks_fail(
         assert difficulty in {1, 2, 3, 4, 5}
         return [("axis", "value", 1, 0, "UNDER")]
 
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "get_difficulty_axes",
         _fake_get_difficulty_axes,
     )
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "generate_sequence_dp_task",
         _fake_generate_sequence_dp_task,
     )
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "generate_suite",
         _fake_generate_suite,
     )
-    monkeypatch.setitem(
-        calibrate_sequence_dp_main.__globals__,
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "quota_report",
         _fake_quota_report,
     )

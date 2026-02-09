@@ -1,4 +1,5 @@
 import random
+from typing import cast
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.difficulty import compute_difficulty
@@ -6,7 +7,12 @@ from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
-from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
+from genfxn.sequence_dp.models import (
+    PredicateAbsDiffLe,
+    PredicateModEq,
+    SequenceDpAxes,
+    SequenceDpSpec,
+)
 from genfxn.sequence_dp.queries import generate_sequence_dp_queries
 from genfxn.sequence_dp.render import render_sequence_dp
 from genfxn.sequence_dp.sampler import sample_sequence_dp_spec
@@ -18,13 +24,15 @@ def _describe_sequence_dp(spec: SequenceDpSpec) -> str:
     if predicate.kind == "eq":
         predicate_text = "elements are equal"
     elif predicate.kind == "abs_diff_le":
+        abs_diff_predicate = cast(PredicateAbsDiffLe, predicate)
         predicate_text = (
-            f"absolute difference is <= {predicate.max_diff}"
+            f"absolute difference is <= {abs_diff_predicate.max_diff}"
         )
     else:
+        mod_predicate = cast(PredicateModEq, predicate)
         predicate_text = (
             "modulo-difference satisfies "
-            f"(a-b) % {predicate.divisor} == {predicate.remainder}"
+            f"(a-b) % {mod_predicate.divisor} == {mod_predicate.remainder}"
         )
 
     return (

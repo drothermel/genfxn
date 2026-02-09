@@ -71,15 +71,21 @@ def _validate_ast_whitelist(
                     continue
                 for n in ast.walk(arg.annotation):
                     if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                        annotation_positions.add((n.lineno, n.col_offset))
+                        annotation_positions.add(
+                            cast(tuple[int, int], (n.lineno, n.col_offset))
+                        )
             if node.returns is not None:
                 for n in ast.walk(node.returns):
                     if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                        annotation_positions.add((n.lineno, n.col_offset))
+                        annotation_positions.add(
+                            cast(tuple[int, int], (n.lineno, n.col_offset))
+                        )
         elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
             for n in ast.walk(node.annotation):
                 if hasattr(n, "lineno") and hasattr(n, "col_offset"):
-                    annotation_positions.add((n.lineno, n.col_offset))
+                    annotation_positions.add(
+                        cast(tuple[int, int], (n.lineno, n.col_offset))
+                    )
 
     for node in ast.walk(tree):
         node_type = type(node)
@@ -298,8 +304,9 @@ def _coerce_query_input(
     if keys != {"a", "b"}:
         return None
 
-    a_value = input_value.get("a")
-    b_value = input_value.get("b")
+    typed_input_value = cast(dict[str, object], input_value)
+    a_value = typed_input_value.get("a")
+    b_value = typed_input_value.get("b")
     if not isinstance(a_value, list) or not all(
         isinstance(x, int) for x in a_value
     ):
@@ -309,7 +316,7 @@ def _coerce_query_input(
     ):
         return None
 
-    return a_value, b_value
+    return cast(list[int], a_value), cast(list[int], b_value)
 
 
 def _validate_query_types(task: Task, strict: bool) -> list[Issue]:

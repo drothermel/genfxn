@@ -540,11 +540,11 @@ class TestComposedPredicateSampling:
             predicate_types=[StringPredicateType.AND],
         )
         spec = sample_stringrules_spec(axes, random.Random(42))
-        operand_kinds = {
-            operand.kind
-            for rule in spec.rules
-            for operand in rule.predicate.operands
-        }
+        operand_kinds: set[str] = set()
+        for rule in spec.rules:
+            assert isinstance(rule.predicate, StringPredicateAnd)
+            for operand in rule.predicate.operands:
+                operand_kinds.add(operand.kind)
         assert len(operand_kinds) >= 2
 
 

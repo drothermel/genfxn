@@ -2,6 +2,7 @@
 
 import importlib.util
 import random
+from typing import Literal
 
 import pytest
 
@@ -303,7 +304,11 @@ class TestStringPredicateJava:
             ("eq", "=="),
         ],
     )
-    def test_length_cmp(self, op: str, expected_op: str) -> None:
+    def test_length_cmp(
+        self,
+        op: Literal["lt", "le", "gt", "ge", "eq"],
+        expected_op: str,
+    ) -> None:
         result = render_string_predicate_java(
             StringPredicateLengthCmp(op=op, value=5)
         )

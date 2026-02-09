@@ -24,6 +24,8 @@ def _require_java_runtime() -> tuple[str, str]:
     java = shutil.which("java")
     if not javac or not java:
         pytest.skip("Java runtime tools (javac/java) not available")
+    assert javac is not None
+    assert java is not None
     return javac, java
 
 
@@ -31,6 +33,7 @@ def _require_rust_runtime() -> str:
     rustc = shutil.which("rustc")
     if not rustc:
         pytest.skip("Rust compiler (rustc) not available")
+    assert rustc is not None
     return rustc
 
 
