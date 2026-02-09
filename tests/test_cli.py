@@ -1,3 +1,4 @@
+import importlib.util
 from typing import Any, cast
 
 import pytest
@@ -5,8 +6,44 @@ import srsly
 from typer.testing import CliRunner
 
 from genfxn.cli import app
+from genfxn.core.models import Task
+from genfxn.stack_bytecode.models import StackBytecodeSpec
+from genfxn.stack_bytecode.render import render_stack_bytecode
+from genfxn.stack_bytecode.validate import (
+    CODE_UNSAFE_AST,
+    validate_stack_bytecode_task,
+)
 
 runner = CliRunner()
+
+
+def _supports_stack_bytecode_family() -> bool:
+    return (
+        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+    )
+
+
+def _expected_all_families() -> set[str]:
+    families = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
+    if _supports_stack_bytecode_family():
+        families.add("stack_bytecode")
+    return families
+
+
+def _supports_stack_bytecode_rust() -> bool:
+    return (
+        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+        and importlib.util.find_spec("genfxn.langs.rust.stack_bytecode")
+        is not None
+    )
+
+
+def _supports_stack_bytecode_java() -> bool:
+    return (
+        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+        and importlib.util.find_spec("genfxn.langs.java.stack_bytecode")
+        is not None
+    )
 
 
 class TestGenerate:
@@ -47,8 +84,7 @@ class TestGenerate:
         assert len(tasks) == 20
 
         families = {t["family"] for t in tasks}
-        expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
-        assert families == expected
+        assert families == _expected_all_families()
 
     def test_generate_all_distributes_remainder_fairly(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -74,12 +110,10 @@ class TestGenerate:
             fam = cast(str, task["family"])
             counts[fam] = counts.get(fam, 0) + 1
 
-        assert counts == {
-            "piecewise": 2,
-            "stateful": 2,
-            "simple_algorithms": 1,
-            "stringrules": 1,
-        }
+        expected_families = _expected_all_families()
+        assert set(counts) == expected_families
+        assert sum(counts.values()) == 6
+        assert max(counts.values()) - min(counts.values()) <= 1
 
     def test_generate_with_seed(self, tmp_path) -> None:
         output1 = tmp_path / "tasks1.jsonl"
@@ -195,13 +229,211 @@ class TestGenerate:
             ],
         )
 
+        if (
+            _supports_stack_bytecode_family()
+            and not _supports_stack_bytecode_rust()
+        ):
+            assert result.exit_code == 1
+            assert "Language 'rust' is not available" in result.output
+            return
+
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 8
         families = {t["family"] for t in tasks}
-        expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
-        assert families == expected
+        assert families == _expected_all_families()
         assert all("def f(" not in cast(str, t["code"]) for t in tasks)
+
+    def test_generate_stack_bytecode_when_available(self, tmp_path) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            ["generate", "-o", str(output), "-f", "stack_bytecode", "-n", "3"],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 3
+        assert all(t["family"] == "stack_bytecode" for t in tasks)
+        for task in tasks:
+            spec = StackBytecodeSpec.model_validate(task["spec"])
+            assert task["code"] == render_stack_bytecode(spec)
+            task_obj = Task.model_validate(task).model_copy(
+                update={"spec": spec.model_dump()}
+            )
+            issues = validate_stack_bytecode_task(task_obj)
+            assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_generate_stack_bytecode_honors_query_ranges(
+        self, tmp_path
+    ) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stack_bytecode",
+                "-n",
+                "2",
+                "--value-range",
+                "-3,4",
+                "--list-length-range",
+                "10,12",
+                "-s",
+                "9",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert tasks
+        for task in tasks:
+            for query in cast(list[dict[str, Any]], task["queries"]):
+                xs = cast(list[int], query["input"])
+                assert 10 <= len(xs) <= 12
+                assert all(-3 <= value <= 4 for value in xs)
+
+    def test_generate_stack_bytecode_with_difficulty(self, tmp_path) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stack_bytecode",
+                "-n",
+                "4",
+                "--difficulty",
+                "4",
+                "-s",
+                "123",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 4
+        assert all(t["family"] == "stack_bytecode" for t in tasks)
+        assert all(t["difficulty"] in {3, 4, 5} for t in tasks)
+
+    def test_generate_stack_bytecode_with_variant(self, tmp_path) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stack_bytecode",
+                "-n",
+                "2",
+                "--difficulty",
+                "3",
+                "--variant",
+                "3A",
+                "-s",
+                "12",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 2
+        assert all(t["family"] == "stack_bytecode" for t in tasks)
+
+    def test_generate_stack_bytecode_invalid_difficulty(self, tmp_path) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stack_bytecode",
+                "-n",
+                "1",
+                "--difficulty",
+                "6",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Invalid difficulty 6 for stack_bytecode" in result.output
+
+    def test_generate_stack_bytecode_rust_language(self, tmp_path) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+        if not _supports_stack_bytecode_rust():
+            pytest.skip("stack_bytecode rust renderer is not available")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stack_bytecode",
+                "-n",
+                "1",
+                "--language",
+                "rust",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert "fn f(xs: &[i64]) -> (i64, i64)" in tasks[0]["code"]
+        output0 = tasks[0]["queries"][0]["output"]
+        assert isinstance(output0, list)
+        assert len(output0) == 2
+
+    def test_generate_stack_bytecode_java_language(self, tmp_path) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+        if not _supports_stack_bytecode_java():
+            pytest.skip("stack_bytecode java renderer is not available")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stack_bytecode",
+                "-n",
+                "1",
+                "--language",
+                "java",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert "public static int[] f(int[] xs)" in tasks[0]["code"]
+        output0 = tasks[0]["queries"][0]["output"]
+        assert isinstance(output0, list)
+        assert len(output0) == 2
 
     def test_generate_java_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -998,6 +1230,8 @@ class TestInfo:
         assert "stateful:" in result.stdout
         assert "simple_algorithms:" in result.stdout
         assert "stringrules:" in result.stdout
+        if _supports_stack_bytecode_family():
+            assert "stack_bytecode:" in result.stdout
 
     def test_info_single_family(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

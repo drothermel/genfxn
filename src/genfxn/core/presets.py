@@ -21,6 +21,11 @@ from genfxn.simple_algorithms.models import (
 from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
+from genfxn.stack_bytecode.models import (
+    InputMode,
+    JumpTargetMode,
+    StackBytecodeAxes,
+)
 from genfxn.stateful.models import (
     StatefulAxes,
 )
@@ -682,6 +687,80 @@ STRINGRULES_PRESETS: dict[int, list[DifficultyPreset]] = {
     ],
 }
 
+# =============================================================================
+# Stack Bytecode Presets
+# Difficulty maps directly from target_difficulty in stack axes.
+# =============================================================================
+
+STACK_BYTECODE_PRESETS: dict[int, list[DifficultyPreset]] = {
+    1: [
+        DifficultyPreset(
+            "1A",
+            "linear, tiny programs with direct input and strict jumps",
+            {
+                "target_difficulty": 1,
+                "max_step_count_range": (20, 32),
+                "jump_target_modes": [JumpTargetMode.ERROR],
+                "input_modes": [InputMode.DIRECT],
+            },
+        )
+    ],
+    2: [
+        DifficultyPreset(
+            "2A",
+            "small arithmetic programs, still strict control",
+            {
+                "target_difficulty": 2,
+                "max_step_count_range": (32, 64),
+                "jump_target_modes": [JumpTargetMode.ERROR],
+                "input_modes": [InputMode.DIRECT],
+            },
+        )
+    ],
+    3: [
+        DifficultyPreset(
+            "3A",
+            "medium programs, mixed jump handling",
+            {
+                "target_difficulty": 3,
+                "max_step_count_range": (64, 96),
+                "jump_target_modes": [
+                    JumpTargetMode.ERROR,
+                    JumpTargetMode.CLAMP,
+                ],
+                "input_modes": [InputMode.DIRECT, InputMode.CYCLIC],
+            },
+        )
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "larger programs with conditional control flow",
+            {
+                "target_difficulty": 4,
+                "max_step_count_range": (96, 128),
+                "jump_target_modes": [
+                    JumpTargetMode.CLAMP,
+                    JumpTargetMode.WRAP,
+                ],
+                "input_modes": [InputMode.DIRECT, InputMode.CYCLIC],
+            },
+        )
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "loop-heavy programs with permissive runtime modes",
+            {
+                "target_difficulty": 5,
+                "max_step_count_range": (128, 160),
+                "jump_target_modes": [JumpTargetMode.WRAP],
+                "input_modes": [InputMode.CYCLIC],
+            },
+        )
+    ],
+}
+
 
 # =============================================================================
 # Lookup Functions
@@ -692,6 +771,7 @@ _FAMILY_PRESETS: dict[str, dict[int, list[DifficultyPreset]]] = {
     "stateful": STATEFUL_PRESETS,
     "simple_algorithms": SIMPLE_ALGORITHMS_PRESETS,
     "stringrules": STRINGRULES_PRESETS,
+    "stack_bytecode": STACK_BYTECODE_PRESETS,
 }
 
 
@@ -725,7 +805,13 @@ def get_difficulty_axes(
     difficulty: int,
     variant: str | None = None,
     rng: random.Random | None = None,
-) -> PiecewiseAxes | StatefulAxes | SimpleAlgorithmsAxes | StringRulesAxes:
+) -> (
+    PiecewiseAxes
+    | StatefulAxes
+    | SimpleAlgorithmsAxes
+    | StringRulesAxes
+    | StackBytecodeAxes
+):
     """Return axes for target difficulty.
 
     Args:
@@ -761,7 +847,13 @@ def get_difficulty_axes(
 
 def _build_axes(
     family: str, overrides: dict[str, Any]
-) -> PiecewiseAxes | StatefulAxes | SimpleAlgorithmsAxes | StringRulesAxes:
+) -> (
+    PiecewiseAxes
+    | StatefulAxes
+    | SimpleAlgorithmsAxes
+    | StringRulesAxes
+    | StackBytecodeAxes
+):
     """Build axes object from overrides."""
     match family:
         case "piecewise":
@@ -772,5 +864,7 @@ def _build_axes(
             return SimpleAlgorithmsAxes(**overrides)
         case "stringrules":
             return StringRulesAxes(**overrides)
+        case "stack_bytecode":
+            return StackBytecodeAxes(**overrides)
         case _:
             raise ValueError(f"Unknown family: {family}")

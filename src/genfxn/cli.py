@@ -7,12 +7,15 @@ import srsly
 import typer
 from pydantic import TypeAdapter
 
-from genfxn.core.codegen import get_spec_value
+from genfxn.core.codegen import get_spec_value, task_id_from_spec
+from genfxn.core.describe import describe_task
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
+from genfxn.core.trace import GenerationTrace
 from genfxn.core.transforms import TransformType
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
@@ -29,6 +32,13 @@ from genfxn.simple_algorithms.models import (
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.splits import AxisHoldout, HoldoutType
+from genfxn.stack_bytecode.models import (
+    StackBytecodeAxes,
+    StackBytecodeSpec,
+)
+from genfxn.stack_bytecode.queries import generate_stack_bytecode_queries
+from genfxn.stack_bytecode.render import render_stack_bytecode
+from genfxn.stack_bytecode.templates import stack_template_program
 from genfxn.stateful.models import StatefulAxes, StatefulSpec, TemplateType
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.models import (
@@ -161,6 +171,8 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
             )
         case "stringrules":
             spec_obj = StringRulesSpec.model_validate(task.spec, strict=True)
+        case "stack_bytecode":
+            spec_obj = StackBytecodeSpec.model_validate(task.spec, strict=True)
         case _:
             raise typer.BadParameter(f"Unknown family: {task.family}")
 
@@ -304,6 +316,52 @@ def _build_stringrules_axes(
     return StringRulesAxes(**kwargs)
 
 
+def _build_stack_bytecode_axes(
+    value_range: str | None,
+    list_length_range: str | None,
+) -> StackBytecodeAxes:
+    kwargs: dict[str, Any] = {}
+    if value_range:
+        kwargs["value_range"] = _parse_range(value_range)
+    if list_length_range:
+        kwargs["list_length_range"] = _parse_range(list_length_range)
+    return StackBytecodeAxes(**kwargs)
+
+
+def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
+    return render_stack_bytecode(spec)
+
+
+def _build_stack_bytecode_task(
+    axes: StackBytecodeAxes,
+    rng: random.Random,
+) -> Task:
+    target = axes.target_difficulty or rng.randint(1, 5)
+    program = stack_template_program(target, rng)
+    max_steps = rng.randint(*axes.max_step_count_range)
+    jump_mode = rng.choice(axes.jump_target_modes)
+    input_mode = rng.choice(axes.input_modes)
+    spec = StackBytecodeSpec(
+        program=program,
+        max_step_count=max_steps,
+        jump_target_mode=jump_mode,
+        input_mode=input_mode,
+    )
+    spec_dict = spec.model_dump()
+    queries = generate_stack_bytecode_queries(spec, axes, rng)
+    return Task(
+        task_id=task_id_from_spec("stack_bytecode", spec_dict),
+        family="stack_bytecode",
+        spec=spec_dict,
+        code=_render_stack_bytecode(spec),
+        queries=queries,
+        trace=GenerationTrace(family="stack_bytecode", steps=[]),
+        axes=axes.model_dump(),
+        difficulty=compute_difficulty("stack_bytecode", spec_dict),
+        description=describe_task("stack_bytecode", spec_dict),
+    )
+
+
 @app.command()
 def generate(
     output: Annotated[
@@ -314,7 +372,10 @@ def generate(
         typer.Option(
             "--family",
             "-f",
-            help="piecewise, stateful, simple_algorithms, stringrules, or all",
+            help=(
+                "piecewise, stateful, simple_algorithms, stringrules, "
+                "stack_bytecode, or all"
+            ),
         ),
     ] = "all",
     count: Annotated[
@@ -567,6 +628,10 @@ def generate(
             overlap_level=overlap_level,
             string_length_range=string_length_range,
         )
+        stack_bytecode_axes = _build_stack_bytecode_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
 
     with output.open("w", encoding="utf-8") as output_handle:
 
@@ -583,6 +648,7 @@ def generate(
                 "stateful",
                 "simple_algorithms",
                 "stringrules",
+                "stack_bytecode",
             ]
             base = count // len(family_order)
             remainder = count % len(family_order)
@@ -604,6 +670,8 @@ def generate(
                 )
             for _ in range(family_counts["stringrules"]):
                 emit(generate_stringrules_task(axes=stringrules_axes, rng=rng))
+            for _ in range(family_counts["stack_bytecode"]):
+                emit(_build_stack_bytecode_task(stack_bytecode_axes, rng))
         elif family == "piecewise":
             for _ in range(count):
                 if difficulty is not None:
@@ -650,6 +718,18 @@ def generate(
                     generate_stringrules_task(
                         axes=cast(StringRulesAxes, axes),
                         rng=rng,
+                    )
+                )
+        elif family == "stack_bytecode":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = stack_bytecode_axes
+                emit(
+                    _build_stack_bytecode_task(
+                        cast(StackBytecodeAxes, axes),
+                        rng,
                     )
                 )
         else:

@@ -16,6 +16,8 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _simple_algorithms_difficulty(spec)
     elif family == "stringrules":
         return _stringrules_difficulty(spec)
+    elif family == "stack_bytecode":
+        return _stack_bytecode_difficulty(spec)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -389,4 +391,101 @@ def _string_transform_score(trans: dict[str, Any]) -> int:
             return 4
         else:
             return 3
+    return 1
+
+
+def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for stack_bytecode with explicit D1..D5 bands.
+
+    Unlike other families that blend weighted components, this model takes
+    the max of component scores: any single hard dimension can drive overall
+    difficulty.
+    """
+    program = spec.get("program", [])
+    if not isinstance(program, list):
+        return 1
+
+    n_instr = len(program)
+    if n_instr <= 3:
+        length_score = 1
+    elif n_instr <= 5:
+        length_score = 2
+    elif n_instr <= 7:
+        length_score = 3
+    elif n_instr <= 10:
+        length_score = 4
+    else:
+        length_score = 5
+
+    ops = [instr.get("op", "") for instr in program if isinstance(instr, dict)]
+    op_scores = [_stack_opcode_score(op) for op in ops]
+    opcode_score = max(op_scores, default=1)
+
+    jump_instructions = [
+        (idx, instr.get("target"))
+        for idx, instr in enumerate(program)
+        if isinstance(instr, dict)
+        and instr.get("op") in {"jump", "jump_if_zero", "jump_if_nonzero"}
+    ]
+    has_jump = any(op == "jump" for op in ops)
+    has_cond_jump = any(
+        op in {"jump_if_zero", "jump_if_nonzero"} for op in ops
+    )
+    has_backward_jump = any(
+        isinstance(target, int) and target < idx
+        for idx, target in jump_instructions
+    )
+    if not has_jump and not has_cond_jump:
+        control_score = 1
+    elif has_jump and not has_cond_jump:
+        control_score = 2
+    elif has_cond_jump and not has_backward_jump:
+        control_score = 3
+    elif has_cond_jump and has_backward_jump and len(jump_instructions) == 1:
+        control_score = 4
+    else:
+        control_score = 5
+
+    jump_target_mode = spec.get("jump_target_mode", "error")
+    input_mode = spec.get("input_mode", "direct")
+    mode_score = 1
+    if jump_target_mode in {"clamp", "wrap"}:
+        mode_score += 1
+    if input_mode == "cyclic":
+        mode_score += 1
+
+    max_steps = spec.get("max_step_count", 64)
+    if isinstance(max_steps, int):
+        if max_steps <= 32:
+            step_score = 1
+        elif max_steps <= 64:
+            step_score = 2
+        elif max_steps <= 96:
+            step_score = 3
+        elif max_steps <= 128:
+            step_score = 4
+        else:
+            step_score = 5
+    else:
+        step_score = 2
+
+    composite = max(
+        length_score,
+        opcode_score,
+        control_score,
+        mode_score,
+        step_score,
+    )
+    return max(1, min(5, int(composite)))
+
+
+def _stack_opcode_score(op: str) -> int:
+    if op in {"halt", "push_const", "load_input"}:
+        return 1
+    if op in {"add", "sub", "mul", "div", "mod", "neg", "abs", "is_zero"}:
+        return 2
+    if op in {"dup", "swap", "pop", "eq", "gt", "lt"}:
+        return 3
+    if op in {"jump", "jump_if_zero", "jump_if_nonzero"}:
+        return 4
     return 1

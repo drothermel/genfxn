@@ -232,6 +232,34 @@ Ordered pattern matching with first-match-wins: `f(s: str) -> str`
 
 ---
 
+## Stack Bytecode
+
+Stack-machine programs over integer lists: `f(xs: list[int]) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band for stack templates |
+| `value_range` | (lo, hi) | (-50, 50) | `--value-range` | Range used for sampled list values in queries |
+| `list_length_range` | (lo, hi) | (0, 8) | `--list-length-range` | Range for sampled input lengths |
+| `const_range` | (lo, hi) | (-10, 10) | — | Range for sampled constants in instructions |
+| `max_step_count_range` | (lo, hi) | (20, 160) | — | Execution step budget range |
+| `jump_target_modes` | list | all | — | Behavior for out-of-range jump targets |
+| `input_modes` | list | all | — | Input indexing mode (`direct` or `cyclic`) |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `input_mode` | `direct`, `cyclic` | Input indexing policy |
+| `jump_target_mode` | `error`, `clamp`, `wrap` | Out-of-range jump handling |
+| `max_step_count` | integer | Maximum VM steps before timeout status |
+| `program.N.op` | instruction op names | Instruction opcode at index N |
+| `program.N.target` | integer | Jump target index for jump instructions |
+
+---
+
 ## Using Spec Field Paths
 
 Spec field paths use dot notation to access nested fields. List indices are supported.

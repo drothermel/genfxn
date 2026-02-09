@@ -13,18 +13,21 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "piecewise": "genfxn.piecewise.render",
         "stateful": "genfxn.stateful.render",
         "simple_algorithms": "genfxn.simple_algorithms.render",
+        "stack_bytecode": "genfxn.stack_bytecode.render",
         "stringrules": "genfxn.stringrules.render",
     },
     Language.JAVA: {
         "piecewise": "genfxn.langs.java.piecewise",
         "stateful": "genfxn.langs.java.stateful",
         "simple_algorithms": "genfxn.langs.java.simple_algorithms",
+        "stack_bytecode": "genfxn.langs.java.stack_bytecode",
         "stringrules": "genfxn.langs.java.stringrules",
     },
     Language.RUST: {
         "piecewise": "genfxn.langs.rust.piecewise",
         "stateful": "genfxn.langs.rust.stateful",
         "simple_algorithms": "genfxn.langs.rust.simple_algorithms",
+        "stack_bytecode": "genfxn.langs.rust.stack_bytecode",
         "stringrules": "genfxn.langs.rust.stringrules",
     },
 }
@@ -34,6 +37,7 @@ _RENDER_FUNCTIONS: dict[str, str] = {
     "piecewise": "render_piecewise",
     "stateful": "render_stateful",
     "simple_algorithms": "render_simple_algorithms",
+    "stack_bytecode": "render_stack_bytecode",
     "stringrules": "render_stringrules",
 }
 

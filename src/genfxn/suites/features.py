@@ -419,3 +419,65 @@ def simple_algorithms_features(spec: dict[str, Any]) -> dict[str, str]:
             features["k_bucket"] = "out_of_range"
 
     return features
+
+
+def stack_bytecode_features(spec: dict[str, Any]) -> dict[str, str]:
+    program = spec.get("program", [])
+    n_instr = len(program) if isinstance(program, list) else 0
+    if n_instr <= 3:
+        size_bucket = "1-3"
+    elif n_instr <= 5:
+        size_bucket = "4-5"
+    elif n_instr <= 7:
+        size_bucket = "6-7"
+    elif n_instr <= 10:
+        size_bucket = "8-10"
+    else:
+        size_bucket = "11+"
+
+    ops = []
+    if isinstance(program, list):
+        for instr in program:
+            if isinstance(instr, dict):
+                ops.append(instr.get("op", ""))
+
+    has_cond_jump = any(op in ("jump_if_zero", "jump_if_nonzero") for op in ops)
+    has_jump = any(op == "jump" for op in ops)
+    has_backward_jump = any(
+        isinstance(instr, dict)
+        and instr.get("op") in ("jump", "jump_if_zero", "jump_if_nonzero")
+        and isinstance(instr.get("target"), int)
+        and instr["target"] < idx
+        for idx, instr in enumerate(
+            program if isinstance(program, list) else []
+        )
+    )
+
+    if has_cond_jump and has_backward_jump:
+        control_flow = "looped_conditional"
+    elif has_cond_jump:
+        control_flow = "conditional"
+    elif has_jump:
+        control_flow = "jump_only"
+    else:
+        control_flow = "linear"
+
+    if any(op in ("jump", "jump_if_zero", "jump_if_nonzero") for op in ops):
+        op_complexity = "control"
+    elif any(op in ("dup", "swap", "pop", "eq", "gt", "lt") for op in ops):
+        op_complexity = "stack_logic"
+    elif any(
+        op in ("add", "sub", "mul", "div", "mod", "neg", "abs")
+        for op in ops
+    ):
+        op_complexity = "arithmetic"
+    else:
+        op_complexity = "basic"
+
+    return {
+        "size_bucket": size_bucket,
+        "control_flow": control_flow,
+        "op_complexity": op_complexity,
+        "input_mode": str(spec.get("input_mode", "direct")),
+        "jump_mode": str(spec.get("jump_target_mode", "error")),
+    }

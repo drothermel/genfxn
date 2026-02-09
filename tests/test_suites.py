@@ -1,5 +1,6 @@
 """Tests for balanced suite generation."""
 
+import importlib.util
 import random
 from collections.abc import Callable
 from typing import cast
@@ -28,6 +29,13 @@ from genfxn.suites.generate import (
     quota_report,
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
+
+
+def _stack_suite_available() -> bool:
+    return (
+        "stack_bytecode" in QUOTAS
+        and importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+    )
 
 # ── Feature extraction tests ─────────────────────────────────────────────
 
@@ -797,6 +805,8 @@ class TestPoolGeneration:
         self, family: str, difficulty: int
     ) -> None:
         """Pool produces candidates at correct difficulty."""
+        from genfxn.core.difficulty import compute_difficulty
+
         candidates, stats = generate_pool(
             family, difficulty, seed=42, pool_size=200
         )
@@ -805,9 +815,55 @@ class TestPoolGeneration:
         assert stats.total_sampled == 200
         # All should have the right difficulty
         for cand in candidates:
-            from genfxn.core.difficulty import compute_difficulty
-
             assert compute_difficulty(family, cand.spec_dict) == difficulty
+
+    def test_stack_bytecode_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
+
+        for difficulty in sorted(QUOTAS["stack_bytecode"].keys()):
+            candidates, stats = generate_pool(
+                "stack_bytecode",
+                difficulty,
+                seed=42,
+                pool_size=120,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                assert (
+                    compute_difficulty("stack_bytecode", cand.spec_dict)
+                    == difficulty
+                )
+
+    def test_stack_bytecode_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["stack_bytecode"].keys()):
+            candidates, _ = generate_pool(
+                "stack_bytecode",
+                difficulty,
+                seed=43,
+                pool_size=150,
+            )
+            assert candidates
+            quota = QUOTAS["stack_bytecode"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for stack_bytecode "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
 
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
@@ -887,6 +943,48 @@ class TestDeterminism:
                 "stringrules", 3, seed=7, pool_size=20, max_retries=0
             )
 
+    def test_stack_bytecode_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+        difficulty = sorted(QUOTAS["stack_bytecode"].keys())[0]
+        a = generate_suite("stack_bytecode", difficulty, seed=19, pool_size=250)
+        b = generate_suite("stack_bytecode", difficulty, seed=19, pool_size=250)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_stack_bytecode_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+        from genfxn.stack_bytecode.eval import eval_stack_bytecode
+        from genfxn.stack_bytecode.models import StackBytecodeSpec
+        difficulty = sorted(QUOTAS["stack_bytecode"].keys())[0]
+        tasks = generate_suite(
+            "stack_bytecode",
+            difficulty,
+            seed=42,
+            pool_size=250,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = StackBytecodeSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        assert callable(f)
+        out = cast(tuple[int, int], f([1, 2, 3]))
+        assert isinstance(out, tuple)
+        assert len(out) == 2
+
+        for q in task.queries:
+            assert isinstance(q.output, tuple)
+            assert len(q.output) == 2
+            assert q.output == eval_stack_bytecode(spec, list(q.input))
+
 
 class TestSuiteGenerationValidation:
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
@@ -960,3 +1058,45 @@ class TestIntegration:
                 f"{family} D{difficulty}: {axis}={value} got {achieved}, "
                 f"need >= {min_acceptable} (target={target})"
             )
+
+    @pytest.mark.slow
+    def test_stack_bytecode_suite_generation_when_available(self) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["stack_bytecode"].keys())[0]
+        tasks = generate_suite(
+            "stack_bytecode",
+            difficulty,
+            seed=42,
+            pool_size=2000,
+        )
+        quota = QUOTAS["stack_bytecode"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "stack_bytecode", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.8))
+            assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_stack_bytecode_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["stack_bytecode"].keys()):
+            tasks = generate_suite(
+                "stack_bytecode",
+                difficulty,
+                seed=101 + difficulty,
+                pool_size=1600,
+            )
+            quota = QUOTAS["stack_bytecode"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "stack_bytecode", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable

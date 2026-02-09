@@ -1,11 +1,13 @@
 """Tests for difficulty-targeted presets."""
 
+import importlib.util
 import random
 from collections import Counter
-from typing import cast
+from typing import ClassVar, cast
 
 import pytest
 
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.presets import (
     PIECEWISE_PRESETS,
     SIMPLE_ALGORITHMS_PRESETS,
@@ -26,6 +28,15 @@ from genfxn.stringrules.models import StringRulesAxes
 from genfxn.stringrules.task import generate_stringrules_task
 
 
+def _supports_stack_bytecode_presets() -> bool:
+    if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
+        return False
+    try:
+        return get_valid_difficulties("stack_bytecode") == [1, 2, 3, 4, 5]
+    except ValueError:
+        return False
+
+
 class TestGetValidDifficulties:
     def test_piecewise_range(self) -> None:
         valid = get_valid_difficulties("piecewise")
@@ -41,6 +52,12 @@ class TestGetValidDifficulties:
 
     def test_stringrules_range(self) -> None:
         valid = get_valid_difficulties("stringrules")
+        assert valid == [1, 2, 3, 4, 5]
+
+    def test_stack_bytecode_range_when_available(self) -> None:
+        if not _supports_stack_bytecode_presets():
+            pytest.skip("stack_bytecode presets are not available")
+        valid = get_valid_difficulties("stack_bytecode")
         assert valid == [1, 2, 3, 4, 5]
 
     def test_unknown_family_raises(self) -> None:
@@ -357,3 +374,111 @@ class TestPresetCompleteness:
                         family, difficulty, variant=preset.name
                     )
                     assert axes is not None
+
+
+class TestStackBytecodePresets:
+    N_SAMPLES = 40
+    EXACT_THRESHOLDS: ClassVar[dict[int, float]] = {
+        1: 0.0,
+        2: 0.1,
+        3: 0.3,
+        4: 0.6,
+        5: 0.9,
+    }
+    WITHIN_ONE_THRESHOLDS: ClassVar[dict[int, float]] = {
+        1: 0.1,
+        2: 0.3,
+        3: 0.65,
+        4: 0.95,
+        5: 0.95,
+    }
+
+    def _require_stack_modules(self):
+        if not _supports_stack_bytecode_presets():
+            pytest.skip("stack_bytecode presets are not available")
+        from genfxn.stack_bytecode.models import StackBytecodeAxes
+        from genfxn.stack_bytecode.task import generate_stack_bytecode_task
+
+        return StackBytecodeAxes, generate_stack_bytecode_task
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_stack_bytecode_preset_accuracy(self, difficulty: int) -> None:
+        StackBytecodeAxes, generate_stack_bytecode_task = (
+            self._require_stack_modules()
+        )
+        rng = random.Random(42)
+        difficulties: list[int] = []
+
+        for _ in range(self.N_SAMPLES):
+            axes = cast(
+                StackBytecodeAxes,
+                get_difficulty_axes("stack_bytecode", difficulty, rng=rng),
+            )
+            task = generate_stack_bytecode_task(axes=axes, rng=rng)
+            difficulties.append(compute_difficulty("stack_bytecode", task.spec))
+
+        exact_ratio = sum(1 for d in difficulties if d == difficulty) / len(
+            difficulties
+        )
+        within_one_ratio = sum(
+            1 for d in difficulties if abs(d - difficulty) <= 1
+        ) / len(difficulties)
+
+        assert exact_ratio >= self.EXACT_THRESHOLDS[difficulty]
+        assert within_one_ratio >= self.WITHIN_ONE_THRESHOLDS[difficulty]
+
+    def test_stack_bytecode_variants_are_distinct(self) -> None:
+        StackBytecodeAxes, _ = self._require_stack_modules()
+        presets = get_difficulty_presets("stack_bytecode", 3)
+        if len(presets) < 2:
+            pytest.skip("Need multiple variants to test distinctness")
+
+        axes_a = cast(
+            StackBytecodeAxes,
+            get_difficulty_axes("stack_bytecode", 3, variant=presets[0].name),
+        )
+        axes_b = cast(
+            StackBytecodeAxes,
+            get_difficulty_axes("stack_bytecode", 3, variant=presets[1].name),
+        )
+
+        assert (
+            axes_a.max_step_count_range != axes_b.max_step_count_range
+            or axes_a.const_range != axes_b.const_range
+            or axes_a.jump_target_modes != axes_b.jump_target_modes
+            or axes_a.input_modes != axes_b.input_modes
+        )
+
+    def test_stack_bytecode_means_increase_with_target(self) -> None:
+        StackBytecodeAxes, generate_stack_bytecode_task = (
+            self._require_stack_modules()
+        )
+        means: dict[int, float] = {}
+        for difficulty in [1, 2, 3, 4, 5]:
+            rng = random.Random(123 + difficulty)
+            observed: list[int] = []
+            for _ in range(self.N_SAMPLES):
+                axes = cast(
+                    StackBytecodeAxes,
+                    get_difficulty_axes(
+                        "stack_bytecode",
+                        difficulty,
+                        rng=rng,
+                    ),
+                )
+                task = generate_stack_bytecode_task(axes=axes, rng=rng)
+                observed.append(
+                    compute_difficulty("stack_bytecode", task.spec)
+                )
+            means[difficulty] = sum(observed) / len(observed)
+
+        ordered_means = [means[d] for d in [1, 2, 3, 4, 5]]
+        assert ordered_means == sorted(ordered_means)
+        assert ordered_means[-1] - ordered_means[0] >= 0.5
+
+    def test_stack_bytecode_each_difficulty_has_presets(self) -> None:
+        self._require_stack_modules()
+        for difficulty in [1, 2, 3, 4, 5]:
+            presets = get_difficulty_presets("stack_bytecode", difficulty)
+            assert presets
+            assert all(p.name.startswith(str(difficulty)) for p in presets)

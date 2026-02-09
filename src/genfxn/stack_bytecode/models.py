@@ -1,0 +1,123 @@
+from enum import Enum, IntEnum
+
+from pydantic import BaseModel, Field, model_validator
+
+
+class InstructionOp(str, Enum):
+    PUSH_CONST = "push_const"
+    LOAD_INPUT = "load_input"
+    DUP = "dup"
+    SWAP = "swap"
+    POP = "pop"
+    ADD = "add"
+    SUB = "sub"
+    MUL = "mul"
+    DIV = "div"
+    MOD = "mod"
+    NEG = "neg"
+    ABS = "abs"
+    EQ = "eq"
+    GT = "gt"
+    LT = "lt"
+    IS_ZERO = "is_zero"
+    JUMP = "jump"
+    JUMP_IF_ZERO = "jump_if_zero"
+    JUMP_IF_NONZERO = "jump_if_nonzero"
+    HALT = "halt"
+
+
+class JumpTargetMode(str, Enum):
+    ERROR = "error"
+    CLAMP = "clamp"
+    WRAP = "wrap"
+
+
+class InputMode(str, Enum):
+    DIRECT = "direct"
+    CYCLIC = "cyclic"
+
+
+class RuntimeStatus(IntEnum):
+    OK = 0
+    STEP_LIMIT = 1
+    STACK_UNDERFLOW = 2
+    BAD_JUMP_TARGET = 3
+    DIV_OR_MOD_BY_ZERO = 4
+    INVALID_INPUT_INDEX = 5
+    EMPTY_STACK_ON_HALT = 6
+
+
+class Instruction(BaseModel):
+    op: InstructionOp
+    value: int | None = None
+    index: int | None = None
+    target: int | None = None
+
+    @model_validator(mode="after")
+    def validate_fields(self) -> "Instruction":
+        needs_value = {InstructionOp.PUSH_CONST}
+        needs_index = {InstructionOp.LOAD_INPUT}
+        needs_target = {
+            InstructionOp.JUMP,
+            InstructionOp.JUMP_IF_ZERO,
+            InstructionOp.JUMP_IF_NONZERO,
+        }
+
+        if self.op in needs_value and self.value is None:
+            raise ValueError(f"op '{self.op.value}' requires field 'value'")
+        if self.op in needs_index and self.index is None:
+            raise ValueError(f"op '{self.op.value}' requires field 'index'")
+        if self.op in needs_target and self.target is None:
+            raise ValueError(f"op '{self.op.value}' requires field 'target'")
+        return self
+
+
+class StackBytecodeSpec(BaseModel):
+    program: list[Instruction] = Field(min_length=1)
+    max_step_count: int = Field(ge=1, default=64)
+    jump_target_mode: JumpTargetMode = JumpTargetMode.ERROR
+    input_mode: InputMode = InputMode.DIRECT
+
+    @model_validator(mode="after")
+    def validate_program(self) -> "StackBytecodeSpec":
+        if not any(instr.op == InstructionOp.HALT for instr in self.program):
+            raise ValueError(
+                "program must contain at least one 'halt' instruction"
+            )
+        return self
+
+
+class StackBytecodeAxes(BaseModel):
+    target_difficulty: int | None = Field(default=None, ge=1, le=5)
+    value_range: tuple[int, int] = Field(default=(-50, 50))
+    list_length_range: tuple[int, int] = Field(default=(0, 8))
+    const_range: tuple[int, int] = Field(default=(-10, 10))
+    max_step_count_range: tuple[int, int] = Field(default=(20, 160))
+    jump_target_modes: list[JumpTargetMode] = Field(
+        default_factory=lambda: list(JumpTargetMode)
+    )
+    input_modes: list[InputMode] = Field(
+        default_factory=lambda: list(InputMode)
+    )
+
+    @model_validator(mode="after")
+    def validate_axes(self) -> "StackBytecodeAxes":
+        for name in (
+            "value_range",
+            "list_length_range",
+            "const_range",
+            "max_step_count_range",
+        ):
+            lo, hi = getattr(self, name)
+            if lo > hi:
+                raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+
+        if self.list_length_range[0] < 0:
+            raise ValueError("list_length_range: low must be >= 0")
+
+        if not self.jump_target_modes:
+            raise ValueError("jump_target_modes must not be empty")
+        if not self.input_modes:
+            raise ValueError("input_modes must not be empty")
+
+        return self

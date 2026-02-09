@@ -1,5 +1,6 @@
 """Tests for Java rendering modules."""
 
+import importlib.util
 import random
 
 import pytest
@@ -73,6 +74,14 @@ from genfxn.stringrules.task import generate_stringrules_task
 def _code_map(task: Task) -> dict[str, str]:
     assert isinstance(task.code, dict)
     return task.code
+
+
+def _supports_stack_bytecode_java() -> bool:
+    return (
+        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+        and importlib.util.find_spec("genfxn.langs.java.stack_bytecode")
+        is not None
+    )
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -741,6 +750,22 @@ class TestMultiLanguageGeneration:
         assert "def f(" in code["python"]
         assert "public static int f(int[] xs)" in code["java"]
 
+    def test_stack_bytecode_generates_java_when_available(self) -> None:
+        if not _supports_stack_bytecode_java():
+            pytest.skip("stack_bytecode Java rendering is not available")
+        from genfxn.stack_bytecode.task import generate_stack_bytecode_task
+
+        task = generate_stack_bytecode_task(
+            rng=random.Random(42),
+            languages=[Language.PYTHON, Language.JAVA],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static int[] f(int[] xs)" in code["java"]
+        assert "return new int[] {" in code["java"]
+
     def test_python_only(self) -> None:
         task = generate_piecewise_task(
             rng=random.Random(42),
@@ -836,6 +861,14 @@ class TestLangsInfra:
         fn = get_render_fn(Language.RUST, "piecewise")
         assert callable(fn)
 
+    def test_registry_stack_bytecode_when_available(self) -> None:
+        if not _supports_stack_bytecode_java():
+            pytest.skip("stack_bytecode Java rendering is not available")
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "stack_bytecode"))
+        assert callable(get_render_fn(Language.JAVA, "stack_bytecode"))
+
     def test_available_languages_includes_python_and_java(self) -> None:
         from genfxn.langs.render import _available_languages
 
@@ -899,3 +932,27 @@ class TestLangsInfra:
         )
         assert list(result.keys()) == ["java"]
         assert "public static int g(int x)" in result["java"]
+
+    def test_render_all_languages_stack_bytecode_when_available(self) -> None:
+        if not _supports_stack_bytecode_java():
+            pytest.skip("stack_bytecode Java rendering is not available")
+        from genfxn.langs.render import render_all_languages
+        from genfxn.stack_bytecode.models import (
+            Instruction,
+            InstructionOp,
+            StackBytecodeSpec,
+        )
+
+        spec = StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        result = render_all_languages(
+            "stack_bytecode",
+            spec,
+            languages=[Language.PYTHON, Language.JAVA],
+        )
+        assert "python" in result
+        assert "java" in result

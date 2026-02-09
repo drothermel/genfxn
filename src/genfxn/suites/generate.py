@@ -25,6 +25,15 @@ from genfxn.simple_algorithms.models import TemplateType as SATemplateType
 from genfxn.simple_algorithms.queries import generate_simple_algorithms_queries
 from genfxn.simple_algorithms.render import render_simple_algorithms
 from genfxn.simple_algorithms.sampler import sample_simple_algorithms_spec
+from genfxn.stack_bytecode.models import (
+    InputMode,
+    JumpTargetMode,
+    StackBytecodeAxes,
+    StackBytecodeSpec,
+)
+from genfxn.stack_bytecode.queries import generate_stack_bytecode_queries
+from genfxn.stack_bytecode.render import render_stack_bytecode
+from genfxn.stack_bytecode.templates import stack_template_program
 from genfxn.stateful.models import StatefulAxes
 from genfxn.stateful.models import TemplateType as StatefulTemplateType
 from genfxn.stateful.queries import generate_stateful_queries
@@ -36,6 +45,7 @@ from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.suites.features import (
     simple_algorithms_features,
+    stack_bytecode_features,
     stateful_features,
     stringrules_features,
 )
@@ -489,6 +499,51 @@ def _pool_axes_simple_algorithms_d5(rng: random.Random) -> SimpleAlgorithmsAxes:
     return SimpleAlgorithmsAxes(**axes_kwargs)
 
 
+def _pool_axes_stack_bytecode_d1(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=1,
+        max_step_count_range=(20, 32),
+        jump_target_modes=[JumpTargetMode.ERROR],
+        input_modes=[InputMode.DIRECT],
+    )
+
+
+def _pool_axes_stack_bytecode_d2(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=2,
+        max_step_count_range=(32, 64),
+        jump_target_modes=[JumpTargetMode.ERROR],
+        input_modes=[InputMode.DIRECT],
+    )
+
+
+def _pool_axes_stack_bytecode_d3(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=3,
+        max_step_count_range=(64, 96),
+        jump_target_modes=[JumpTargetMode.CLAMP],
+        input_modes=[InputMode.CYCLIC],
+    )
+
+
+def _pool_axes_stack_bytecode_d4(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=4,
+        max_step_count_range=(96, 128),
+        jump_target_modes=[JumpTargetMode.CLAMP],
+        input_modes=[InputMode.DIRECT],
+    )
+
+
+def _pool_axes_stack_bytecode_d5(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=5,
+        max_step_count_range=(128, 160),
+        jump_target_modes=[JumpTargetMode.WRAP],
+        input_modes=[InputMode.CYCLIC],
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -507,6 +562,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_simple_algorithms_d4,
         5: _pool_axes_simple_algorithms_d5,
     },
+    "stack_bytecode": {
+        1: _pool_axes_stack_bytecode_d1,
+        2: _pool_axes_stack_bytecode_d2,
+        3: _pool_axes_stack_bytecode_d3,
+        4: _pool_axes_stack_bytecode_d4,
+        5: _pool_axes_stack_bytecode_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -515,6 +577,7 @@ _FEATURE_FNS = {
     "stringrules": stringrules_features,
     "stateful": stateful_features,
     "simple_algorithms": simple_algorithms_features,
+    "stack_bytecode": stack_bytecode_features,
 }
 
 
@@ -564,7 +627,52 @@ def _sample_spec(
         return sample_stateful_spec(axes, rng, trace=trace)
     elif family == "simple_algorithms":
         return sample_simple_algorithms_spec(axes, rng, trace=trace)
+    elif family == "stack_bytecode":
+        return _sample_stack_bytecode_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
+
+
+def _sample_stack_bytecode_spec(
+    axes: StackBytecodeAxes,
+    rng: random.Random,
+    trace: list[TraceStep] | None = None,
+) -> StackBytecodeSpec:
+    target = axes.target_difficulty or rng.randint(1, 5)
+    program = stack_template_program(target, rng)
+    jump_mode = rng.choice(axes.jump_target_modes)
+    input_mode = rng.choice(axes.input_modes)
+    max_steps = rng.randint(*axes.max_step_count_range)
+    if trace is not None:
+        trace.extend(
+            [
+                TraceStep(
+                    step="target_difficulty",
+                    choice="target difficulty for template",
+                    value=target,
+                ),
+                TraceStep(
+                    step="jump_target_mode",
+                    choice="jump target handling mode",
+                    value=jump_mode.value,
+                ),
+                TraceStep(
+                    step="input_mode",
+                    choice="input indexing mode",
+                    value=input_mode.value,
+                ),
+                TraceStep(
+                    step="max_step_count",
+                    choice="maximum VM step count",
+                    value=max_steps,
+                ),
+            ]
+        )
+    return StackBytecodeSpec(
+        program=program,
+        max_step_count=max_steps,
+        jump_target_mode=jump_mode,
+        input_mode=input_mode,
+    )
 
 
 # ── Pool generation ──────────────────────────────────────────────────────
@@ -820,6 +928,11 @@ def _generate_task_from_candidate(
             axes = SimpleAlgorithmsAxes()
         py_code = render_simple_algorithms(spec)
         queries = generate_simple_algorithms_queries(spec, axes, rng)
+    elif family == "stack_bytecode":
+        if axes is None:
+            axes = StackBytecodeAxes()
+        py_code = render_stack_bytecode(spec)
+        queries = generate_stack_bytecode_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 
