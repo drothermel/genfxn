@@ -3,6 +3,11 @@
 Agreed top‑7 families (with a tie at #6).
 Date: 2026-02-09
 
+## Status
+
+- Completed: `Stack/Bytecode Interpreter` (implemented as `stack_bytecode`)
+- In Progress: `Finite-State Transducer (FSM/Mealy/Moore)` (next family)
+
 1. Stack/Bytecode Interpreter
 Signature: `f(xs: list[int]) -> int` (program baked into spec; optional `f(program, xs)` variant)
 Axes: instruction set size, program length, control‑flow depth, stack depth, input mode, output mode, max_step_count, jump_target_mode (error/clamp/wrap)
