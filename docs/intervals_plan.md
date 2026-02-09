@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: Planned (M0-M5 + suite integration + calibration + runtime parity)
+Status: In progress (M0 complete; M1-M5 remaining)
 
 ## Goal
 
@@ -336,7 +336,7 @@ This family is not complete until all are true:
 
 ## Execution Checklist
 
-- [ ] M0 complete
+- [x] M0 complete
 - [ ] M1 complete
 - [ ] M2 complete
 - [ ] M3 complete
@@ -350,3 +350,13 @@ This family is not complete until all are true:
 
 - 2026-02-09: Plan drafted. `intervals` selected as next family from
   `docs/shared_rec_list.md` after completed `sequence_dp`.
+- 2026-02-09: M0 completed with parallel subagents. Added package skeleton and
+  core contract files in `src/genfxn/intervals/`:
+  `models.py`, `eval.py`, `sampler.py`, `queries.py`, `render.py`, `task.py`,
+  and `__init__.py`; added focused M0 tests in `tests/test_intervals.py`.
+  Contract freeze semantics implemented for boundary modes, reversed endpoint
+  normalization, merge-touching behavior, and int-output operations
+  (`total_coverage`, `merged_count`, `max_overlap_count`, `gap_count`).
+  Focused verification passed:
+  `uv run ruff check src/genfxn/intervals tests/test_intervals.py`
+  `uv run pytest tests/test_intervals.py -q` (6 passed).
