@@ -54,6 +54,7 @@ from genfxn.core.transforms import (
     TransformScale,
     TransformShift,
 )
+from genfxn.fsm.task import generate_fsm_task
 from genfxn.langs.rust._helpers import rust_string_literal
 from genfxn.langs.rust.expressions import render_expression_rust
 from genfxn.langs.rust.predicates import render_predicate_rust
@@ -764,6 +765,17 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
 
+    def test_fsm_generates_rust(self) -> None:
+        task = generate_fsm_task(
+            rng=seeded_rng(42),
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
             pytest.skip("stack_bytecode Rust rendering is not available")
@@ -852,6 +864,7 @@ class TestRustRegistry:
         ]
         if _supports_stack_bytecode_rust():
             families.append("stack_bytecode")
+        families.append("fsm")
         for family in families:
             fn = get_render_fn(Language.RUST, family)
             assert callable(fn)

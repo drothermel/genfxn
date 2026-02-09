@@ -7,6 +7,10 @@ from typer.testing import CliRunner
 
 from genfxn.cli import app
 from genfxn.core.models import Task
+from genfxn.fsm.models import FsmSpec
+from genfxn.fsm.render import render_fsm
+from genfxn.fsm.validate import CODE_UNSAFE_AST as FSM_CODE_UNSAFE_AST
+from genfxn.fsm.validate import validate_fsm_task
 from genfxn.stack_bytecode.models import StackBytecodeSpec
 from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.validate import (
@@ -24,7 +28,13 @@ def _supports_stack_bytecode_family() -> bool:
 
 
 def _expected_all_families() -> set[str]:
-    families = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
+    families = {
+        "piecewise",
+        "stateful",
+        "simple_algorithms",
+        "stringrules",
+        "fsm",
+    }
     if _supports_stack_bytecode_family():
         families.add("stack_bytecode")
     return families
@@ -72,6 +82,27 @@ class TestGenerate:
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 5
         assert all(t["family"] == "stateful" for t in tasks)
+
+    def test_generate_fsm(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "fsm", "-n", "5"]
+        )
+
+        assert result.exit_code == 0
+        assert "Generated 5 tasks" in result.stdout
+
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 5
+        assert all(t["family"] == "fsm" for t in tasks)
+        for task in tasks:
+            spec = FsmSpec.model_validate(task["spec"])
+            assert task["code"] == render_fsm(spec)
+            task_obj = Task.model_validate(task).model_copy(
+                update={"spec": spec.model_dump()}
+            )
+            issues = validate_fsm_task(task_obj)
+            assert not any(i.code == FSM_CODE_UNSAFE_AST for i in issues)
 
     def test_generate_all(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -356,6 +387,74 @@ class TestGenerate:
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 2
         assert all(t["family"] == "stack_bytecode" for t in tasks)
+
+    def test_generate_fsm_with_difficulty(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "fsm",
+                "-n",
+                "4",
+                "--difficulty",
+                "4",
+                "-s",
+                "123",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 4
+        assert all(t["family"] == "fsm" for t in tasks)
+        assert all(t["difficulty"] in {3, 4, 5} for t in tasks)
+
+    def test_generate_fsm_with_variant(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "fsm",
+                "-n",
+                "2",
+                "--difficulty",
+                "3",
+                "--variant",
+                "3A",
+                "-s",
+                "12",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 2
+        assert all(t["family"] == "fsm" for t in tasks)
+
+    def test_generate_fsm_invalid_difficulty(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "fsm",
+                "-n",
+                "1",
+                "--difficulty",
+                "6",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Invalid difficulty 6 for fsm" in result.output
 
     def test_generate_stack_bytecode_invalid_difficulty(self, tmp_path) -> None:
         if not _supports_stack_bytecode_family():
@@ -1230,6 +1329,7 @@ class TestInfo:
         assert "stateful:" in result.stdout
         assert "simple_algorithms:" in result.stdout
         assert "stringrules:" in result.stdout
+        assert "fsm:" in result.stdout
         if _supports_stack_bytecode_family():
             assert "stack_bytecode:" in result.stdout
 

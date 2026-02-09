@@ -260,6 +260,50 @@ Stack-machine programs over integer lists: `f(xs: list[int]) -> int`
 
 ---
 
+## FSM
+
+Finite-state machines over integer sequences: `f(xs: list[int]) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `machine_types` | list | all | — | Machine family (`moore`, `mealy`) |
+| `output_modes` | list | all | — | Output behavior (`final_state_id`, `accept_bool`, `transition_count`) |
+| `undefined_transition_policies` | list | all | — | Behavior when no transition matches (`sink`, `stay`, `error`) |
+| `predicate_types` | list | all | — | Predicate types used for transitions |
+| `n_states_range` | (lo, hi) | (2, 6) | — | Range for number of states |
+| `transitions_per_state_range` | (lo, hi) | (1, 4) | — | Range for transitions sampled per state |
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
+| `value_range` | (lo, hi) | (-20, 20) | `--value-range` | Range used for query input values |
+| `threshold_range` | (lo, hi) | (-10, 10) | `--threshold-range` | Range for threshold predicates |
+| `divisor_range` | (lo, hi) | (2, 10) | `--divisor-range` | Range for modular predicates |
+
+### Predicate Types
+
+| Value | CLI | Description |
+|-------|-----|-------------|
+| `EVEN` | `even` | `x % 2 == 0` |
+| `ODD` | `odd` | `x % 2 != 0` |
+| `LT` | `lt` | `x < threshold` |
+| `LE` | `le` | `x <= threshold` |
+| `GT` | `gt` | `x > threshold` |
+| `GE` | `ge` | `x >= threshold` |
+| `MOD_EQ` | `mod_eq` | `x % divisor == remainder` |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `machine_type` | `moore`, `mealy` | FSM machine style |
+| `output_mode` | output mode values | Output interpretation |
+| `undefined_transition_policy` | `sink`, `stay`, `error` | Unmatched transition handling |
+| `states.N.is_accept` | `true`, `false` | Acceptance bit for state N |
+| `states.N.transitions.M.predicate.kind` | predicate types | Transition predicate type |
+| `states.N.transitions.M.target_state_id` | integer | Transition target state id |
+
+---
+
 ## Using Spec Field Paths
 
 Spec field paths use dot notation to access nested fields. List indices are supported.

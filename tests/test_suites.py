@@ -14,6 +14,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SATemplateType,
 )
 from genfxn.suites.features import (
+    fsm_features,
     simple_algorithms_features,
     stateful_features,
     stringrules_features,
@@ -35,6 +36,13 @@ def _stack_suite_available() -> bool:
     return (
         "stack_bytecode" in QUOTAS
         and importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+    )
+
+
+def _fsm_suite_available() -> bool:
+    return (
+        "fsm" in QUOTAS
+        and importlib.util.find_spec("genfxn.fsm.task") is not None
     )
 
 # ── Feature extraction tests ─────────────────────────────────────────────
@@ -448,6 +456,85 @@ class TestSimpleAlgorithmsFeatures:
         assert f["edge_count"] == "1"
 
 
+class TestFsmFeatures:
+    def test_basic_fsm_features(self) -> None:
+        spec = {
+            "machine_type": "moore",
+            "output_mode": "final_state_id",
+            "undefined_transition_policy": "stay",
+            "states": [
+                {
+                    "id": 0,
+                    "is_accept": False,
+                    "transitions": [
+                        {
+                            "predicate": {"kind": "even"},
+                            "target_state_id": 1,
+                        }
+                    ],
+                },
+                {
+                    "id": 1,
+                    "is_accept": True,
+                    "transitions": [
+                        {
+                            "predicate": {"kind": "odd"},
+                            "target_state_id": 0,
+                        }
+                    ],
+                },
+            ],
+        }
+        f = fsm_features(spec)
+        assert f["n_states_bucket"] == "2"
+        assert f["transition_density_bucket"] == "low"
+        assert f["predicate_complexity"] == "basic"
+        assert f["machine_type"] == "moore"
+        assert f["output_mode"] == "final_state_id"
+        assert f["undefined_policy"] == "stay"
+
+    def test_modular_predicates_and_dense_transitions(self) -> None:
+        spec = {
+            "machine_type": "mealy",
+            "output_mode": "transition_count",
+            "undefined_transition_policy": "error",
+            "states": [
+                {
+                    "id": 0,
+                    "is_accept": False,
+                    "transitions": [
+                        {
+                            "predicate": {
+                                "kind": "mod_eq",
+                                "divisor": 3,
+                                "remainder": 1,
+                            },
+                            "target_state_id": 1,
+                        },
+                        {
+                            "predicate": {"kind": "gt", "value": 0},
+                            "target_state_id": 2,
+                        },
+                        {
+                            "predicate": {"kind": "lt", "value": 0},
+                            "target_state_id": 3,
+                        },
+                    ],
+                },
+                {"id": 1, "is_accept": True, "transitions": []},
+                {"id": 2, "is_accept": False, "transitions": []},
+                {"id": 3, "is_accept": False, "transitions": []},
+            ],
+        }
+        f = fsm_features(spec)
+        assert f["n_states_bucket"] == "3-4"
+        assert f["transition_density_bucket"] == "low"
+        assert f["predicate_complexity"] == "modular"
+        assert f["machine_type"] == "mealy"
+        assert f["output_mode"] == "transition_count"
+        assert f["undefined_policy"] == "error"
+
+
 class _FixedChoiceRng:
     def __init__(self, choices: list[object]) -> None:
         self._choices = choices
@@ -565,6 +652,32 @@ class TestHardConstraints:
     def test_stateful_d5_filters(self) -> None:
         quota = QUOTAS["stateful"][5]
         features_ok = {"transform_bucket": "pipeline5", "pred_kind": "composed"}
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_fsm_d4_filters_when_available(self) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+        quota = QUOTAS["fsm"][4]
+        features_ok = {
+            "machine_type": "mealy",
+            "output_mode": "transition_count",
+            "undefined_policy": "error",
+            "transition_density_bucket": "high",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_fsm_d5_filters_when_available(self) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+        quota = QUOTAS["fsm"][5]
+        features_ok = {
+            "machine_type": "mealy",
+            "output_mode": "transition_count",
+            "undefined_policy": "error",
+            "transition_density_bucket": "very_high",
+        }
         for key, val in quota.hard_constraints.items():
             assert features_ok.get(key) == val
 
@@ -865,6 +978,51 @@ class TestPoolGeneration:
                     f"{bucket.axis}={bucket.value}"
                 )
 
+    def test_fsm_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
+
+        for difficulty in sorted(QUOTAS["fsm"].keys()):
+            candidates, stats = generate_pool(
+                "fsm",
+                difficulty,
+                seed=42,
+                pool_size=140,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                assert compute_difficulty("fsm", cand.spec_dict) == difficulty
+
+    def test_fsm_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["fsm"].keys()):
+            candidates, _ = generate_pool(
+                "fsm",
+                difficulty,
+                seed=43,
+                pool_size=180,
+            )
+            assert candidates
+            quota = QUOTAS["fsm"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for fsm "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -985,6 +1143,47 @@ class TestDeterminism:
             assert len(q.output) == 2
             assert q.output == eval_stack_bytecode(spec, list(q.input))
 
+    def test_fsm_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+        difficulty = sorted(QUOTAS["fsm"].keys())[0]
+        a = generate_suite("fsm", difficulty, seed=19, pool_size=260)
+        b = generate_suite("fsm", difficulty, seed=19, pool_size=260)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_fsm_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+        from genfxn.fsm.eval import eval_fsm
+        from genfxn.fsm.models import FsmSpec
+
+        difficulty = sorted(QUOTAS["fsm"].keys())[0]
+        tasks = generate_suite(
+            "fsm",
+            difficulty,
+            seed=42,
+            pool_size=260,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = FsmSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        assert callable(f)
+        out = cast(int, f([1, 2, 3]))
+        assert isinstance(out, int)
+
+        for q in task.queries:
+            assert isinstance(q.output, int)
+            assert q.output == eval_fsm(spec, list(q.input))
+
 
 class TestSuiteGenerationValidation:
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
@@ -1097,6 +1296,48 @@ class TestIntegration:
             quota = QUOTAS["stack_bytecode"][difficulty]
             assert len(tasks) == quota.total
             report = quota_report(tasks, "stack_bytecode", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_fsm_suite_generation_when_available(self) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["fsm"].keys())[0]
+        tasks = generate_suite(
+            "fsm",
+            difficulty,
+            seed=52,
+            pool_size=2000,
+        )
+        quota = QUOTAS["fsm"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "fsm", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.8))
+            assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_fsm_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _fsm_suite_available():
+            pytest.skip("fsm suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["fsm"].keys()):
+            tasks = generate_suite(
+                "fsm",
+                difficulty,
+                seed=201 + difficulty,
+                pool_size=1800,
+            )
+            quota = QUOTAS["fsm"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "fsm", difficulty)
             for _, _, target, achieved, _ in report:
                 min_acceptable = max(1, int(target * 0.75))
                 assert achieved >= min_acceptable

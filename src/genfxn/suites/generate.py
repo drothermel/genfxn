@@ -17,6 +17,18 @@ from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.core.transforms import TransformType
+from genfxn.fsm.models import (
+    FsmAxes,
+    MachineType,
+    OutputMode,
+    UndefinedTransitionPolicy,
+)
+from genfxn.fsm.models import (
+    PredicateType as FsmPredicateType,
+)
+from genfxn.fsm.queries import generate_fsm_queries
+from genfxn.fsm.render import render_fsm
+from genfxn.fsm.sampler import sample_fsm_spec
 from genfxn.simple_algorithms.models import (
     CountingMode,
     SimpleAlgorithmsAxes,
@@ -44,6 +56,7 @@ from genfxn.stringrules.queries import generate_stringrules_queries
 from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.suites.features import (
+    fsm_features,
     simple_algorithms_features,
     stack_bytecode_features,
     stateful_features,
@@ -544,6 +557,92 @@ def _pool_axes_stack_bytecode_d5(_: random.Random) -> StackBytecodeAxes:
     )
 
 
+def _pool_axes_fsm_d1(_: random.Random) -> FsmAxes:
+    return FsmAxes(
+        target_difficulty=1,
+        machine_types=[MachineType.MOORE],
+        output_modes=[OutputMode.FINAL_STATE_ID],
+        undefined_transition_policies=[UndefinedTransitionPolicy.STAY],
+        predicate_types=[FsmPredicateType.EVEN, FsmPredicateType.ODD],
+        n_states_range=(2, 2),
+        transitions_per_state_range=(0, 1),
+    )
+
+
+def _pool_axes_fsm_d2(_: random.Random) -> FsmAxes:
+    return FsmAxes(
+        target_difficulty=2,
+        machine_types=[MachineType.MOORE],
+        output_modes=[OutputMode.FINAL_STATE_ID, OutputMode.ACCEPT_BOOL],
+        undefined_transition_policies=[
+            UndefinedTransitionPolicy.STAY,
+            UndefinedTransitionPolicy.SINK,
+        ],
+        predicate_types=[
+            FsmPredicateType.EVEN,
+            FsmPredicateType.ODD,
+            FsmPredicateType.LT,
+            FsmPredicateType.GT,
+        ],
+        n_states_range=(2, 3),
+        transitions_per_state_range=(1, 2),
+    )
+
+
+def _pool_axes_fsm_d3(_: random.Random) -> FsmAxes:
+    return FsmAxes(
+        target_difficulty=3,
+        machine_types=[MachineType.MEALY],
+        output_modes=[OutputMode.ACCEPT_BOOL, OutputMode.TRANSITION_COUNT],
+        undefined_transition_policies=[UndefinedTransitionPolicy.SINK],
+        predicate_types=[
+            FsmPredicateType.LT,
+            FsmPredicateType.LE,
+            FsmPredicateType.GT,
+            FsmPredicateType.GE,
+            FsmPredicateType.MOD_EQ,
+        ],
+        n_states_range=(4, 5),
+        transitions_per_state_range=(2, 3),
+    )
+
+
+def _pool_axes_fsm_d4(_: random.Random) -> FsmAxes:
+    return FsmAxes(
+        target_difficulty=4,
+        machine_types=[MachineType.MEALY],
+        output_modes=[OutputMode.TRANSITION_COUNT],
+        undefined_transition_policies=[UndefinedTransitionPolicy.ERROR],
+        predicate_types=[
+            FsmPredicateType.MOD_EQ,
+            FsmPredicateType.LT,
+            FsmPredicateType.LE,
+            FsmPredicateType.GT,
+            FsmPredicateType.GE,
+        ],
+        n_states_range=(5, 5),
+        transitions_per_state_range=(2, 3),
+    )
+
+
+def _pool_axes_fsm_d5(_: random.Random) -> FsmAxes:
+    return FsmAxes(
+        target_difficulty=5,
+        machine_types=[MachineType.MEALY],
+        output_modes=[OutputMode.TRANSITION_COUNT],
+        undefined_transition_policies=[UndefinedTransitionPolicy.ERROR],
+        predicate_types=[
+            FsmPredicateType.MOD_EQ,
+            FsmPredicateType.LT,
+            FsmPredicateType.LE,
+            FsmPredicateType.GT,
+            FsmPredicateType.GE,
+        ],
+        n_states_range=(6, 6),
+        transitions_per_state_range=(4, 5),
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -569,6 +668,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_stack_bytecode_d4,
         5: _pool_axes_stack_bytecode_d5,
     },
+    "fsm": {
+        1: _pool_axes_fsm_d1,
+        2: _pool_axes_fsm_d2,
+        3: _pool_axes_fsm_d3,
+        4: _pool_axes_fsm_d4,
+        5: _pool_axes_fsm_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -578,6 +684,7 @@ _FEATURE_FNS = {
     "stateful": stateful_features,
     "simple_algorithms": simple_algorithms_features,
     "stack_bytecode": stack_bytecode_features,
+    "fsm": fsm_features,
 }
 
 
@@ -629,6 +736,8 @@ def _sample_spec(
         return sample_simple_algorithms_spec(axes, rng, trace=trace)
     elif family == "stack_bytecode":
         return _sample_stack_bytecode_spec(axes, rng, trace=trace)
+    elif family == "fsm":
+        return sample_fsm_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -933,6 +1042,11 @@ def _generate_task_from_candidate(
             axes = StackBytecodeAxes()
         py_code = render_stack_bytecode(spec)
         queries = generate_stack_bytecode_queries(spec, axes, rng)
+    elif family == "fsm":
+        if axes is None:
+            axes = FsmAxes()
+        py_code = render_fsm(spec)
+        queries = generate_fsm_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 

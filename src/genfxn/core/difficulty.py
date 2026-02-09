@@ -4,6 +4,12 @@ PIECEWISE_WEIGHTS = {"branches": 0.4, "expr_type": 0.4, "coeff": 0.2}
 STATEFUL_WEIGHTS = {"template": 0.4, "predicate": 0.3, "transform": 0.3}
 SIMPLE_ALGORITHMS_WEIGHTS = {"template": 0.5, "mode": 0.3, "edge": 0.2}
 STRINGRULES_WEIGHTS = {"rules": 0.4, "predicate": 0.3, "transform": 0.3}
+FSM_WEIGHTS = {
+    "states": 0.3,
+    "transitions": 0.25,
+    "predicate": 0.2,
+    "mode": 0.25,
+}
 
 
 def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
@@ -16,6 +22,8 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _simple_algorithms_difficulty(spec)
     elif family == "stringrules":
         return _stringrules_difficulty(spec)
+    elif family == "fsm":
+        return _fsm_difficulty(spec)
     elif family == "stack_bytecode":
         return _stack_bytecode_difficulty(spec)
     raise ValueError(f"Unknown family: {family}")
@@ -392,6 +400,104 @@ def _string_transform_score(trans: dict[str, Any]) -> int:
         else:
             return 3
     return 1
+
+
+def _fsm_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for finite-state machine tasks."""
+    states = spec.get("states", [])
+    if not isinstance(states, list):
+        return 1
+
+    n_states = len(states)
+    if n_states <= 2:
+        state_score = 1
+    elif n_states == 3:
+        state_score = 2
+    elif n_states == 4:
+        state_score = 3
+    elif n_states == 5:
+        state_score = 4
+    else:
+        state_score = 5
+
+    total_transitions = 0
+    max_transitions = 0
+    predicate_scores: list[int] = []
+    for state in states:
+        if not isinstance(state, dict):
+            continue
+        transitions = state.get("transitions", [])
+        if not isinstance(transitions, list):
+            continue
+        total_transitions += len(transitions)
+        max_transitions = max(max_transitions, len(transitions))
+        for transition in transitions:
+            if not isinstance(transition, dict):
+                continue
+            predicate = transition.get("predicate")
+            if isinstance(predicate, dict):
+                predicate_scores.append(_fsm_predicate_score(predicate))
+
+    if n_states > 0:
+        avg_transitions = total_transitions / n_states
+    else:
+        avg_transitions = 0.0
+    transition_density = max(avg_transitions, float(max_transitions))
+    if transition_density <= 1:
+        transition_score = 1
+    elif transition_density <= 2:
+        transition_score = 2
+    elif transition_density <= 3:
+        transition_score = 3
+    elif transition_density <= 4:
+        transition_score = 4
+    else:
+        transition_score = 5
+
+    predicate_score = max(predicate_scores, default=1)
+    mode_score = _fsm_mode_score(spec)
+
+    w = FSM_WEIGHTS
+    raw = (
+        w["states"] * state_score
+        + w["transitions"] * transition_score
+        + w["predicate"] * predicate_score
+        + w["mode"] * mode_score
+    )
+    return max(1, min(5, round(raw)))
+
+
+def _fsm_mode_score(spec: dict[str, Any]) -> float:
+    machine_type = spec.get("machine_type", "moore")
+    output_mode = spec.get("output_mode", "final_state_id")
+    policy = spec.get("undefined_transition_policy", "stay")
+
+    score = 1.0
+    if machine_type == "mealy":
+        score += 1.0
+
+    if output_mode == "accept_bool":
+        score += 1.0
+    elif output_mode == "transition_count":
+        score += 2.0
+
+    if policy == "sink":
+        score += 1.0
+    elif policy == "error":
+        score += 2.0
+
+    return max(1.0, min(5.0, score))
+
+
+def _fsm_predicate_score(pred: dict[str, Any]) -> int:
+    kind = pred.get("kind", "")
+    if kind in ("even", "odd"):
+        return 1
+    if kind in ("lt", "le", "gt", "ge"):
+        return 2
+    if kind == "mod_eq":
+        return 5
+    return 2
 
 
 def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:

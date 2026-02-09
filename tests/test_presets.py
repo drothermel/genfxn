@@ -9,6 +9,7 @@ import pytest
 
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.presets import (
+    FSM_PRESETS,
     PIECEWISE_PRESETS,
     SIMPLE_ALGORITHMS_PRESETS,
     STATEFUL_PRESETS,
@@ -18,6 +19,8 @@ from genfxn.core.presets import (
     get_difficulty_presets,
     get_valid_difficulties,
 )
+from genfxn.fsm.models import FsmAxes
+from genfxn.fsm.task import generate_fsm_task
 from genfxn.piecewise.models import PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.simple_algorithms.models import SimpleAlgorithmsAxes
@@ -58,6 +61,10 @@ class TestGetValidDifficulties:
         if not _supports_stack_bytecode_presets():
             pytest.skip("stack_bytecode presets are not available")
         valid = get_valid_difficulties("stack_bytecode")
+        assert valid == [1, 2, 3, 4, 5]
+
+    def test_fsm_range(self) -> None:
+        valid = get_valid_difficulties("fsm")
         assert valid == [1, 2, 3, 4, 5]
 
     def test_unknown_family_raises(self) -> None:
@@ -103,6 +110,10 @@ class TestGetDifficultyAxes:
     def test_stringrules_returns_correct_type(self) -> None:
         axes = get_difficulty_axes("stringrules", 2)
         assert isinstance(axes, StringRulesAxes)
+
+    def test_fsm_returns_correct_type(self) -> None:
+        axes = get_difficulty_axes("fsm", 3)
+        assert isinstance(axes, FsmAxes)
 
     def test_variant_selects_specific_preset(self) -> None:
         axes_a = cast(
@@ -183,6 +194,8 @@ class TestPresetAccuracy:
                 task = generate_stringrules_task(
                     axes=cast(StringRulesAxes, axes), rng=rng
                 )
+            elif family == "fsm":
+                task = generate_fsm_task(axes=cast(FsmAxes, axes), rng=rng)
             else:
                 raise ValueError(f"Unknown family: {family}")
 
@@ -322,6 +335,47 @@ class TestPresetVariety:
         )
 
 
+class TestFsmPresets:
+    N_SAMPLES = 50
+
+    def test_fsm_means_increase_with_target(self) -> None:
+        means: dict[int, float] = {}
+        for difficulty in [1, 2, 3, 4, 5]:
+            rng = random.Random(123 + difficulty)
+            observed: list[int] = []
+            for _ in range(self.N_SAMPLES):
+                axes = cast(
+                    FsmAxes,
+                    get_difficulty_axes("fsm", difficulty, rng=rng),
+                )
+                task = generate_fsm_task(axes=axes, rng=rng)
+                observed.append(compute_difficulty("fsm", task.spec))
+            means[difficulty] = sum(observed) / len(observed)
+
+        ordered_means = [means[d] for d in [1, 2, 3, 4, 5]]
+        assert ordered_means == sorted(ordered_means)
+        assert ordered_means[-1] - ordered_means[0] >= 2.5
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_fsm_presets_are_within_one_of_target(
+        self, difficulty: int
+    ) -> None:
+        rng = random.Random(900 + difficulty)
+        observed: list[int] = []
+        for _ in range(self.N_SAMPLES):
+            axes = cast(
+                FsmAxes,
+                get_difficulty_axes("fsm", difficulty, rng=rng),
+            )
+            task = generate_fsm_task(axes=axes, rng=rng)
+            observed.append(compute_difficulty("fsm", task.spec))
+
+        within_one_ratio = sum(
+            1 for score in observed if abs(score - difficulty) <= 1
+        ) / len(observed)
+        assert within_one_ratio >= 0.9
+
+
 class TestPresetCompleteness:
     """Test that preset dictionaries are well-formed."""
 
@@ -359,6 +413,14 @@ class TestPresetCompleteness:
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
 
+    def test_fsm_presets_structure(self) -> None:
+        for difficulty, presets in FSM_PRESETS.items():
+            assert isinstance(difficulty, int)
+            assert 1 <= difficulty <= 5
+            assert len(presets) >= 1
+            for preset in presets:
+                assert preset.name.startswith(f"{difficulty}")
+
     def test_all_presets_produce_valid_axes(self) -> None:
         """Verify all preset overrides create valid axes objects."""
         for family, preset_dict in [
@@ -366,6 +428,7 @@ class TestPresetCompleteness:
             ("stateful", STATEFUL_PRESETS),
             ("simple_algorithms", SIMPLE_ALGORITHMS_PRESETS),
             ("stringrules", STRINGRULES_PRESETS),
+            ("fsm", FSM_PRESETS),
         ]:
             for difficulty, presets in preset_dict.items():
                 for preset in presets:
