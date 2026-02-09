@@ -421,6 +421,75 @@ def simple_algorithms_features(spec: dict[str, Any]) -> dict[str, str]:
     return features
 
 
+def bitops_features(spec: dict[str, Any]) -> dict[str, str]:
+    operations = spec.get("operations", [])
+    if not isinstance(operations, list):
+        operations = []
+
+    n_ops = len(operations)
+    if n_ops <= 2:
+        n_ops_bucket = "1-2"
+    elif n_ops <= 3:
+        n_ops_bucket = "2-3"
+    elif n_ops <= 4:
+        n_ops_bucket = "3-4"
+    elif n_ops <= 5:
+        n_ops_bucket = "4-5"
+    else:
+        n_ops_bucket = "6+"
+
+    width_bits = spec.get("width_bits", 8)
+    if not isinstance(width_bits, int):
+        width_bits = 8
+
+    if width_bits <= 8:
+        width_bucket = "8"
+    elif width_bits <= 16:
+        width_bucket = "16"
+    elif width_bits <= 32:
+        width_bucket = "24-32"
+    else:
+        width_bucket = "33+"
+
+    ops: list[str] = []
+    for operation in operations:
+        if isinstance(operation, dict):
+            op = operation.get("op", "")
+            if isinstance(op, str):
+                ops.append(op)
+
+    has_shift = any(op in ("shl", "shr_logical") for op in ops)
+    has_rotate = any(op in ("rotl", "rotr") for op in ops)
+    has_aggregate = any(op in ("popcount", "parity") for op in ops)
+
+    op_score = 1
+    for op in ops:
+        if op in ("popcount", "parity"):
+            op_score = max(op_score, 4)
+        elif op in ("rotl", "rotr"):
+            op_score = max(op_score, 3)
+        elif op in ("shl", "shr_logical"):
+            op_score = max(op_score, 2)
+
+    if op_score <= 1:
+        op_complexity = "basic"
+    elif op_score == 2:
+        op_complexity = "shift"
+    elif op_score == 3:
+        op_complexity = "rotate"
+    else:
+        op_complexity = "aggregate"
+
+    return {
+        "n_ops_bucket": n_ops_bucket,
+        "width_bucket": width_bucket,
+        "op_complexity": op_complexity,
+        "has_shift": str(has_shift).lower(),
+        "has_rotate": str(has_rotate).lower(),
+        "has_aggregate": str(has_aggregate).lower(),
+    }
+
+
 def stack_bytecode_features(spec: dict[str, Any]) -> dict[str, str]:
     program = spec.get("program", [])
     n_instr = len(program) if isinstance(program, list) else 0

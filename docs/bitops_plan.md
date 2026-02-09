@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M1-M3 complete, M4 pending)
+Status: In progress (M1-M4 complete)
 
 ## Goal
 
@@ -147,8 +147,8 @@ Use this after memory compaction:
 - [x] M1 complete
 - [x] M2 complete
 - [x] M3 complete
-- [ ] M4 complete
-- [ ] Suite integration follow-up complete
+- [x] M4 complete
+- [x] Suite integration follow-up complete
 - [ ] Full `ruff` and full `pytest` pass
 - [ ] PR updated with behavior notes + test evidence
 
@@ -185,3 +185,17 @@ Use this after memory compaction:
   and
   `uv run pytest tests/test_validate_bitops.py tests/test_java_render.py tests/test_rust_render.py tests/test_bitops.py -q`
   (305 passed).
+- 2026-02-09: M4 implemented. Added CLI integration in `src/genfxn/cli.py`
+  and CLI tests in `tests/test_cli.py`; added presets integration in
+  `src/genfxn/core/presets.py` with tests in `tests/test_presets.py`; added
+  docs updates in `README.md`; and integrated `bitops` into suites via
+  `src/genfxn/suites/features.py`, `src/genfxn/suites/quotas.py`, and
+  `src/genfxn/suites/generate.py` with coverage in `tests/test_suites.py`.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/cli.py src/genfxn/core/presets.py src/genfxn/suites/features.py src/genfxn/suites/quotas.py src/genfxn/suites/generate.py tests/test_cli.py tests/test_presets.py tests/test_suites.py`
+  and
+  `uv run pytest tests/test_cli.py tests/test_presets.py tests/test_suites.py -q --verification-level=full`
+  (195 passed, 1 skipped).
+  Additional balancing check passed for 50-task suites:
+  `generate_suite("bitops", d)` and `quota_report(..., "bitops", d)` for
+  d=1..5 each returned 50 tasks with zero under-target buckets.

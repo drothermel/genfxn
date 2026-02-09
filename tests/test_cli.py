@@ -21,6 +21,10 @@ from genfxn.stack_bytecode.validate import (
 runner = CliRunner()
 
 
+def _supports_bitops_family() -> bool:
+    return importlib.util.find_spec("genfxn.bitops.task") is not None
+
+
 def _supports_stack_bytecode_family() -> bool:
     return (
         importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
@@ -35,6 +39,8 @@ def _expected_all_families() -> set[str]:
         "stringrules",
         "fsm",
     }
+    if _supports_bitops_family():
+        families.add("bitops")
     if _supports_stack_bytecode_family():
         families.add("stack_bytecode")
     return families
@@ -104,6 +110,22 @@ class TestGenerate:
             issues = validate_fsm_task(task_obj)
             assert not any(i.code == FSM_CODE_UNSAFE_AST for i in issues)
 
+    def test_generate_bitops_when_available(self, tmp_path) -> None:
+        if not _supports_bitops_family():
+            pytest.skip("bitops family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "bitops", "-n", "5"]
+        )
+
+        assert result.exit_code == 0
+        assert "Generated 5 tasks" in result.stdout
+
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 5
+        assert all(t["family"] == "bitops" for t in tasks)
+
     def test_generate_all(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
@@ -118,6 +140,8 @@ class TestGenerate:
         assert families == _expected_all_families()
 
     def test_generate_all_distributes_remainder_fairly(self, tmp_path) -> None:
+        expected_families = _expected_all_families()
+        count = len(expected_families) + 1
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -128,7 +152,7 @@ class TestGenerate:
                 "-f",
                 "all",
                 "-n",
-                "6",
+                str(count),
                 "-s",
                 "42",
             ],
@@ -141,9 +165,8 @@ class TestGenerate:
             fam = cast(str, task["family"])
             counts[fam] = counts.get(fam, 0) + 1
 
-        expected_families = _expected_all_families()
         assert set(counts) == expected_families
-        assert sum(counts.values()) == 6
+        assert sum(counts.values()) == count
         assert max(counts.values()) - min(counts.values()) <= 1
 
     def test_generate_with_seed(self, tmp_path) -> None:

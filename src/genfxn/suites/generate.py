@@ -8,6 +8,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from genfxn.bitops.models import BitOp, BitopsAxes
+from genfxn.bitops.queries import generate_bitops_queries
+from genfxn.bitops.render import render_bitops
+from genfxn.bitops.sampler import sample_bitops_spec
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
 from genfxn.core.difficulty import compute_difficulty
@@ -56,6 +60,7 @@ from genfxn.stringrules.queries import generate_stringrules_queries
 from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.suites.features import (
+    bitops_features,
     fsm_features,
     simple_algorithms_features,
     stack_bytecode_features,
@@ -643,6 +648,81 @@ def _pool_axes_fsm_d5(_: random.Random) -> FsmAxes:
     )
 
 
+def _pool_axes_bitops_d1(_: random.Random) -> BitopsAxes:
+    return BitopsAxes(
+        target_difficulty=1,
+        width_choices=[8],
+        n_ops_range=(1, 2),
+        allowed_ops=[
+            BitOp.AND_MASK,
+            BitOp.OR_MASK,
+            BitOp.XOR_MASK,
+            BitOp.NOT,
+        ],
+    )
+
+
+def _pool_axes_bitops_d2(_: random.Random) -> BitopsAxes:
+    return BitopsAxes(
+        target_difficulty=2,
+        width_choices=[8, 16],
+        n_ops_range=(2, 3),
+        allowed_ops=[
+            BitOp.AND_MASK,
+            BitOp.OR_MASK,
+            BitOp.XOR_MASK,
+            BitOp.NOT,
+            BitOp.SHL,
+            BitOp.SHR_LOGICAL,
+        ],
+    )
+
+
+def _pool_axes_bitops_d3(_: random.Random) -> BitopsAxes:
+    return BitopsAxes(
+        target_difficulty=3,
+        width_choices=[16],
+        n_ops_range=(3, 4),
+        allowed_ops=[
+            BitOp.SHL,
+            BitOp.SHR_LOGICAL,
+            BitOp.ROTL,
+            BitOp.ROTR,
+            BitOp.NOT,
+        ],
+    )
+
+
+def _pool_axes_bitops_d4(_: random.Random) -> BitopsAxes:
+    return BitopsAxes(
+        target_difficulty=4,
+        width_choices=[32],
+        n_ops_range=(4, 5),
+        allowed_ops=[
+            BitOp.ROTL,
+            BitOp.ROTR,
+            BitOp.POPCOUNT,
+            BitOp.PARITY,
+            BitOp.XOR_MASK,
+        ],
+    )
+
+
+def _pool_axes_bitops_d5(_: random.Random) -> BitopsAxes:
+    return BitopsAxes(
+        target_difficulty=5,
+        width_choices=[32],
+        n_ops_range=(6, 7),
+        allowed_ops=[
+            BitOp.POPCOUNT,
+            BitOp.PARITY,
+            BitOp.ROTL,
+            BitOp.ROTR,
+            BitOp.SHR_LOGICAL,
+        ],
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -675,6 +755,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_fsm_d4,
         5: _pool_axes_fsm_d5,
     },
+    "bitops": {
+        1: _pool_axes_bitops_d1,
+        2: _pool_axes_bitops_d2,
+        3: _pool_axes_bitops_d3,
+        4: _pool_axes_bitops_d4,
+        5: _pool_axes_bitops_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -685,6 +772,7 @@ _FEATURE_FNS = {
     "simple_algorithms": simple_algorithms_features,
     "stack_bytecode": stack_bytecode_features,
     "fsm": fsm_features,
+    "bitops": bitops_features,
 }
 
 
@@ -738,6 +826,8 @@ def _sample_spec(
         return _sample_stack_bytecode_spec(axes, rng, trace=trace)
     elif family == "fsm":
         return sample_fsm_spec(axes, rng, trace=trace)
+    elif family == "bitops":
+        return sample_bitops_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -1047,6 +1137,11 @@ def _generate_task_from_candidate(
             axes = FsmAxes()
         py_code = render_fsm(spec)
         queries = generate_fsm_queries(spec, axes, rng)
+    elif family == "bitops":
+        if axes is None:
+            axes = BitopsAxes()
+        py_code = render_bitops(spec)
+        queries = generate_bitops_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 

@@ -1,7 +1,7 @@
 # genfxn
 
 Synthetic function dataset generator for code reasoning research. Generates
-executable function tasks with structured test cases across six function
+executable function tasks with structured test cases across seven function
 families. CLI output is single-language (Python by default, or Java/Rust via
 `--language`).
 
@@ -21,6 +21,7 @@ uv sync
 | **stringrules** | `f(s: str) -> str` | Ordered pattern matching with first-match-wins precedence |
 | **stack_bytecode** | `f(xs: list[int]) -> int` | Small stack-machine programs with controlled runtime semantics |
 | **fsm** | `f(xs: list[int]) -> int` | Finite-state machine execution over integer sequences |
+| **bitops** | `f(x: int) -> int` | Fixed-width bit-operation pipelines over integer inputs |
 
 ### Piecewise
 
@@ -98,6 +99,11 @@ execution and explicit runtime status codes.
 Finite-state machines process each integer input step-by-step using ordered
 transitions and configurable behavior when no transition matches.
 
+### Bitops
+
+Fixed-width pipelines over integer inputs using bitwise and shift/rotate
+operations, with output masked to the configured width.
+
 ## Generation
 
 Generate tasks to JSONL files.
@@ -111,7 +117,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-o, --output PATH` | Output JSONL file |
-| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, or `all` |
+| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, or `all` |
 | `-n, --count INT` | Number of tasks to generate |
 
 ### General Options
@@ -198,6 +204,9 @@ genfxn generate -o tasks.jsonl -f simple_algorithms -n 50 \
 # String rules with high overlap (tests rule precedence)
 genfxn generate -o tasks.jsonl -f stringrules -n 50 \
     --n-rules 4 --overlap-level high
+
+# Bitops tasks at target difficulty 4
+genfxn generate -o tasks.jsonl -f bitops -n 50 --difficulty 4
 ```
 
 See [AXES.md](AXES.md) for complete axis documentation.

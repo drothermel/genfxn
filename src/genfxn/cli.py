@@ -7,6 +7,8 @@ import srsly
 import typer
 from pydantic import TypeAdapter
 
+from genfxn.bitops.models import BitopsAxes, BitopsSpec
+from genfxn.bitops.task import generate_bitops_task
 from genfxn.core.codegen import get_spec_value, task_id_from_spec
 from genfxn.core.describe import describe_task
 from genfxn.core.difficulty import compute_difficulty
@@ -54,6 +56,7 @@ app = typer.Typer(help="Generate and split function synthesis tasks.")
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
 _simple_algorithms_spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 _fsm_spec_adapter = TypeAdapter(FsmSpec)
+_bitops_spec_adapter = TypeAdapter(BitopsSpec)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -178,6 +181,10 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
             spec_obj = StackBytecodeSpec.model_validate(task.spec, strict=True)
         case "fsm":
             spec_obj = _fsm_spec_adapter.validate_python(
+                task.spec, strict=True
+            )
+        case "bitops":
+            spec_obj = _bitops_spec_adapter.validate_python(
                 task.spec, strict=True
             )
         case _:
@@ -396,7 +403,7 @@ def generate(
             "-f",
             help=(
                 "piecewise, stateful, simple_algorithms, stringrules, "
-                "stack_bytecode, fsm, or all"
+                "bitops, stack_bytecode, fsm, or all"
             ),
         ),
     ] = "all",
@@ -659,6 +666,7 @@ def generate(
             threshold_range=threshold_range,
             divisor_range=divisor_range,
         )
+        bitops_axes = BitopsAxes()
 
     with output.open("w", encoding="utf-8") as output_handle:
 
@@ -675,6 +683,7 @@ def generate(
                 "stateful",
                 "simple_algorithms",
                 "stringrules",
+                "bitops",
                 "stack_bytecode",
                 "fsm",
             ]
@@ -698,10 +707,19 @@ def generate(
                 )
             for _ in range(family_counts["stringrules"]):
                 emit(generate_stringrules_task(axes=stringrules_axes, rng=rng))
+            for _ in range(family_counts["bitops"]):
+                emit(generate_bitops_task(axes=bitops_axes, rng=rng))
             for _ in range(family_counts["stack_bytecode"]):
                 emit(_build_stack_bytecode_task(stack_bytecode_axes, rng))
             for _ in range(family_counts["fsm"]):
                 emit(generate_fsm_task(axes=fsm_axes, rng=rng))
+        elif family == "bitops":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = bitops_axes
+                emit(generate_bitops_task(axes=cast(BitopsAxes, axes), rng=rng))
         elif family == "piecewise":
             for _ in range(count):
                 if difficulty is not None:

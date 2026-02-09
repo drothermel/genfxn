@@ -7,8 +7,11 @@ from typing import ClassVar, cast
 
 import pytest
 
+from genfxn.bitops.models import BitopsAxes
+from genfxn.bitops.task import generate_bitops_task
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.presets import (
+    BITOPS_PRESETS,
     FSM_PRESETS,
     PIECEWISE_PRESETS,
     SIMPLE_ALGORITHMS_PRESETS,
@@ -67,6 +70,10 @@ class TestGetValidDifficulties:
         valid = get_valid_difficulties("fsm")
         assert valid == [1, 2, 3, 4, 5]
 
+    def test_bitops_range(self) -> None:
+        valid = get_valid_difficulties("bitops")
+        assert valid == [1, 2, 3, 4, 5]
+
     def test_unknown_family_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown family"):
             get_valid_difficulties("unknown")
@@ -114,6 +121,10 @@ class TestGetDifficultyAxes:
     def test_fsm_returns_correct_type(self) -> None:
         axes = get_difficulty_axes("fsm", 3)
         assert isinstance(axes, FsmAxes)
+
+    def test_bitops_returns_correct_type(self) -> None:
+        axes = get_difficulty_axes("bitops", 3)
+        assert isinstance(axes, BitopsAxes)
 
     def test_variant_selects_specific_preset(self) -> None:
         axes_a = cast(
@@ -196,6 +207,10 @@ class TestPresetAccuracy:
                 )
             elif family == "fsm":
                 task = generate_fsm_task(axes=cast(FsmAxes, axes), rng=rng)
+            elif family == "bitops":
+                task = generate_bitops_task(
+                    axes=cast(BitopsAxes, axes), rng=rng
+                )
             else:
                 raise ValueError(f"Unknown family: {family}")
 
@@ -226,6 +241,11 @@ class TestPresetAccuracy:
             "stringrules", difficulty
         )
         self._verify_accuracy(difficulties, difficulty, "stringrules")
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_bitops_preset_accuracy(self, difficulty: int) -> None:
+        difficulties = self._generate_tasks_for_preset("bitops", difficulty)
+        self._verify_accuracy(difficulties, difficulty, "bitops")
 
     def _verify_accuracy(
         self, difficulties: list[int], target: int, family: str
@@ -421,6 +441,14 @@ class TestPresetCompleteness:
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
 
+    def test_bitops_presets_structure(self) -> None:
+        for difficulty, presets in BITOPS_PRESETS.items():
+            assert isinstance(difficulty, int)
+            assert 1 <= difficulty <= 5
+            assert len(presets) >= 1
+            for preset in presets:
+                assert preset.name.startswith(f"{difficulty}")
+
     def test_all_presets_produce_valid_axes(self) -> None:
         """Verify all preset overrides create valid axes objects."""
         for family, preset_dict in [
@@ -429,6 +457,7 @@ class TestPresetCompleteness:
             ("simple_algorithms", SIMPLE_ALGORITHMS_PRESETS),
             ("stringrules", STRINGRULES_PRESETS),
             ("fsm", FSM_PRESETS),
+            ("bitops", BITOPS_PRESETS),
         ]:
             for difficulty, presets in preset_dict.items():
                 for preset in presets:

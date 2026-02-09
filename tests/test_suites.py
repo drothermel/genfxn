@@ -14,6 +14,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SATemplateType,
 )
 from genfxn.suites.features import (
+    bitops_features,
     fsm_features,
     simple_algorithms_features,
     stateful_features,
@@ -43,6 +44,13 @@ def _fsm_suite_available() -> bool:
     return (
         "fsm" in QUOTAS
         and importlib.util.find_spec("genfxn.fsm.task") is not None
+    )
+
+
+def _bitops_suite_available() -> bool:
+    return (
+        "bitops" in QUOTAS
+        and importlib.util.find_spec("genfxn.bitops.task") is not None
     )
 
 # ── Feature extraction tests ─────────────────────────────────────────────
@@ -535,6 +543,42 @@ class TestFsmFeatures:
         assert f["undefined_policy"] == "error"
 
 
+class TestBitopsFeatures:
+    def test_basic_bitops_features(self) -> None:
+        spec = {
+            "width_bits": 8,
+            "operations": [
+                {"op": "xor_mask", "arg": 3},
+                {"op": "not", "arg": None},
+            ],
+        }
+        f = bitops_features(spec)
+        assert f["n_ops_bucket"] == "1-2"
+        assert f["width_bucket"] == "8"
+        assert f["op_complexity"] == "basic"
+        assert f["has_shift"] == "false"
+        assert f["has_rotate"] == "false"
+        assert f["has_aggregate"] == "false"
+
+    def test_aggregate_bitops_features(self) -> None:
+        spec = {
+            "width_bits": 32,
+            "operations": [
+                {"op": "rotl", "arg": 3},
+                {"op": "popcount", "arg": None},
+                {"op": "parity", "arg": None},
+                {"op": "shr_logical", "arg": 1},
+            ],
+        }
+        f = bitops_features(spec)
+        assert f["n_ops_bucket"] == "3-4"
+        assert f["width_bucket"] == "24-32"
+        assert f["op_complexity"] == "aggregate"
+        assert f["has_shift"] == "true"
+        assert f["has_rotate"] == "true"
+        assert f["has_aggregate"] == "true"
+
+
 class _FixedChoiceRng:
     def __init__(self, choices: list[object]) -> None:
         self._choices = choices
@@ -677,6 +721,28 @@ class TestHardConstraints:
             "output_mode": "transition_count",
             "undefined_policy": "error",
             "transition_density_bucket": "very_high",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_bitops_d4_filters_when_available(self) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+        quota = QUOTAS["bitops"][4]
+        features_ok = {
+            "op_complexity": "aggregate",
+            "n_ops_bucket": "4-5",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_bitops_d5_filters_when_available(self) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+        quota = QUOTAS["bitops"][5]
+        features_ok = {
+            "op_complexity": "aggregate",
+            "n_ops_bucket": "6+",
         }
         for key, val in quota.hard_constraints.items():
             assert features_ok.get(key) == val
@@ -1023,6 +1089,54 @@ class TestPoolGeneration:
                     f"{bucket.axis}={bucket.value}"
                 )
 
+    def test_bitops_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
+
+        for difficulty in sorted(QUOTAS["bitops"].keys()):
+            candidates, stats = generate_pool(
+                "bitops",
+                difficulty,
+                seed=42,
+                pool_size=140,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                assert (
+                    compute_difficulty("bitops", cand.spec_dict)
+                    == difficulty
+                )
+
+    def test_bitops_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["bitops"].keys()):
+            candidates, _ = generate_pool(
+                "bitops",
+                difficulty,
+                seed=43,
+                pool_size=180,
+            )
+            assert candidates
+            quota = QUOTAS["bitops"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for bitops "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1184,6 +1298,47 @@ class TestDeterminism:
             assert isinstance(q.output, int)
             assert q.output == eval_fsm(spec, list(q.input))
 
+    def test_bitops_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+        difficulty = sorted(QUOTAS["bitops"].keys())[0]
+        a = generate_suite("bitops", difficulty, seed=19, pool_size=260)
+        b = generate_suite("bitops", difficulty, seed=19, pool_size=260)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_bitops_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+        from genfxn.bitops.eval import eval_bitops
+        from genfxn.bitops.models import BitopsSpec
+
+        difficulty = sorted(QUOTAS["bitops"].keys())[0]
+        tasks = generate_suite(
+            "bitops",
+            difficulty,
+            seed=42,
+            pool_size=260,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = BitopsSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        assert callable(f)
+        out = cast(int, f(123))
+        assert isinstance(out, int)
+
+        for q in task.queries:
+            assert isinstance(q.output, int)
+            assert q.output == eval_bitops(spec, cast(int, q.input))
+
 
 class TestSuiteGenerationValidation:
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
@@ -1338,6 +1493,48 @@ class TestIntegration:
             quota = QUOTAS["fsm"][difficulty]
             assert len(tasks) == quota.total
             report = quota_report(tasks, "fsm", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_bitops_suite_generation_when_available(self) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["bitops"].keys())[0]
+        tasks = generate_suite(
+            "bitops",
+            difficulty,
+            seed=62,
+            pool_size=2000,
+        )
+        quota = QUOTAS["bitops"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "bitops", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.8))
+            assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_bitops_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _bitops_suite_available():
+            pytest.skip("bitops suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["bitops"].keys()):
+            tasks = generate_suite(
+                "bitops",
+                difficulty,
+                seed=301 + difficulty,
+                pool_size=1800,
+            )
+            quota = QUOTAS["bitops"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "bitops", difficulty)
             for _, _, target, achieved, _ in report:
                 min_acceptable = max(1, int(target * 0.75))
                 assert achieved >= min_acceptable
