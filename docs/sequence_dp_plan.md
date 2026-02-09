@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0-M1 complete)
+Status: In progress (M0-M2 complete)
 
 ## Goal
 
@@ -340,7 +340,7 @@ Required completion gate for this family:
 
 - [x] M0 complete
 - [x] M1 complete
-- [ ] M2 complete
+- [x] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
 - [ ] M5 complete
@@ -361,3 +361,13 @@ Required completion gate for this family:
   `tests/test_sequence_dp.py` and re-ran focused checks:
   `uv run ruff check src/genfxn/sequence_dp tests/test_sequence_dp.py`
   and `uv run pytest tests/test_sequence_dp.py -q` (9 passed).
+- 2026-02-09: M2 completed via parallel subagents + orchestration. Added
+  `sequence_dp` difficulty scoring in `src/genfxn/core/difficulty.py`,
+  connected task difficulty assignment in `src/genfxn/sequence_dp/task.py`,
+  and expanded coverage in `tests/test_difficulty.py` and
+  `tests/test_sequence_dp.py` for target-difficulty monotonicity and query
+  quality across sampled seeds/tasks.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/core/difficulty.py src/genfxn/sequence_dp tests/test_difficulty.py tests/test_sequence_dp.py`
+  and `uv run pytest tests/test_difficulty.py tests/test_sequence_dp.py -q`
+  (88 passed).

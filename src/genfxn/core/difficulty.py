@@ -10,6 +10,13 @@ FSM_WEIGHTS = {
     "predicate": 0.2,
     "mode": 0.25,
 }
+SEQUENCE_DP_WEIGHTS = {
+    "template": 0.2,
+    "output_mode": 0.2,
+    "predicate": 0.2,
+    "scores": 0.25,
+    "tie_break": 0.15,
+}
 
 
 def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
@@ -28,6 +35,8 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _bitops_difficulty(spec)
     elif family == "stack_bytecode":
         return _stack_bytecode_difficulty(spec)
+    elif family == "sequence_dp":
+        return _sequence_dp_difficulty(spec)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -500,6 +509,153 @@ def _fsm_predicate_score(pred: dict[str, Any]) -> int:
     if kind == "mod_eq":
         return 5
     return 2
+
+
+def _sequence_dp_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for sequence dynamic programming tasks."""
+    template_score = _sequence_dp_template_score(spec.get("template"))
+    output_mode_score = _sequence_dp_output_mode_score(
+        spec.get("output_mode")
+    )
+    predicate_score = _sequence_dp_match_predicate_score(
+        spec.get("match_predicate")
+    )
+    score_profile = _sequence_dp_score_profile_score(
+        spec.get("match_score"),
+        spec.get("mismatch_score"),
+        spec.get("gap_score"),
+    )
+    tie_break_score = _sequence_dp_tie_break_score(
+        spec.get("step_tie_break")
+    )
+
+    w = SEQUENCE_DP_WEIGHTS
+    raw = (
+        w["template"] * template_score
+        + w["output_mode"] * output_mode_score
+        + w["predicate"] * predicate_score
+        + w["scores"] * score_profile
+        + w["tie_break"] * tie_break_score
+    )
+    return max(1, min(5, round(raw)))
+
+
+def _sequence_dp_template_score(template: Any) -> int:
+    value = _enum_or_str_value(template)
+    if value == "global":
+        return 1
+    if value == "local":
+        return 4
+    return 2
+
+
+def _sequence_dp_output_mode_score(output_mode: Any) -> int:
+    value = _enum_or_str_value(output_mode)
+    if value == "score":
+        return 1
+    if value == "alignment_len":
+        return 3
+    if value == "gap_count":
+        return 5
+    return 2
+
+
+def _sequence_dp_match_predicate_score(predicate: Any) -> int:
+    if not isinstance(predicate, dict):
+        return 1
+
+    kind = _enum_or_str_value(predicate.get("kind"))
+    if kind == "eq":
+        return 1
+
+    if kind == "abs_diff_le":
+        max_diff = _coerce_int(predicate.get("max_diff"), 0)
+        if max_diff <= 0:
+            return 2
+        if max_diff <= 2:
+            return 3
+        if max_diff <= 4:
+            return 4
+        return 5
+
+    if kind == "mod_eq":
+        divisor = _coerce_int(predicate.get("divisor"), 2)
+        if divisor <= 2:
+            return 3
+        if divisor <= 5:
+            return 4
+        return 5
+
+    return 2
+
+
+def _sequence_dp_score_profile_score(
+    match_score: Any, mismatch_score: Any, gap_score: Any
+) -> int:
+    match = _coerce_int(match_score, 1)
+    mismatch = _coerce_int(mismatch_score, -1)
+    gap = _coerce_int(gap_score, -1)
+
+    margin = match - max(mismatch, gap)
+    if margin >= 6:
+        score = 1
+    elif margin >= 4:
+        score = 2
+    elif margin >= 2:
+        score = 3
+    elif margin >= 1:
+        score = 4
+    else:
+        score = 5
+
+    deltas = (
+        abs(match - mismatch),
+        abs(match - gap),
+        abs(mismatch - gap),
+    )
+    close_pairs = sum(1 for d in deltas if d <= 1)
+    if close_pairs >= 2:
+        score += 1
+
+    if mismatch >= 0 and gap >= 0:
+        score += 1
+
+    return max(1, min(5, score))
+
+
+def _sequence_dp_tie_break_score(step_tie_break: Any) -> int:
+    value = _enum_or_str_value(step_tie_break)
+    if value == "diag_up_left":
+        return 1
+    if value == "diag_left_up":
+        return 2
+    if value in ("up_diag_left", "left_diag_up"):
+        return 3
+    if value == "up_left_diag":
+        return 4
+    if value == "left_up_diag":
+        return 5
+    return 3
+
+
+def _enum_or_str_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    enum_value = getattr(value, "value", None)
+    if isinstance(enum_value, str):
+        return enum_value
+    return ""
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:
