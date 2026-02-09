@@ -6,11 +6,47 @@ import srsly
 import typer
 
 from genfxn.suites.generate import generate_suite, quota_report
+from genfxn.suites.quotas import QUOTAS
 
 app = typer.Typer()
 
-ALL_FAMILIES = ["stringrules", "stateful", "simple_algorithms"]
-ALL_DIFFICULTIES = [3, 4, 5]
+
+def _parse_families(families: str) -> list[str]:
+    if families == "all":
+        return list(QUOTAS.keys())
+
+    family_list = [f.strip() for f in families.split(",") if f.strip()]
+    if not family_list:
+        raise typer.BadParameter("families must not be empty")
+
+    invalid = [family for family in family_list if family not in QUOTAS]
+    if invalid:
+        invalid_str = ", ".join(invalid)
+        valid = ", ".join(sorted(QUOTAS.keys()))
+        raise typer.BadParameter(
+            f"Invalid families: {invalid_str}. Valid options: {valid}"
+        )
+
+    return family_list
+
+
+def _parse_difficulties(difficulties: str) -> list[int] | None:
+    if difficulties == "all":
+        return None
+
+    try:
+        difficulty_list = [
+            int(d.strip()) for d in difficulties.split(",") if d.strip()
+        ]
+    except ValueError as exc:
+        raise typer.BadParameter(
+            "difficulties must be comma-separated integers or 'all'"
+        ) from exc
+
+    if not difficulty_list:
+        raise typer.BadParameter("difficulties must not be empty")
+
+    return difficulty_list
 
 
 @app.command()
@@ -31,18 +67,28 @@ def main(
     ),
 ) -> None:
     """Generate balanced 50-task suites per (family, difficulty)."""
-    family_list = (
-        ALL_FAMILIES
-        if families == "all"
-        else [f.strip() for f in families.split(",") if f.strip()]
-    )
-    diff_list = (
-        ALL_DIFFICULTIES
-        if difficulties == "all"
-        else [int(d.strip()) for d in difficulties.split(",") if d.strip()]
-    )
+    family_list = _parse_families(families)
+    requested_difficulties = _parse_difficulties(difficulties)
 
     for family in family_list:
+        family_difficulties = list(QUOTAS[family].keys())
+        if requested_difficulties is None:
+            diff_list = family_difficulties
+        else:
+            supported = set(family_difficulties)
+            diff_list = [d for d in requested_difficulties if d in supported]
+            skipped = [d for d in requested_difficulties if d not in supported]
+
+            for difficulty in skipped:
+                typer.echo(
+                    f"Skipping {family} D{difficulty}: not available in QUOTAS"
+                )
+            if not diff_list:
+                typer.echo(
+                    f"Skipping {family}: no requested difficulties available"
+                )
+                continue
+
         for difficulty in diff_list:
             typer.echo(f"\n{'=' * 60}")
             typer.echo(f"Generating {family} D{difficulty}...")

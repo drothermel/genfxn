@@ -16,6 +16,7 @@ from genfxn.simple_algorithms.models import (
 from genfxn.suites.features import (
     bitops_features,
     fsm_features,
+    sequence_dp_features,
     simple_algorithms_features,
     stateful_features,
     stringrules_features,
@@ -51,6 +52,13 @@ def _bitops_suite_available() -> bool:
     return (
         "bitops" in QUOTAS
         and importlib.util.find_spec("genfxn.bitops.task") is not None
+    )
+
+
+def _sequence_dp_suite_available() -> bool:
+    return (
+        "sequence_dp" in QUOTAS
+        and importlib.util.find_spec("genfxn.sequence_dp.task") is not None
     )
 
 # ── Feature extraction tests ─────────────────────────────────────────────
@@ -579,6 +587,62 @@ class TestBitopsFeatures:
         assert f["has_aggregate"] == "true"
 
 
+class TestSequenceDpFeatures:
+    def test_eq_score_profile_and_tie_bucket(self) -> None:
+        spec = {
+            "template": "global",
+            "output_mode": "score",
+            "match_predicate": {"kind": "eq"},
+            "match_score": 7,
+            "mismatch_score": -3,
+            "gap_score": -4,
+            "step_tie_break": "diag_up_left",
+        }
+        f = sequence_dp_features(spec)
+        assert f["template"] == "global"
+        assert f["output_mode"] == "score"
+        assert f["predicate_kind"] == "eq"
+        assert f["score_profile"] == "wide"
+        assert f["tie_break_bucket"] == "diag_first"
+        assert f["abs_diff_bucket"] == "na"
+        assert f["divisor_bucket"] == "na"
+
+    def test_abs_diff_bucket(self) -> None:
+        spec = {
+            "template": "global",
+            "output_mode": "alignment_len",
+            "match_predicate": {"kind": "abs_diff_le", "max_diff": 3},
+            "match_score": 5,
+            "mismatch_score": 0,
+            "gap_score": -1,
+            "step_tie_break": "diag_left_up",
+        }
+        f = sequence_dp_features(spec)
+        assert f["predicate_kind"] == "abs_diff_le"
+        assert f["abs_diff_bucket"] == "2-3"
+        assert f["tie_break_order"] == "diag_left_up"
+
+    def test_mod_divisor_bucket_and_tie_heavy(self) -> None:
+        spec = {
+            "template": "local",
+            "output_mode": "gap_count",
+            "match_predicate": {
+                "kind": "mod_eq",
+                "divisor": 9,
+                "remainder": 2,
+            },
+            "match_score": 1,
+            "mismatch_score": 2,
+            "gap_score": 2,
+            "step_tie_break": "left_up_diag",
+        }
+        f = sequence_dp_features(spec)
+        assert f["predicate_kind"] == "mod_eq"
+        assert f["divisor_bucket"] == "8+"
+        assert f["tie_break_bucket"] == "left_first"
+        assert f["score_profile"] == "tie_heavy"
+
+
 class _FixedChoiceRng:
     def __init__(self, choices: list[object]) -> None:
         self._choices = choices
@@ -743,6 +807,29 @@ class TestHardConstraints:
         features_ok = {
             "op_complexity": "aggregate",
             "n_ops_bucket": "6+",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_sequence_dp_d4_filters_when_available(self) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+        quota = QUOTAS["sequence_dp"][4]
+        features_ok = {
+            "template": "local",
+            "predicate_kind": "mod_eq",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_sequence_dp_d5_filters_when_available(self) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+        quota = QUOTAS["sequence_dp"][5]
+        features_ok = {
+            "template": "local",
+            "output_mode": "gap_count",
+            "predicate_kind": "mod_eq",
         }
         for key, val in quota.hard_constraints.items():
             assert features_ok.get(key) == val
@@ -1137,6 +1224,54 @@ class TestPoolGeneration:
                     f"{bucket.axis}={bucket.value}"
                 )
 
+    def test_sequence_dp_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
+
+        for difficulty in sorted(QUOTAS["sequence_dp"].keys()):
+            candidates, stats = generate_pool(
+                "sequence_dp",
+                difficulty,
+                seed=42,
+                pool_size=220,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                assert (
+                    compute_difficulty("sequence_dp", cand.spec_dict)
+                    == difficulty
+                )
+
+    def test_sequence_dp_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["sequence_dp"].keys()):
+            candidates, _ = generate_pool(
+                "sequence_dp",
+                difficulty,
+                seed=43,
+                pool_size=260,
+            )
+            assert candidates
+            quota = QUOTAS["sequence_dp"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for sequence_dp "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1339,6 +1474,50 @@ class TestDeterminism:
             assert isinstance(q.output, int)
             assert q.output == eval_bitops(spec, cast(int, q.input))
 
+    def test_sequence_dp_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+        difficulty = sorted(QUOTAS["sequence_dp"].keys())[0]
+        a = generate_suite("sequence_dp", difficulty, seed=19, pool_size=320)
+        b = generate_suite("sequence_dp", difficulty, seed=19, pool_size=320)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_sequence_dp_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+        from genfxn.sequence_dp.eval import eval_sequence_dp
+        from genfxn.sequence_dp.models import SequenceDpSpec
+
+        difficulty = sorted(QUOTAS["sequence_dp"].keys())[0]
+        tasks = generate_suite(
+            "sequence_dp",
+            difficulty,
+            seed=42,
+            pool_size=320,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = SequenceDpSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        assert callable(f)
+        out = cast(int, f([1, 2], [1, 2]))
+        assert isinstance(out, int)
+
+        for q in task.queries:
+            q_input = cast(dict[str, list[int]], q.input)
+            assert isinstance(q.output, int)
+            assert q.output == eval_sequence_dp(
+                spec, q_input["a"], q_input["b"]
+            )
+
 
 class TestSuiteGenerationValidation:
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
@@ -1535,6 +1714,48 @@ class TestIntegration:
             quota = QUOTAS["bitops"][difficulty]
             assert len(tasks) == quota.total
             report = quota_report(tasks, "bitops", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_sequence_dp_suite_generation_when_available(self) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["sequence_dp"].keys())[0]
+        tasks = generate_suite(
+            "sequence_dp",
+            difficulty,
+            seed=72,
+            pool_size=2200,
+        )
+        quota = QUOTAS["sequence_dp"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "sequence_dp", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.8))
+            assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_sequence_dp_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _sequence_dp_suite_available():
+            pytest.skip("sequence_dp suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["sequence_dp"].keys()):
+            tasks = generate_suite(
+                "sequence_dp",
+                difficulty,
+                seed=401 + difficulty,
+                pool_size=2000,
+            )
+            quota = QUOTAS["sequence_dp"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "sequence_dp", difficulty)
             for _, _, target, achieved, _ in report:
                 min_acceptable = max(1, int(target * 0.75))
                 assert achieved >= min_acceptable

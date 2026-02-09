@@ -1,0 +1,181 @@
+import json
+import runpy
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, cast
+
+import pytest
+from click.exceptions import Exit
+
+_SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "scripts"
+    / "calibrate_sequence_dp.py"
+)
+_SCRIPT_NS = runpy.run_path(str(_SCRIPT))
+calibrate_sequence_dp_main = cast(Callable[..., None], _SCRIPT_NS["main"])
+
+
+class _FakeAxes:
+    def __init__(self, difficulty: int) -> None:
+        self.difficulty = difficulty
+
+
+class _FakeGeneratedTask:
+    def __init__(self, difficulty: int) -> None:
+        self.difficulty = difficulty
+
+
+class _FakeSuiteTask:
+    def __init__(self) -> None:
+        self.spec: dict[str, Any] = {}
+
+
+def test_main_writes_report_when_strict_checks_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _fake_get_difficulty_axes(
+        family: str, difficulty: int, rng: object
+    ) -> _FakeAxes:
+        assert family == "sequence_dp"
+        assert rng is not None
+        return _FakeAxes(difficulty)
+
+    def _fake_generate_sequence_dp_task(
+        axes: _FakeAxes, rng: object
+    ) -> _FakeGeneratedTask:
+        assert rng is not None
+        return _FakeGeneratedTask(axes.difficulty)
+
+    def _fake_generate_suite(
+        family: str,
+        difficulty: int,
+        seed: int,
+        pool_size: int,
+    ) -> list[_FakeSuiteTask]:
+        assert family == "sequence_dp"
+        assert difficulty in {1, 2, 3, 4, 5}
+        assert seed > 0
+        assert pool_size > 0
+        return [_FakeSuiteTask() for _ in range(50)]
+
+    def _fake_quota_report(
+        tasks: list[_FakeSuiteTask],
+        family: str,
+        difficulty: int,
+    ) -> list[tuple[str, str, int, int, str]]:
+        assert tasks
+        assert family == "sequence_dp"
+        assert difficulty in {1, 2, 3, 4, 5}
+        return [("axis", "value", 1, 1, "OK")]
+
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "get_difficulty_axes",
+        _fake_get_difficulty_axes,
+    )
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "generate_sequence_dp_task",
+        _fake_generate_sequence_dp_task,
+    )
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "generate_suite",
+        _fake_generate_suite,
+    )
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "quota_report",
+        _fake_quota_report,
+    )
+
+    output = tmp_path / "sequence_dp_calibration.json"
+    calibrate_sequence_dp_main(
+        output=output,
+        samples=5,
+        seed=7,
+        pool_size=11,
+        strict=True,
+    )
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["family"] == "sequence_dp"
+    assert report["strict"]["passed"] is True
+    assert report["reachability"]["D3"]["exact"] == 1.0
+    assert report["reachability"]["D5"]["within_one"] == 1.0
+
+
+def test_main_raises_exit_when_strict_checks_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _fake_get_difficulty_axes(
+        family: str, difficulty: int, rng: object
+    ) -> _FakeAxes:
+        assert family == "sequence_dp"
+        assert rng is not None
+        return _FakeAxes(difficulty)
+
+    def _fake_generate_sequence_dp_task(
+        axes: _FakeAxes, rng: object
+    ) -> _FakeGeneratedTask:
+        assert rng is not None
+        return _FakeGeneratedTask(axes.difficulty)
+
+    def _fake_generate_suite(
+        family: str,
+        difficulty: int,
+        seed: int,
+        pool_size: int,
+    ) -> list[_FakeSuiteTask]:
+        assert family == "sequence_dp"
+        assert difficulty in {1, 2, 3, 4, 5}
+        assert seed > 0
+        assert pool_size > 0
+        return [_FakeSuiteTask() for _ in range(50)]
+
+    def _fake_quota_report(
+        tasks: list[_FakeSuiteTask],
+        family: str,
+        difficulty: int,
+    ) -> list[tuple[str, str, int, int, str]]:
+        assert tasks
+        assert family == "sequence_dp"
+        assert difficulty in {1, 2, 3, 4, 5}
+        return [("axis", "value", 1, 0, "UNDER")]
+
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "get_difficulty_axes",
+        _fake_get_difficulty_axes,
+    )
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "generate_sequence_dp_task",
+        _fake_generate_sequence_dp_task,
+    )
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "generate_suite",
+        _fake_generate_suite,
+    )
+    monkeypatch.setitem(
+        calibrate_sequence_dp_main.__globals__,
+        "quota_report",
+        _fake_quota_report,
+    )
+
+    output = tmp_path / "sequence_dp_calibration.json"
+    with pytest.raises(Exit) as exc_info:
+        calibrate_sequence_dp_main(
+            output=output,
+            samples=5,
+            seed=7,
+            pool_size=11,
+            strict=True,
+        )
+    assert exc_info.value.exit_code == 1
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["strict"]["passed"] is False
+    assert report["strict"]["failures"]

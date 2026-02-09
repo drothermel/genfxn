@@ -33,6 +33,22 @@ from genfxn.fsm.models import (
 from genfxn.fsm.queries import generate_fsm_queries
 from genfxn.fsm.render import render_fsm
 from genfxn.fsm.sampler import sample_fsm_spec
+from genfxn.sequence_dp.models import (
+    OutputMode as SequenceDpOutputMode,
+)
+from genfxn.sequence_dp.models import (
+    PredicateType as SequenceDpPredicateType,
+)
+from genfxn.sequence_dp.models import (
+    SequenceDpAxes,
+    TieBreakOrder,
+)
+from genfxn.sequence_dp.models import (
+    TemplateType as SequenceDpTemplateType,
+)
+from genfxn.sequence_dp.queries import generate_sequence_dp_queries
+from genfxn.sequence_dp.render import render_sequence_dp
+from genfxn.sequence_dp.sampler import sample_sequence_dp_spec
 from genfxn.simple_algorithms.models import (
     CountingMode,
     SimpleAlgorithmsAxes,
@@ -62,6 +78,7 @@ from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.suites.features import (
     bitops_features,
     fsm_features,
+    sequence_dp_features,
     simple_algorithms_features,
     stack_bytecode_features,
     stateful_features,
@@ -723,6 +740,93 @@ def _pool_axes_bitops_d5(_: random.Random) -> BitopsAxes:
     )
 
 
+def _pool_axes_sequence_dp_d1(_: random.Random) -> SequenceDpAxes:
+    return SequenceDpAxes(
+        templates=[SequenceDpTemplateType.GLOBAL],
+        output_modes=[SequenceDpOutputMode.SCORE],
+        predicate_types=[SequenceDpPredicateType.EQ],
+        tie_break_orders=[TieBreakOrder.DIAG_UP_LEFT],
+        match_score_range=(4, 9),
+        mismatch_score_range=(-6, 0),
+        gap_score_range=(-6, 0),
+    )
+
+
+def _pool_axes_sequence_dp_d2(_: random.Random) -> SequenceDpAxes:
+    return SequenceDpAxes(
+        target_difficulty=2,
+        templates=[SequenceDpTemplateType.GLOBAL],
+        output_modes=[SequenceDpOutputMode.ALIGNMENT_LEN],
+        predicate_types=[SequenceDpPredicateType.ABS_DIFF_LE],
+        abs_diff_range=(0, 2),
+        tie_break_orders=[
+            TieBreakOrder.DIAG_UP_LEFT,
+            TieBreakOrder.DIAG_LEFT_UP,
+        ],
+        match_score_range=(4, 6),
+        mismatch_score_range=(-1, 0),
+        gap_score_range=(-2, -1),
+    )
+
+
+def _pool_axes_sequence_dp_d3(_: random.Random) -> SequenceDpAxes:
+    return SequenceDpAxes(
+        target_difficulty=3,
+        templates=[SequenceDpTemplateType.GLOBAL],
+        output_modes=[SequenceDpOutputMode.ALIGNMENT_LEN],
+        predicate_types=[
+            SequenceDpPredicateType.ABS_DIFF_LE,
+            SequenceDpPredicateType.MOD_EQ,
+        ],
+        abs_diff_range=(1, 3),
+        divisor_range=(2, 6),
+        tie_break_orders=[
+            TieBreakOrder.UP_DIAG_LEFT,
+            TieBreakOrder.LEFT_DIAG_UP,
+        ],
+        match_score_range=(2, 4),
+        mismatch_score_range=(-1, 1),
+        gap_score_range=(-2, 0),
+    )
+
+
+def _pool_axes_sequence_dp_d4(_: random.Random) -> SequenceDpAxes:
+    return SequenceDpAxes(
+        target_difficulty=4,
+        templates=[SequenceDpTemplateType.LOCAL],
+        output_modes=[
+            SequenceDpOutputMode.ALIGNMENT_LEN,
+            SequenceDpOutputMode.GAP_COUNT,
+        ],
+        predicate_types=[SequenceDpPredicateType.MOD_EQ],
+        divisor_range=(3, 8),
+        tie_break_orders=[
+            TieBreakOrder.UP_LEFT_DIAG,
+            TieBreakOrder.LEFT_UP_DIAG,
+        ],
+        match_score_range=(2, 4),
+        mismatch_score_range=(1, 2),
+        gap_score_range=(-1, 1),
+    )
+
+
+def _pool_axes_sequence_dp_d5(_: random.Random) -> SequenceDpAxes:
+    return SequenceDpAxes(
+        target_difficulty=5,
+        templates=[SequenceDpTemplateType.LOCAL],
+        output_modes=[SequenceDpOutputMode.GAP_COUNT],
+        predicate_types=[SequenceDpPredicateType.MOD_EQ],
+        divisor_range=(5, 10),
+        tie_break_orders=[
+            TieBreakOrder.LEFT_UP_DIAG,
+            TieBreakOrder.UP_LEFT_DIAG,
+        ],
+        match_score_range=(1, 2),
+        mismatch_score_range=(1, 2),
+        gap_score_range=(1, 2),
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -762,6 +866,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_bitops_d4,
         5: _pool_axes_bitops_d5,
     },
+    "sequence_dp": {
+        1: _pool_axes_sequence_dp_d1,
+        2: _pool_axes_sequence_dp_d2,
+        3: _pool_axes_sequence_dp_d3,
+        4: _pool_axes_sequence_dp_d4,
+        5: _pool_axes_sequence_dp_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -773,6 +884,7 @@ _FEATURE_FNS = {
     "stack_bytecode": stack_bytecode_features,
     "fsm": fsm_features,
     "bitops": bitops_features,
+    "sequence_dp": sequence_dp_features,
 }
 
 
@@ -828,6 +940,8 @@ def _sample_spec(
         return sample_fsm_spec(axes, rng, trace=trace)
     elif family == "bitops":
         return sample_bitops_spec(axes, rng, trace=trace)
+    elif family == "sequence_dp":
+        return sample_sequence_dp_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -1142,6 +1256,11 @@ def _generate_task_from_candidate(
             axes = BitopsAxes()
         py_code = render_bitops(spec)
         queries = generate_bitops_queries(spec, axes, rng)
+    elif family == "sequence_dp":
+        if axes is None:
+            axes = SequenceDpAxes()
+        py_code = render_sequence_dp(spec)
+        queries = generate_sequence_dp_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 

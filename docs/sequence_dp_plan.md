@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0-M3 complete)
+Status: Complete (M0-M5 + suite integration + calibration script)
 
 ## Goal
 
@@ -342,10 +342,10 @@ Required completion gate for this family:
 - [x] M1 complete
 - [x] M2 complete
 - [x] M3 complete
-- [ ] M4 complete
-- [ ] M5 complete
-- [ ] Full `ruff` and full `pytest` pass
-- [ ] Calibration script strict mode pass
+- [x] M4 complete
+- [x] M5 complete
+- [x] Full `ruff` and full `pytest` pass
+- [x] Calibration script strict mode pass
 - [ ] PR updated with behavior notes + test evidence
 
 ## Notes Log
@@ -387,3 +387,21 @@ Required completion gate for this family:
   `uv run pytest tests/test_sequence_dp.py tests/test_validate_sequence_dp.py tests/test_difficulty.py -q` (95 passed)
   `uv run pytest tests/test_java_render.py tests/test_rust_render.py -q` (294 passed)
   `uv run pytest tests/test_sequence_dp_runtime_parity.py -q --verification-level=full` (3 passed)
+- 2026-02-09: M4 completed. Added CLI + preset + docs integration for
+  `sequence_dp` in `src/genfxn/cli.py`, `src/genfxn/core/presets.py`,
+  `src/genfxn/core/describe.py`, `README.md`, and `AXES.md` with coverage in
+  `tests/test_cli.py` and `tests/test_presets.py`.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/cli.py src/genfxn/core/presets.py src/genfxn/core/describe.py tests/test_cli.py tests/test_presets.py`
+  `uv run pytest tests/test_cli.py tests/test_presets.py -q --verification-level=full` (130 passed, 1 skipped)
+- 2026-02-09: M5 completed. Added balanced-suite integration for
+  `sequence_dp` in `src/genfxn/suites/features.py`,
+  `src/genfxn/suites/quotas.py`, and `src/genfxn/suites/generate.py`; added
+  calibration script `scripts/calibrate_sequence_dp.py`; and expanded suite and
+  script coverage in `tests/test_suites.py` and
+  `tests/test_calibrate_sequence_dp_script.py`.
+  Verification passed:
+  `uv run ruff check .`
+  `uv run pytest tests/test_suites.py tests/test_calibrate_sequence_dp_script.py tests/test_generate_balanced_suites_script.py -q --verification-level=full` (94 passed)
+  `uv run python scripts/calibrate_sequence_dp.py --strict --seed 42` (PASS)
+  `uv run pytest tests/ -v --verification-level=full` (1402 passed, 1 skipped)

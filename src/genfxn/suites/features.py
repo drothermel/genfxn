@@ -626,3 +626,88 @@ def fsm_features(spec: dict[str, Any]) -> dict[str, str]:
             "stay",
         ),
     }
+
+
+def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
+    def _enum_or_str(value: Any, default: str) -> str:
+        if value is None:
+            return default
+        if hasattr(value, "value"):
+            enum_value = value.value
+            if isinstance(enum_value, str):
+                return enum_value
+        if isinstance(value, str):
+            return value
+        return str(value)
+
+    def _safe_int(value: Any, default: int) -> int:
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        return default
+
+    template = _enum_or_str(spec.get("template"), "global")
+    output_mode = _enum_or_str(spec.get("output_mode"), "score")
+    tie_break_order = _enum_or_str(
+        spec.get("step_tie_break"), "diag_up_left"
+    )
+
+    if tie_break_order.startswith("diag_"):
+        tie_break_bucket = "diag_first"
+    elif tie_break_order.startswith("up_"):
+        tie_break_bucket = "up_first"
+    elif tie_break_order.startswith("left_"):
+        tie_break_bucket = "left_first"
+    else:
+        tie_break_bucket = "diag_first"
+
+    predicate = spec.get("match_predicate", {})
+    if isinstance(predicate, dict):
+        predicate_kind = _enum_or_str(predicate.get("kind"), "eq")
+    else:
+        predicate_kind = "eq"
+
+    match_score = _safe_int(spec.get("match_score"), 1)
+    mismatch_score = _safe_int(spec.get("mismatch_score"), -1)
+    gap_score = _safe_int(spec.get("gap_score"), -1)
+    margin = match_score - max(mismatch_score, gap_score)
+    if margin >= 4:
+        score_profile = "wide"
+    elif margin >= 2:
+        score_profile = "medium"
+    elif margin >= 1:
+        score_profile = "narrow"
+    else:
+        score_profile = "tie_heavy"
+
+    abs_diff_bucket = "na"
+    divisor_bucket = "na"
+    if isinstance(predicate, dict):
+        if predicate_kind == "abs_diff_le":
+            max_diff = _safe_int(predicate.get("max_diff"), 0)
+            if max_diff <= 1:
+                abs_diff_bucket = "0-1"
+            elif max_diff <= 3:
+                abs_diff_bucket = "2-3"
+            else:
+                abs_diff_bucket = "4+"
+        elif predicate_kind == "mod_eq":
+            divisor = _safe_int(predicate.get("divisor"), 2)
+            if divisor <= 3:
+                divisor_bucket = "2-3"
+            elif divisor <= 5:
+                divisor_bucket = "4-5"
+            elif divisor <= 7:
+                divisor_bucket = "6-7"
+            else:
+                divisor_bucket = "8+"
+
+    return {
+        "template": template,
+        "output_mode": output_mode,
+        "predicate_kind": predicate_kind,
+        "tie_break_order": tie_break_order,
+        "tie_break_bucket": tie_break_bucket,
+        "score_profile": score_profile,
+        "abs_diff_bucket": abs_diff_bucket,
+        "divisor_bucket": divisor_bucket,
+    }
