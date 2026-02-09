@@ -47,6 +47,31 @@ class TestValidTask:
             errors = [i for i in issues if i.severity == Severity.ERROR]
             assert errors == [], f"seed {seed} produced errors: {errors}"
 
+    @pytest.mark.full
+    def test_fuzz_many_generated_tasks_no_errors(self) -> None:
+        rng = random.Random(1337)
+        for _ in range(120):
+            task = generate_fsm_task(rng=rng)
+            issues = validate_fsm_task(
+                task,
+                execute_untrusted_code=True,
+                semantic_trials=20,
+                max_semantic_issues=20,
+                random_seed=17,
+            )
+            errors = [i for i in issues if i.severity == Severity.ERROR]
+            assert errors == []
+
+    @pytest.mark.full
+    def test_fuzz_rendered_code_stays_ast_safe(self) -> None:
+        rng = random.Random(2026)
+        for _ in range(200):
+            task = generate_fsm_task(rng=rng)
+            assert isinstance(task.code, str)
+            issues, _ = _validate_ast_whitelist(task.code)
+            unsafe = [i for i in issues if i.code == CODE_UNSAFE_AST]
+            assert unsafe == []
+
 
 class TestFamilyAndTaskId:
     def test_wrong_family_short_circuits(self, baseline_task: Task) -> None:

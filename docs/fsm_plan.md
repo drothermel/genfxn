@@ -182,3 +182,5 @@ Use this after memory compaction:
   D5 is genuinely reachable. Added suite + difficulty tests
   (`tests/test_suites.py`, `tests/test_difficulty.py`).
   Full suite check passed locally (`1263 passed, 25 skipped`).
+- 2026-02-09: Added `docs/fsm_difficulty.md` to document FSM scoring design,
+  D5 reachability rationale, and calibration guidance.
