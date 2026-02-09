@@ -18,6 +18,8 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_stack_bytecode(spec)
     elif family == "bitops":
         return _describe_bitops(spec)
+    elif family == "sequence_dp":
+        return _describe_sequence_dp(spec)
     return ""
 
 
@@ -773,6 +775,56 @@ def _describe_bitops(spec: dict[str, Any]) -> str:
         f"apply operations in order: {', then '.join(rendered_ops)}, and "
         f"after each operation mask the intermediate result to {width_bits} "
         "bits. Return the resulting integer."
+    )
+
+
+def _describe_sequence_dp(spec: dict[str, Any]) -> str:
+    def _read_int(value: Any, default: int) -> int:
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        return default
+
+    template = _enum_text(spec.get("template", "global"))
+    output_mode = _enum_text(spec.get("output_mode", "score"))
+    tie_break = _enum_text(spec.get("step_tie_break", "diag_up_left"))
+    match_score = _format_number(_read_int(spec.get("match_score"), 1))
+    mismatch_score = _format_number(_read_int(spec.get("mismatch_score"), -1))
+    gap_score = _format_number(_read_int(spec.get("gap_score"), -1))
+
+    predicate = spec.get("match_predicate", {})
+    predicate_text = "elements are equal"
+    if isinstance(predicate, dict):
+        kind = _enum_text(predicate.get("kind", "eq"))
+        if kind == "abs_diff_le":
+            max_diff = _format_number(_read_int(predicate.get("max_diff"), 0))
+            predicate_text = (
+                "absolute difference between paired elements is at most "
+                f"{max_diff}"
+            )
+        elif kind == "mod_eq":
+            divisor = _format_number(_read_int(predicate.get("divisor"), 2))
+            remainder = _format_number(
+                _read_int(predicate.get("remainder"), 0)
+            )
+            predicate_text = (
+                "paired elements satisfy modular match "
+                f"(a-b) % {divisor} == {remainder}"
+            )
+
+    return _join_description_parts(
+        (
+            "Implement f(a: list[int], b: list[int]) -> int using "
+            f"{template} sequence dynamic-programming semantics."
+        ),
+        f"Use match predicate: {predicate_text}.",
+        (
+            f"Use match_score={match_score}, "
+            f"mismatch_score={mismatch_score}, gap_score={gap_score}."
+        ),
+        (
+            f"Break ties with '{tie_break}' move ordering and return "
+            f"'{output_mode}'."
+        ),
     )
 
 

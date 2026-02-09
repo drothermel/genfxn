@@ -14,6 +14,7 @@ from genfxn.core.presets import (
     BITOPS_PRESETS,
     FSM_PRESETS,
     PIECEWISE_PRESETS,
+    SEQUENCE_DP_PRESETS,
     SIMPLE_ALGORITHMS_PRESETS,
     STATEFUL_PRESETS,
     STRINGRULES_PRESETS,
@@ -26,6 +27,8 @@ from genfxn.fsm.models import FsmAxes
 from genfxn.fsm.task import generate_fsm_task
 from genfxn.piecewise.models import PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.sequence_dp.models import SequenceDpAxes
+from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.simple_algorithms.models import SimpleAlgorithmsAxes
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.models import StatefulAxes
@@ -72,6 +75,10 @@ class TestGetValidDifficulties:
 
     def test_bitops_range(self) -> None:
         valid = get_valid_difficulties("bitops")
+        assert valid == [1, 2, 3, 4, 5]
+
+    def test_sequence_dp_range(self) -> None:
+        valid = get_valid_difficulties("sequence_dp")
         assert valid == [1, 2, 3, 4, 5]
 
     def test_unknown_family_raises(self) -> None:
@@ -125,6 +132,10 @@ class TestGetDifficultyAxes:
     def test_bitops_returns_correct_type(self) -> None:
         axes = get_difficulty_axes("bitops", 3)
         assert isinstance(axes, BitopsAxes)
+
+    def test_sequence_dp_returns_correct_type(self) -> None:
+        axes = get_difficulty_axes("sequence_dp", 3)
+        assert isinstance(axes, SequenceDpAxes)
 
     def test_variant_selects_specific_preset(self) -> None:
         axes_a = cast(
@@ -211,6 +222,10 @@ class TestPresetAccuracy:
                 task = generate_bitops_task(
                     axes=cast(BitopsAxes, axes), rng=rng
                 )
+            elif family == "sequence_dp":
+                task = generate_sequence_dp_task(
+                    axes=cast(SequenceDpAxes, axes), rng=rng
+                )
             else:
                 raise ValueError(f"Unknown family: {family}")
 
@@ -246,6 +261,13 @@ class TestPresetAccuracy:
     def test_bitops_preset_accuracy(self, difficulty: int) -> None:
         difficulties = self._generate_tasks_for_preset("bitops", difficulty)
         self._verify_accuracy(difficulties, difficulty, "bitops")
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_sequence_dp_preset_accuracy(self, difficulty: int) -> None:
+        difficulties = self._generate_tasks_for_preset(
+            "sequence_dp", difficulty
+        )
+        self._verify_accuracy(difficulties, difficulty, "sequence_dp")
 
     def _verify_accuracy(
         self, difficulties: list[int], target: int, family: str
@@ -449,6 +471,14 @@ class TestPresetCompleteness:
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
 
+    def test_sequence_dp_presets_structure(self) -> None:
+        for difficulty, presets in SEQUENCE_DP_PRESETS.items():
+            assert isinstance(difficulty, int)
+            assert 1 <= difficulty <= 5
+            assert len(presets) >= 1
+            for preset in presets:
+                assert preset.name.startswith(f"{difficulty}")
+
     def test_all_presets_produce_valid_axes(self) -> None:
         """Verify all preset overrides create valid axes objects."""
         for family, preset_dict in [
@@ -458,6 +488,7 @@ class TestPresetCompleteness:
             ("stringrules", STRINGRULES_PRESETS),
             ("fsm", FSM_PRESETS),
             ("bitops", BITOPS_PRESETS),
+            ("sequence_dp", SEQUENCE_DP_PRESETS),
         ]:
             for difficulty, presets in preset_dict.items():
                 for preset in presets:
