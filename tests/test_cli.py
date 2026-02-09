@@ -353,6 +353,9 @@ class TestGenerate:
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert "fn f(xs: &[i64]) -> (i64, i64)" in tasks[0]["code"]
+        output0 = tasks[0]["queries"][0]["output"]
+        assert isinstance(output0, list)
+        assert len(output0) == 2
 
     def test_generate_stack_bytecode_java_language(self, tmp_path) -> None:
         if not _supports_stack_bytecode_family():
@@ -378,6 +381,9 @@ class TestGenerate:
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert "public static int[] f(int[] xs)" in tasks[0]["code"]
+        output0 = tasks[0]["queries"][0]["output"]
+        assert isinstance(output0, list)
+        assert len(output0) == 2
 
     def test_generate_java_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"

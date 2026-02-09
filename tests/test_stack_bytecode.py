@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.stack_bytecode.eval import eval_stack_bytecode
 from genfxn.stack_bytecode.models import (
@@ -379,6 +380,23 @@ class TestSamplerAndQueries:
         assert {q.tag for q in queries}.issubset(set(QueryTag))
         for q in queries:
             assert q.output == eval_stack_bytecode(spec, list(q.input))
+
+    def test_sampler_respects_target_difficulty_axis(self) -> None:
+        def _sample_difficulty_average(target: int) -> float:
+            rng = random.Random(1000 + target)
+            axes = StackBytecodeAxes(target_difficulty=target)
+            scores = [
+                compute_difficulty(
+                    "stack_bytecode",
+                    sample_stack_bytecode_spec(axes, rng).model_dump(),
+                )
+                for _ in range(80)
+            ]
+            return sum(scores) / len(scores)
+
+        avg_low = _sample_difficulty_average(1)
+        avg_high = _sample_difficulty_average(5)
+        assert avg_high >= avg_low + 1.0
 
 
 class TestRenderRoundtrip:

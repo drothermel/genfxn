@@ -5,7 +5,8 @@ import pytest
 
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import WRONG_FAMILY, Severity
-from genfxn.stack_bytecode.models import StackBytecodeAxes
+from genfxn.stack_bytecode.models import StackBytecodeAxes, StackBytecodeSpec
+from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
 from genfxn.stack_bytecode.validate import (
     CODE_CODE_EXEC_ERROR,
@@ -329,3 +330,9 @@ class TestAxesAndParanoidHelpers:
             "def f(xs):\n    return xs.__class__"
         )
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_accepts_stack_renderer_output(self) -> None:
+        task = generate_stack_bytecode_task(rng=random.Random(7))
+        spec = StackBytecodeSpec.model_validate(task.spec, strict=True)
+        issues, _ = _validate_ast_whitelist(render_stack_bytecode(spec))
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)

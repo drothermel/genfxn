@@ -396,23 +396,25 @@ def _resolve_jump_target(
     return None
 
 
-def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
+def _stack_exec_output(
+    spec: StackBytecodeSpec, xs: list[int]
+) -> tuple[int, int]:
     program = spec.program
     if not program:
-        return 6
+        return (6, 0)
 
     stack: list[int] = []
     pc = 0
     steps = 0
     while steps < spec.max_step_count:
         if pc < 0 or pc >= len(program):
-            return 3
+            return (3, 0)
         instr = program[pc]
         op = instr.op
         steps += 1
 
         if op == InstructionOp.HALT:
-            return stack[-1] if stack else 6
+            return (0, stack[-1]) if stack else (6, 0)
         if op == InstructionOp.PUSH_CONST:
             stack.append(0 if instr.value is None else instr.value)
             pc += 1
@@ -421,10 +423,10 @@ def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
             idx = 0 if instr.index is None else instr.index
             if spec.input_mode == InputMode.CYCLIC:
                 if len(xs) == 0:
-                    return 5
+                    return (5, 0)
                 idx = idx % len(xs)
             if idx < 0 or idx >= len(xs):
-                return 5
+                return (5, 0)
             stack.append(xs[idx])
             pc += 1
             continue
@@ -436,7 +438,7 @@ def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
             InstructionOp.IS_ZERO,
         }:
             if len(stack) < 1:
-                return 2
+                return (2, 0)
             v = stack[-1]
             if op == InstructionOp.DUP:
                 stack.append(v)
@@ -452,7 +454,7 @@ def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
             continue
         if op == InstructionOp.SWAP:
             if len(stack) < 2:
-                return 2
+                return (2, 0)
             stack[-1], stack[-2] = stack[-2], stack[-1]
             pc += 1
             continue
@@ -467,7 +469,7 @@ def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
             InstructionOp.LT,
         }:
             if len(stack) < 2:
-                return 2
+                return (2, 0)
             b = stack.pop()
             a = stack.pop()
             if op == InstructionOp.ADD:
@@ -478,11 +480,11 @@ def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
                 stack.append(a * b)
             elif op == InstructionOp.DIV:
                 if b == 0:
-                    return 4
+                    return (4, 0)
                 stack.append(int(a / b))
             elif op == InstructionOp.MOD:
                 if b == 0:
-                    return 4
+                    return (4, 0)
                 stack.append(a % b)
             elif op == InstructionOp.EQ:
                 stack.append(1 if a == b else 0)
@@ -500,7 +502,7 @@ def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
             target = 0 if instr.target is None else instr.target
             if op != InstructionOp.JUMP:
                 if len(stack) < 1:
-                    return 2
+                    return (2, 0)
                 cond = stack.pop()
                 if op == InstructionOp.JUMP_IF_ZERO and cond != 0:
                     pc += 1
@@ -514,17 +516,17 @@ def _stack_exec_output(spec: StackBytecodeSpec, xs: list[int]) -> int:
                 mode=spec.jump_target_mode.value,
             )
             if resolved is None:
-                return 3
+                return (3, 0)
             pc = resolved
             continue
-        return 3
-    return 1
+        return (3, 0)
+    return (1, 0)
 
 
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
-    spec_json = repr(spec.model_dump())
+    spec_json = repr(spec.model_dump(mode="json"))
     return (
-        "def f(xs: list[int]) -> int:\n"
+        "def f(xs: list[int]) -> tuple[int, int]:\n"
         f"    spec = {spec_json}\n"
         "    program = spec['program']\n"
         "    stack = []\n"
@@ -532,12 +534,12 @@ def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
         "    steps = 0\n"
         "    while steps < spec['max_step_count']:\n"
         "        if pc < 0 or pc >= len(program):\n"
-        "            return 3\n"
+        "            return (3, 0)\n"
         "        instr = program[pc]\n"
         "        op = instr['op']\n"
         "        steps += 1\n"
         "        if op == 'halt':\n"
-        "            return stack[-1] if stack else 6\n"
+        "            return (0, stack[-1]) if stack else (6, 0)\n"
         "        if op == 'push_const':\n"
         "            stack.append(instr.get('value', 0))\n"
         "            pc += 1\n"
@@ -546,16 +548,16 @@ def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
         "            idx = instr.get('index', 0)\n"
         "            if spec['input_mode'] == 'cyclic':\n"
         "                if not xs:\n"
-        "                    return 5\n"
+        "                    return (5, 0)\n"
         "                idx = idx % len(xs)\n"
         "            if idx < 0 or idx >= len(xs):\n"
-        "                return 5\n"
+        "                return (5, 0)\n"
         "            stack.append(xs[idx])\n"
         "            pc += 1\n"
         "            continue\n"
         "        if op in {'dup', 'pop', 'neg', 'abs', 'is_zero'}:\n"
         "            if len(stack) < 1:\n"
-        "                return 2\n"
+        "                return (2, 0)\n"
         "            v = stack[-1]\n"
         "            if op == 'dup':\n"
         "                stack.append(v)\n"
@@ -571,13 +573,13 @@ def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
         "            continue\n"
         "        if op == 'swap':\n"
         "            if len(stack) < 2:\n"
-        "                return 2\n"
+        "                return (2, 0)\n"
         "            stack[-1], stack[-2] = stack[-2], stack[-1]\n"
         "            pc += 1\n"
         "            continue\n"
         "        if op in {'add','sub','mul','div','mod','eq','gt','lt'}:\n"
         "            if len(stack) < 2:\n"
-        "                return 2\n"
+        "                return (2, 0)\n"
         "            b = stack.pop()\n"
         "            a = stack.pop()\n"
         "            if op == 'add':\n"
@@ -588,11 +590,11 @@ def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
         "                stack.append(a * b)\n"
         "            elif op == 'div':\n"
         "                if b == 0:\n"
-        "                    return 4\n"
+        "                    return (4, 0)\n"
         "                stack.append(int(a / b))\n"
         "            elif op == 'mod':\n"
         "                if b == 0:\n"
-        "                    return 4\n"
+        "                    return (4, 0)\n"
         "                stack.append(a % b)\n"
         "            elif op == 'eq':\n"
         "                stack.append(1 if a == b else 0)\n"
@@ -606,7 +608,7 @@ def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
         "            tgt = instr.get('target', 0)\n"
         "            if op != 'jump':\n"
         "                if len(stack) < 1:\n"
-        "                    return 2\n"
+        "                    return (2, 0)\n"
         "                cond = stack.pop()\n"
         "                if op == 'jump_if_zero' and cond != 0:\n"
         "                    pc += 1\n"
@@ -621,10 +623,10 @@ def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
         "            elif spec['jump_target_mode'] == 'wrap':\n"
         "                pc = tgt % len(program)\n"
         "            else:\n"
-        "                return 3\n"
+        "                return (3, 0)\n"
         "            continue\n"
-        "        return 3\n"
-        "    return 1\n"
+        "        return (3, 0)\n"
+        "    return (1, 0)\n"
     )
 
 

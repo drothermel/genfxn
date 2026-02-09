@@ -27,6 +27,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Name,
         ast.Constant,
         ast.List,
+        ast.Set,
         ast.Tuple,
         ast.Dict,
         ast.Subscript,
