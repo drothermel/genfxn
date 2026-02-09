@@ -11,6 +11,8 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_simple_algorithms(spec)
     elif family == "stringrules":
         return _describe_stringrules(spec)
+    elif family == "fsm":
+        return _describe_fsm(spec)
     elif family == "stack_bytecode":
         return _describe_stack_bytecode(spec)
     return ""
@@ -681,4 +683,52 @@ def _describe_stack_bytecode(spec: dict[str, Any]) -> str:
         f"input mode '{input_mode}', jump handling '{jump_mode}', and "
         f"a max step count of {max_steps}. Return the final top-of-stack "
         "value, or a runtime status code when execution fails."
+    )
+
+
+def _describe_fsm(spec: dict[str, Any]) -> str:
+    machine_type = spec.get("machine_type", "moore")
+    output_mode = spec.get("output_mode", "final_state_id")
+    policy = spec.get("undefined_transition_policy", "stay")
+    start_state_id = spec.get("start_state_id", 0)
+    states = spec.get("states", [])
+
+    n_states = len(states) if isinstance(states, list) else 0
+    n_transitions = 0
+    accept_states: list[int] = []
+    if isinstance(states, list):
+        for state in states:
+            if not isinstance(state, dict):
+                continue
+            transitions = state.get("transitions", [])
+            if isinstance(transitions, list):
+                n_transitions += len(transitions)
+            if state.get("is_accept"):
+                state_id = state.get("id")
+                if isinstance(state_id, int):
+                    accept_states.append(state_id)
+
+    if output_mode == "accept_bool":
+        if accept_states:
+            accept_text = ", ".join(str(state_id) for state_id in accept_states)
+            output_text = (
+                "return 1 when the final state is accepting "
+                f"(accepting states: {accept_text}), otherwise 0"
+            )
+        else:
+            output_text = (
+                "return 1 when the final state is accepting, otherwise 0"
+            )
+    elif output_mode == "transition_count":
+        output_text = "return the number of transitions taken"
+    else:
+        output_text = "return the final state id"
+
+    return (
+        f"Run a deterministic {machine_type} finite-state machine over a "
+        f"list of integers. The machine has {n_states} states and "
+        f"{n_transitions} transitions, and starts in state {start_state_id}. "
+        f"For each input value, use the first matching transition in the "
+        f"current state's ordered transition list; if none match, apply "
+        f"undefined-transition policy '{policy}'. Finally, {output_text}."
     )

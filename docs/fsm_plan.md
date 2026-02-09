@@ -2,7 +2,7 @@
 
 Date: 2026-02-09  
 Owner: Codex + Danielle  
-Status: In Progress (planning complete, implementation not started)
+Status: In Progress (M1 complete)
 
 ## Goal
 
@@ -142,13 +142,16 @@ Use this after memory compaction:
 
 ## Execution Checklist
 
-- [ ] M1 complete
+- [x] M1 complete
 - [ ] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
-- [ ] Full `ruff` and full `pytest` pass
+- [x] Full `ruff` and full `pytest` pass
 - [ ] PR updated with behavior notes + test evidence
 
 ## Notes Log
 
 - 2026-02-09: Plan drafted. Stack/bytecode work finished; FSM selected as next.
+- 2026-02-09: M1 implemented (`src/genfxn/fsm/*` + `tests/test_fsm.py`).
+  Added `fsm` support in `core/difficulty.py` and `core/describe.py`.
+  Full suite check passed locally (`1223 passed, 22 skipped`).
