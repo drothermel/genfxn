@@ -11,6 +11,7 @@ from genfxn.intervals.queries import generate_intervals_queries
 from genfxn.intervals.render import render_intervals
 from genfxn.intervals.sampler import sample_intervals_spec
 from genfxn.intervals.task import generate_intervals_task
+from genfxn.intervals.validate import validate_intervals_task
 
 __all__ = [
     "BoundaryMode",
@@ -22,4 +23,5 @@ __all__ = [
     "generate_intervals_task",
     "render_intervals",
     "sample_intervals_spec",
+    "validate_intervals_task",
 ]

@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M0-M2 complete; M3-M5 remaining)
+Status: In progress (M0-M3 complete; M4-M5 remaining)
 
 ## Goal
 
@@ -339,7 +339,7 @@ This family is not complete until all are true:
 - [x] M0 complete
 - [x] M1 complete
 - [x] M2 complete
-- [ ] M3 complete
+- [x] M3 complete
 - [ ] M4 complete
 - [ ] M5 complete
 - [ ] Full `ruff` and full `pytest` pass
@@ -377,3 +377,14 @@ This family is not complete until all are true:
   Focused verification passed:
   `uv run ruff check src/genfxn/core/difficulty.py src/genfxn/intervals/sampler.py src/genfxn/intervals/task.py tests/test_intervals.py tests/test_difficulty.py`
   `uv run pytest tests/test_intervals.py tests/test_difficulty.py -q` (92 passed).
+- 2026-02-09: M3 completed with parallel subagents. Added intervals AST safety
+  policy (`src/genfxn/intervals/ast_safety.py`) and full task validator
+  (`src/genfxn/intervals/validate.py`) with wrong-family, spec, task_id,
+  query-type, query-output, AST, compile/exec, and semantic checks. Exported
+  `validate_intervals_task` in `src/genfxn/intervals/__init__.py` and added
+  focused validator tests in `tests/test_validate_intervals.py`.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/intervals tests/test_validate_intervals.py tests/test_intervals.py`
+  `uv run pytest tests/test_validate_intervals.py tests/test_intervals.py -q` (19 passed)
+  `uv run pytest tests/test_difficulty.py tests/test_intervals.py tests/test_validate_intervals.py -q` (99 passed)
+  `uv run ty check src/genfxn/intervals tests/test_validate_intervals.py` (pass).
