@@ -121,8 +121,9 @@ mode (`score`, `alignment_len`, or `gap_count`).
 
 Interval operations over integer endpoints with explicit boundary handling
 (`closed_closed`, `closed_open`, `open_closed`, `open_open`), touching-merge
-control, and configurable output operation (`total_coverage`, `merged_count`,
-`max_overlap_count`, `gap_count`).
+control, endpoint clipping/quantization (`endpoint_clip_abs`,
+`endpoint_quantize_step`), and configurable output operation
+(`total_coverage`, `merged_count`, `max_overlap_count`, `gap_count`).
 
 ## Generation
 

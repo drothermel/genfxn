@@ -834,6 +834,16 @@ def _describe_intervals(spec: dict[str, Any]) -> str:
     operation = _enum_text(spec.get("operation", "total_coverage"))
     boundary_mode = _enum_text(spec.get("boundary_mode", "closed_closed"))
     merge_touching = bool(spec.get("merge_touching", True))
+    endpoint_clip_abs = spec.get("endpoint_clip_abs", 20)
+    endpoint_quantize_step = spec.get("endpoint_quantize_step", 1)
+    try:
+        clip_value = int(endpoint_clip_abs)
+    except (TypeError, ValueError):
+        clip_value = 20
+    try:
+        quantize_step = int(endpoint_quantize_step)
+    except (TypeError, ValueError):
+        quantize_step = 1
     if merge_touching:
         merge_text = "merge touching spans"
     else:
@@ -843,6 +853,14 @@ def _describe_intervals(spec: dict[str, Any]) -> str:
         (
             "Implement f(intervals: list[tuple[int, int]]) -> int. "
             "Normalize each interval so lo <= hi."
+        ),
+        (
+            f"Clamp each endpoint into [-{clip_value}, {clip_value}] "
+            "before normalization."
+        ),
+        (
+            "Quantize endpoints toward zero to multiples of "
+            f"{quantize_step}."
         ),
         (
             f"Apply boundary mode '{boundary_mode}' to map intervals onto "

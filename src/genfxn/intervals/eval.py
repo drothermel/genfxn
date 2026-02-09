@@ -3,11 +3,29 @@ from genfxn.intervals.models import BoundaryMode, IntervalsSpec, OperationType
 Span = tuple[int, int]
 
 
+def _clip_endpoint(value: int, endpoint_clip_abs: int) -> int:
+    return min(max(value, -endpoint_clip_abs), endpoint_clip_abs)
+
+
+def _quantize_endpoint(value: int, endpoint_quantize_step: int) -> int:
+    if endpoint_quantize_step <= 1:
+        return value
+    magnitude = abs(value) // endpoint_quantize_step
+    quantized = magnitude * endpoint_quantize_step
+    return quantized if value >= 0 else -quantized
+
+
 def _adjust_span(
     a: int,
     b: int,
     boundary_mode: BoundaryMode,
+    endpoint_clip_abs: int,
+    endpoint_quantize_step: int,
 ) -> Span | None:
+    a = _clip_endpoint(a, endpoint_clip_abs)
+    b = _clip_endpoint(b, endpoint_clip_abs)
+    a = _quantize_endpoint(a, endpoint_quantize_step)
+    b = _quantize_endpoint(b, endpoint_quantize_step)
     lo = min(a, b)
     hi = max(a, b)
 
@@ -27,11 +45,19 @@ def _adjust_span(
 
 def _effective_spans(
     boundary_mode: BoundaryMode,
+    endpoint_clip_abs: int,
+    endpoint_quantize_step: int,
     intervals: list[tuple[int, int]],
 ) -> list[Span]:
     spans: list[Span] = []
     for a, b in intervals:
-        span = _adjust_span(a, b, boundary_mode)
+        span = _adjust_span(
+            a,
+            b,
+            boundary_mode,
+            endpoint_clip_abs,
+            endpoint_quantize_step,
+        )
         if span is not None:
             spans.append(span)
     return spans
@@ -92,7 +118,12 @@ def eval_intervals(
     spec: IntervalsSpec,
     intervals: list[tuple[int, int]],
 ) -> int:
-    spans = _effective_spans(spec.boundary_mode, intervals)
+    spans = _effective_spans(
+        spec.boundary_mode,
+        spec.endpoint_clip_abs,
+        spec.endpoint_quantize_step,
+        intervals,
+    )
     if not spans:
         return 0
 

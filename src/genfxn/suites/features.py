@@ -728,6 +728,16 @@ def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
     operation = _enum_or_str(spec.get("operation"), "total_coverage")
     boundary_mode = _enum_or_str(spec.get("boundary_mode"), "closed_closed")
     merge_touching = str(bool(spec.get("merge_touching", False))).lower()
+    raw_clip = spec.get("endpoint_clip_abs", 20)
+    raw_quantize_step = spec.get("endpoint_quantize_step", 1)
+    try:
+        endpoint_clip_abs = int(raw_clip)
+    except (TypeError, ValueError):
+        endpoint_clip_abs = 20
+    try:
+        endpoint_quantize_step = int(raw_quantize_step)
+    except (TypeError, ValueError):
+        endpoint_quantize_step = 1
 
     if boundary_mode == "closed_closed":
         boundary_bucket = "closed"
@@ -736,9 +746,29 @@ def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
     else:
         boundary_bucket = "mixed"
 
+    if endpoint_clip_abs <= 5:
+        clip_bucket = "tight"
+    elif endpoint_clip_abs <= 10:
+        clip_bucket = "medium"
+    elif endpoint_clip_abs <= 15:
+        clip_bucket = "wide"
+    else:
+        clip_bucket = "very_wide"
+
+    if endpoint_quantize_step <= 1:
+        quantize_bucket = "none"
+    elif endpoint_quantize_step <= 2:
+        quantize_bucket = "step2"
+    elif endpoint_quantize_step <= 4:
+        quantize_bucket = "step3-4"
+    else:
+        quantize_bucket = "step5+"
+
     return {
         "operation": operation,
         "boundary_mode": boundary_mode,
         "boundary_bucket": boundary_bucket,
         "merge_touching": merge_touching,
+        "clip_bucket": clip_bucket,
+        "quantize_bucket": quantize_bucket,
     }

@@ -11,12 +11,32 @@ def render_intervals(
         f'    String operation = "{spec.operation.value}";',
         f'    String boundaryMode = "{spec.boundary_mode.value}";',
         f"    boolean mergeTouching = {str(spec.merge_touching).lower()};",
+        f"    long endpointClipAbs = {spec.endpoint_clip_abs}L;",
+        f"    long endpointQuantizeStep = {spec.endpoint_quantize_step}L;",
         "",
         "    java.util.ArrayList<long[]> adjusted = "
         "new java.util.ArrayList<>();",
         f"    for (long[] raw : {var}) {{",
-        "        long lo = Math.min(raw[0], raw[1]);",
-        "        long hi = Math.max(raw[0], raw[1]);",
+        "        long a = raw[0];",
+        "        long b = raw[1];",
+        "        a = Math.min(endpointClipAbs, a);",
+        "        a = Math.max(-endpointClipAbs, a);",
+        "        b = Math.min(endpointClipAbs, b);",
+        "        b = Math.max(-endpointClipAbs, b);",
+        "        if (endpointQuantizeStep > 1L) {",
+        (
+            "            long qa = "
+            "(Math.abs(a) / endpointQuantizeStep) * endpointQuantizeStep;"
+        ),
+        (
+            "            long qb = "
+            "(Math.abs(b) / endpointQuantizeStep) * endpointQuantizeStep;"
+        ),
+        "            a = a >= 0L ? qa : -qa;",
+        "            b = b >= 0L ? qb : -qb;",
+        "        }",
+        "        long lo = Math.min(a, b);",
+        "        long hi = Math.max(a, b);",
         "",
         "        long start;",
         "        long end;",

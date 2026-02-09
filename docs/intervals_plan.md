@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: Near-complete (M0-M5 complete; full-suite verification pending)
+Status: Complete (M0-M5 + cardinality expansion + full-suite verification)
 
 ## Goal
 
@@ -419,10 +419,9 @@ This family is not complete until all are true:
   - Integration test updates:
     `tests/test_cli.py`, `tests/test_presets.py`, `tests/test_suites.py`
 
-  Note: `intervals` currently has a finite semantic spec space (32 unique
-  operation/boundary/merge combinations), so suite quota totals are set per
-  difficulty to the reachable exact-difficulty counts (D1=3, D2=9, D3=8,
-  D4=9, D5=3) rather than 50.
+  Note (superseded): this initial integration used only
+  operation/boundary/merge spec fields and therefore had a small finite
+  semantic space.
 
   Focused verification passed:
   `uv run ruff check src/genfxn/cli.py src/genfxn/core/describe.py src/genfxn/core/presets.py src/genfxn/intervals/task.py src/genfxn/suites/features.py src/genfxn/suites/generate.py src/genfxn/suites/quotas.py scripts/calibrate_intervals.py tests/test_calibrate_intervals_script.py tests/test_cli.py tests/test_presets.py tests/test_suites.py --fix`
@@ -431,3 +430,38 @@ This family is not complete until all are true:
   `uv run pytest tests/test_difficulty.py tests/test_intervals.py tests/test_validate_intervals.py -q` (99 passed)
   `uv run ty check src/genfxn/cli.py src/genfxn/core/describe.py src/genfxn/core/presets.py src/genfxn/intervals/task.py src/genfxn/suites/features.py src/genfxn/suites/generate.py src/genfxn/suites/quotas.py scripts/calibrate_intervals.py tests/test_calibrate_intervals_script.py tests/test_cli.py tests/test_presets.py tests/test_suites.py` (pass)
   `uv run python scripts/calibrate_intervals.py --samples 40 --pool-size 1500 --output /tmp/intervals_calibration_test.json --strict` (pass).
+- 2026-02-09: Post-M5 semantic cardinality expansion completed.
+  - Added new per-spec semantics:
+    `endpoint_clip_abs` and `endpoint_quantize_step`
+    (`src/genfxn/intervals/models.py`), wired through evaluator/renderers:
+    `src/genfxn/intervals/eval.py`,
+    `src/genfxn/intervals/render.py`,
+    `src/genfxn/langs/java/intervals.py`,
+    `src/genfxn/langs/rust/intervals.py`
+  - Updated sampler and difficulty targeting for wider exact-difficulty
+    cardinality:
+    `src/genfxn/intervals/sampler.py`,
+    `src/genfxn/core/difficulty.py`
+  - Updated AST whitelist for new generated Python constructs:
+    `src/genfxn/intervals/ast_safety.py`,
+    `src/genfxn/intervals/validate.py`
+  - Extended suite features/quotas/pool axes and presets, restoring 50-task
+    suite targets for intervals D1..D5:
+    `src/genfxn/suites/features.py`,
+    `src/genfxn/suites/quotas.py`,
+    `src/genfxn/suites/generate.py`,
+    `src/genfxn/core/presets.py`
+  - Tests/docs updated:
+    `tests/test_intervals.py`,
+    `tests/test_difficulty.py`,
+    `tests/test_suites.py`,
+    `README.md`,
+    `AXES.md`
+
+  Verification passed:
+  `uv run ruff check src/genfxn/intervals src/genfxn/langs/java/intervals.py src/genfxn/langs/rust/intervals.py src/genfxn/core/difficulty.py src/genfxn/core/describe.py src/genfxn/suites/features.py src/genfxn/suites/generate.py src/genfxn/suites/quotas.py src/genfxn/core/presets.py tests/test_intervals.py tests/test_difficulty.py tests/test_suites.py tests/test_validate_intervals.py tests/test_presets.py` (pass)
+  `uv run ty check src/genfxn/intervals src/genfxn/langs/java/intervals.py src/genfxn/langs/rust/intervals.py src/genfxn/core/difficulty.py src/genfxn/core/describe.py src/genfxn/suites/features.py src/genfxn/suites/generate.py src/genfxn/suites/quotas.py src/genfxn/core/presets.py tests/test_intervals.py tests/test_difficulty.py tests/test_suites.py tests/test_validate_intervals.py tests/test_presets.py` (pass)
+  `uv run pytest tests/test_intervals.py tests/test_difficulty.py tests/test_suites.py -q` (181 passed, 13 skipped)
+  `uv run pytest tests/test_java_render.py tests/test_rust_render.py tests/test_intervals_runtime_parity.py tests/test_validate_intervals.py tests/test_presets.py tests/test_calibrate_intervals_script.py -q` (391 passed, 4 skipped)
+  `uv run python scripts/calibrate_intervals.py --samples 60 --pool-size 2000 --strict --output /tmp/intervals_calibration_expanded.json` (pass)
+  `uv run pytest tests/ -v --verification-level=full` (1454 passed, 1 skipped).

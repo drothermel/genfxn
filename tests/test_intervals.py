@@ -121,6 +121,7 @@ def _make_spec(
     boundary_mode: Any,
     merge_touching: bool,
     seed: int,
+    endpoint_clip_abs: int | None = None,
 ) -> Any:
     spec, _ = _sample_spec_and_axes(seed=seed)
     dump = spec.model_dump()
@@ -140,6 +141,23 @@ def _make_spec(
         ("merge_touching",),
         merge_touching,
     ), "Unable to set merge_touching field in intervals spec"
+    if endpoint_clip_abs is not None:
+        assert _set_first_existing(
+            dump,
+            ("endpoint_clip_abs",),
+            endpoint_clip_abs,
+        ), "Unable to set endpoint_clip_abs field in intervals spec"
+    else:
+        assert _set_first_existing(
+            dump,
+            ("endpoint_clip_abs",),
+            20,
+        ), "Unable to set endpoint_clip_abs field in intervals spec"
+    assert _set_first_existing(
+        dump,
+        ("endpoint_quantize_step",),
+        1,
+    ), "Unable to set endpoint_quantize_step field in intervals spec"
 
     return IntervalsSpec.model_validate(dump)
 
@@ -209,6 +227,16 @@ class TestEvaluatorSemantics:
             )
             assert eval_intervals(spec, intervals) == expected
 
+    def test_endpoint_clipping_changes_coverage(self) -> None:
+        spec = _make_spec(
+            operation=_enum_member(OperationType, "total", "coverage"),
+            boundary_mode=_enum_member(BoundaryMode, "closed", "closed"),
+            merge_touching=True,
+            endpoint_clip_abs=3,
+            seed=140,
+        )
+        assert eval_intervals(spec, [(-10, 10)]) == 7
+
 
 class TestModels:
     def test_spec_and_axes_roundtrip_model_validation(self) -> None:
@@ -227,6 +255,10 @@ class TestModels:
     def test_axes_reject_invalid_probability_range(self) -> None:
         with pytest.raises(Exception):
             IntervalsAxes(degenerate_interval_prob_range=(-0.1, 0.2))
+
+    def test_axes_reject_invalid_endpoint_clip_range(self) -> None:
+        with pytest.raises(Exception):
+            IntervalsAxes(endpoint_clip_abs_range=(0, 5))
 
 
 class TestSampler:

@@ -662,32 +662,44 @@ class TestIntervalsFeatures:
             "operation": "total_coverage",
             "boundary_mode": "closed_closed",
             "merge_touching": True,
+            "endpoint_clip_abs": 18,
+            "endpoint_quantize_step": 1,
         }
         f = intervals_features(spec)
         assert f["operation"] == "total_coverage"
         assert f["boundary_mode"] == "closed_closed"
         assert f["boundary_bucket"] == "closed"
         assert f["merge_touching"] == "true"
+        assert f["clip_bucket"] == "very_wide"
+        assert f["quantize_bucket"] == "none"
 
     def test_gap_count_open_boundary(self) -> None:
         spec = {
             "operation": "gap_count",
             "boundary_mode": "open_open",
             "merge_touching": False,
+            "endpoint_clip_abs": 5,
+            "endpoint_quantize_step": 2,
         }
         f = intervals_features(spec)
         assert f["operation"] == "gap_count"
         assert f["boundary_bucket"] == "open"
         assert f["merge_touching"] == "false"
+        assert f["clip_bucket"] == "tight"
+        assert f["quantize_bucket"] == "step2"
 
     def test_mixed_boundary_bucket(self) -> None:
         spec = {
             "operation": "merged_count",
             "boundary_mode": "closed_open",
             "merge_touching": False,
+            "endpoint_clip_abs": 10,
+            "endpoint_quantize_step": 4,
         }
         f = intervals_features(spec)
         assert f["boundary_bucket"] == "mixed"
+        assert f["clip_bucket"] == "medium"
+        assert f["quantize_bucket"] == "step3-4"
 
 
 class _FixedChoiceRng:

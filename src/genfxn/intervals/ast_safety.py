@@ -34,6 +34,8 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Store,
         ast.Add,
         ast.Sub,
+        ast.Mult,
+        ast.FloorDiv,
         ast.USub,
         ast.Eq,
         ast.Gt,
@@ -54,6 +56,8 @@ ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
         "min",
         "range",
         "sorted",
+        "abs",
+        "_quantize",
     }
 )
 
@@ -77,7 +81,10 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         "hi",
         "idx",
         "intervals",
+        "endpoint_clip_abs",
+        "endpoint_quantize_step",
         "lo",
+        "magnitude",
         "merge_touching",
         "merged",
         "next_point",
@@ -86,11 +93,13 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         "point",
         "prev_end",
         "prev_start",
+        "q",
         "raw_a",
         "raw_b",
         "start",
         "threshold",
         "total",
+        "v",
     }
 )
 
@@ -101,6 +110,8 @@ CALL_ARITIES: dict[str, set[int]] = {
     "min": {2},
     "range": {1, 2, 3},
     "sorted": {1},
+    "abs": {1},
+    "_quantize": {1},
 }
 
 METHOD_ARITIES: dict[str, set[int]] = {

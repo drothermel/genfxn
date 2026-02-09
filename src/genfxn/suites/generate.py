@@ -838,17 +838,21 @@ def _pool_axes_sequence_dp_d5(_: random.Random) -> SequenceDpAxes:
 
 def _pool_axes_intervals_d1(_: random.Random) -> IntervalsAxes:
     return IntervalsAxes(
+        target_difficulty=1,
         operation_types=[
             OperationType.TOTAL_COVERAGE,
             OperationType.MERGED_COUNT,
         ],
         boundary_modes=[BoundaryMode.CLOSED_CLOSED],
         merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(12, 20),
+        endpoint_quantize_step_range=(1, 4),
     )
 
 
 def _pool_axes_intervals_d2(_: random.Random) -> IntervalsAxes:
     return IntervalsAxes(
+        target_difficulty=2,
         operation_types=[
             OperationType.TOTAL_COVERAGE,
             OperationType.MERGED_COUNT,
@@ -861,11 +865,14 @@ def _pool_axes_intervals_d2(_: random.Random) -> IntervalsAxes:
             BoundaryMode.OPEN_OPEN,
         ],
         merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(8, 15),
+        endpoint_quantize_step_range=(1, 5),
     )
 
 
 def _pool_axes_intervals_d3(_: random.Random) -> IntervalsAxes:
     return IntervalsAxes(
+        target_difficulty=3,
         operation_types=[
             OperationType.TOTAL_COVERAGE,
             OperationType.MERGED_COUNT,
@@ -879,11 +886,14 @@ def _pool_axes_intervals_d3(_: random.Random) -> IntervalsAxes:
             BoundaryMode.OPEN_OPEN,
         ],
         merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(8, 14),
+        endpoint_quantize_step_range=(1, 5),
     )
 
 
 def _pool_axes_intervals_d4(_: random.Random) -> IntervalsAxes:
     return IntervalsAxes(
+        target_difficulty=4,
         operation_types=[
             OperationType.MAX_OVERLAP_COUNT,
             OperationType.GAP_COUNT,
@@ -894,18 +904,23 @@ def _pool_axes_intervals_d4(_: random.Random) -> IntervalsAxes:
             BoundaryMode.OPEN_OPEN,
         ],
         merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(5, 10),
+        endpoint_quantize_step_range=(1, 6),
     )
 
 
 def _pool_axes_intervals_d5(_: random.Random) -> IntervalsAxes:
     return IntervalsAxes(
+        target_difficulty=5,
         operation_types=[OperationType.GAP_COUNT],
         boundary_modes=[
             BoundaryMode.CLOSED_OPEN,
             BoundaryMode.OPEN_CLOSED,
             BoundaryMode.OPEN_OPEN,
         ],
-        merge_touching_choices=[True],
+        merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(3, 7),
+        endpoint_quantize_step_range=(1, 6),
     )
 
 

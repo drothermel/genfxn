@@ -1138,6 +1138,8 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
                 ],
                 "boundary_modes": [BoundaryMode.CLOSED_CLOSED],
                 "merge_touching_choices": [False, True],
+                "endpoint_clip_abs_range": (12, 20),
+                "endpoint_quantize_step_range": (1, 4),
             },
         )
     ],
@@ -1149,6 +1151,8 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
                 "operation_types": [OperationType.TOTAL_COVERAGE],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [False, True],
+                "endpoint_clip_abs_range": (8, 15),
+                "endpoint_quantize_step_range": (1, 5),
             },
         )
     ],
@@ -1160,6 +1164,8 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
                 "operation_types": [OperationType.MERGED_COUNT],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [True],
+                "endpoint_clip_abs_range": (8, 14),
+                "endpoint_quantize_step_range": (1, 5),
             },
         )
     ],
@@ -1171,6 +1177,8 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
                 "operation_types": [OperationType.MAX_OVERLAP_COUNT],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [False, True],
+                "endpoint_clip_abs_range": (5, 10),
+                "endpoint_quantize_step_range": (1, 6),
             },
         )
     ],
@@ -1182,6 +1190,8 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
                 "operation_types": [OperationType.GAP_COUNT],
                 "boundary_modes": [BoundaryMode.OPEN_OPEN],
                 "merge_touching_choices": [True],
+                "endpoint_clip_abs_range": (3, 7),
+                "endpoint_quantize_step_range": (1, 6),
             },
         )
     ],

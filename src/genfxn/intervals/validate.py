@@ -43,6 +43,7 @@ PYTHON_CODE_KEY = "python"
 _spec_adapter = TypeAdapter(IntervalsSpec)
 _ALLOWED_BUILTINS = {
     "ValueError": ValueError,
+    "abs": abs,
     "len": len,
     "max": max,
     "min": min,

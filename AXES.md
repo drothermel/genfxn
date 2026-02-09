@@ -409,6 +409,8 @@ Interval-statistics tasks over integer endpoints:
 | `n_intervals_range` | (lo, hi) | (0, 10) | `--list-length-range` | Range for sampled interval-counts in queries |
 | `endpoint_range` | (lo, hi) | (-20, 20) | `--value-range` | Range for sampled interval endpoints |
 | `max_span_range` | (lo, hi) | (0, 20) | — | Max absolute span used when sampling endpoints |
+| `endpoint_clip_abs_range` | (lo, hi) | (3, 20) | — | Range for per-spec endpoint clipping threshold before interval normalization |
+| `endpoint_quantize_step_range` | (lo, hi) | (1, 4) | — | Range for per-spec endpoint quantization step (toward-zero multiples) |
 | `allow_reversed_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for reversed endpoint sampling |
 | `degenerate_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for zero-length intervals |
 | `nested_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for nested interval structures |
@@ -438,6 +440,8 @@ Interval-statistics tasks over integer endpoints:
 | `operation` | operation values | Output operation family |
 | `boundary_mode` | boundary mode values | Endpoint inclusion policy |
 | `merge_touching` | `true`, `false` | Whether adjacent spans are merged |
+| `endpoint_clip_abs` | positive integer | Endpoint clamp bound applied before normalization |
+| `endpoint_quantize_step` | positive integer | Endpoint quantization step (toward-zero multiples) |
 
 ---
 

@@ -796,6 +796,7 @@ class TestComputeDifficulty:
             "operation": "merged_count",
             "boundary_mode": "closed_open",
             "merge_touching": True,
+            "endpoint_clip_abs": 12,
         }
         difficulty = compute_difficulty("intervals", spec)
         assert 1 <= difficulty <= 5
@@ -809,26 +810,31 @@ class TestComputeDifficulty:
                 "operation": "total_coverage",
                 "boundary_mode": "closed_closed",
                 "merge_touching": False,
+                "endpoint_clip_abs": 20,
             },
             {
                 "operation": "merged_count",
                 "boundary_mode": "closed_open",
                 "merge_touching": False,
+                "endpoint_clip_abs": 14,
             },
             {
                 "operation": "merged_count",
                 "boundary_mode": "open_closed",
                 "merge_touching": True,
+                "endpoint_clip_abs": 10,
             },
             {
                 "operation": "max_overlap_count",
                 "boundary_mode": "open_closed",
                 "merge_touching": True,
+                "endpoint_clip_abs": 7,
             },
             {
                 "operation": "gap_count",
                 "boundary_mode": "open_open",
                 "merge_touching": True,
+                "endpoint_clip_abs": 4,
             },
         ]
         scores = [compute_difficulty("intervals", spec) for spec in specs]
@@ -842,11 +848,13 @@ class TestComputeDifficulty:
             "operation": "total_coverage",
             "boundary_mode": "closed_closed",
             "merge_touching": False,
+            "endpoint_clip_abs": 20,
         }
         hard = {
             "operation": "gap_count",
             "boundary_mode": "open_open",
             "merge_touching": True,
+            "endpoint_clip_abs": 3,
         }
         easy_score = compute_difficulty("intervals", very_simple)
         hard_score = compute_difficulty("intervals", hard)

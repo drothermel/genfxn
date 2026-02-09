@@ -9,28 +9,77 @@ from genfxn.intervals.models import (
 )
 
 _TARGET_OPERATION_PREFS: dict[int, list[OperationType]] = {
-    1: [OperationType.TOTAL_COVERAGE],
-    2: [OperationType.MERGED_COUNT, OperationType.TOTAL_COVERAGE],
-    3: [OperationType.MERGED_COUNT, OperationType.MAX_OVERLAP_COUNT],
+    1: [OperationType.TOTAL_COVERAGE, OperationType.MERGED_COUNT],
+    2: [
+        OperationType.MERGED_COUNT,
+        OperationType.TOTAL_COVERAGE,
+        OperationType.MAX_OVERLAP_COUNT,
+    ],
+    3: [
+        OperationType.MERGED_COUNT,
+        OperationType.MAX_OVERLAP_COUNT,
+        OperationType.GAP_COUNT,
+    ],
     4: [OperationType.MAX_OVERLAP_COUNT, OperationType.GAP_COUNT],
     5: [OperationType.GAP_COUNT],
 }
 
 _TARGET_BOUNDARY_PREFS: dict[int, list[BoundaryMode]] = {
     1: [BoundaryMode.CLOSED_CLOSED],
-    2: [BoundaryMode.CLOSED_OPEN, BoundaryMode.CLOSED_CLOSED],
-    3: [BoundaryMode.OPEN_CLOSED, BoundaryMode.CLOSED_OPEN],
+    2: [
+        BoundaryMode.CLOSED_OPEN,
+        BoundaryMode.CLOSED_CLOSED,
+        BoundaryMode.OPEN_CLOSED,
+        BoundaryMode.OPEN_OPEN,
+    ],
+    3: [
+        BoundaryMode.OPEN_CLOSED,
+        BoundaryMode.CLOSED_OPEN,
+        BoundaryMode.OPEN_OPEN,
+    ],
     4: [BoundaryMode.OPEN_OPEN, BoundaryMode.OPEN_CLOSED],
-    5: [BoundaryMode.OPEN_OPEN],
+    5: [
+        BoundaryMode.OPEN_OPEN,
+        BoundaryMode.CLOSED_OPEN,
+        BoundaryMode.OPEN_CLOSED,
+    ],
 }
 
 _TARGET_MERGE_TOUCHING_PREFS: dict[int, list[bool]] = {
-    1: [False],
+    1: [False, True],
     2: [False, True],
     3: [True, False],
-    4: [True],
-    5: [True],
+    4: [True, False],
+    5: [True, False],
 }
+
+_TARGET_ENDPOINT_CLIP_ABS_RANGES: dict[int, tuple[int, int]] = {
+    1: (14, 20),
+    2: (10, 16),
+    3: (7, 12),
+    4: (5, 9),
+    5: (3, 6),
+}
+
+
+def _sample_int_in_range(
+    value_range: tuple[int, int],
+    rng: random.Random,
+) -> int:
+    return rng.randint(value_range[0], value_range[1])
+
+
+def _sample_int_with_preferred_overlap(
+    *,
+    available: tuple[int, int],
+    preferred: tuple[int, int],
+    rng: random.Random,
+) -> int:
+    lo = max(available[0], preferred[0])
+    hi = min(available[1], preferred[1])
+    if lo <= hi:
+        return rng.randint(lo, hi)
+    return rng.randint(available[0], available[1])
 
 
 def _sample_probability(
@@ -62,6 +111,14 @@ def sample_intervals_spec(
         operation = rng.choice(axes.operation_types)
         boundary_mode = rng.choice(axes.boundary_modes)
         merge_touching = rng.choice(axes.merge_touching_choices)
+        endpoint_clip_abs = _sample_int_in_range(
+            axes.endpoint_clip_abs_range,
+            rng,
+        )
+        endpoint_quantize_step = _sample_int_in_range(
+            axes.endpoint_quantize_step_range,
+            rng,
+        )
     else:
         operation = _pick_from_preferred(
             axes.operation_types,
@@ -76,6 +133,15 @@ def sample_intervals_spec(
         merge_touching = _pick_from_preferred(
             axes.merge_touching_choices,
             _TARGET_MERGE_TOUCHING_PREFS[target_difficulty],
+            rng,
+        )
+        endpoint_clip_abs = _sample_int_with_preferred_overlap(
+            available=axes.endpoint_clip_abs_range,
+            preferred=_TARGET_ENDPOINT_CLIP_ABS_RANGES[target_difficulty],
+            rng=rng,
+        )
+        endpoint_quantize_step = _sample_int_in_range(
+            axes.endpoint_quantize_step_range,
             rng,
         )
 
@@ -96,6 +162,18 @@ def sample_intervals_spec(
         "sample_merge_touching",
         f"Merge touching: {merge_touching}",
         merge_touching,
+    )
+    trace_step(
+        trace,
+        "sample_endpoint_clip_abs",
+        f"Endpoint clip abs: {endpoint_clip_abs}",
+        endpoint_clip_abs,
+    )
+    trace_step(
+        trace,
+        "sample_endpoint_quantize_step",
+        f"Endpoint quantize step: {endpoint_quantize_step}",
+        endpoint_quantize_step,
     )
     trace_step(
         trace,
@@ -120,4 +198,6 @@ def sample_intervals_spec(
         operation=operation,
         boundary_mode=boundary_mode,
         merge_touching=merge_touching,
+        endpoint_clip_abs=endpoint_clip_abs,
+        endpoint_quantize_step=endpoint_quantize_step,
     )

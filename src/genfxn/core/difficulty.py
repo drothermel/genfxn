@@ -18,9 +18,10 @@ SEQUENCE_DP_WEIGHTS = {
     "tie_break": 0.15,
 }
 INTERVALS_WEIGHTS = {
-    "operation": 0.45,
-    "boundary": 0.35,
-    "merge": 0.2,
+    "operation": 0.35,
+    "boundary": 0.25,
+    "merge": 0.15,
+    "clip": 0.25,
 }
 
 
@@ -650,16 +651,19 @@ def _intervals_difficulty(spec: dict[str, Any]) -> int:
     operation_value = _enum_or_str_value(spec.get("operation"))
     boundary_value = _enum_or_str_value(spec.get("boundary_mode"))
     merge_touching = bool(spec.get("merge_touching", False))
+    endpoint_clip_abs = _coerce_int(spec.get("endpoint_clip_abs"), 20)
 
     operation_score = _intervals_operation_score(operation_value)
     boundary_score = _intervals_boundary_score(boundary_value)
     merge_score = 3 if merge_touching else 1
+    clip_score = _intervals_clip_score(endpoint_clip_abs)
 
     w = INTERVALS_WEIGHTS
     raw = (
         w["operation"] * operation_score
         + w["boundary"] * boundary_score
         + w["merge"] * merge_score
+        + w["clip"] * clip_score
     )
     raw += _intervals_interaction_bonus(
         operation_value,
@@ -690,6 +694,18 @@ def _intervals_boundary_score(boundary_mode: str) -> int:
     if boundary_mode == "open_open":
         return 4
     return 2
+
+
+def _intervals_clip_score(endpoint_clip_abs: int) -> int:
+    if endpoint_clip_abs <= 4:
+        return 5
+    if endpoint_clip_abs <= 7:
+        return 4
+    if endpoint_clip_abs <= 10:
+        return 3
+    if endpoint_clip_abs <= 14:
+        return 2
+    return 1
 
 
 def _intervals_interaction_bonus(

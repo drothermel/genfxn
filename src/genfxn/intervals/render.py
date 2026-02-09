@@ -30,6 +30,25 @@ def _get_bool_field(
     return default
 
 
+def _get_int_field(
+    spec_dict: dict[str, Any],
+    candidates: tuple[str, ...],
+    default: int,
+) -> int:
+    for name in candidates:
+        value = spec_dict.get(name)
+        if value is None or isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                continue
+    return default
+
+
 def render_intervals(
     spec: IntervalsSpec,
     func_name: str = "f",
@@ -51,15 +70,40 @@ def render_intervals(
         ("merge_touching",),
         True,
     )
+    endpoint_clip_abs = _get_int_field(
+        spec_dict,
+        ("endpoint_clip_abs",),
+        20,
+    )
+    endpoint_quantize_step = _get_int_field(
+        spec_dict,
+        ("endpoint_quantize_step",),
+        1,
+    )
 
     lines = [
         f"def {func_name}({var}: list[tuple[int, int]]) -> int:",
         f"    operation = {operation!r}",
         f"    boundary_mode = {boundary_mode!r}",
         f"    merge_touching = {merge_touching!r}",
+        f"    endpoint_clip_abs = {endpoint_clip_abs}",
+        f"    endpoint_quantize_step = {endpoint_quantize_step}",
+        "",
+        "    def _quantize(v: int) -> int:",
+        "        if endpoint_quantize_step <= 1:",
+        "            return v",
+        "        magnitude = abs(v) // endpoint_quantize_step",
+        "        q = magnitude * endpoint_quantize_step",
+        "        return q if v >= 0 else -q",
         "",
         "    adjusted: list[tuple[int, int]] = []",
         f"    for raw_a, raw_b in {var}:",
+        "        raw_a = min(endpoint_clip_abs, raw_a)",
+        "        raw_a = max(-endpoint_clip_abs, raw_a)",
+        "        raw_b = min(endpoint_clip_abs, raw_b)",
+        "        raw_b = max(-endpoint_clip_abs, raw_b)",
+        "        raw_a = _quantize(raw_a)",
+        "        raw_b = _quantize(raw_b)",
         "        lo = min(raw_a, raw_b)",
         "        hi = max(raw_a, raw_b)",
         "",
