@@ -9,6 +9,11 @@ Core Python package code lives in `src/genfxn/`. Family-specific generators are 
 
 Shared logic (models, validation, difficulty, tracing, presets) is in `src/genfxn/core/` and dataset splitting in `src/genfxn/splits.py`. Tests are in `tests/` with one module per feature area (for example `tests/test_stateful.py`, `tests/test_cli.py`). Utility and demo scripts are in `scripts/`.
 
+## Family Roadmap
+New family work is sequenced using `docs/shared_rec_list.md`. When selecting
+the next family to implement, follow that list in order unless explicitly
+reprioritized in a newer planning document.
+
 ## Build, Test, and Development Commands
 - `uv sync`: install Python dependencies (root project).
 - `uv run pytest tests/ -v`: run the full Python test suite.

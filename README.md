@@ -24,6 +24,11 @@ uv sync
 | **bitops** | `f(x: int) -> int` | Fixed-width bit-operation pipelines over integer inputs |
 | **sequence_dp** | `f(a: list[int], b: list[int]) -> int` | Sequence dynamic-programming alignment variants with custom scoring |
 
+### Family Roadmap
+
+New family implementation is being done in the prioritized order documented in
+`docs/shared_rec_list.md`.
+
 ### Piecewise
 
 Branching functions that apply different expressions based on input conditions.
