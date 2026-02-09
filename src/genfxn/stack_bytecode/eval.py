@@ -265,9 +265,11 @@ def eval_stack_bytecode(
 
 
 def eval_instruction(instr: Instruction, stack: list[int]) -> list[int]:
-    """Execute one non-control-flow instruction on a copy of stack.
+    """Execute one supported single-step op on a copy of ``stack``.
 
-    Utility used by tests/debugging. Control-flow ops are unsupported here.
+    This helper currently supports only ``InstructionOp.PUSH_CONST`` (push
+    ``instr.value`` or 0) and ``InstructionOp.POP`` (raises ``ValueError``
+    on underflow). Control-flow and all other ops are unsupported.
     """
     out = list(stack)
     op = instr.op

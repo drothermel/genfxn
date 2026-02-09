@@ -4,6 +4,8 @@ from genfxn.stack_bytecode.models import StackBytecodeSpec
 def render_stack_bytecode(
     spec: StackBytecodeSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
+    # Java renderer intentionally uses int[]/int arithmetic for idiomatic Java.
+    # Rust uses i64; extremely large values can overflow differently per target.
     ops = ", ".join(f'"{instr.op.value}"' for instr in spec.program)
     values = ", ".join(
         str(instr.value if instr.value is not None else 0)

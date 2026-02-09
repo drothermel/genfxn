@@ -10,7 +10,7 @@ from pydantic import TypeAdapter
 from genfxn.core.codegen import get_spec_value, task_id_from_spec
 from genfxn.core.describe import describe_task
 from genfxn.core.difficulty import compute_difficulty
-from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.core.string_predicates import StringPredicateType
@@ -33,12 +33,12 @@ from genfxn.simple_algorithms.models import (
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.splits import AxisHoldout, HoldoutType
 from genfxn.stack_bytecode.models import (
-    InputMode,
-    Instruction,
-    InstructionOp,
     StackBytecodeAxes,
     StackBytecodeSpec,
 )
+from genfxn.stack_bytecode.queries import generate_stack_bytecode_queries
+from genfxn.stack_bytecode.render import render_stack_bytecode
+from genfxn.stack_bytecode.templates import stack_template_program
 from genfxn.stateful.models import StatefulAxes, StatefulSpec, TemplateType
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.models import (
@@ -328,306 +328,8 @@ def _build_stack_bytecode_axes(
     return StackBytecodeAxes(**kwargs)
 
 
-def _stack_template_program(
-    difficulty: int,
-    rng: random.Random,
-) -> list[Instruction]:
-    if difficulty <= 1:
-        c = rng.randint(-10, 10)
-        return [
-            Instruction(op=InstructionOp.PUSH_CONST, value=c),
-            Instruction(op=InstructionOp.HALT),
-        ]
-    if difficulty == 2:
-        c = rng.randint(-5, 5)
-        return [
-            Instruction(op=InstructionOp.LOAD_INPUT, index=0),
-            Instruction(op=InstructionOp.PUSH_CONST, value=c),
-            Instruction(op=InstructionOp.ADD),
-            Instruction(op=InstructionOp.HALT),
-        ]
-    if difficulty == 3:
-        c = rng.randint(1, 5)
-        return [
-            Instruction(op=InstructionOp.LOAD_INPUT, index=0),
-            Instruction(op=InstructionOp.DUP),
-            Instruction(op=InstructionOp.PUSH_CONST, value=c),
-            Instruction(op=InstructionOp.MUL),
-            Instruction(op=InstructionOp.SUB),
-            Instruction(op=InstructionOp.HALT),
-        ]
-    if difficulty == 4:
-        c = rng.randint(1, 5)
-        return [
-            Instruction(op=InstructionOp.LOAD_INPUT, index=0),
-            Instruction(op=InstructionOp.JUMP_IF_ZERO, target=5),
-            Instruction(op=InstructionOp.LOAD_INPUT, index=1),
-            Instruction(op=InstructionOp.PUSH_CONST, value=c),
-            Instruction(op=InstructionOp.ADD),
-            Instruction(op=InstructionOp.HALT),
-            Instruction(op=InstructionOp.PUSH_CONST, value=0),
-            Instruction(op=InstructionOp.HALT),
-        ]
-    c = rng.randint(1, 3)
-    return [
-        Instruction(op=InstructionOp.PUSH_CONST, value=0),
-        Instruction(op=InstructionOp.LOAD_INPUT, index=0),
-        Instruction(op=InstructionOp.JUMP_IF_ZERO, target=8),
-        Instruction(op=InstructionOp.LOAD_INPUT, index=0),
-        Instruction(op=InstructionOp.PUSH_CONST, value=c),
-        Instruction(op=InstructionOp.SUB),
-        Instruction(op=InstructionOp.JUMP_IF_NONZERO, target=3),
-        Instruction(op=InstructionOp.PUSH_CONST, value=1),
-        Instruction(op=InstructionOp.HALT),
-    ]
-
-
-def _resolve_jump_target(
-    target: int,
-    program_len: int,
-    mode: str,
-) -> int | None:
-    if 0 <= target < program_len:
-        return target
-    if mode == "clamp":
-        return min(max(target, 0), max(program_len - 1, 0))
-    if mode == "wrap" and program_len > 0:
-        return target % program_len
-    return None
-
-
-def _stack_exec_output(
-    spec: StackBytecodeSpec, xs: list[int]
-) -> tuple[int, int]:
-    program = spec.program
-    if not program:
-        return (6, 0)
-
-    stack: list[int] = []
-    pc = 0
-    steps = 0
-    while steps < spec.max_step_count:
-        if pc < 0 or pc >= len(program):
-            return (3, 0)
-        instr = program[pc]
-        op = instr.op
-        steps += 1
-
-        if op == InstructionOp.HALT:
-            return (0, stack[-1]) if stack else (6, 0)
-        if op == InstructionOp.PUSH_CONST:
-            stack.append(0 if instr.value is None else instr.value)
-            pc += 1
-            continue
-        if op == InstructionOp.LOAD_INPUT:
-            idx = 0 if instr.index is None else instr.index
-            if spec.input_mode == InputMode.CYCLIC:
-                if len(xs) == 0:
-                    return (5, 0)
-                idx = idx % len(xs)
-            if idx < 0 or idx >= len(xs):
-                return (5, 0)
-            stack.append(xs[idx])
-            pc += 1
-            continue
-        if op in {
-            InstructionOp.DUP,
-            InstructionOp.POP,
-            InstructionOp.NEG,
-            InstructionOp.ABS,
-            InstructionOp.IS_ZERO,
-        }:
-            if len(stack) < 1:
-                return (2, 0)
-            v = stack[-1]
-            if op == InstructionOp.DUP:
-                stack.append(v)
-            elif op == InstructionOp.POP:
-                stack.pop()
-            elif op == InstructionOp.NEG:
-                stack[-1] = -v
-            elif op == InstructionOp.ABS:
-                stack[-1] = abs(v)
-            else:
-                stack[-1] = 1 if v == 0 else 0
-            pc += 1
-            continue
-        if op == InstructionOp.SWAP:
-            if len(stack) < 2:
-                return (2, 0)
-            stack[-1], stack[-2] = stack[-2], stack[-1]
-            pc += 1
-            continue
-        if op in {
-            InstructionOp.ADD,
-            InstructionOp.SUB,
-            InstructionOp.MUL,
-            InstructionOp.DIV,
-            InstructionOp.MOD,
-            InstructionOp.EQ,
-            InstructionOp.GT,
-            InstructionOp.LT,
-        }:
-            if len(stack) < 2:
-                return (2, 0)
-            b = stack.pop()
-            a = stack.pop()
-            if op == InstructionOp.ADD:
-                stack.append(a + b)
-            elif op == InstructionOp.SUB:
-                stack.append(a - b)
-            elif op == InstructionOp.MUL:
-                stack.append(a * b)
-            elif op == InstructionOp.DIV:
-                if b == 0:
-                    return (4, 0)
-                stack.append(int(a / b))
-            elif op == InstructionOp.MOD:
-                if b == 0:
-                    return (4, 0)
-                stack.append(a % b)
-            elif op == InstructionOp.EQ:
-                stack.append(1 if a == b else 0)
-            elif op == InstructionOp.GT:
-                stack.append(1 if a > b else 0)
-            else:
-                stack.append(1 if a < b else 0)
-            pc += 1
-            continue
-        if op in {
-            InstructionOp.JUMP,
-            InstructionOp.JUMP_IF_ZERO,
-            InstructionOp.JUMP_IF_NONZERO,
-        }:
-            target = 0 if instr.target is None else instr.target
-            if op != InstructionOp.JUMP:
-                if len(stack) < 1:
-                    return (2, 0)
-                cond = stack.pop()
-                if op == InstructionOp.JUMP_IF_ZERO and cond != 0:
-                    pc += 1
-                    continue
-                if op == InstructionOp.JUMP_IF_NONZERO and cond == 0:
-                    pc += 1
-                    continue
-            resolved = _resolve_jump_target(
-                target=target,
-                program_len=len(program),
-                mode=spec.jump_target_mode.value,
-            )
-            if resolved is None:
-                return (3, 0)
-            pc = resolved
-            continue
-        return (3, 0)
-    return (1, 0)
-
-
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
-    spec_json = repr(spec.model_dump(mode="json"))
-    return (
-        "def f(xs: list[int]) -> tuple[int, int]:\n"
-        f"    spec = {spec_json}\n"
-        "    program = spec['program']\n"
-        "    stack = []\n"
-        "    pc = 0\n"
-        "    steps = 0\n"
-        "    while steps < spec['max_step_count']:\n"
-        "        if pc < 0 or pc >= len(program):\n"
-        "            return (3, 0)\n"
-        "        instr = program[pc]\n"
-        "        op = instr['op']\n"
-        "        steps += 1\n"
-        "        if op == 'halt':\n"
-        "            return (0, stack[-1]) if stack else (6, 0)\n"
-        "        if op == 'push_const':\n"
-        "            stack.append(instr.get('value', 0))\n"
-        "            pc += 1\n"
-        "            continue\n"
-        "        if op == 'load_input':\n"
-        "            idx = instr.get('index', 0)\n"
-        "            if spec['input_mode'] == 'cyclic':\n"
-        "                if not xs:\n"
-        "                    return (5, 0)\n"
-        "                idx = idx % len(xs)\n"
-        "            if idx < 0 or idx >= len(xs):\n"
-        "                return (5, 0)\n"
-        "            stack.append(xs[idx])\n"
-        "            pc += 1\n"
-        "            continue\n"
-        "        if op in {'dup', 'pop', 'neg', 'abs', 'is_zero'}:\n"
-        "            if len(stack) < 1:\n"
-        "                return (2, 0)\n"
-        "            v = stack[-1]\n"
-        "            if op == 'dup':\n"
-        "                stack.append(v)\n"
-        "            elif op == 'pop':\n"
-        "                stack.pop()\n"
-        "            elif op == 'neg':\n"
-        "                stack[-1] = -v\n"
-        "            elif op == 'abs':\n"
-        "                stack[-1] = abs(v)\n"
-        "            else:\n"
-        "                stack[-1] = 1 if v == 0 else 0\n"
-        "            pc += 1\n"
-        "            continue\n"
-        "        if op == 'swap':\n"
-        "            if len(stack) < 2:\n"
-        "                return (2, 0)\n"
-        "            stack[-1], stack[-2] = stack[-2], stack[-1]\n"
-        "            pc += 1\n"
-        "            continue\n"
-        "        if op in {'add','sub','mul','div','mod','eq','gt','lt'}:\n"
-        "            if len(stack) < 2:\n"
-        "                return (2, 0)\n"
-        "            b = stack.pop()\n"
-        "            a = stack.pop()\n"
-        "            if op == 'add':\n"
-        "                stack.append(a + b)\n"
-        "            elif op == 'sub':\n"
-        "                stack.append(a - b)\n"
-        "            elif op == 'mul':\n"
-        "                stack.append(a * b)\n"
-        "            elif op == 'div':\n"
-        "                if b == 0:\n"
-        "                    return (4, 0)\n"
-        "                stack.append(int(a / b))\n"
-        "            elif op == 'mod':\n"
-        "                if b == 0:\n"
-        "                    return (4, 0)\n"
-        "                stack.append(a % b)\n"
-        "            elif op == 'eq':\n"
-        "                stack.append(1 if a == b else 0)\n"
-        "            elif op == 'gt':\n"
-        "                stack.append(1 if a > b else 0)\n"
-        "            else:\n"
-        "                stack.append(1 if a < b else 0)\n"
-        "            pc += 1\n"
-        "            continue\n"
-        "        if op in {'jump', 'jump_if_zero', 'jump_if_nonzero'}:\n"
-        "            tgt = instr.get('target', 0)\n"
-        "            if op != 'jump':\n"
-        "                if len(stack) < 1:\n"
-        "                    return (2, 0)\n"
-        "                cond = stack.pop()\n"
-        "                if op == 'jump_if_zero' and cond != 0:\n"
-        "                    pc += 1\n"
-        "                    continue\n"
-        "                if op == 'jump_if_nonzero' and cond == 0:\n"
-        "                    pc += 1\n"
-        "                    continue\n"
-        "            if 0 <= tgt < len(program):\n"
-        "                pc = tgt\n"
-        "            elif spec['jump_target_mode'] == 'clamp':\n"
-        "                pc = min(max(tgt, 0), len(program) - 1)\n"
-        "            elif spec['jump_target_mode'] == 'wrap':\n"
-        "                pc = tgt % len(program)\n"
-        "            else:\n"
-        "                return (3, 0)\n"
-        "            continue\n"
-        "        return (3, 0)\n"
-        "    return (1, 0)\n"
-    )
+    return render_stack_bytecode(spec)
 
 
 def _build_stack_bytecode_task(
@@ -635,7 +337,7 @@ def _build_stack_bytecode_task(
     rng: random.Random,
 ) -> Task:
     target = axes.target_difficulty or rng.randint(1, 5)
-    program = _stack_template_program(target, rng)
+    program = stack_template_program(target, rng)
     max_steps = rng.randint(*axes.max_step_count_range)
     jump_mode = rng.choice(axes.jump_target_modes)
     input_mode = rng.choice(axes.input_modes)
@@ -646,28 +348,7 @@ def _build_stack_bytecode_task(
         input_mode=input_mode,
     )
     spec_dict = spec.model_dump()
-    queries = [
-        Query(
-            input=[],
-            output=_stack_exec_output(spec, []),
-            tag=QueryTag.BOUNDARY,
-        ),
-        Query(
-            input=[0],
-            output=_stack_exec_output(spec, [0]),
-            tag=QueryTag.TYPICAL,
-        ),
-        Query(
-            input=[1],
-            output=_stack_exec_output(spec, [1]),
-            tag=QueryTag.COVERAGE,
-        ),
-        Query(
-            input=[-2, 3, 4],
-            output=_stack_exec_output(spec, [-2, 3, 4]),
-            tag=QueryTag.ADVERSARIAL,
-        ),
-    ]
+    queries = generate_stack_bytecode_queries(spec, axes, rng)
     return Task(
         task_id=task_id_from_spec("stack_bytecode", spec_dict),
         family="stack_bytecode",

@@ -395,7 +395,12 @@ def _string_transform_score(trans: dict[str, Any]) -> int:
 
 
 def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:
-    """Compute difficulty for stack_bytecode with explicit D1..D5 bands."""
+    """Compute difficulty for stack_bytecode with explicit D1..D5 bands.
+
+    Unlike other families that blend weighted components, this model takes
+    the max of component scores: any single hard dimension can drive overall
+    difficulty.
+    """
     program = spec.get("program", [])
     if not isinstance(program, list):
         return 1

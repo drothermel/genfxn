@@ -6,6 +6,13 @@ import srsly
 from typer.testing import CliRunner
 
 from genfxn.cli import app
+from genfxn.core.models import Task
+from genfxn.stack_bytecode.models import StackBytecodeSpec
+from genfxn.stack_bytecode.render import render_stack_bytecode
+from genfxn.stack_bytecode.validate import (
+    CODE_UNSAFE_AST,
+    validate_stack_bytecode_task,
+)
 
 runner = CliRunner()
 
@@ -251,6 +258,49 @@ class TestGenerate:
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 3
         assert all(t["family"] == "stack_bytecode" for t in tasks)
+        for task in tasks:
+            spec = StackBytecodeSpec.model_validate(task["spec"])
+            assert task["code"] == render_stack_bytecode(spec)
+            task_obj = Task.model_validate(task).model_copy(
+                update={"spec": spec.model_dump()}
+            )
+            issues = validate_stack_bytecode_task(task_obj)
+            assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_generate_stack_bytecode_honors_query_ranges(
+        self, tmp_path
+    ) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stack_bytecode",
+                "-n",
+                "2",
+                "--value-range",
+                "-3,4",
+                "--list-length-range",
+                "10,12",
+                "-s",
+                "9",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert tasks
+        for task in tasks:
+            for query in cast(list[dict[str, Any]], task["queries"]):
+                xs = cast(list[int], query["input"])
+                assert 10 <= len(xs) <= 12
+                assert all(-3 <= value <= 4 for value in xs)
 
     def test_generate_stack_bytecode_with_difficulty(self, tmp_path) -> None:
         if not _supports_stack_bytecode_family():

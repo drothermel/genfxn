@@ -53,6 +53,14 @@ class TestValidTask:
             errors = [i for i in issues if i.severity == Severity.ERROR]
             assert errors == [], f"seed {seed} produced errors: {errors}"
 
+    def test_json_roundtrip_outputs_validate(self, baseline_task: Task) -> None:
+        roundtripped = Task.model_validate(
+            baseline_task.model_dump(mode="json")
+        )
+        issues = validate_stack_bytecode_task(roundtripped)
+        assert not any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+        assert not any(i.code == CODE_QUERY_OUTPUT_MISMATCH for i in issues)
+
 
 class TestFamilyAndTaskId:
     def test_wrong_family_short_circuits(self, baseline_task: Task) -> None:

@@ -25,9 +25,9 @@ __all__ = [
     "StackBytecodeAxes",
     "StackBytecodeSpec",
     "eval_stack_bytecode",
-    "render_stack_bytecode",
-    "sample_stack_bytecode_spec",
     "generate_stack_bytecode_queries",
     "generate_stack_bytecode_task",
+    "render_stack_bytecode",
+    "sample_stack_bytecode_spec",
     "validate_stack_bytecode_task",
 ]

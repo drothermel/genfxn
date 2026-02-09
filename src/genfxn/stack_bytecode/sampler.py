@@ -98,6 +98,13 @@ def _ops_for_target(target_difficulty: int | None) -> list[InstructionOp]:
             InstructionOp.JUMP,
             InstructionOp.HALT,
         ]
+    if target_difficulty == 4:
+        return [
+            InstructionOp.PUSH_CONST,
+            InstructionOp.LOAD_INPUT,
+            *_NULLARY_OPS,
+            InstructionOp.HALT,
+        ]
     return [
         InstructionOp.PUSH_CONST,
         InstructionOp.LOAD_INPUT,
@@ -164,6 +171,9 @@ def _sample_instruction(
     rng: random.Random,
 ) -> Instruction:
     op = rng.choice(op_choices)
+    # Keep HALT in the weighted choice pool so low-complexity programs
+    # remain common; remap interior HALTs to PUSH_CONST and append the
+    # true terminating HALT explicitly at the end of the program.
     if op == InstructionOp.HALT:
         op = InstructionOp.PUSH_CONST
 

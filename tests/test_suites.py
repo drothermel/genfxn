@@ -805,6 +805,8 @@ class TestPoolGeneration:
         self, family: str, difficulty: int
     ) -> None:
         """Pool produces candidates at correct difficulty."""
+        from genfxn.core.difficulty import compute_difficulty
+
         candidates, stats = generate_pool(
             family, difficulty, seed=42, pool_size=200
         )
@@ -813,8 +815,6 @@ class TestPoolGeneration:
         assert stats.total_sampled == 200
         # All should have the right difficulty
         for cand in candidates:
-            from genfxn.core.difficulty import compute_difficulty
-
             assert compute_difficulty(family, cand.spec_dict) == difficulty
 
     def test_stack_bytecode_pool_generates_candidates_when_available(
@@ -822,6 +822,8 @@ class TestPoolGeneration:
     ) -> None:
         if not _stack_suite_available():
             pytest.skip("stack_bytecode suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
 
         for difficulty in sorted(QUOTAS["stack_bytecode"].keys()):
             candidates, stats = generate_pool(
@@ -833,8 +835,6 @@ class TestPoolGeneration:
             assert len(candidates) > 0
             assert stats.candidates == len(candidates)
             for cand in candidates:
-                from genfxn.core.difficulty import compute_difficulty
-
                 assert (
                     compute_difficulty("stack_bytecode", cand.spec_dict)
                     == difficulty
@@ -952,6 +952,38 @@ class TestDeterminism:
         a = generate_suite("stack_bytecode", difficulty, seed=19, pool_size=250)
         b = generate_suite("stack_bytecode", difficulty, seed=19, pool_size=250)
         assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_stack_bytecode_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+        from genfxn.stack_bytecode.eval import eval_stack_bytecode
+        from genfxn.stack_bytecode.models import StackBytecodeSpec
+        difficulty = sorted(QUOTAS["stack_bytecode"].keys())[0]
+        tasks = generate_suite(
+            "stack_bytecode",
+            difficulty,
+            seed=42,
+            pool_size=250,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = StackBytecodeSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        assert callable(f)
+        out = cast(tuple[int, int], f([1, 2, 3]))
+        assert isinstance(out, tuple)
+        assert len(out) == 2
+
+        for q in task.queries:
+            assert isinstance(q.output, tuple)
+            assert len(q.output) == 2
+            assert q.output == eval_stack_bytecode(spec, list(q.input))
 
 
 class TestSuiteGenerationValidation:

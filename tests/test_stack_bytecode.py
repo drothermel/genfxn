@@ -18,6 +18,7 @@ from genfxn.stack_bytecode.queries import generate_stack_bytecode_queries
 from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.sampler import sample_stack_bytecode_spec
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
+from genfxn.stack_bytecode.templates import stack_template_program
 
 
 def _spec(
@@ -381,6 +382,24 @@ class TestSamplerAndQueries:
         for q in queries:
             assert q.output == eval_stack_bytecode(spec, list(q.input))
 
+    def test_queries_respect_value_and_length_ranges(self) -> None:
+        axes = StackBytecodeAxes(
+            target_difficulty=3,
+            value_range=(3, 7),
+            list_length_range=(2, 4),
+        )
+        spec = sample_stack_bytecode_spec(axes, random.Random(9))
+        queries = generate_stack_bytecode_queries(spec, axes, random.Random(9))
+
+        assert queries
+        for q in queries:
+            lo, hi = axes.list_length_range
+            assert lo <= len(q.input) <= hi
+            assert all(
+                axes.value_range[0] <= x <= axes.value_range[1]
+                for x in q.input
+            )
+
     def test_sampler_respects_target_difficulty_axis(self) -> None:
         def _sample_difficulty_average(target: int) -> float:
             rng = random.Random(1000 + target)
@@ -397,6 +416,20 @@ class TestSamplerAndQueries:
         avg_low = _sample_difficulty_average(1)
         avg_high = _sample_difficulty_average(5)
         assert avg_high >= avg_low + 1.0
+
+    def test_template_program_d4_has_expected_jump_target(self) -> None:
+        program = stack_template_program(4, random.Random(42))
+        assert len(program) == 8
+        assert program[1].op == InstructionOp.JUMP_IF_ZERO
+        assert program[1].target == 6
+
+    def test_template_program_d5_has_expected_layout(self) -> None:
+        program = stack_template_program(5, random.Random(42))
+        assert len(program) == 11
+        assert program[2].op == InstructionOp.JUMP_IF_ZERO
+        assert program[2].target == 10
+        assert program[8].op == InstructionOp.JUMP
+        assert program[8].target == 10
 
 
 class TestRenderRoundtrip:

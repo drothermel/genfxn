@@ -14,6 +14,11 @@ def _rand_list(
     return [rng.randint(lo, hi) for _ in range(length)]
 
 
+def _clamp(value: int, bounds: tuple[int, int]) -> int:
+    lo, hi = bounds
+    return min(max(value, lo), hi)
+
+
 def generate_stack_bytecode_queries(
     spec: StackBytecodeSpec,
     axes: StackBytecodeAxes,
@@ -27,11 +32,12 @@ def generate_stack_bytecode_queries(
 
     queries: list[Query] = []
 
-    # Coverage: empty, single, typical.
+    # Coverage: min-length, an optional one-item case, and midpoint length.
+    one_len = min(max(l_lo, 1), l_hi)
+    coverage_lengths = [l_lo, one_len, (l_lo + l_hi) // 2]
     coverage_inputs = [
-        [],
-        [rng.randint(v_lo, v_hi)],
-        _rand_list((l_lo + l_hi) // 2, axes.value_range, rng),
+        _rand_list(length, axes.value_range, rng)
+        for length in dict.fromkeys(coverage_lengths)
     ]
     for xs in coverage_inputs:
         queries.append(
@@ -75,9 +81,14 @@ def generate_stack_bytecode_queries(
             )
         )
 
-    # Adversarial: repeating patterns and zero-heavy vectors.
-    patterned = [0, 1, -1, 0, 1, -1][: max(0, min(l_hi, 6))]
-    zeros = [0 for _ in range(max(0, min(l_hi, 6)))]
+    # Adversarial: repeating patterns and zero-heavy vectors within bounds.
+    adv_len = 0 if l_hi == 0 else min(max(l_lo, 1), l_hi)
+    base_pattern = [0, 1, -1, 0, 1, -1]
+    patterned = [
+        _clamp(base_pattern[i % len(base_pattern)], axes.value_range)
+        for i in range(adv_len)
+    ]
+    zeros = [_clamp(0, axes.value_range) for _ in range(adv_len)]
     queries.append(
         Query(
             input=patterned,

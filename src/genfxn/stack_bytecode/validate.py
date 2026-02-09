@@ -307,19 +307,15 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                 )
             )
 
-        out = q.output
-        is_valid_out = (
-            isinstance(out, tuple)
-            and len(out) == 2
-            and isinstance(out[0], int)
-            and isinstance(out[1], int)
-        )
-        if not is_valid_out:
+        if _coerce_query_output(q.output) is None:
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
                     severity=severity,
-                    message="Query output must be tuple[int, int]",
+                    message=(
+                        "Query output must be tuple[int, int] "
+                        "or list[int, int]"
+                    ),
                     location=f"queries[{i}].output",
                     task_id=task.task_id,
                 )
@@ -341,8 +337,11 @@ def _validate_query_outputs(
             isinstance(x, int) for x in q.input
         ):
             continue
+        actual = _coerce_query_output(q.output)
+        if actual is None:
+            continue
         expected = eval_stack_bytecode(spec, q.input)
-        if q.output != expected:
+        if actual != expected:
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_MISMATCH,
@@ -356,6 +355,13 @@ def _validate_query_outputs(
                 )
             )
     return issues
+
+
+def _coerce_query_output(output: object) -> tuple[int, int] | None:
+    if isinstance(output, (tuple, list)) and len(output) == 2:
+        if isinstance(output[0], int) and isinstance(output[1], int):
+            return (output[0], output[1])
+    return None
 
 
 def _validate_semantics(
@@ -376,7 +382,7 @@ def _validate_semantics(
     len_lo, len_hi = axes.list_length_range
     val_lo, val_hi = axes.value_range
 
-    for i in range(semantic_trials):
+    for _ in range(semantic_trials):
         n = rng.randint(len_lo, len_hi)
         xs = [rng.randint(val_lo, val_hi) for _ in range(n)]
         expected = eval_stack_bytecode(spec, xs)

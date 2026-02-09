@@ -3,7 +3,7 @@
 import importlib.util
 import random
 from collections import Counter
-from typing import cast
+from typing import ClassVar, cast
 
 import pytest
 
@@ -378,8 +378,20 @@ class TestPresetCompleteness:
 
 class TestStackBytecodePresets:
     N_SAMPLES = 40
-    EXACT_THRESHOLDS = {1: 0.0, 2: 0.1, 3: 0.3, 4: 0.6, 5: 0.9}
-    WITHIN_ONE_THRESHOLDS = {1: 0.1, 2: 0.3, 3: 0.65, 4: 0.95, 5: 0.95}
+    EXACT_THRESHOLDS: ClassVar[dict[int, float]] = {
+        1: 0.0,
+        2: 0.1,
+        3: 0.3,
+        4: 0.6,
+        5: 0.9,
+    }
+    WITHIN_ONE_THRESHOLDS: ClassVar[dict[int, float]] = {
+        1: 0.1,
+        2: 0.3,
+        3: 0.65,
+        4: 0.95,
+        5: 0.95,
+    }
 
     def _require_stack_modules(self):
         if not _supports_stack_bytecode_presets():
