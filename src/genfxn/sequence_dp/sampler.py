@@ -145,7 +145,7 @@ def _sample_match_predicate(
     axes: SequenceDpAxes,
     target_difficulty: int | None,
     rng: random.Random,
-):
+) -> PredicateEq | PredicateAbsDiffLe | PredicateModEq:
     if predicate_type == PredicateType.EQ:
         return PredicateEq()
 

@@ -1,29 +1,21 @@
-import importlib.util
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
 
+from helpers import load_script_module
+
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_tests.py"
 
 
-def _load_script_module(script: Path, module_name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(module_name, script)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to load script module from {script}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-_SCRIPT_MODULE = _load_script_module(_SCRIPT, "tests.run_tests_script_module")
+_SCRIPT_MODULE = load_script_module(_SCRIPT, "tests.run_tests_script_module")
 parse_duration_seconds = cast(
     Callable[[str], float | None],
-    getattr(_SCRIPT_MODULE, "_parse_duration_seconds"),
+    _SCRIPT_MODULE._parse_duration_seconds,
 )
-run_tests_main = cast(Callable[[], int], getattr(_SCRIPT_MODULE, "main"))
-script_subprocess = cast(ModuleType, getattr(_SCRIPT_MODULE, "subprocess"))
+run_tests_main = cast(Callable[[], int], _SCRIPT_MODULE.main)
+script_subprocess = cast(ModuleType, _SCRIPT_MODULE.subprocess)
 
 
 def test_parse_duration_seconds_uses_last_match() -> None:

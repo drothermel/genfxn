@@ -167,5 +167,15 @@ def generate_sequence_dp_queries(
             _append_query(a_vals, b_vals, tag)
             if len(queries) > prev_count:
                 break
+        if any(query.tag == tag for query in queries):
+            continue
+        raise RuntimeError(
+            "Failed to generate a unique query for tag "
+            f"{tag.value} after retries with "
+            f"value_range={axes.value_range}, "
+            f"a_lo={a_lo}, a_hi={a_hi}, "
+            f"b_lo={b_lo}, b_hi={b_hi}, "
+            f"v_mid={v_mid}."
+        )
 
     return queries

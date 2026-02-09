@@ -17,6 +17,11 @@ Shared logic (models, validation, difficulty, tracing, presets) is in `src/genfx
 - `uv run genfxn generate -f all -n 20 -o /tmp/tasks.jsonl`: generate sample tasks.
 - `uv run genfxn split /tmp/tasks.jsonl --train /tmp/train.jsonl --test /tmp/test.jsonl --random-ratio 0.8 --seed 42`: split dataset.
 
+### Agent Tooling Rule
+When running Python tooling in this repo, always use `uv run ...` rather than
+invoking binaries directly. This includes `python`, `pytest`, `ruff`, `ty`, and
+related Python CLI tools.
+
 ## Coding Style & Naming Conventions
 Target Python is 3.12 with `ruff` enforcing style (`line-length = 80`, import sorting via `I`). Use 4-space indentation, type hints, and `snake_case` for functions/modules. Keep models and enums explicit (see `models.py` patterns in each family).
 

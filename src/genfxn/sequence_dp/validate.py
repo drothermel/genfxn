@@ -236,8 +236,6 @@ def _validate_code_compile(
                     task_id=task.task_id,
                 )
             ], None
-    _ = parsed_tree
-
     if not execute_untrusted_code:
         return [], None
 

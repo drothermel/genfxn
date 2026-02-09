@@ -1,10 +1,10 @@
 import random
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 import pytest
+from helpers import require_java_runtime, require_rust_runtime
 
 from genfxn.bitops.eval import eval_bitops
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
@@ -12,24 +12,6 @@ from genfxn.bitops.sampler import sample_bitops_spec
 from genfxn.bitops.task import generate_bitops_task
 from genfxn.langs.java.bitops import render_bitops as render_bitops_java
 from genfxn.langs.rust.bitops import render_bitops as render_bitops_rust
-
-
-def _require_java_runtime() -> tuple[str, str]:
-    javac = shutil.which("javac")
-    java = shutil.which("java")
-    if not javac or not java:
-        pytest.skip("Java runtime tools (javac/java) not available")
-    assert javac is not None
-    assert java is not None
-    return javac, java
-
-
-def _require_rust_runtime() -> str:
-    rustc = shutil.which("rustc")
-    if not rustc:
-        pytest.skip("Rust compiler (rustc) not available")
-    assert rustc is not None
-    return rustc
 
 
 def _run_java_f(javac: str, java: str, code: str, x: int) -> int:
@@ -95,7 +77,7 @@ def _run_rust_f(rustc: str, code: str, x: int) -> int:
 
 @pytest.mark.full
 def test_bitops_java_runtime_parity() -> None:
-    javac, java = _require_java_runtime()
+    javac, java = require_java_runtime()
     task = generate_bitops_task(rng=random.Random(42))
     spec = BitopsSpec.model_validate(task.spec)
     java_code = render_bitops_java(spec, func_name="f")
@@ -109,7 +91,7 @@ def test_bitops_java_runtime_parity() -> None:
 
 @pytest.mark.full
 def test_bitops_rust_runtime_parity() -> None:
-    rustc = _require_rust_runtime()
+    rustc = require_rust_runtime()
     task = generate_bitops_task(rng=random.Random(99))
     spec = BitopsSpec.model_validate(task.spec)
     rust_code = render_bitops_rust(spec, func_name="f")
@@ -123,8 +105,8 @@ def test_bitops_rust_runtime_parity() -> None:
 
 @pytest.mark.full
 def test_bitops_runtime_parity_across_sampled_specs() -> None:
-    javac, java = _require_java_runtime()
-    rustc = _require_rust_runtime()
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
 
     rng = random.Random(77)
     for _ in range(8):

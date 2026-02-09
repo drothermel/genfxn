@@ -2,7 +2,8 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: Complete (M0-M5 + suite integration + calibration script)
+Status: Near-complete (M0-M5 + suite integration + calibration script;
+PR notes/test evidence pending)
 
 ## Goal
 

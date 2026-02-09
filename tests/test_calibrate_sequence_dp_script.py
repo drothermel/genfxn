@@ -1,12 +1,11 @@
-import importlib.util
 import json
 from collections.abc import Callable
 from pathlib import Path
-from types import ModuleType
 from typing import Any, cast
 
 import pytest
 from click.exceptions import Exit
+from helpers import load_script_module
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -14,22 +13,10 @@ _SCRIPT = (
     / "calibrate_sequence_dp.py"
 )
 
-
-def _load_script_module(script: Path, module_name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(module_name, script)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to load script module from {script}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-_SCRIPT_MODULE = _load_script_module(
+_SCRIPT_MODULE = load_script_module(
     _SCRIPT, "tests.calibrate_sequence_dp_script_module"
 )
-calibrate_sequence_dp_main = cast(
-    Callable[..., None], getattr(_SCRIPT_MODULE, "main")
-)
+calibrate_sequence_dp_main = cast(Callable[..., None], _SCRIPT_MODULE.main)
 
 
 class _FakeAxes:

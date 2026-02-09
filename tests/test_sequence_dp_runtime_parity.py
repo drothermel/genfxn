@@ -1,11 +1,11 @@
 import random
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import require_java_runtime, require_rust_runtime
 
 from genfxn.langs.java.sequence_dp import (
     render_sequence_dp as render_sequence_dp_java,
@@ -17,24 +17,6 @@ from genfxn.sequence_dp.eval import eval_sequence_dp
 from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
 from genfxn.sequence_dp.sampler import sample_sequence_dp_spec
 from genfxn.sequence_dp.task import generate_sequence_dp_task
-
-
-def _require_java_runtime() -> tuple[str, str]:
-    javac = shutil.which("javac")
-    java = shutil.which("java")
-    if not javac or not java:
-        pytest.skip("Java runtime tools (javac/java) not available")
-    assert javac is not None
-    assert java is not None
-    return javac, java
-
-
-def _require_rust_runtime() -> str:
-    rustc = shutil.which("rustc")
-    if not rustc:
-        pytest.skip("Rust compiler (rustc) not available")
-    assert rustc is not None
-    return rustc
 
 
 def _long_literal(value: int) -> str:
@@ -139,7 +121,7 @@ def _run_rust_f(
 
 @pytest.mark.full
 def test_sequence_dp_java_runtime_parity() -> None:
-    javac, java = _require_java_runtime()
+    javac, java = require_java_runtime()
     task = generate_sequence_dp_task(rng=random.Random(42))
     spec = SequenceDpSpec.model_validate(task.spec)
     java_code = render_sequence_dp_java(spec, func_name="f")
@@ -153,7 +135,7 @@ def test_sequence_dp_java_runtime_parity() -> None:
 
 @pytest.mark.full
 def test_sequence_dp_rust_runtime_parity() -> None:
-    rustc = _require_rust_runtime()
+    rustc = require_rust_runtime()
     task = generate_sequence_dp_task(rng=random.Random(99))
     spec = SequenceDpSpec.model_validate(task.spec)
     rust_code = render_sequence_dp_rust(spec, func_name="f")
@@ -167,8 +149,8 @@ def test_sequence_dp_rust_runtime_parity() -> None:
 
 @pytest.mark.full
 def test_sequence_dp_runtime_parity_across_sampled_specs() -> None:
-    javac, java = _require_java_runtime()
-    rustc = _require_rust_runtime()
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
 
     rng = random.Random(77)
     sample_inputs = (
