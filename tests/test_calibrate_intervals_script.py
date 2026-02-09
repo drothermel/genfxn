@@ -182,3 +182,75 @@ def test_main_raises_exit_when_strict_checks_fail(
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["strict"]["passed"] is False
     assert report["strict"]["failures"]
+
+
+def test_main_strict_fails_when_means_are_not_monotonic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reachability = {
+        1: {"mean": 1.1, "exact": 1.0, "within_one": 1.0},
+        2: {"mean": 2.0, "exact": 1.0, "within_one": 1.0},
+        3: {"mean": 1.8, "exact": 1.0, "within_one": 1.0},
+        4: {"mean": 4.0, "exact": 1.0, "within_one": 1.0},
+        5: {"mean": 5.0, "exact": 1.0, "within_one": 1.0},
+    }
+    monotonic = {
+        "means": {
+            "D1": 1.1,
+            "D2": 2.0,
+            "D3": 1.8,
+            "D4": 4.0,
+            "D5": 5.0,
+        },
+        "is_monotonic": False,
+        "violations": [
+            {
+                "from": "D2",
+                "to": "D3",
+                "from_mean": 2.0,
+                "to_mean": 1.8,
+            }
+        ],
+    }
+    suite_checks = {
+        difficulty: {
+            "difficulty": difficulty,
+            "seed": 1000 + difficulty,
+            "generated_count": 10,
+            "error": None,
+            "quota_rows": [],
+            "under_rows": [],
+        }
+        for difficulty in [1, 2, 3, 4, 5]
+    }
+
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "_compute_reachability",
+        lambda *, samples, seed: reachability,
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "_check_monotonic_means",
+        lambda _reachability: monotonic,
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "_run_suite_checks",
+        lambda *, seed, pool_size: suite_checks,
+    )
+
+    output = tmp_path / "intervals_calibration.json"
+    with pytest.raises(Exit) as exc_info:
+        calibrate_intervals_main(
+            output=output,
+            samples=5,
+            seed=7,
+            pool_size=11,
+            strict=True,
+        )
+    assert exc_info.value.exit_code == 1
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["strict"]["passed"] is False
+    assert "Monotonic means check failed" in report["strict"]["failures"]

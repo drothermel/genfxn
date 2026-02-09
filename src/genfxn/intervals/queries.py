@@ -37,20 +37,64 @@ def _clamp(value: int, bounds: tuple[int, int]) -> int:
     return min(max(value, lo), hi)
 
 
+def _sample_non_degenerate_interval(
+    bounds: tuple[int, int],
+    max_span_range: tuple[int, int],
+    rng: random.Random,
+) -> tuple[int, int] | None:
+    lo, hi = bounds
+    if lo >= hi:
+        return None
+
+    max_possible_span = hi - lo
+    requested_lo = max(1, max_span_range[0])
+    requested_hi = max(requested_lo, max_span_range[1])
+    span_hi = min(requested_hi, max_possible_span)
+    if span_hi < 1:
+        return None
+
+    span_lo = min(requested_lo, span_hi)
+    span = rng.randint(span_lo, span_hi)
+    start = rng.randint(lo, hi - span)
+    return start, start + span
+
+
 def _sample_interval(
+    *,
     endpoint_range: tuple[int, int],
     max_span_range: tuple[int, int],
+    existing_intervals: list[tuple[int, int]],
+    allow_reversed_interval_prob: float,
+    degenerate_interval_prob: float,
+    nested_interval_prob: float,
     rng: random.Random,
 ) -> tuple[int, int]:
     lo, hi = endpoint_range
-    start = rng.randint(lo, hi)
-    span_min = max(0, max_span_range[0])
-    span_max = max(span_min, max_span_range[1])
-    span = rng.randint(span_min, span_max)
-    direction = -1 if rng.random() < 0.5 else 1
-    end = _clamp(start + direction * span, endpoint_range)
-    if rng.random() < 0.25:
-        return end, start
+    bounds = endpoint_range
+
+    if existing_intervals and rng.random() < nested_interval_prob:
+        parent_a, parent_b = existing_intervals[
+            rng.randrange(len(existing_intervals))
+        ]
+        bounds = (min(parent_a, parent_b), max(parent_a, parent_b))
+        lo, hi = bounds
+
+    must_be_degenerate = lo == hi or rng.random() < degenerate_interval_prob
+    if must_be_degenerate:
+        point = rng.randint(lo, hi)
+        start = point
+        end = point
+    else:
+        sampled = _sample_non_degenerate_interval(bounds, max_span_range, rng)
+        if sampled is None:
+            point = rng.randint(lo, hi)
+            start = point
+            end = point
+        else:
+            start, end = sampled
+
+    if start != end and rng.random() < allow_reversed_interval_prob:
+        start, end = end, start
     return start, end
 
 
@@ -94,6 +138,9 @@ def generate_intervals_queries(
     n_typical = max(1, min(4, n_hi if n_hi >= 1 else 1))
     lo, hi = endpoint_range
     mid = (lo + hi) // 2
+    allow_reversed_interval_prob = spec.allow_reversed_interval_prob
+    degenerate_interval_prob = spec.degenerate_interval_prob
+    nested_interval_prob = spec.nested_interval_prob
 
     queries: list[Query] = []
 
@@ -136,10 +183,19 @@ def generate_intervals_queries(
 
     for _ in range(n_typical):
         count = rng.randint(max(0, n_lo), max(max(0, n_lo), n_hi))
-        sampled = [
-            _sample_interval(endpoint_range, max_span_range, rng)
-            for _ in range(count)
-        ]
+        sampled: list[tuple[int, int]] = []
+        for _ in range(count):
+            sampled.append(
+                _sample_interval(
+                    endpoint_range=endpoint_range,
+                    max_span_range=max_span_range,
+                    existing_intervals=sampled,
+                    allow_reversed_interval_prob=allow_reversed_interval_prob,
+                    degenerate_interval_prob=degenerate_interval_prob,
+                    nested_interval_prob=nested_interval_prob,
+                    rng=rng,
+                )
+            )
         _append(sampled, QueryTag.TYPICAL)
 
     chain_size = max(2, min(6, max(n_lo, 2)))

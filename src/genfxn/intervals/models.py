@@ -23,6 +23,9 @@ class IntervalsSpec(BaseModel):
     merge_touching: bool
     endpoint_clip_abs: int = Field(default=20, ge=1)
     endpoint_quantize_step: int = Field(default=1, ge=1)
+    allow_reversed_interval_prob: float = Field(default=0.0, ge=0.0, le=1.0)
+    degenerate_interval_prob: float = Field(default=0.0, ge=0.0, le=1.0)
+    nested_interval_prob: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class IntervalsAxes(BaseModel):

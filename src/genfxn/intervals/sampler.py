@@ -145,6 +145,19 @@ def sample_intervals_spec(
             rng,
         )
 
+    allow_reversed_interval_prob = _sample_probability(
+        axes.allow_reversed_interval_prob_range,
+        rng,
+    )
+    degenerate_interval_prob = _sample_probability(
+        axes.degenerate_interval_prob_range,
+        rng,
+    )
+    nested_interval_prob = _sample_probability(
+        axes.nested_interval_prob_range,
+        rng,
+    )
+
     trace_step(
         trace,
         "sample_operation",
@@ -179,19 +192,19 @@ def sample_intervals_spec(
         trace,
         "sample_reverse_prob",
         "Reversed interval probability sampled for query generation",
-        _sample_probability(axes.allow_reversed_interval_prob_range, rng),
+        allow_reversed_interval_prob,
     )
     trace_step(
         trace,
         "sample_degenerate_prob",
         "Degenerate interval probability sampled for query generation",
-        _sample_probability(axes.degenerate_interval_prob_range, rng),
+        degenerate_interval_prob,
     )
     trace_step(
         trace,
         "sample_nested_prob",
         "Nested interval probability sampled for query generation",
-        _sample_probability(axes.nested_interval_prob_range, rng),
+        nested_interval_prob,
     )
 
     return IntervalsSpec(
@@ -200,4 +213,7 @@ def sample_intervals_spec(
         merge_touching=merge_touching,
         endpoint_clip_abs=endpoint_clip_abs,
         endpoint_quantize_step=endpoint_quantize_step,
+        allow_reversed_interval_prob=allow_reversed_interval_prob,
+        degenerate_interval_prob=degenerate_interval_prob,
+        nested_interval_prob=nested_interval_prob,
     )

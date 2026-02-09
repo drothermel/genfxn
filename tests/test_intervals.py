@@ -294,6 +294,17 @@ class TestSampler:
             assert averages[target + 1] >= averages[target] + 0.05
         assert averages[5] >= averages[1] + 1.0
 
+    def test_sampler_persists_interval_probability_samples(self) -> None:
+        axes = IntervalsAxes(
+            allow_reversed_interval_prob_range=(0.75, 0.75),
+            degenerate_interval_prob_range=(0.5, 0.5),
+            nested_interval_prob_range=(0.25, 0.25),
+        )
+        spec = _call_sample(sample_intervals_spec, axes, seed=404)
+        assert spec.allow_reversed_interval_prob == 0.75
+        assert spec.degenerate_interval_prob == 0.5
+        assert spec.nested_interval_prob == 0.25
+
 
 class TestQueries:
     def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
@@ -333,6 +344,112 @@ class TestQueries:
             for start, end in query.input:
                 assert 0 <= start <= 0
                 assert 0 <= end <= 0
+
+    def test_queries_use_degenerate_probability_for_typical_cases(self) -> None:
+        axes = IntervalsAxes(
+            n_intervals_range=(3, 3),
+            endpoint_range=(-8, 8),
+            max_span_range=(1, 6),
+            allow_reversed_interval_prob_range=(0.0, 0.0),
+            degenerate_interval_prob_range=(1.0, 1.0),
+            nested_interval_prob_range=(0.0, 0.0),
+        )
+        spec = _call_sample(sample_intervals_spec, axes, seed=601)
+        queries = _call_queries(
+            generate_intervals_queries,
+            spec,
+            axes,
+            seed=601,
+        )
+        typical_queries = [q for q in queries if q.tag == QueryTag.TYPICAL]
+        assert typical_queries
+        for query in typical_queries:
+            assert query.input
+            assert all(a == b for a, b in query.input)
+
+    def test_queries_use_reverse_probability_for_typical_cases(self) -> None:
+        common_axes = dict(
+            n_intervals_range=(3, 3),
+            endpoint_range=(-8, 8),
+            max_span_range=(1, 6),
+            degenerate_interval_prob_range=(0.0, 0.0),
+            nested_interval_prob_range=(0.0, 0.0),
+        )
+
+        forward_axes = IntervalsAxes(
+            **common_axes,
+            allow_reversed_interval_prob_range=(0.0, 0.0),
+        )
+        forward_spec = _call_sample(
+            sample_intervals_spec,
+            forward_axes,
+            seed=602,
+        )
+        forward_queries = _call_queries(
+            generate_intervals_queries,
+            forward_spec,
+            forward_axes,
+            seed=602,
+        )
+        forward_typical = [
+            q for q in forward_queries if q.tag == QueryTag.TYPICAL
+        ]
+        assert forward_typical
+        for query in forward_typical:
+            assert all(a <= b for a, b in query.input)
+
+        reversed_axes = IntervalsAxes(
+            **common_axes,
+            allow_reversed_interval_prob_range=(1.0, 1.0),
+        )
+        reversed_spec = _call_sample(
+            sample_intervals_spec,
+            reversed_axes,
+            seed=603,
+        )
+        reversed_queries = _call_queries(
+            generate_intervals_queries,
+            reversed_spec,
+            reversed_axes,
+            seed=603,
+        )
+        reversed_typical = [
+            q for q in reversed_queries if q.tag == QueryTag.TYPICAL
+        ]
+        assert reversed_typical
+        for query in reversed_typical:
+            assert all(a > b for a, b in query.input)
+
+    def test_queries_use_nested_probability_for_typical_cases(self) -> None:
+        axes = IntervalsAxes(
+            n_intervals_range=(4, 4),
+            endpoint_range=(-8, 8),
+            max_span_range=(1, 6),
+            allow_reversed_interval_prob_range=(0.0, 0.0),
+            degenerate_interval_prob_range=(0.0, 0.0),
+            nested_interval_prob_range=(1.0, 1.0),
+        )
+        spec = _call_sample(sample_intervals_spec, axes, seed=604)
+        queries = _call_queries(
+            generate_intervals_queries,
+            spec,
+            axes,
+            seed=604,
+        )
+        typical_queries = [q for q in queries if q.tag == QueryTag.TYPICAL]
+        assert typical_queries
+
+        for query in typical_queries:
+            for idx, (a, b) in enumerate(query.input):
+                if idx == 0:
+                    continue
+                lo = min(a, b)
+                hi = max(a, b)
+                assert any(
+                    min(parent_a, parent_b) <= lo
+                    and hi <= max(parent_a, parent_b)
+                    for parent_a, parent_b in query.input[:idx]
+                )
 
 
 class TestTaskGeneration:

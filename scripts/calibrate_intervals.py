@@ -165,6 +165,7 @@ def _strict_summary(
     *,
     enabled: bool,
     reachability: dict[int, dict[str, Any]],
+    monotonic: dict[str, Any],
     suite_checks: dict[int, dict[str, Any]],
 ) -> dict[str, Any]:
     failures: list[str] = []
@@ -198,12 +199,16 @@ def _strict_summary(
                     f"{len(under_rows)} UNDER quota rows"
                 )
 
+    if not bool(monotonic.get("is_monotonic", False)):
+        failures.append("Monotonic means check failed")
+
     return {
         "enabled": enabled,
         "thresholds": {
             "exact_min": STRICT_EXACT_MIN,
             "within_one_min": STRICT_WITHIN_ONE_MIN,
             "under_rows_allowed": 0,
+            "monotonic_required": True,
         },
         "passed": not failures,
         "failures": failures,
@@ -235,7 +240,7 @@ def main(
         "--strict",
         help=(
             "Exit non-zero unless exact>=0.50, within_one>=0.90, "
-            "and quota rows have no UNDER status"
+            "monotonic means pass, and quota rows have no UNDER status"
         ),
     ),
 ) -> None:
@@ -246,6 +251,7 @@ def main(
     strict_report = _strict_summary(
         enabled=strict,
         reachability=reachability,
+        monotonic=monotonic,
         suite_checks=suite_checks,
     )
 
