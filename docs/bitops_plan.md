@@ -2,7 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: In progress (M1-M2 complete, M3-M4 pending)
+Status: In progress (M1-M3 complete, M4 pending)
 
 ## Goal
 
@@ -146,7 +146,7 @@ Use this after memory compaction:
 
 - [x] M1 complete
 - [x] M2 complete
-- [ ] M3 complete
+- [x] M3 complete
 - [ ] M4 complete
 - [ ] Suite integration follow-up complete
 - [ ] Full `ruff` and full `pytest` pass
@@ -173,3 +173,15 @@ Use this after memory compaction:
   `uv run ruff check src/genfxn/core/difficulty.py tests/test_bitops.py tests/test_difficulty.py`
   and `uv run pytest tests/test_bitops.py tests/test_difficulty.py -v`
   (82 passed).
+- 2026-02-09: M3 implemented. Added language renderers for
+  `bitops` in `src/genfxn/langs/java/bitops.py` and
+  `src/genfxn/langs/rust/bitops.py` and wired language registry support.
+  Hardened validator/AST safety in `src/genfxn/bitops/validate.py` and
+  `src/genfxn/bitops/ast_safety.py`, then added validator tests in
+  `tests/test_validate_bitops.py` and renderer coverage updates in
+  `tests/test_java_render.py` and `tests/test_rust_render.py`.
+  Focused verification passed:
+  `uv run ruff check src/genfxn/bitops/ast_safety.py src/genfxn/bitops/validate.py src/genfxn/langs/java/bitops.py src/genfxn/langs/rust/bitops.py src/genfxn/langs/registry.py tests/test_validate_bitops.py tests/test_java_render.py tests/test_rust_render.py`
+  and
+  `uv run pytest tests/test_validate_bitops.py tests/test_java_render.py tests/test_rust_render.py tests/test_bitops.py -q`
+  (305 passed).

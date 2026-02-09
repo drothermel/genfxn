@@ -1,6 +1,7 @@
 import ast
 import random
 from collections.abc import Callable
+from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -25,15 +26,17 @@ from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
-CODE_CODE_PARSE_ERROR = "CODE_PARSE_ERROR"
-CODE_CODE_EXEC_ERROR = "CODE_EXEC_ERROR"
-CODE_CODE_MISSING_FUNC = "CODE_MISSING_FUNC"
-CODE_CODE_RUNTIME_ERROR = "CODE_RUNTIME_ERROR"
-CODE_QUERY_INPUT_TYPE = "QUERY_INPUT_TYPE"
-CODE_QUERY_OUTPUT_TYPE = "QUERY_OUTPUT_TYPE"
-CODE_QUERY_OUTPUT_MISMATCH = "QUERY_OUTPUT_MISMATCH"
-CODE_FUNC_NOT_CALLABLE = "FUNC_NOT_CALLABLE"
-CODE_UNSAFE_AST = "UNSAFE_AST"
+CODE_CODE_PARSE_ERROR = "CODE_CODE_PARSE_ERROR"
+CODE_CODE_EXEC_ERROR = "CODE_CODE_EXEC_ERROR"
+CODE_CODE_MISSING_FUNC = "CODE_CODE_MISSING_FUNC"
+CODE_CODE_RUNTIME_ERROR = "CODE_CODE_RUNTIME_ERROR"
+CODE_QUERY_INPUT_TYPE = "CODE_QUERY_INPUT_TYPE"
+CODE_QUERY_OUTPUT_TYPE = "CODE_QUERY_OUTPUT_TYPE"
+CODE_QUERY_OUTPUT_MISMATCH = "CODE_QUERY_OUTPUT_MISMATCH"
+CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
+CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
+CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
+CODE_UNSAFE_AST = "CODE_UNSAFE_AST"
 CURRENT_FAMILY = "bitops"
 PYTHON_CODE_KEY = "python"
 
@@ -66,6 +69,10 @@ def _validate_ast_whitelist(
                 for n in ast.walk(node.returns):
                     if hasattr(n, "lineno") and hasattr(n, "col_offset"):
                         annotation_positions.add((n.lineno, n.col_offset))
+        elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
+            for n in ast.walk(node.annotation):
+                if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                    annotation_positions.add((n.lineno, n.col_offset))
 
     for node in ast.walk(tree):
         node_type = type(node)
@@ -219,24 +226,33 @@ def _validate_spec_deserialize(
 
 def _validate_code_compile(
     task: Task,
-    code: str | None,
-    execute_untrusted_code: bool,
+    code: str | None = None,
+    parsed_tree: ast.Module | None = None,
+    execute_untrusted_code: bool = True,
 ) -> tuple[list[Issue], Callable[[int], int] | None]:
+    if code is None:
+        if isinstance(task.code, str):
+            code = task.code
+        elif isinstance(task.code, dict):
+            code = task.code.get(PYTHON_CODE_KEY)
+
     if code is None:
         return [], None
 
-    try:
-        ast.parse(code)
-    except SyntaxError as e:
-        return [
-            Issue(
-                code=CODE_CODE_PARSE_ERROR,
-                severity=Severity.ERROR,
-                message=f"Syntax error in code: {e}",
-                location="code",
-                task_id=task.task_id,
-            )
-        ], None
+    if parsed_tree is None:
+        try:
+            parsed_tree = ast.parse(code)
+        except SyntaxError as e:
+            return [
+                Issue(
+                    code=CODE_CODE_PARSE_ERROR,
+                    severity=Severity.ERROR,
+                    message=f"Syntax error in code: {e}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
+    _ = parsed_tree
 
     if not execute_untrusted_code:
         return [], None
@@ -269,18 +285,29 @@ def _validate_code_compile(
         ], None
 
     fn_obj = namespace.get("f")
-    if not callable(fn_obj):
+    if fn_obj is None:
         return [
             Issue(
-                code=CODE_FUNC_NOT_CALLABLE,
+                code=CODE_CODE_MISSING_FUNC,
                 severity=Severity.ERROR,
-                message="Function 'f' is not callable",
+                message="Function 'f' not found in code namespace",
                 location="code",
                 task_id=task.task_id,
             )
         ], None
 
-    return [], fn_obj
+    if not callable(fn_obj):
+        return [
+            Issue(
+                code=CODE_FUNC_NOT_CALLABLE,
+                severity=Severity.ERROR,
+                message=f"Function 'f' is not callable: {type(fn_obj)}",
+                location="code.f",
+                task_id=task.task_id,
+            )
+        ], None
+
+    return [], cast(Callable[[int], int], fn_obj)
 
 
 def _validate_query_outputs(
@@ -322,6 +349,7 @@ def _validate_semantics(
     axes: BitopsAxes,
     strict: bool,
     semantic_trials: int,
+    max_semantic_issues: int,
     rng: random.Random,
 ) -> list[Issue]:
     if fn is None:
@@ -352,7 +380,7 @@ def _validate_semantics(
         if actual != expected:
             issues.append(
                 Issue(
-                    code=CODE_CODE_RUNTIME_ERROR,
+                    code=CODE_SEMANTIC_MISMATCH,
                     severity=severity,
                     message=(
                         f"Semantic mismatch for input {x}: "
@@ -362,6 +390,20 @@ def _validate_semantics(
                     task_id=task.task_id,
                 )
             )
+            if len(issues) >= max_semantic_issues:
+                issues.append(
+                    Issue(
+                        code=CODE_SEMANTIC_ISSUES_CAPPED,
+                        severity=severity,
+                        message=(
+                            "Semantic checks stopped after "
+                            f"{max_semantic_issues} issues"
+                        ),
+                        location="code",
+                        task_id=task.task_id,
+                    )
+                )
+                break
 
     return issues
 
@@ -371,6 +413,7 @@ def validate_bitops_task(
     axes: BitopsAxes | None = None,
     strict: bool = True,
     execute_untrusted_code: bool = True,
+    max_semantic_issues: int = 10,
     semantic_trials: int = 16,
     random_seed: int = 0,
 ) -> list[Issue]:
@@ -405,13 +448,15 @@ def validate_bitops_task(
     elif isinstance(task.code, dict):
         code = task.code.get(PYTHON_CODE_KEY)
 
+    parsed_tree: ast.Module | None = None
     if code is not None:
-        ast_issues, _ = _validate_ast_whitelist(code)
+        ast_issues, parsed_tree = _validate_ast_whitelist(code)
         issues.extend(ast_issues)
 
     compile_issues, fn = _validate_code_compile(
         task,
         code=code,
+        parsed_tree=parsed_tree,
         execute_untrusted_code=execute_untrusted_code,
     )
     issues.extend(compile_issues)
@@ -427,6 +472,7 @@ def validate_bitops_task(
             axes,
             strict=strict,
             semantic_trials=semantic_trials,
+            max_semantic_issues=max_semantic_issues,
             rng=rng,
         )
     )

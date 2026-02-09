@@ -19,6 +19,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "stringrules": "genfxn.stringrules.render",
     },
     Language.JAVA: {
+        "bitops": "genfxn.langs.java.bitops",
         "fsm": "genfxn.langs.java.fsm",
         "piecewise": "genfxn.langs.java.piecewise",
         "stateful": "genfxn.langs.java.stateful",
@@ -27,6 +28,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "stringrules": "genfxn.langs.java.stringrules",
     },
     Language.RUST: {
+        "bitops": "genfxn.langs.rust.bitops",
         "fsm": "genfxn.langs.rust.fsm",
         "piecewise": "genfxn.langs.rust.piecewise",
         "stateful": "genfxn.langs.rust.stateful",

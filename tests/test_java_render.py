@@ -5,6 +5,8 @@ import random
 
 import pytest
 
+from genfxn.bitops.models import BitInstruction, BitOp, BitopsSpec
+from genfxn.bitops.task import generate_bitops_task
 from genfxn.core.models import Task
 from genfxn.core.predicates import (
     PredicateAnd,
@@ -489,6 +491,39 @@ class TestPiecewiseJava:
         assert "(x == 1 || x == 2)" in code
 
 
+class TestBitopsJava:
+    def test_renders_fixed_width_operations(self) -> None:
+        from genfxn.langs.java.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=8,
+            operations=[
+                BitInstruction(op=BitOp.SHR_LOGICAL, arg=3),
+                BitInstruction(op=BitOp.ROTL, arg=9),
+                BitInstruction(op=BitOp.POPCOUNT),
+                BitInstruction(op=BitOp.PARITY),
+            ],
+        )
+        code = render_bitops(spec)
+        assert "public static long f(long x)" in code
+        assert "long mask = widthBits == 64 ? -1L" in code
+        assert "Math.floorMod(arg, (long) widthBits)" in code
+        assert ">>> amt" in code
+        assert "Long.bitCount" in code
+        assert "& 1" in code
+
+    def test_custom_signature(self) -> None:
+        from genfxn.langs.java.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=16,
+            operations=[BitInstruction(op=BitOp.NOT)],
+        )
+        code = render_bitops(spec, func_name="g", var="n")
+        assert "public static long g(long n)" in code
+        assert "value = (~value) & mask;" in code
+
+
 class TestStatefulJava:
     def test_conditional_linear_sum(self) -> None:
         from genfxn.langs.java.stateful import render_stateful
@@ -762,6 +797,17 @@ class TestMultiLanguageGeneration:
         assert "def f(" in code["python"]
         assert "public static int f(int[] xs)" in code["java"]
 
+    def test_bitops_generates_java(self) -> None:
+        task = generate_bitops_task(
+            rng=random.Random(42),
+            languages=[Language.PYTHON, Language.JAVA],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static long f(long x)" in code["java"]
+
     def test_stack_bytecode_generates_java_when_available(self) -> None:
         if not _supports_stack_bytecode_java():
             pytest.skip("stack_bytecode Java rendering is not available")
@@ -859,6 +905,12 @@ class TestLangsInfra:
         from genfxn.langs.registry import get_render_fn
 
         fn = get_render_fn(Language.JAVA, "piecewise")
+        assert callable(fn)
+
+    def test_registry_java_bitops(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        fn = get_render_fn(Language.JAVA, "bitops")
         assert callable(fn)
 
     def test_registry_unknown_family_raises(self) -> None:

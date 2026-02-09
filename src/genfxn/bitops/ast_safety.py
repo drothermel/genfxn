@@ -9,6 +9,8 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.arguments,
         ast.arg,
         ast.Assign,
+        ast.AnnAssign,
+        ast.AugAssign,
         ast.Return,
         ast.For,
         ast.If,
@@ -16,17 +18,20 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Raise,
         ast.BinOp,
         ast.BoolOp,
+        ast.IfExp,
         ast.UnaryOp,
         ast.Compare,
         ast.Call,
         ast.Name,
         ast.Constant,
         ast.List,
+        ast.Tuple,
         ast.Dict,
         ast.Subscript,
         ast.Attribute,
         ast.Load,
         ast.Store,
+        ast.Add,
         ast.BitAnd,
         ast.BitOr,
         ast.BitXor,
@@ -35,9 +40,17 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Sub,
         ast.Mod,
         ast.Invert,
+        ast.Not,
         ast.Eq,
+        ast.NotEq,
+        ast.Gt,
+        ast.GtE,
+        ast.Lt,
+        ast.LtE,
         ast.Is,
         ast.IsNot,
+        ast.And,
+        ast.Or,
     }
 )
 
@@ -67,4 +80,4 @@ METHOD_ARITIES: dict[str, set[int]] = {
     "bit_count": {0},
 }
 
-ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset({"int"})
+ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset({"int", "None"})
