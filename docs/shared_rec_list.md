@@ -6,7 +6,7 @@ Date: 2026-02-09
 ## Status
 
 - Completed: `Stack/Bytecode Interpreter` (implemented as `stack_bytecode`)
-- In Progress: `Finite-State Transducer (FSM/Mealy/Moore)` (next family)
+- Completed: `Finite-State Transducer (FSM/Mealy/Moore)`
 - Implementation plan: `docs/fsm_plan.md`
 
 1. Stack/Bytecode Interpreter

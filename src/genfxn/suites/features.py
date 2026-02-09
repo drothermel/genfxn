@@ -488,7 +488,7 @@ def fsm_features(spec: dict[str, Any]) -> dict[str, str]:
         if value is None:
             return default
         if hasattr(value, "value"):
-            enum_value = getattr(value, "value")
+            enum_value = value.value
             if isinstance(enum_value, str):
                 return enum_value
         if isinstance(value, str):

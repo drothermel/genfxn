@@ -753,7 +753,7 @@ class TestMultiLanguageGeneration:
 
     def test_fsm_generates_java(self) -> None:
         task = generate_fsm_task(
-            rng=random.Random(42),
+            rng=random.Random(42),  # noqa: S311
             languages=[Language.PYTHON, Language.JAVA],
         )
         code = _code_map(task)
