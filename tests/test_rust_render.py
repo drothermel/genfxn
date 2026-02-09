@@ -1,5 +1,6 @@
 """Tests for Rust rendering modules."""
 
+import importlib.util
 import random
 
 import pytest
@@ -74,6 +75,14 @@ def _code_map(task: Task) -> dict[str, str]:
 
 def seeded_rng(seed: int) -> random.Random:  # noqa: S311
     return random.Random(seed)
+
+
+def _supports_stack_bytecode_rust() -> bool:
+    return (
+        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+        and importlib.util.find_spec("genfxn.langs.rust.stack_bytecode")
+        is not None
+    )
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -755,6 +764,21 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
 
+    def test_stack_bytecode_generates_rust_when_available(self) -> None:
+        if not _supports_stack_bytecode_rust():
+            pytest.skip("stack_bytecode Rust rendering is not available")
+        from genfxn.stack_bytecode.task import generate_stack_bytecode_task
+
+        task = generate_stack_bytecode_task(
+            rng=seeded_rng(42),
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn " in code["rust"]
+
     def test_rust_only(self) -> None:
         task = generate_piecewise_task(
             rng=seeded_rng(42),
@@ -819,12 +843,15 @@ class TestRustRegistry:
     def test_registry_rust_all_families(self) -> None:
         from genfxn.langs.registry import get_render_fn
 
-        for family in (
+        families = [
             "piecewise",
             "stateful",
             "simple_algorithms",
             "stringrules",
-        ):
+        ]
+        if _supports_stack_bytecode_rust():
+            families.append("stack_bytecode")
+        for family in families:
             fn = get_render_fn(Language.RUST, family)
             assert callable(fn)
 
@@ -874,3 +901,27 @@ class TestRustRegistry:
         )
         assert list(result.keys()) == ["rust"]
         assert "fn g(x: i64) -> i64" in result["rust"]
+
+    def test_render_all_languages_stack_bytecode_when_available(self) -> None:
+        if not _supports_stack_bytecode_rust():
+            pytest.skip("stack_bytecode Rust rendering is not available")
+        from genfxn.langs.render import render_all_languages
+        from genfxn.stack_bytecode.models import (
+            Instruction,
+            InstructionOp,
+            StackBytecodeSpec,
+        )
+
+        spec = StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        result = render_all_languages(
+            "stack_bytecode",
+            spec,
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        assert "python" in result
+        assert "rust" in result

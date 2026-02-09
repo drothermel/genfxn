@@ -1,3 +1,4 @@
+import importlib.util
 from typing import Any, cast
 
 import pytest
@@ -7,6 +8,27 @@ from typer.testing import CliRunner
 from genfxn.cli import app
 
 runner = CliRunner()
+
+
+def _supports_stack_bytecode_family() -> bool:
+    return (
+        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+    )
+
+
+def _expected_all_families() -> set[str]:
+    families = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
+    if _supports_stack_bytecode_family():
+        families.add("stack_bytecode")
+    return families
+
+
+def _supports_stack_bytecode_rust() -> bool:
+    return (
+        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+        and importlib.util.find_spec("genfxn.langs.rust.stack_bytecode")
+        is not None
+    )
 
 
 class TestGenerate:
@@ -47,8 +69,7 @@ class TestGenerate:
         assert len(tasks) == 20
 
         families = {t["family"] for t in tasks}
-        expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
-        assert families == expected
+        assert families == _expected_all_families()
 
     def test_generate_all_distributes_remainder_fairly(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -74,12 +95,10 @@ class TestGenerate:
             fam = cast(str, task["family"])
             counts[fam] = counts.get(fam, 0) + 1
 
-        assert counts == {
-            "piecewise": 2,
-            "stateful": 2,
-            "simple_algorithms": 1,
-            "stringrules": 1,
-        }
+        expected_families = _expected_all_families()
+        assert set(counts) == expected_families
+        assert sum(counts.values()) == 6
+        assert max(counts.values()) - min(counts.values()) <= 1
 
     def test_generate_with_seed(self, tmp_path) -> None:
         output1 = tmp_path / "tasks1.jsonl"
@@ -195,13 +214,35 @@ class TestGenerate:
             ],
         )
 
+        if (
+            _supports_stack_bytecode_family()
+            and not _supports_stack_bytecode_rust()
+        ):
+            assert result.exit_code == 1
+            assert "Language 'rust' is not available" in result.output
+            return
+
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 8
         families = {t["family"] for t in tasks}
-        expected = {"piecewise", "stateful", "simple_algorithms", "stringrules"}
-        assert families == expected
+        assert families == _expected_all_families()
         assert all("def f(" not in cast(str, t["code"]) for t in tasks)
+
+    def test_generate_stack_bytecode_when_available(self, tmp_path) -> None:
+        if not _supports_stack_bytecode_family():
+            pytest.skip("stack_bytecode family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            ["generate", "-o", str(output), "-f", "stack_bytecode", "-n", "3"],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 3
+        assert all(t["family"] == "stack_bytecode" for t in tasks)
 
     def test_generate_java_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -998,6 +1039,8 @@ class TestInfo:
         assert "stateful:" in result.stdout
         assert "simple_algorithms:" in result.stdout
         assert "stringrules:" in result.stdout
+        if _supports_stack_bytecode_family():
+            assert "stack_bytecode:" in result.stdout
 
     def test_info_single_family(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
 from genfxn.core.difficulty import compute_difficulty
-from genfxn.core.models import Task
+from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
@@ -25,6 +25,14 @@ from genfxn.simple_algorithms.models import TemplateType as SATemplateType
 from genfxn.simple_algorithms.queries import generate_simple_algorithms_queries
 from genfxn.simple_algorithms.render import render_simple_algorithms
 from genfxn.simple_algorithms.sampler import sample_simple_algorithms_spec
+from genfxn.stack_bytecode.models import (
+    InputMode,
+    Instruction,
+    InstructionOp,
+    JumpTargetMode,
+    StackBytecodeAxes,
+    StackBytecodeSpec,
+)
 from genfxn.stateful.models import StatefulAxes
 from genfxn.stateful.models import TemplateType as StatefulTemplateType
 from genfxn.stateful.queries import generate_stateful_queries
@@ -36,6 +44,7 @@ from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.suites.features import (
     simple_algorithms_features,
+    stack_bytecode_features,
     stateful_features,
     stringrules_features,
 )
@@ -489,6 +498,106 @@ def _pool_axes_simple_algorithms_d5(rng: random.Random) -> SimpleAlgorithmsAxes:
     return SimpleAlgorithmsAxes(**axes_kwargs)
 
 
+def _pool_axes_stack_bytecode_d1(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=1,
+        max_step_count_range=(20, 32),
+        jump_target_modes=[JumpTargetMode.ERROR],
+        input_modes=[InputMode.DIRECT],
+    )
+
+
+def _pool_axes_stack_bytecode_d2(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=2,
+        max_step_count_range=(32, 64),
+        jump_target_modes=[JumpTargetMode.ERROR],
+        input_modes=[InputMode.DIRECT],
+    )
+
+
+def _pool_axes_stack_bytecode_d3(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=3,
+        max_step_count_range=(64, 96),
+        jump_target_modes=[JumpTargetMode.CLAMP],
+        input_modes=[InputMode.CYCLIC],
+    )
+
+
+def _pool_axes_stack_bytecode_d4(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=4,
+        max_step_count_range=(96, 128),
+        jump_target_modes=[JumpTargetMode.CLAMP],
+        input_modes=[InputMode.DIRECT],
+    )
+
+
+def _pool_axes_stack_bytecode_d5(_: random.Random) -> StackBytecodeAxes:
+    return StackBytecodeAxes(
+        target_difficulty=5,
+        max_step_count_range=(128, 160),
+        jump_target_modes=[JumpTargetMode.WRAP],
+        input_modes=[InputMode.CYCLIC],
+    )
+
+
+def _stack_template_program(
+    difficulty: int, rng: random.Random
+) -> list[Instruction]:
+    if difficulty <= 1:
+        c = rng.randint(-10, 10)
+        return [
+            Instruction(op=InstructionOp.PUSH_CONST, value=c),
+            Instruction(op=InstructionOp.HALT),
+        ]
+    if difficulty == 2:
+        c = rng.randint(-5, 5)
+        return [
+            Instruction(op=InstructionOp.LOAD_INPUT, index=0),
+            Instruction(op=InstructionOp.PUSH_CONST, value=c),
+            Instruction(op=InstructionOp.ADD),
+            Instruction(op=InstructionOp.HALT),
+        ]
+    if difficulty == 3:
+        c = rng.randint(1, 5)
+        return [
+            Instruction(op=InstructionOp.LOAD_INPUT, index=0),
+            Instruction(op=InstructionOp.DUP),
+            Instruction(op=InstructionOp.PUSH_CONST, value=c),
+            Instruction(op=InstructionOp.MUL),
+            Instruction(op=InstructionOp.SUB),
+            Instruction(op=InstructionOp.HALT),
+        ]
+    if difficulty == 4:
+        c = rng.randint(1, 5)
+        return [
+            Instruction(op=InstructionOp.LOAD_INPUT, index=0),
+            Instruction(op=InstructionOp.JUMP_IF_ZERO, target=6),
+            Instruction(op=InstructionOp.LOAD_INPUT, index=1),
+            Instruction(op=InstructionOp.PUSH_CONST, value=c),
+            Instruction(op=InstructionOp.ADD),
+            Instruction(op=InstructionOp.HALT),
+            Instruction(op=InstructionOp.PUSH_CONST, value=0),
+            Instruction(op=InstructionOp.HALT),
+        ]
+    c = rng.randint(1, 3)
+    return [
+        Instruction(op=InstructionOp.PUSH_CONST, value=0),
+        Instruction(op=InstructionOp.LOAD_INPUT, index=0),
+        Instruction(op=InstructionOp.JUMP_IF_ZERO, target=10),
+        Instruction(op=InstructionOp.LOAD_INPUT, index=0),
+        Instruction(op=InstructionOp.PUSH_CONST, value=c),
+        Instruction(op=InstructionOp.SUB),
+        Instruction(op=InstructionOp.JUMP_IF_NONZERO, target=3),
+        Instruction(op=InstructionOp.PUSH_CONST, value=1),
+        Instruction(op=InstructionOp.JUMP, target=10),
+        Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+        Instruction(op=InstructionOp.HALT),
+    ]
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -507,6 +616,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_simple_algorithms_d4,
         5: _pool_axes_simple_algorithms_d5,
     },
+    "stack_bytecode": {
+        1: _pool_axes_stack_bytecode_d1,
+        2: _pool_axes_stack_bytecode_d2,
+        3: _pool_axes_stack_bytecode_d3,
+        4: _pool_axes_stack_bytecode_d4,
+        5: _pool_axes_stack_bytecode_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -515,6 +631,7 @@ _FEATURE_FNS = {
     "stringrules": stringrules_features,
     "stateful": stateful_features,
     "simple_algorithms": simple_algorithms_features,
+    "stack_bytecode": stack_bytecode_features,
 }
 
 
@@ -564,7 +681,52 @@ def _sample_spec(
         return sample_stateful_spec(axes, rng, trace=trace)
     elif family == "simple_algorithms":
         return sample_simple_algorithms_spec(axes, rng, trace=trace)
+    elif family == "stack_bytecode":
+        return _sample_stack_bytecode_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
+
+
+def _sample_stack_bytecode_spec(
+    axes: StackBytecodeAxes,
+    rng: random.Random,
+    trace: list[TraceStep] | None = None,
+) -> StackBytecodeSpec:
+    target = axes.target_difficulty or rng.randint(1, 5)
+    program = _stack_template_program(target, rng)
+    jump_mode = rng.choice(axes.jump_target_modes)
+    input_mode = rng.choice(axes.input_modes)
+    max_steps = rng.randint(*axes.max_step_count_range)
+    if trace is not None:
+        trace.extend(
+            [
+                TraceStep(
+                    step="target_difficulty",
+                    choice="target difficulty for template",
+                    value=target,
+                ),
+                TraceStep(
+                    step="jump_target_mode",
+                    choice="jump target handling mode",
+                    value=jump_mode.value,
+                ),
+                TraceStep(
+                    step="input_mode",
+                    choice="input indexing mode",
+                    value=input_mode.value,
+                ),
+                TraceStep(
+                    step="max_step_count",
+                    choice="maximum VM step count",
+                    value=max_steps,
+                ),
+            ]
+        )
+    return StackBytecodeSpec(
+        program=program,
+        max_step_count=max_steps,
+        jump_target_mode=jump_mode,
+        input_mode=input_mode,
+    )
 
 
 # ── Pool generation ──────────────────────────────────────────────────────
@@ -795,6 +957,267 @@ def greedy_select(
 # ── Full task generation from spec ───────────────────────────────────────
 
 
+def _resolve_jump_target(
+    target: int,
+    program_len: int,
+    mode: str,
+) -> int | None:
+    if 0 <= target < program_len:
+        return target
+    if mode == "clamp":
+        return min(max(target, 0), max(program_len - 1, 0))
+    if mode == "wrap" and program_len > 0:
+        return target % program_len
+    return None
+
+
+def _execute_stack_bytecode(spec: StackBytecodeSpec, xs: list[int]) -> int:
+    program = spec.program
+    if not program:
+        return 6
+
+    stack: list[int] = []
+    pc = 0
+    steps = 0
+    while steps < spec.max_step_count:
+        if pc < 0 or pc >= len(program):
+            return 3
+        instr = program[pc]
+        op = instr.op
+        steps += 1
+
+        if op == InstructionOp.HALT:
+            return stack[-1] if stack else 6
+        if op == InstructionOp.PUSH_CONST:
+            stack.append(0 if instr.value is None else instr.value)
+            pc += 1
+            continue
+        if op == InstructionOp.LOAD_INPUT:
+            idx = 0 if instr.index is None else instr.index
+            if spec.input_mode == InputMode.CYCLIC:
+                if len(xs) == 0:
+                    return 5
+                idx = idx % len(xs)
+            if idx < 0 or idx >= len(xs):
+                return 5
+            stack.append(xs[idx])
+            pc += 1
+            continue
+        if op in {
+            InstructionOp.DUP,
+            InstructionOp.POP,
+            InstructionOp.NEG,
+            InstructionOp.ABS,
+            InstructionOp.IS_ZERO,
+        }:
+            if len(stack) < 1:
+                return 2
+            v = stack[-1]
+            if op == InstructionOp.DUP:
+                stack.append(v)
+            elif op == InstructionOp.POP:
+                stack.pop()
+            elif op == InstructionOp.NEG:
+                stack[-1] = -v
+            elif op == InstructionOp.ABS:
+                stack[-1] = abs(v)
+            else:
+                stack[-1] = 1 if v == 0 else 0
+            pc += 1
+            continue
+        if op == InstructionOp.SWAP:
+            if len(stack) < 2:
+                return 2
+            stack[-1], stack[-2] = stack[-2], stack[-1]
+            pc += 1
+            continue
+        if op in {
+            InstructionOp.ADD,
+            InstructionOp.SUB,
+            InstructionOp.MUL,
+            InstructionOp.DIV,
+            InstructionOp.MOD,
+            InstructionOp.EQ,
+            InstructionOp.GT,
+            InstructionOp.LT,
+        }:
+            if len(stack) < 2:
+                return 2
+            b = stack.pop()
+            a = stack.pop()
+            if op == InstructionOp.ADD:
+                stack.append(a + b)
+            elif op == InstructionOp.SUB:
+                stack.append(a - b)
+            elif op == InstructionOp.MUL:
+                stack.append(a * b)
+            elif op == InstructionOp.DIV:
+                if b == 0:
+                    return 4
+                stack.append(int(a / b))
+            elif op == InstructionOp.MOD:
+                if b == 0:
+                    return 4
+                stack.append(a % b)
+            elif op == InstructionOp.EQ:
+                stack.append(1 if a == b else 0)
+            elif op == InstructionOp.GT:
+                stack.append(1 if a > b else 0)
+            else:
+                stack.append(1 if a < b else 0)
+            pc += 1
+            continue
+        if op in {
+            InstructionOp.JUMP,
+            InstructionOp.JUMP_IF_ZERO,
+            InstructionOp.JUMP_IF_NONZERO,
+        }:
+            target = 0 if instr.target is None else instr.target
+            if op != InstructionOp.JUMP:
+                if len(stack) < 1:
+                    return 2
+                cond = stack.pop()
+                if op == InstructionOp.JUMP_IF_ZERO and cond != 0:
+                    pc += 1
+                    continue
+                if op == InstructionOp.JUMP_IF_NONZERO and cond == 0:
+                    pc += 1
+                    continue
+            resolved = _resolve_jump_target(
+                target=target,
+                program_len=len(program),
+                mode=spec.jump_target_mode.value,
+            )
+            if resolved is None:
+                return 3
+            pc = resolved
+            continue
+        return 3
+    return 1
+
+
+def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
+    spec_json = repr(spec.model_dump())
+    return (
+        "def f(xs: list[int]) -> int:\n"
+        f"    spec = {spec_json}\n"
+        "    program = spec['program']\n"
+        "    stack = []\n"
+        "    pc = 0\n"
+        "    steps = 0\n"
+        "    while steps < spec['max_step_count']:\n"
+        "        if pc < 0 or pc >= len(program):\n"
+        "            return 3\n"
+        "        instr = program[pc]\n"
+        "        op = instr['op']\n"
+        "        steps += 1\n"
+        "        if op == 'halt':\n"
+        "            return stack[-1] if stack else 6\n"
+        "        if op == 'push_const':\n"
+        "            stack.append(instr.get('value', 0))\n"
+        "            pc += 1\n"
+        "            continue\n"
+        "        if op == 'load_input':\n"
+        "            idx = instr.get('index', 0)\n"
+        "            if spec['input_mode'] == 'cyclic':\n"
+        "                if not xs:\n"
+        "                    return 5\n"
+        "                idx = idx % len(xs)\n"
+        "            if idx < 0 or idx >= len(xs):\n"
+        "                return 5\n"
+        "            stack.append(xs[idx])\n"
+        "            pc += 1\n"
+        "            continue\n"
+        "        if op in {'dup', 'pop', 'neg', 'abs', 'is_zero'}:\n"
+        "            if len(stack) < 1:\n"
+        "                return 2\n"
+        "            v = stack[-1]\n"
+        "            if op == 'dup':\n"
+        "                stack.append(v)\n"
+        "            elif op == 'pop':\n"
+        "                stack.pop()\n"
+        "            elif op == 'neg':\n"
+        "                stack[-1] = -v\n"
+        "            elif op == 'abs':\n"
+        "                stack[-1] = abs(v)\n"
+        "            else:\n"
+        "                stack[-1] = 1 if v == 0 else 0\n"
+        "            pc += 1\n"
+        "            continue\n"
+        "        if op == 'swap':\n"
+        "            if len(stack) < 2:\n"
+        "                return 2\n"
+        "            stack[-1], stack[-2] = stack[-2], stack[-1]\n"
+        "            pc += 1\n"
+        "            continue\n"
+        "        if op in {'add','sub','mul','div','mod','eq','gt','lt'}:\n"
+        "            if len(stack) < 2:\n"
+        "                return 2\n"
+        "            b = stack.pop()\n"
+        "            a = stack.pop()\n"
+        "            if op == 'add':\n"
+        "                stack.append(a + b)\n"
+        "            elif op == 'sub':\n"
+        "                stack.append(a - b)\n"
+        "            elif op == 'mul':\n"
+        "                stack.append(a * b)\n"
+        "            elif op == 'div':\n"
+        "                if b == 0:\n"
+        "                    return 4\n"
+        "                stack.append(int(a / b))\n"
+        "            elif op == 'mod':\n"
+        "                if b == 0:\n"
+        "                    return 4\n"
+        "                stack.append(a % b)\n"
+        "            elif op == 'eq':\n"
+        "                stack.append(1 if a == b else 0)\n"
+        "            elif op == 'gt':\n"
+        "                stack.append(1 if a > b else 0)\n"
+        "            else:\n"
+        "                stack.append(1 if a < b else 0)\n"
+        "            pc += 1\n"
+        "            continue\n"
+        "        if op in {'jump', 'jump_if_zero', 'jump_if_nonzero'}:\n"
+        "            tgt = instr.get('target', 0)\n"
+        "            if op != 'jump':\n"
+        "                if len(stack) < 1:\n"
+        "                    return 2\n"
+        "                cond = stack.pop()\n"
+        "                if op == 'jump_if_zero' and cond != 0:\n"
+        "                    pc += 1\n"
+        "                    continue\n"
+        "                if op == 'jump_if_nonzero' and cond == 0:\n"
+        "                    pc += 1\n"
+        "                    continue\n"
+        "            if 0 <= tgt < len(program):\n"
+        "                pc = tgt\n"
+        "            elif spec['jump_target_mode'] == 'clamp':\n"
+        "                pc = min(max(tgt, 0), len(program) - 1)\n"
+        "            elif spec['jump_target_mode'] == 'wrap':\n"
+        "                pc = tgt % len(program)\n"
+        "            else:\n"
+        "                return 3\n"
+        "            continue\n"
+        "        return 3\n"
+        "    return 1\n"
+    )
+
+
+def _generate_stack_bytecode_queries(
+    spec: StackBytecodeSpec,
+) -> list[Query]:
+    inputs = [
+        ([], QueryTag.BOUNDARY),
+        ([0], QueryTag.TYPICAL),
+        ([1], QueryTag.COVERAGE),
+        ([-2, 3, 4], QueryTag.ADVERSARIAL),
+    ]
+    return [
+        Query(input=xs, output=_execute_stack_bytecode(spec, xs), tag=tag)
+        for xs, tag in inputs
+    ]
+
+
 def _generate_task_from_candidate(
     family: str,
     candidate: Candidate,
@@ -820,6 +1243,11 @@ def _generate_task_from_candidate(
             axes = SimpleAlgorithmsAxes()
         py_code = render_simple_algorithms(spec)
         queries = generate_simple_algorithms_queries(spec, axes, rng)
+    elif family == "stack_bytecode":
+        if axes is None:
+            axes = StackBytecodeAxes()
+        py_code = _render_stack_bytecode(spec)
+        queries = _generate_stack_bytecode_queries(spec)
     else:
         raise ValueError(f"Unknown family: {family}")
 

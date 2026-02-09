@@ -1,5 +1,6 @@
 """Tests for balanced suite generation."""
 
+import importlib.util
 import random
 from collections.abc import Callable
 from typing import cast
@@ -28,6 +29,13 @@ from genfxn.suites.generate import (
     quota_report,
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
+
+
+def _stack_suite_available() -> bool:
+    return (
+        "stack_bytecode" in QUOTAS
+        and importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
+    )
 
 # ── Feature extraction tests ─────────────────────────────────────────────
 
@@ -809,6 +817,29 @@ class TestPoolGeneration:
 
             assert compute_difficulty(family, cand.spec_dict) == difficulty
 
+    def test_stack_bytecode_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["stack_bytecode"].keys()):
+            candidates, stats = generate_pool(
+                "stack_bytecode",
+                difficulty,
+                seed=42,
+                pool_size=120,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                from genfxn.core.difficulty import compute_difficulty
+
+                assert (
+                    compute_difficulty("stack_bytecode", cand.spec_dict)
+                    == difficulty
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -960,3 +991,24 @@ class TestIntegration:
                 f"{family} D{difficulty}: {axis}={value} got {achieved}, "
                 f"need >= {min_acceptable} (target={target})"
             )
+
+    @pytest.mark.slow
+    def test_stack_bytecode_suite_generation_when_available(self) -> None:
+        if not _stack_suite_available():
+            pytest.skip("stack_bytecode suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["stack_bytecode"].keys())[0]
+        tasks = generate_suite(
+            "stack_bytecode",
+            difficulty,
+            seed=42,
+            pool_size=2000,
+        )
+        quota = QUOTAS["stack_bytecode"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "stack_bytecode", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.8))
+            assert achieved >= min_acceptable

@@ -11,6 +11,8 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_simple_algorithms(spec)
     elif family == "stringrules":
         return _describe_stringrules(spec)
+    elif family == "stack_bytecode":
+        return _describe_stack_bytecode(spec)
     return ""
 
 
@@ -642,3 +644,41 @@ def _describe_string_transform(trans: dict[str, Any]) -> str:
                 return f"apply in order: {', then '.join(step_texts)}"
 
     return "return it unchanged"
+
+
+def _describe_stack_bytecode(spec: dict[str, Any]) -> str:
+    program = spec.get("program", [])
+    n_instr = len(program) if isinstance(program, list) else 0
+    input_mode = spec.get("input_mode", "direct")
+    jump_mode = spec.get("jump_target_mode", "error")
+    max_steps = spec.get("max_step_count", 64)
+    has_conditional = any(
+        isinstance(instr, dict)
+        and instr.get("op") in ("jump_if_zero", "jump_if_nonzero")
+        for instr in program
+    )
+    has_loop = any(
+        isinstance(instr, dict)
+        and instr.get("op") in ("jump", "jump_if_zero", "jump_if_nonzero")
+        and isinstance(instr.get("target"), int)
+        and instr["target"] < idx
+        for idx, instr in enumerate(program)
+    )
+    flow_text = "linear control flow"
+    if has_conditional and has_loop:
+        flow_text = "conditional jumps with potential loops"
+    elif has_conditional:
+        flow_text = "conditional jumps"
+    elif any(
+        isinstance(instr, dict) and instr.get("op") == "jump"
+        for instr in program
+    ):
+        flow_text = "unconditional jumps"
+
+    return (
+        "Execute a stack-based bytecode program over a list of integers. "
+        f"The program has {n_instr} instructions with {flow_text}, "
+        f"input mode '{input_mode}', jump handling '{jump_mode}', and "
+        f"a max step count of {max_steps}. Return the final top-of-stack "
+        "value, or a runtime status code when execution fails."
+    )

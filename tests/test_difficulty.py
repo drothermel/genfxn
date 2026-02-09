@@ -1,3 +1,5 @@
+import importlib.util
+
 import pytest
 
 from genfxn.core.difficulty import (
@@ -651,6 +653,23 @@ class TestComputeDifficulty:
             "default_transform": {"kind": "identity"},
         }
         difficulty = compute_difficulty("stringrules", spec)
+        assert 1 <= difficulty <= 5
+
+    def test_stack_bytecode_family_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
+            pytest.skip("stack_bytecode family is not available")
+        spec = {
+            "program": [
+                {"op": "push_const", "value": 2},
+                {"op": "push_const", "value": 3},
+                {"op": "mul"},
+                {"op": "halt"},
+            ],
+            "max_step_count": 64,
+            "jump_target_mode": "error",
+            "input_mode": "direct",
+        }
+        difficulty = compute_difficulty("stack_bytecode", spec)
         assert 1 <= difficulty <= 5
 
     def test_unknown_family_raises(self) -> None:

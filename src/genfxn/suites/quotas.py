@@ -219,6 +219,39 @@ _SIMPLE_ALGORITHMS_D5 = QuotaSpec(
     ],
 )
 
+# ── Stack bytecode quotas ────────────────────────────────────────────────
+
+_STACK_BYTECODE_D1 = QuotaSpec(
+    hard_constraints={"control_flow": "linear", "op_complexity": "basic"},
+    buckets=[Bucket("size_bucket", "1-3", 50)],
+)
+
+_STACK_BYTECODE_D2 = QuotaSpec(
+    hard_constraints={"control_flow": "linear", "op_complexity": "arithmetic"},
+    buckets=[Bucket("size_bucket", "4-5", 50)],
+)
+
+_STACK_BYTECODE_D3 = QuotaSpec(
+    hard_constraints={"op_complexity": "stack_logic"},
+    buckets=[Bucket("size_bucket", "6-7", 50)],
+)
+
+_STACK_BYTECODE_D4 = QuotaSpec(
+    hard_constraints={
+        "control_flow": "conditional",
+        "op_complexity": "control",
+    },
+    buckets=[Bucket("size_bucket", "8-10", 50)],
+)
+
+_STACK_BYTECODE_D5 = QuotaSpec(
+    hard_constraints={
+        "control_flow": "looped_conditional",
+        "op_complexity": "control",
+    },
+    buckets=[Bucket("size_bucket", "11+", 50)],
+)
+
 # ── Combined lookup ──────────────────────────────────────────────────────
 
 QUOTAS: dict[str, dict[int, QuotaSpec]] = {
@@ -228,5 +261,12 @@ QUOTAS: dict[str, dict[int, QuotaSpec]] = {
         3: _SIMPLE_ALGORITHMS_D3,
         4: _SIMPLE_ALGORITHMS_D4,
         5: _SIMPLE_ALGORITHMS_D5,
+    },
+    "stack_bytecode": {
+        1: _STACK_BYTECODE_D1,
+        2: _STACK_BYTECODE_D2,
+        3: _STACK_BYTECODE_D3,
+        4: _STACK_BYTECODE_D4,
+        5: _STACK_BYTECODE_D5,
     },
 }
