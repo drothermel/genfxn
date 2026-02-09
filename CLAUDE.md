@@ -12,3 +12,13 @@
 - `src/genfxn/core/difficulty.py` - Difficulty scoring (1-5) per family
 - `src/genfxn/core/describe.py` - Natural language task descriptions
 - `src/genfxn/{family}/task.py` - Task generation entry points
+
+## Family Quality Gate
+
+No new family should be added or marked complete without an executable
+cross-language runtime parity test harness.
+
+Required:
+- Runtime parity tests must execute code (not only inspect rendered strings).
+- Tests must compare Python, Java, and Rust outputs on the same specs/inputs.
+- Parity harness coverage must be part of the family's test evidence in PRs.
