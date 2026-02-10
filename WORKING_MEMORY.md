@@ -160,6 +160,41 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
 - Validation for this batch should run targeted full-mode parity suites plus
   `ruff` and `ty` on touched files.
 
+## Latest Intake Extension (2026-02-10, Oversized Literal Parity Rigor)
+- Oversized-literal runtime tests in `piecewise`, `stateful`, and
+  `simple_algorithms` currently only prove Java compile/run viability; they do
+  not assert Java/Rust output parity against Python evaluators.
+- Some oversized literal cases use out-of-range divisor/remainder values in
+  mod predicates/expressions, which can diverge from the chosen int32 contract
+  used in core overflow fixes.
+- `tests/test_java_render.py` currently has thin `java_int_literal(...)`
+  coverage and should explicitly lock compile-safe behavior at int32 and
+  long-range boundaries.
+
+## Latest Intake Extension (2026-02-10, Overflow-Adjacent Expected Source)
+- Overflow-adjacent runtime parity tests in `sequence_dp` and `stack_bytecode`
+  currently pin hardcoded expected numeric outputs.
+- These expectations should be derived from the Python evaluators
+  (`eval_sequence_dp`, `eval_stack_bytecode`) to keep parity assertions aligned
+  with the canonical runtime semantics while remaining deterministic.
+- Scope is limited to:
+  - `tests/test_sequence_dp_runtime_parity.py`
+  - `tests/test_stack_bytecode_runtime_parity.py`
+
+## Latest Intake Extension (2026-02-10, Core Semantics Blocking Fixes #1/#2/#3)
+- `eval_predicate(...)` currently has no int32-eval mode, so int32 families
+  (`piecewise`, `stateful`, `simple_algorithms`) evaluate predicate constants
+  with unbounded-Python semantics while Java/Rust execute int32 semantics.
+- int32 transform `clip` in `eval_transform(...)` currently clips against raw
+  `low/high` bounds before wrapping, diverging from Java/Rust behavior that
+  applies int32-cast bounds during clamp.
+- Core `mod_eq` and `piecewise` `ExprMod` divisors are only validated as `> 0`;
+  very large positive divisors can wrap to zero/negative in int32 runtimes,
+  creating compile/runtime modulo crash or divergence risk.
+- `stateful`/`simple_algorithms` query-generation helpers still call
+  `eval_predicate(...)` in default mode, so generated boundary/adversarial
+  examples can drift from int32 runtime semantics for wrapped constants.
+
 ## Active Checklist (Current Batch)
 - [x] Fix scalar key typing in `dedupe_queries` and add type-separation tests.
 - [x] Reject bool values in range holdout matching (library + CLI) and add
@@ -217,6 +252,14 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
       `simple_algorithms`, `stateful`, and `piecewise`.
 - [x] Run targeted full-mode parity validation for touched runtime files plus
       `ruff` and `ty`, and record evidence.
+- [ ] Strengthen oversized-literal runtime tests to assert Java/Rust parity
+      against Python eval in `piecewise`, `stateful`, and
+      `simple_algorithms`.
+- [ ] Replace oversized divisor/remainder parity fixtures with values aligned
+      to the chosen int32 contract for mod operations.
+- [ ] Expand `tests/test_java_render.py` `TestJavaIntLiteral` coverage for
+      compile-safe boundary/extreme values.
+- [ ] Run targeted pytest + `ruff` + `ty` on touched files and record evidence.
 
 ## Completed This Chunk (2026-02-10, Int32 Overflow Contract Alignment)
 - Added shared int32 arithmetic helpers in `src/genfxn/core/int32.py` and

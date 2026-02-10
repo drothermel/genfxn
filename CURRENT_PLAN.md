@@ -210,6 +210,17 @@ Current execution batch (2026-02-10, issue #3 int32-boundary parity coverage):
 - [x] Run targeted full parity suites for touched files and run
       `uv run ruff check` + `uv run ty check` on touched files.
 
+Current execution batch (2026-02-10, review item #6 expected-source cleanup):
+- [ ] Replace hardcoded expected values in overflow-adjacent parity tests with
+      evaluator-derived expected outputs in:
+      `tests/test_sequence_dp_runtime_parity.py` and
+      `tests/test_stack_bytecode_runtime_parity.py`.
+- [ ] Preserve deterministic inputs/cases and explicit Java/Rust parity
+      assertions against evaluator-derived expected outputs.
+- [ ] Run targeted validation:
+      `uv run pytest ... --verification-level=full` for both touched files,
+      plus `uv run ruff check` and `uv run ty check` on touched files.
+
 Progress update (2026-02-10, issue #3 int32-boundary parity coverage):
 - Added deterministic int32-boundary parity regressions:
   - `test_simple_algorithms_runtime_parity_int32_boundary_cases`
@@ -229,6 +240,21 @@ Progress update (2026-02-10, issue #3 int32-boundary parity coverage):
   - `uv run ty check tests/test_simple_algorithms_runtime_parity.py
     tests/test_stateful_runtime_parity.py
     tests/test_piecewise_runtime_parity.py` -> passed
+
+Current execution batch (2026-02-10, review item #5 oversized-literal parity):
+- [ ] Update oversized-literal tests in:
+      `tests/test_piecewise_runtime_parity.py`,
+      `tests/test_stateful_runtime_parity.py`,
+      `tests/test_simple_algorithms_runtime_parity.py`
+      so Java/Rust outputs are asserted against Python evaluator outputs.
+- [ ] Replace oversized divisor/remainder fixtures in parity tests with values
+      that remain valid under the current int32 contract.
+- [ ] Expand `tests/test_java_render.py` `TestJavaIntLiteral` assertions to
+      cover compile-safe boundary/extreme integer rendering.
+- [ ] Run targeted verification commands:
+      `uv run pytest ... --verification-level=full`,
+      `uv run ruff check ...`,
+      `uv run ty check ...`.
 
 Exit criterion:
 - Each family parity file contains both sampled and forced-variant sections.

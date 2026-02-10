@@ -318,106 +318,86 @@ def test_stack_bytecode_runtime_parity_overflow_adjacent_cases() -> None:
     max_i64 = (1 << 63) - 1
     min_i64 = -(1 << 63)
 
-    cases: tuple[tuple[StackBytecodeSpec, tuple[int, int]], ...] = (
-        (
-            StackBytecodeSpec(
-                program=[
-                    Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
-                    Instruction(op=InstructionOp.PUSH_CONST, value=1),
-                    Instruction(op=InstructionOp.ADD),
-                    Instruction(op=InstructionOp.HALT),
-                ],
-                max_step_count=8,
-                jump_target_mode=JumpTargetMode.ERROR,
-                input_mode=InputMode.DIRECT,
-            ),
-            (0, min_i64),
+    cases: tuple[StackBytecodeSpec, ...] = (
+        StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.ADD),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=8,
+            jump_target_mode=JumpTargetMode.ERROR,
+            input_mode=InputMode.DIRECT,
         ),
-        (
-            StackBytecodeSpec(
-                program=[
-                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
-                    Instruction(op=InstructionOp.PUSH_CONST, value=1),
-                    Instruction(op=InstructionOp.SUB),
-                    Instruction(op=InstructionOp.HALT),
-                ],
-                max_step_count=8,
-                jump_target_mode=JumpTargetMode.ERROR,
-                input_mode=InputMode.DIRECT,
-            ),
-            (0, max_i64),
+        StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.SUB),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=8,
+            jump_target_mode=JumpTargetMode.ERROR,
+            input_mode=InputMode.DIRECT,
         ),
-        (
-            StackBytecodeSpec(
-                program=[
-                    Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
-                    Instruction(op=InstructionOp.PUSH_CONST, value=2),
-                    Instruction(op=InstructionOp.MUL),
-                    Instruction(op=InstructionOp.HALT),
-                ],
-                max_step_count=8,
-                jump_target_mode=JumpTargetMode.ERROR,
-                input_mode=InputMode.DIRECT,
-            ),
-            (0, -2),
+        StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=2),
+                Instruction(op=InstructionOp.MUL),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=8,
+            jump_target_mode=JumpTargetMode.ERROR,
+            input_mode=InputMode.DIRECT,
         ),
-        (
-            StackBytecodeSpec(
-                program=[
-                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
-                    Instruction(op=InstructionOp.NEG),
-                    Instruction(op=InstructionOp.HALT),
-                ],
-                max_step_count=6,
-                jump_target_mode=JumpTargetMode.ERROR,
-                input_mode=InputMode.DIRECT,
-            ),
-            (0, min_i64),
+        StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.NEG),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=6,
+            jump_target_mode=JumpTargetMode.ERROR,
+            input_mode=InputMode.DIRECT,
         ),
-        (
-            StackBytecodeSpec(
-                program=[
-                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
-                    Instruction(op=InstructionOp.ABS),
-                    Instruction(op=InstructionOp.HALT),
-                ],
-                max_step_count=6,
-                jump_target_mode=JumpTargetMode.ERROR,
-                input_mode=InputMode.DIRECT,
-            ),
-            (0, min_i64),
+        StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.ABS),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=6,
+            jump_target_mode=JumpTargetMode.ERROR,
+            input_mode=InputMode.DIRECT,
         ),
-        (
-            StackBytecodeSpec(
-                program=[
-                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
-                    Instruction(op=InstructionOp.PUSH_CONST, value=-1),
-                    Instruction(op=InstructionOp.DIV),
-                    Instruction(op=InstructionOp.HALT),
-                ],
-                max_step_count=8,
-                jump_target_mode=JumpTargetMode.ERROR,
-                input_mode=InputMode.DIRECT,
-            ),
-            (0, min_i64),
+        StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                Instruction(op=InstructionOp.DIV),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=8,
+            jump_target_mode=JumpTargetMode.ERROR,
+            input_mode=InputMode.DIRECT,
         ),
-        (
-            StackBytecodeSpec(
-                program=[
-                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
-                    Instruction(op=InstructionOp.PUSH_CONST, value=-1),
-                    Instruction(op=InstructionOp.MOD),
-                    Instruction(op=InstructionOp.HALT),
-                ],
-                max_step_count=8,
-                jump_target_mode=JumpTargetMode.ERROR,
-                input_mode=InputMode.DIRECT,
-            ),
-            (0, 0),
+        StackBytecodeSpec(
+            program=[
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                Instruction(op=InstructionOp.MOD),
+                Instruction(op=InstructionOp.HALT),
+            ],
+            max_step_count=8,
+            jump_target_mode=JumpTargetMode.ERROR,
+            input_mode=InputMode.DIRECT,
         ),
     )
 
-    for spec, expected in cases:
+    for spec in cases:
+        expected = eval_stack_bytecode(spec, [])
         java_code = render_stack_bytecode_java(spec, func_name="f")
         rust_code = render_stack_bytecode_rust(spec, func_name="f")
         assert _run_java_f(javac, java, java_code, []) == expected

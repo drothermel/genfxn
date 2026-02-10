@@ -301,14 +301,13 @@ def test_sequence_dp_runtime_parity_overflow_adjacent_cases() -> None:
     )
     predicate_overflow_inputs = ([min_i64], [1])
 
-    cases: tuple[
-        tuple[SequenceDpSpec, tuple[list[int], list[int]], int], ...
-    ] = (
-        (score_overflow_spec, score_overflow_inputs, max_i64 - 2),
-        (predicate_overflow_spec, predicate_overflow_inputs, 9),
+    cases: tuple[tuple[SequenceDpSpec, tuple[list[int], list[int]]], ...] = (
+        (score_overflow_spec, score_overflow_inputs),
+        (predicate_overflow_spec, predicate_overflow_inputs),
     )
 
-    for spec, (a_vals, b_vals), expected in cases:
+    for spec, (a_vals, b_vals) in cases:
+        expected = eval_sequence_dp(spec, a_vals, b_vals)
         java_code = render_sequence_dp_java(spec, func_name="f")
         rust_code = render_sequence_dp_rust(spec, func_name="f")
         assert _run_java_f(javac, java, java_code, a_vals, b_vals) == expected
