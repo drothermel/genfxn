@@ -292,6 +292,75 @@ def _safe_unlink(path: Path) -> None:
         return
 
 
+def _safe_close_fd(fd: int | None) -> None:
+    if fd is None:
+        return
+    try:
+        os.close(fd)
+    except OSError:
+        return
+
+
+def _move_existing_output_to_backup(path: Path) -> Path | None:
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return None
+
+    backup_fd, backup_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".bak",
+        dir=path.parent,
+    )
+    os.close(backup_fd)
+    backup = Path(backup_name)
+    _safe_unlink(backup)
+    os.replace(path, backup)
+    return backup
+
+
+def _restore_backup(path: Path, backup: Path | None) -> None:
+    if backup is None:
+        return
+    os.replace(backup, path)
+
+
+def _commit_split_outputs(
+    *,
+    train_tmp: Path,
+    train: Path,
+    test_tmp: Path,
+    test: Path,
+) -> None:
+    train_backup: Path | None = None
+    test_backup: Path | None = None
+    train_replaced = False
+    test_replaced = False
+    try:
+        train_backup = _move_existing_output_to_backup(train)
+        test_backup = _move_existing_output_to_backup(test)
+
+        os.replace(train_tmp, train)
+        train_replaced = True
+        os.replace(test_tmp, test)
+        test_replaced = True
+    except Exception:
+        if train_replaced:
+            _safe_unlink(train)
+        if test_replaced:
+            _safe_unlink(test)
+        _restore_backup(train, train_backup)
+        _restore_backup(test, test_backup)
+        raise
+    finally:
+        _safe_unlink(train_tmp)
+        _safe_unlink(test_tmp)
+        if train_backup is not None:
+            _safe_unlink(train_backup)
+        if test_backup is not None:
+            _safe_unlink(test_backup)
+
+
 def _paths_resolve_to_same_target(left: Path, right: Path) -> bool:
     left_resolved = left.expanduser().resolve(strict=False)
     right_resolved = right.expanduser().resolve(strict=False)
@@ -302,29 +371,45 @@ def _paths_resolve_to_same_target(left: Path, right: Path) -> bool:
 def _atomic_split_outputs(
     train: Path, test: Path
 ) -> Iterator[tuple[TextIO, TextIO]]:
-    train_fd, train_tmp_name = tempfile.mkstemp(
-        prefix=f".{train.name}.",
-        suffix=".tmp",
-        dir=train.parent,
-    )
-    test_fd, test_tmp_name = tempfile.mkstemp(
-        prefix=f".{test.name}.",
-        suffix=".tmp",
-        dir=test.parent,
-    )
-    train_tmp = Path(train_tmp_name)
-    test_tmp = Path(test_tmp_name)
+    train_fd: int | None = None
+    test_fd: int | None = None
+    train_tmp: Path | None = None
+    test_tmp: Path | None = None
     try:
+        train_fd, train_tmp_name = tempfile.mkstemp(
+            prefix=f".{train.name}.",
+            suffix=".tmp",
+            dir=train.parent,
+        )
+        train_tmp = Path(train_tmp_name)
+
+        test_fd, test_tmp_name = tempfile.mkstemp(
+            prefix=f".{test.name}.",
+            suffix=".tmp",
+            dir=test.parent,
+        )
+        test_tmp = Path(test_tmp_name)
+
         with (
             os.fdopen(train_fd, "w", encoding="utf-8") as train_handle,
             os.fdopen(test_fd, "w", encoding="utf-8") as test_handle,
         ):
+            train_fd = None
+            test_fd = None
             yield train_handle, test_handle
-        os.replace(train_tmp, train)
-        os.replace(test_tmp, test)
+        _commit_split_outputs(
+            train_tmp=train_tmp,
+            train=train,
+            test_tmp=test_tmp,
+            test=test,
+        )
     except Exception:
-        _safe_unlink(train_tmp)
-        _safe_unlink(test_tmp)
+        _safe_close_fd(train_fd)
+        _safe_close_fd(test_fd)
+        if train_tmp is not None:
+            _safe_unlink(train_tmp)
+        if test_tmp is not None:
+            _safe_unlink(test_tmp)
         raise
 
 

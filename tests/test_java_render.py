@@ -1163,7 +1163,7 @@ class TestLangsInfra:
         assert Language.PYTHON in available
         assert Language.JAVA not in available
 
-    def test_available_languages_ignores_attribute_error(
+    def test_available_languages_raises_attribute_error(
         self, monkeypatch
     ) -> None:
         from genfxn.langs import render as render_module
@@ -1177,9 +1177,8 @@ class TestLangsInfra:
 
         monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
 
-        available = render_module._available_languages()
-        assert Language.PYTHON in available
-        assert Language.JAVA not in available
+        with pytest.raises(AttributeError, match="missing render function"):
+            render_module._available_languages()
 
     def test_render_all_languages_default(self) -> None:
         from genfxn.langs.render import render_all_languages

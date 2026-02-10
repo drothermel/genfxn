@@ -5,6 +5,7 @@ import pytest
 import srsly
 from typer.testing import CliRunner
 
+import genfxn.cli as cli_module
 from genfxn.cli import _matches_holdout as cli_matches_holdout
 from genfxn.cli import _parse_numeric_range, app
 from genfxn.core.models import Task
@@ -1357,6 +1358,57 @@ class TestSplit:
         assert result.exit_code != 0
         assert "file operation failed" in result.output
         assert "Traceback" not in result.output
+
+    def test_atomic_split_outputs_cleans_up_when_second_tmp_create_fails(
+        self, tmp_path
+    ) -> None:
+        train = tmp_path / "train_dir" / "train.jsonl"
+        test = tmp_path / "missing_dir" / "test.jsonl"
+        train.parent.mkdir(parents=True)
+
+        with pytest.raises(FileNotFoundError):
+            with cli_module._atomic_split_outputs(train, test):
+                pass
+
+        leaked = list(train.parent.glob(".train.jsonl.*.tmp"))
+        assert leaked == []
+
+    def test_atomic_split_outputs_rolls_back_on_second_replace_failure(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        train = tmp_path / "train.jsonl"
+        test = tmp_path / "test.jsonl"
+        train.write_text("old-train\n", encoding="utf-8")
+        test.write_text("old-test\n", encoding="utf-8")
+
+        original_replace = cli_module.os.replace
+        saw_failure = False
+
+        def _flaky_replace(src, dst):
+            nonlocal saw_failure
+            src_path = src if isinstance(src, str) else str(src)
+            dst_path = dst if isinstance(dst, str) else str(dst)
+            if (
+                not saw_failure
+                and dst_path == str(test)
+                and src_path.endswith(".tmp")
+            ):
+                saw_failure = True
+                raise OSError("simulated replace failure")
+            return original_replace(src, dst)
+
+        monkeypatch.setattr(cli_module.os, "replace", _flaky_replace)
+
+        with pytest.raises(OSError, match="simulated replace failure"):
+            with cli_module._atomic_split_outputs(train, test) as (
+                train_handle,
+                test_handle,
+            ):
+                train_handle.write("new-train\n")
+                test_handle.write("new-test\n")
+
+        assert train.read_text(encoding="utf-8") == "old-train\n"
+        assert test.read_text(encoding="utf-8") == "old-test\n"
 
     def test_split_requires_random_or_holdout_mode(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
