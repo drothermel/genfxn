@@ -259,6 +259,113 @@ def test_persistent_worker_raises_bootstrap_error(monkeypatch) -> None:
         )
 
 
+def test_persistent_worker_startup_crash_maps_to_bootstrap_error(
+    monkeypatch,
+) -> None:
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            raise safe_exec.Empty
+
+        def close(self) -> None:
+            return
+
+        def join_thread(self) -> None:
+            return
+
+    class _FakeProcess:
+        exitcode = 1
+
+        def start(self) -> None:
+            return
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def is_alive(self) -> bool:
+            return False
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_get_mp_context", lambda: _FakeCtx())
+    monkeypatch.setattr(safe_exec, "_terminate_process_tree", lambda _: None)
+    monkeypatch.setattr(
+        safe_exec,
+        "_has_importable_main_module",
+        lambda: False,
+    )
+
+    with pytest.raises(SafeExecBootstrapError, match="__main__"):
+        safe_exec._PersistentWorker(
+            code="def f(x):\n    return x",
+            allowed_builtins={},
+            memory_limit_mb=None,
+            timeout_sec=1.0,
+        )
+
+
+def test_persistent_worker_startup_crash_keeps_runtime_error(
+    monkeypatch,
+) -> None:
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            raise safe_exec.Empty
+
+        def close(self) -> None:
+            return
+
+        def join_thread(self) -> None:
+            return
+
+    class _FakeProcess:
+        exitcode = 1
+
+        def start(self) -> None:
+            return
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def is_alive(self) -> bool:
+            return False
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_get_mp_context", lambda: _FakeCtx())
+    monkeypatch.setattr(safe_exec, "_terminate_process_tree", lambda _: None)
+    monkeypatch.setattr(
+        safe_exec,
+        "_has_importable_main_module",
+        lambda: True,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Execution worker crashed during startup with exit code 1",
+    ):
+        safe_exec._PersistentWorker(
+            code="def f(x):\n    return x",
+            allowed_builtins={},
+            memory_limit_mb=None,
+            timeout_sec=1.0,
+        )
+
+
 def test_persistent_worker_startup_timeout_uses_floor(monkeypatch) -> None:
     observed_timeouts: list[float] = []
 

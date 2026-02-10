@@ -278,6 +278,31 @@ def _bootstrap_error(method: str, exc: BaseException) -> SafeExecBootstrapError:
     )
 
 
+def _is_spawn_like_method(method: str) -> bool:
+    return method in {"spawn", "forkserver"}
+
+
+def _has_importable_main_module() -> bool:
+    try:
+        import __main__
+    except Exception:
+        return False
+
+    main_file = getattr(__main__, "__file__", None)
+    if not isinstance(main_file, str) or not main_file:
+        return False
+
+    # `spawn`/`forkserver` need an importable script file. Interactive modes
+    # (`<stdin>`, `<string>`, REPL) do not satisfy this requirement.
+    if main_file.startswith("<") and main_file.endswith(">"):
+        return False
+    return True
+
+
+def _should_map_startup_crash_to_bootstrap_error(method: str) -> bool:
+    return _is_spawn_like_method(method) and not _has_importable_main_module()
+
+
 def _get_mp_context() -> mp.context.BaseContext:
     """Return multiprocessing context suitable for safe_exec workers."""
     configured = os.environ.get(_SAFE_EXEC_START_METHOD_ENV)
@@ -697,6 +722,16 @@ class _PersistentWorker:
         except Empty:
             self._terminate()
             if self._process.exitcode not in (None, 0):
+                if _should_map_startup_crash_to_bootstrap_error(
+                    self._start_method
+                ):
+                    raise _bootstrap_error(
+                        self._start_method,
+                        RuntimeError(
+                            "worker exited during startup with exit code "
+                            f"{self._process.exitcode}"
+                        ),
+                    )
                 raise RuntimeError(
                     "Execution worker crashed during startup with "
                     f"exit code {self._process.exitcode}"
