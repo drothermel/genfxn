@@ -9,7 +9,11 @@ from pydantic import TypeAdapter
 
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
-from genfxn.core.codegen import get_spec_value, task_id_from_spec
+from genfxn.core.codegen import (
+    get_spec_value,
+    has_spec_value,
+    task_id_from_spec,
+)
 from genfxn.core.describe import describe_task
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
@@ -110,15 +114,25 @@ def _write_task_line(handle, task: Task) -> None:
 
 
 def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
-    value = get_spec_value(task.spec, holdout.axis_path)
-    if value is None:
+    if not has_spec_value(task.spec, holdout.axis_path):
         return False
+    value = get_spec_value(task.spec, holdout.axis_path)
 
     match holdout.holdout_type:
         case HoldoutType.EXACT:
             return value == holdout.holdout_value
         case HoldoutType.RANGE:
-            lo, hi = holdout.holdout_value
+            range_value = holdout.holdout_value
+            if (
+                not isinstance(range_value, tuple | list)
+                or len(range_value) != 2
+            ):
+                return False
+            lo, hi = range_value
+            if not isinstance(lo, int | float) or not isinstance(
+                hi, int | float
+            ):
+                return False
             if not isinstance(value, int | float):
                 return False
             return lo <= value <= hi
@@ -130,13 +144,8 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
     return False
 
 
-def _count_nonempty_jsonl_lines(input_file: Path) -> int:
-    count = 0
-    with input_file.open("rb") as handle:
-        for line in handle:
-            if line.strip():
-                count += 1
-    return count
+def _count_validated_tasks(input_file: Path) -> int:
+    return sum(1 for _ in _iter_validated_tasks(input_file))
 
 
 def _parse_single_language(language: str) -> Language:
@@ -1035,7 +1044,7 @@ def split(
         if random_ratio < 0 or random_ratio > 1:
             typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
-        total_count = _count_nonempty_jsonl_lines(input_file)
+        total_count = _count_validated_tasks(input_file)
         target_train_count = int(total_count * random_ratio)
         rng = random.Random(split_seed)
         with (

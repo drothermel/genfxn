@@ -6,37 +6,33 @@ from typing import Any
 
 import pytest
 from helpers import require_java_runtime, require_rust_runtime
+from pydantic import TypeAdapter
 
-from genfxn.langs.java.temporal_logic import _long_literal
-from genfxn.langs.registry import get_render_fn
-from genfxn.langs.rust.temporal_logic import _i64_literal
-from genfxn.langs.types import Language
-from genfxn.temporal_logic.eval import eval_temporal_logic
-from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
-from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
-from genfxn.temporal_logic.task import generate_temporal_logic_task
+from genfxn.langs.java.stateful import render_stateful as render_stateful_java
+from genfxn.langs.rust.stateful import render_stateful as render_stateful_rust
+from genfxn.stateful.eval import eval_stateful
+from genfxn.stateful.models import StatefulAxes, StatefulSpec
+from genfxn.stateful.sampler import sample_stateful_spec
+from genfxn.stateful.task import generate_stateful_task
+
+_stateful_spec_adapter = TypeAdapter(StatefulSpec)
 
 
 def _parse_query_input(input_value: Any) -> list[int]:
     if not isinstance(input_value, list):
-        raise TypeError("temporal_logic query input must be list[int]")
+        raise TypeError("stateful query input must be list[int]")
     if not all(isinstance(v, int) for v in input_value):
-        raise TypeError("temporal_logic query input must be list[int]")
+        raise TypeError("stateful query input must be list[int]")
     return [int(v) for v in input_value]
 
 
-def _run_java_f(
-    javac: str,
-    java: str,
-    code: str,
-    xs: list[int],
-) -> int:
-    xs_lit = ", ".join(_long_literal(v) for v in xs)
+def _run_java_f(javac: str, java: str, code: str, xs: list[int]) -> int:
+    xs_lit = ", ".join(f"{x}" for x in xs)
     main_src = (
         "public class Main {\n"
         f"{code}\n"
         "  public static void main(String[] args) {\n"
-        f"    long[] xs = new long[]{{{xs_lit}}};\n"
+        f"    int[] xs = new int[]{{{xs_lit}}};\n"
         "    System.out.print(f(xs));\n"
         "  }\n"
         "}\n"
@@ -63,7 +59,7 @@ def _run_java_f(
 
 
 def _run_rust_f(rustc: str, code: str, xs: list[int]) -> int:
-    xs_lit = ", ".join(_i64_literal(v) for v in xs)
+    xs_lit = ", ".join(f"{x}i64" for x in xs)
     main_src = (
         f"{code}\n"
         "fn main() {\n"
@@ -94,67 +90,60 @@ def _run_rust_f(rustc: str, code: str, xs: list[int]) -> int:
 
 
 @pytest.mark.full
-def test_temporal_logic_java_runtime_parity() -> None:
+def test_stateful_java_runtime_parity() -> None:
     javac, java = require_java_runtime()
-    task = generate_temporal_logic_task(rng=random.Random(42))
-    spec = TemporalLogicSpec.model_validate(task.spec)
-    java_code = get_render_fn(Language.JAVA, "temporal_logic")(
-        spec,
-        func_name="f",
-    )
+    task = generate_stateful_task(rng=random.Random(42))
+    spec = _stateful_spec_adapter.validate_python(task.spec, strict=True)
+    java_code = render_stateful_java(spec, func_name="f")
 
     for query in task.queries:
         xs = _parse_query_input(query.input)
-        expected = eval_temporal_logic(spec, xs)
+        expected = eval_stateful(spec, xs)
         actual = _run_java_f(javac, java, java_code, xs)
         assert actual == expected
 
 
 @pytest.mark.full
-def test_temporal_logic_rust_runtime_parity() -> None:
+def test_stateful_rust_runtime_parity() -> None:
     rustc = require_rust_runtime()
-    task = generate_temporal_logic_task(rng=random.Random(99))
-    spec = TemporalLogicSpec.model_validate(task.spec)
-    rust_code = get_render_fn(Language.RUST, "temporal_logic")(
-        spec,
-        func_name="f",
-    )
+    task = generate_stateful_task(rng=random.Random(99))
+    spec = _stateful_spec_adapter.validate_python(task.spec, strict=True)
+    rust_code = render_stateful_rust(spec, func_name="f")
 
     for query in task.queries:
         xs = _parse_query_input(query.input)
-        expected = eval_temporal_logic(spec, xs)
+        expected = eval_stateful(spec, xs)
         actual = _run_rust_f(rustc, rust_code, xs)
         assert actual == expected
 
 
 @pytest.mark.full
-def test_temporal_logic_runtime_parity_across_sampled_specs() -> None:
+def test_stateful_runtime_parity_across_sampled_specs() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
-    render_java = get_render_fn(Language.JAVA, "temporal_logic")
-    render_rust = get_render_fn(Language.RUST, "temporal_logic")
 
+    rng = random.Random(77)
+    axes = StatefulAxes(
+        value_range=(-15, 15),
+        list_length_range=(0, 8),
+        threshold_range=(-10, 10),
+        divisor_range=(2, 8),
+        shift_range=(-4, 4),
+        scale_range=(-3, 3),
+    )
     sample_inputs = (
         [],
         [0],
         [1, -1],
-        [-2, -1, 0, 1, 2],
-        [5, 5, 5, 5],
-        [3, 0, -3, 0, 3],
-        [7, -8, 9, -10, 11, -12],
-    )
-    rng = random.Random(77)
-    axes = TemporalLogicAxes(
-        formula_depth_range=(1, 5),
-        sequence_length_range=(0, 9),
-        value_range=(-10, 10),
-        predicate_constant_range=(-9, 9),
+        [2, 2, 2],
+        [-3, 0, 3, -3],
+        [5, -4, 3, -2, 1],
     )
     for _ in range(8):
-        spec = sample_temporal_logic_spec(axes, rng=rng)
-        java_code = render_java(spec, func_name="f")
-        rust_code = render_rust(spec, func_name="f")
+        spec = sample_stateful_spec(axes, rng=rng)
+        java_code = render_stateful_java(spec, func_name="f")
+        rust_code = render_stateful_rust(spec, func_name="f")
         for xs in sample_inputs:
-            expected = eval_temporal_logic(spec, list(xs))
+            expected = eval_stateful(spec, list(xs))
             assert _run_java_f(javac, java, java_code, list(xs)) == expected
             assert _run_rust_f(rustc, rust_code, list(xs)) == expected

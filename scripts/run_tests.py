@@ -41,7 +41,7 @@ def main() -> int:
     parser.add_argument(
         "--tier",
         choices=("fast", "standard", "full"),
-        default="standard",
+        default="full",
         help="Verification tier to run.",
     )
     parser.add_argument(

@@ -21,7 +21,9 @@ def _rust_atom_expression(kind: str, constant: int) -> str:
         return f"xs[i] <= {const}"
     if kind == "gt":
         return f"xs[i] > {const}"
-    return f"xs[i] >= {const}"
+    if kind == "ge":
+        return f"xs[i] >= {const}"
+    raise ValueError(f"Unsupported predicate kind: {kind}")
 
 
 def _emit_rust_node(
@@ -135,30 +137,33 @@ def _emit_rust_node(
         blocks.append("\n".join(body))
         return node_name
 
-    left_name = _emit_rust_node(node["left"], blocks, next_id)
-    right_name = _emit_rust_node(node["right"], blocks, next_id)
-    body = [
-        f"fn {node_name}(xs: &[i64], i: usize) -> bool {{",
-        "    for j in (0..=i).rev() {",
-        f"        if !{right_name}(xs, j) {{",
-        "            continue;",
-        "        }",
-        "        let mut valid = true;",
-        "        for k in (j + 1)..=i {",
-        f"            if !{left_name}(xs, k) {{",
-        "                valid = false;",
-        "                break;",
-        "            }",
-        "        }",
-        "        if valid {",
-        "            return true;",
-        "        }",
-        "    }",
-        "    false",
-        "}",
-    ]
-    blocks.append("\n".join(body))
-    return node_name
+    if op == "since":
+        left_name = _emit_rust_node(node["left"], blocks, next_id)
+        right_name = _emit_rust_node(node["right"], blocks, next_id)
+        body = [
+            f"fn {node_name}(xs: &[i64], i: usize) -> bool {{",
+            "    for j in (0..=i).rev() {",
+            f"        if !{right_name}(xs, j) {{",
+            "            continue;",
+            "        }",
+            "        let mut valid = true;",
+            "        for k in (j + 1)..=i {",
+            f"            if !{left_name}(xs, k) {{",
+            "                valid = false;",
+            "                break;",
+            "            }",
+            "        }",
+            "        if valid {",
+            "            return true;",
+            "        }",
+            "    }",
+            "    false",
+            "}",
+        ]
+        blocks.append("\n".join(body))
+        return node_name
+
+    raise ValueError(f"Unsupported operator: {op}")
 
 
 def render_temporal_logic(

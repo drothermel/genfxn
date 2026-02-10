@@ -8,6 +8,7 @@ from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
 from genfxn.bitops.validate import (
     CODE_CODE_EXEC_ERROR,
+    CODE_CODE_PARSE_ERROR,
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
@@ -125,3 +126,11 @@ def test_ast_whitelist_allows_negative_literals() -> None:
     code = "def f(x):\n    arg = -1\n    return x ^ arg"
     issues, _ = _validate_ast_whitelist(code)
     assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
+
+def test_non_string_python_code_payload_reports_parse_error(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(update={"code": {"python": 123}})
+    issues = validate_bitops_task(corrupted)
+    assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)

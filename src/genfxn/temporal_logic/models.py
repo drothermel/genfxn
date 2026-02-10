@@ -73,7 +73,7 @@ def _validate_formula_node(node: Any) -> int:
                 f"unknown predicate kind '{raw_predicate}'"
             ) from exc
         constant = node.get("constant")
-        if not isinstance(constant, int):
+        if type(constant) is not int:
             raise ValueError("atom node must include int 'constant'")
         return 1
 
@@ -143,6 +143,8 @@ class TemporalLogicAxes(BaseModel):
 
         if self.formula_depth_range[0] < 1:
             raise ValueError("formula_depth_range: low must be >= 1")
+        if self.formula_depth_range[1] > 12:
+            raise ValueError("formula_depth_range: high must be <= 12")
         if self.sequence_length_range[0] < 0:
             raise ValueError("sequence_length_range: low must be >= 0")
 

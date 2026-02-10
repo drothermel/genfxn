@@ -223,20 +223,33 @@ def _validate_code_compile(
     if code is None:
         return [], None
 
+    if not isinstance(code, str):
+        return [
+            Issue(
+                code=CODE_CODE_PARSE_ERROR,
+                severity=Severity.ERROR,
+                message=(
+                    "Code payload must be a string, got "
+                    f"{type(code).__name__}"
+                ),
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
+
     if parsed_tree is None:
         try:
             parsed_tree = ast.parse(code)
-        except SyntaxError as e:
+        except (SyntaxError, TypeError) as e:
             return [
                 Issue(
                     code=CODE_CODE_PARSE_ERROR,
                     severity=Severity.ERROR,
-                    message=f"Syntax error in code: {e}",
+                    message=f"Failed to parse code: {e}",
                     location="code",
                     task_id=task.task_id,
                 )
             ], None
-    _ = parsed_tree
 
     if not execute_untrusted_code:
         return [], None
@@ -489,18 +502,22 @@ def validate_stack_bytecode_task(
     elif isinstance(task.code, dict):
         code = task.code.get(PYTHON_CODE_KEY)
 
+    ast_issues: list[Issue] = []
     parsed_tree: ast.Module | None = None
     if code is not None:
         ast_issues, parsed_tree = _validate_ast_whitelist(code)
         issues.extend(ast_issues)
 
-    compile_issues, fn = _validate_code_compile(
-        task,
-        code=code,
-        parsed_tree=parsed_tree,
-        execute_untrusted_code=execute_untrusted_code,
-    )
-    issues.extend(compile_issues)
+    fn = None
+    has_unsafe_ast = any(i.code == CODE_UNSAFE_AST for i in ast_issues)
+    if not has_unsafe_ast:
+        compile_issues, fn = _validate_code_compile(
+            task,
+            code=code,
+            parsed_tree=parsed_tree,
+            execute_untrusted_code=execute_untrusted_code,
+        )
+        issues.extend(compile_issues)
 
     issues.extend(_validate_query_outputs(task, spec, strict=strict))
 

@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from genfxn.core.codegen import get_spec_value
+from genfxn.core.codegen import get_spec_value, has_spec_value
 from genfxn.core.models import Task
 
 
@@ -30,15 +30,25 @@ class SplitResult(BaseModel):
 
 def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
     """Check if task matches a single holdout condition."""
-    value = get_spec_value(task.spec, holdout.axis_path)
-    if value is None:
+    if not has_spec_value(task.spec, holdout.axis_path):
         return False
+    value = get_spec_value(task.spec, holdout.axis_path)
 
     match holdout.holdout_type:
         case HoldoutType.EXACT:
             return value == holdout.holdout_value
         case HoldoutType.RANGE:
-            lo, hi = holdout.holdout_value
+            range_value = holdout.holdout_value
+            if (
+                not isinstance(range_value, tuple | list)
+                or len(range_value) != 2
+            ):
+                return False
+            lo, hi = range_value
+            if not isinstance(lo, int | float) or not isinstance(
+                hi, int | float
+            ):
+                return False
             if not isinstance(value, (int, float)):
                 return False
             return lo <= value <= hi

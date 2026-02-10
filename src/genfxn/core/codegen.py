@@ -6,24 +6,40 @@ import srsly
 from genfxn.core.models import Query
 
 
+def _lookup_spec_path(spec: dict[str, Any], path: str) -> tuple[bool, Any]:
+    """Resolve a dot-path in a spec and preserve explicit None leaf values."""
+    keys = path.split(".")
+    value: Any = spec
+    for key in keys:
+        if isinstance(value, dict):
+            if key not in value:
+                return False, None
+            value = value[key]
+        elif isinstance(value, list) and key.isdigit():
+            idx = int(key)
+            if idx >= len(value):
+                return False, None
+            value = value[idx]
+        else:
+            return False, None
+    return True, value
+
+
 def get_spec_value(spec: dict[str, Any], path: str) -> Any:
     """Access nested spec value by dot-path (e.g., 'predicate.kind').
 
     Returns None if path doesn't exist.
     """
-    keys = path.split(".")
-    value: Any = spec
-    for key in keys:
-        if isinstance(value, dict):
-            value = value.get(key)
-        elif isinstance(value, list) and key.isdigit():
-            idx = int(key)
-            value = value[idx] if idx < len(value) else None
-        else:
-            return None
-        if value is None:
-            return None
+    found, value = _lookup_spec_path(spec, path)
+    if not found:
+        return None
     return value
+
+
+def has_spec_value(spec: dict[str, Any], path: str) -> bool:
+    """Return True when a dot-path exists, even if its value is None."""
+    found, _ = _lookup_spec_path(spec, path)
+    return found
 
 
 def task_id_from_spec(family: str, spec: dict[str, Any]) -> str:

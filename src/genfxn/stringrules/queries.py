@@ -233,32 +233,50 @@ def _generate_non_matching_string(
             return base[:pos] + rng.choice(breakers) + base[pos:]
 
         case StringPredicateIsUpper():
-            # Force not-isupper() by including a non-uppercase character.
+            # Force not-isupper() via lowercase character, or no cased chars.
             length = _sample_length(min_len=1)
-            breakers = [ch for ch in charset if not ch.isupper()]
-            if length is None or not breakers:
+            lower_breakers = [ch for ch in charset if ch.islower()]
+            non_cased = [ch for ch in charset if not ch.isalpha()]
+            if length is None:
                 return None
             if length == 1:
-                return rng.choice(breakers)
-            if not upper_charset:
-                return _random_string(length, "".join(breakers), rng)
-            base = _random_string(length - 1, upper_charset, rng)
-            pos = rng.randint(0, len(base))
-            return base[:pos] + rng.choice(breakers) + base[pos:]
+                if lower_breakers:
+                    return rng.choice(lower_breakers)
+                if non_cased:
+                    return rng.choice(non_cased)
+                return None
+            if lower_breakers and upper_charset:
+                base = _random_string(length - 1, upper_charset, rng)
+                pos = rng.randint(0, len(base))
+                return base[:pos] + rng.choice(lower_breakers) + base[pos:]
+            if lower_breakers:
+                return _random_string(length, "".join(lower_breakers), rng)
+            if non_cased:
+                return _random_string(length, "".join(non_cased), rng)
+            return None
 
         case StringPredicateIsLower():
-            # Force not-islower() by including a non-lowercase character.
+            # Force not-islower() via uppercase character, or no cased chars.
             length = _sample_length(min_len=1)
-            breakers = [ch for ch in charset if not ch.islower()]
-            if length is None or not breakers:
+            upper_breakers = [ch for ch in charset if ch.isupper()]
+            non_cased = [ch for ch in charset if not ch.isalpha()]
+            if length is None:
                 return None
             if length == 1:
-                return rng.choice(breakers)
-            if not lower_charset:
-                return _random_string(length, "".join(breakers), rng)
-            base = _random_string(length - 1, lower_charset, rng)
-            pos = rng.randint(0, len(base))
-            return base[:pos] + rng.choice(breakers) + base[pos:]
+                if upper_breakers:
+                    return rng.choice(upper_breakers)
+                if non_cased:
+                    return rng.choice(non_cased)
+                return None
+            if upper_breakers and lower_charset:
+                base = _random_string(length - 1, lower_charset, rng)
+                pos = rng.randint(0, len(base))
+                return base[:pos] + rng.choice(upper_breakers) + base[pos:]
+            if upper_breakers:
+                return _random_string(length, "".join(upper_breakers), rng)
+            if non_cased:
+                return _random_string(length, "".join(non_cased), rng)
+            return None
 
         case StringPredicateLengthCmp(op=op, value=v):
             match op:

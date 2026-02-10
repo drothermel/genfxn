@@ -32,6 +32,8 @@ def render_predicate_rust(pred: Predicate, var: str = "x") -> str:
         case PredicateModEq(divisor=d, remainder=r):
             return f"{var}.rem_euclid({d}) == {r}"
         case PredicateInSet(values=vals):
+            if not vals:
+                return "false"
             items = ", ".join(str(v) for v in sorted(vals))
             return f"[{items}].contains(&{var})"
         case PredicateNot(operand=op):

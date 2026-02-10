@@ -410,21 +410,26 @@ def _generate_max_window_queries(
     lo, hi = axes.value_range
     length_bounds = axes.list_length_range
 
-    # Empty list - k > len
-    queries.append(
-        Query(
-            input=[],
-            output=eval_simple_algorithms(spec, []),
-            tag=QueryTag.COVERAGE,
+    # Empty list - k > len (only when it fits configured length bounds).
+    empty = _fit_length_bounds([], length_bounds, min_len=0)
+    if empty is not None and len(empty) < k:
+        queries.append(
+            Query(
+                input=empty,
+                output=eval_simple_algorithms(spec, empty),
+                tag=QueryTag.COVERAGE,
+            )
         )
-    )
 
     # List shorter than k (values in [lo, hi]; length exactly k-1)
     if k - 1 > 0:
         short_base = _distinct_in_range(lo, hi, k - 1)
         # Repeat base values to fill length k-1, then truncate.
-        short = (short_base * ((k - 1) // max(1, len(short_base)) + 1))[: k - 1]
-        if len(short) == k - 1:
+        short_template = (
+            short_base * ((k - 1) // max(1, len(short_base)) + 1)
+        )[: k - 1]
+        short = _fit_length_bounds(short_template, length_bounds, min_len=0)
+        if short is not None and len(short) < k:
             queries.append(
                 Query(
                     input=short,
@@ -436,14 +441,19 @@ def _generate_max_window_queries(
     # Exactly k elements (distinct in [lo, hi])
     exact_k = _distinct_in_range(lo, hi, k)
     if len(exact_k) >= k:
-        exact_k = exact_k[:k]
-        queries.append(
-            Query(
-                input=exact_k,
-                output=eval_simple_algorithms(spec, exact_k),
-                tag=QueryTag.BOUNDARY,
-            )
+        exact_fit = _fit_length_bounds(
+            exact_k[:k],
+            length_bounds,
+            min_len=k,
         )
+        if exact_fit is not None and len(exact_fit) >= k:
+            queries.append(
+                Query(
+                    input=exact_fit,
+                    output=eval_simple_algorithms(spec, exact_fit),
+                    tag=QueryTag.BOUNDARY,
+                )
+            )
 
     # k=1 edge case test (several values in [lo, hi], max is one of them)
     if k == 1 and hi >= lo:
@@ -523,7 +533,7 @@ def _generate_max_window_queries(
     # Random typical
     len_lo, len_hi = axes.list_length_range
     for _ in range(2):
-        length = rng.randint(max(k, len_lo), len_hi)
+        length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
         queries.append(
             Query(

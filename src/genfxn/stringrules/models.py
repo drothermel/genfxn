@@ -64,10 +64,13 @@ class StringRulesAxes(BaseModel):
             raise ValueError("predicate_types must not be empty")
         if not self.transform_types:
             raise ValueError("transform_types must not be empty")
-        if not _get_charset(self.charset):
+        resolved_charset = _get_charset(self.charset)
+        if not resolved_charset:
             raise ValueError(
                 "charset must resolve to a non-empty character set"
             )
+        if any(ord(ch) > 127 for ch in resolved_charset):
+            raise ValueError("charset must be ASCII-only for parity")
 
         for name in (
             "string_length_range",

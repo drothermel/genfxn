@@ -1079,6 +1079,7 @@ def _pool_axes_temporal_logic_d4(_: random.Random) -> TemporalLogicAxes:
         formula_depth_range=(4, 4),
         operator_mix=[
             TemporalOperator.ATOM,
+            TemporalOperator.NOT,
             TemporalOperator.AND,
             TemporalOperator.OR,
             TemporalOperator.NEXT,

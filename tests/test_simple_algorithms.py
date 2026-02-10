@@ -305,6 +305,18 @@ class TestQueryGeneration:
         assert queries
         assert all(len(q.input) <= axes.list_length_range[1] for q in queries)
 
+    def test_max_window_queries_respect_list_length_lower_bound(self) -> None:
+        spec = MaxWindowSumSpec(k=5, invalid_k_default=-1)
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(2, 3),
+            window_size_range=(5, 5),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        assert queries
+        assert all(len(q.input) >= axes.list_length_range[0] for q in queries)
+
     def test_max_window_k_minus_one_query_uses_eval_with_empty_default(
         self,
     ) -> None:

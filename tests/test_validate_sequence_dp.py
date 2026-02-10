@@ -10,6 +10,7 @@ from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
 from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.sequence_dp.validate import (
     CODE_CODE_EXEC_ERROR,
+    CODE_CODE_PARSE_ERROR,
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
@@ -114,3 +115,11 @@ def test_execute_untrusted_code_true_reports_exec_error(
     )
     issues = _validate_sequence_dp_task(corrupted, execute_untrusted_code=True)
     assert any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
+
+
+def test_non_string_python_code_payload_reports_parse_error(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(update={"code": {"python": 123}})
+    issues = validate_sequence_dp_task(corrupted)
+    assert any(issue.code == CODE_CODE_PARSE_ERROR for issue in issues)

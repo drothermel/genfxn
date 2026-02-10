@@ -143,6 +143,13 @@ class TestCodeCompilationAndExecution:
         assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
         assert not any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
+    def test_non_string_python_code_payload_reports_parse_error(
+        self, baseline_task: Task
+    ) -> None:
+        corrupted = baseline_task.model_copy(update={"code": {"python": 123}})
+        issues = validate_stack_bytecode_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
     def test_exec_error_caught(self, baseline_task: Task) -> None:
         corrupted = baseline_task.model_copy(
             update={"code": "raise ValueError('boom')"}
@@ -182,6 +189,38 @@ class TestCodeCompilationAndExecution:
             execute_untrusted_code=False,
         )
         assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+
+    def test_unsafe_ast_short_circuits_execution(
+        self, baseline_task: Task, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        called = False
+
+        def _spy(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            nonlocal called
+            called = True
+            return {}
+
+        monkeypatch.setattr(
+            "genfxn.stack_bytecode.validate.execute_code_restricted",
+            _spy,
+        )
+        corrupted = baseline_task.model_copy(
+            update={
+                "code": (
+                    "while True:\n"
+                    "    pass\n"
+                    "def f(xs):\n"
+                    "    return (0, 0)"
+                )
+            }
+        )
+        issues = _validate_stack_bytecode_task(
+            corrupted,
+            execute_untrusted_code=True,
+        )
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+        assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert called is False
 
 
 class TestQueryTypeValidation:

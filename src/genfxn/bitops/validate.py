@@ -245,15 +245,29 @@ def _validate_code_compile(
     if code is None:
         return [], None
 
+    if not isinstance(code, str):
+        return [
+            Issue(
+                code=CODE_CODE_PARSE_ERROR,
+                severity=Severity.ERROR,
+                message=(
+                    "Code payload must be a string, got "
+                    f"{type(code).__name__}"
+                ),
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
+
     if parsed_tree is None:
         try:
             parsed_tree = ast.parse(code)
-        except SyntaxError as e:
+        except (SyntaxError, TypeError) as e:
             return [
                 Issue(
                     code=CODE_CODE_PARSE_ERROR,
                     severity=Severity.ERROR,
-                    message=f"Syntax error in code: {e}",
+                    message=f"Failed to parse code: {e}",
                     location="code",
                     task_id=task.task_id,
                 )

@@ -19,7 +19,9 @@ def _eval_predicate(kind: PredicateKind, constant: int, value: int) -> bool:
         return value <= constant
     if kind == PredicateKind.GT:
         return value > constant
-    return value >= constant
+    if kind == PredicateKind.GE:
+        return value >= constant
+    raise ValueError(f"Unsupported predicate kind: {kind}")
 
 
 def _eval_formula(node: dict[str, Any], xs: list[int], index: int) -> bool:

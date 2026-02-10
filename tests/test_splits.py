@@ -274,6 +274,39 @@ class TestSplitTasks:
         assert result.holdouts == holdouts
         assert len(result.holdouts) == 2
 
+    def test_exact_holdout_matches_explicit_none_value(self) -> None:
+        tasks = [
+            _make_task("t1", {"value": None}),
+            _make_task("t2", {}),
+            _make_task("t3", {"value": 1}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="value",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=None,
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.test] == ["t1"]
+        assert {t.task_id for t in result.train} == {"t2", "t3"}
+
+    def test_malformed_range_holdout_fails_closed(self) -> None:
+        tasks = [
+            _make_task("t1", {"score": 10}),
+            _make_task("t2", {"score": 20}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(0, 10, 20),
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.train] == ["t1", "t2"]
+        assert result.test == []
+
 
 class TestRandomSplit:
     def test_basic_split_ratio(self) -> None:

@@ -9,6 +9,8 @@ from genfxn.core.string_predicates import (
     StringPredicateEndsWith,
     StringPredicateIsAlpha,
     StringPredicateIsDigit,
+    StringPredicateIsLower,
+    StringPredicateIsUpper,
     StringPredicateLengthCmp,
     StringPredicateNot,
     StringPredicateOr,
@@ -429,6 +431,56 @@ class TestQueryGeneration:
         assert queries
         assert all(set(q.input).issubset(charset) for q in queries)
 
+    def test_is_upper_non_matching_queries_are_truly_non_matching(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=1,
+            string_length_range=(1, 6),
+            charset="ascii_letters_digits",
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsUpper(),
+                    transform=StringTransformUppercase(),
+                )
+            ],
+            default_transform=StringTransformLowercase(),
+        )
+        queries = generate_stringrules_queries(spec, axes, random.Random(101))
+        non_matching = [
+            q
+            for q in queries
+            if not eval_string_predicate(spec.rules[0].predicate, q.input)
+        ]
+        assert non_matching
+        for query in non_matching:
+            assert query.output == eval_stringrules(spec, query.input)
+
+    def test_is_lower_non_matching_queries_are_truly_non_matching(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=1,
+            string_length_range=(1, 6),
+            charset="ascii_letters_digits",
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsLower(),
+                    transform=StringTransformLowercase(),
+                )
+            ],
+            default_transform=StringTransformUppercase(),
+        )
+        queries = generate_stringrules_queries(spec, axes, random.Random(102))
+        non_matching = [
+            q
+            for q in queries
+            if not eval_string_predicate(spec.rules[0].predicate, q.input)
+        ]
+        assert non_matching
+        for query in non_matching:
+            assert query.output == eval_stringrules(spec, query.input)
+
 
 class TestAxesValidation:
     def test_invalid_string_length_range(self) -> None:
@@ -448,6 +500,10 @@ class TestAxesValidation:
             ValueError, match="predicate_types must not be empty"
         ):
             StringRulesAxes(predicate_types=[])
+
+    def test_non_ascii_charset_rejected_for_parity(self) -> None:
+        with pytest.raises(ValueError, match="ASCII-only"):
+            StringRulesAxes(charset="abcé")
 
 
 class TestTaskGeneration:

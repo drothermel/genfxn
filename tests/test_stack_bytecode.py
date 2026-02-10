@@ -386,6 +386,16 @@ class TestSamplerAndQueries:
         for q in queries:
             assert q.output == eval_stack_bytecode(spec, list(q.input))
 
+    def test_queries_cover_all_tags_when_inputs_can_vary(self) -> None:
+        axes = StackBytecodeAxes(
+            target_difficulty=3,
+            value_range=(-2, 2),
+            list_length_range=(0, 4),
+        )
+        spec = sample_stack_bytecode_spec(axes, random.Random(31))
+        queries = generate_stack_bytecode_queries(spec, axes, random.Random(31))
+        assert {q.tag for q in queries} == set(QueryTag)
+
     def test_queries_respect_value_and_length_ranges(self) -> None:
         axes = StackBytecodeAxes(
             target_difficulty=3,

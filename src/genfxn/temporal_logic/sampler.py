@@ -118,8 +118,14 @@ def _sample_formula(
         return {"op": chosen.value, "child": child}
 
     if chosen in _BINARY_OPERATORS:
-        left_depth = rng.randint(1, max(1, depth - 1))
-        right_depth = rng.randint(1, max(1, depth - 1))
+        # Preserve requested depth by forcing one branch to depth-1.
+        force_left = bool(rng.randint(0, 1))
+        if force_left:
+            left_depth = depth - 1
+            right_depth = rng.randint(1, depth - 1)
+        else:
+            left_depth = rng.randint(1, depth - 1)
+            right_depth = depth - 1
         left = _sample_formula(
             depth=left_depth,
             operator_mix=available,

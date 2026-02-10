@@ -273,11 +273,18 @@ def _generate_adversarial_queries(
         _make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)
     ]
     all_match = [v for v in match_vals if v is not None]
-    if all_match:
+    fitted_all_match = (
+        _fit_to_length_bounds(all_match, axes.list_length_range)
+        if all_match
+        else None
+    )
+    if fitted_all_match is not None and all(
+        eval_predicate(pred, x) for x in fitted_all_match
+    ):
         queries.append(
             Query(
-                input=all_match,
-                output=eval_stateful(spec, all_match),
+                input=fitted_all_match,
+                output=eval_stateful(spec, fitted_all_match),
                 tag=QueryTag.ADVERSARIAL,
             )
         )
@@ -287,11 +294,18 @@ def _generate_adversarial_queries(
         for _ in range(typical_len)
     ]
     all_non_match = [v for v in non_match_vals if v is not None]
-    if all_non_match:
+    fitted_all_non_match = (
+        _fit_to_length_bounds(all_non_match, axes.list_length_range)
+        if all_non_match
+        else None
+    )
+    if fitted_all_non_match is not None and all(
+        not eval_predicate(pred, x) for x in fitted_all_non_match
+    ):
         queries.append(
             Query(
-                input=all_non_match,
-                output=eval_stateful(spec, all_non_match),
+                input=fitted_all_non_match,
+                output=eval_stateful(spec, fitted_all_non_match),
                 tag=QueryTag.ADVERSARIAL,
             )
         )

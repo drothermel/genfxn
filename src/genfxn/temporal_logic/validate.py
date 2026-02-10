@@ -23,6 +23,7 @@ from genfxn.temporal_logic.ast_safety import (
 )
 from genfxn.temporal_logic.eval import eval_temporal_logic
 from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
+from genfxn.temporal_logic.utils import sample_sequence
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -37,6 +38,7 @@ CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "CODE_UNSAFE_AST"
+CODE_AXES_DESERIALIZE_ERROR = "AXES_DESERIALIZE_ERROR"
 CURRENT_FAMILY = "temporal_logic"
 PYTHON_CODE_KEY = "python"
 
@@ -50,6 +52,10 @@ _ALLOWED_BUILTINS = {
     "str": str,
     "sum": sum,
 }
+
+
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _validate_ast_whitelist(
@@ -337,7 +343,7 @@ def _validate_code_compile(
 def _coerce_query_input(input_value: object) -> list[int] | None:
     if not isinstance(input_value, list):
         return None
-    if not all(isinstance(value, int) for value in input_value):
+    if not all(_is_int_not_bool(value) for value in input_value):
         return None
     return cast(list[int], input_value)
 
@@ -357,7 +363,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     task_id=task.task_id,
                 )
             )
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -383,7 +389,7 @@ def _validate_query_outputs(
         xs = _coerce_query_input(query.input)
         if xs is None:
             continue
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             continue
 
         expected = eval_temporal_logic(spec, xs)
@@ -404,16 +410,6 @@ def _validate_query_outputs(
     return issues
 
 
-def _sample_sequence(
-    *,
-    length_range: tuple[int, int],
-    value_range: tuple[int, int],
-    rng: random.Random,
-) -> list[int]:
-    n = rng.randint(length_range[0], length_range[1])
-    return [rng.randint(value_range[0], value_range[1]) for _ in range(n)]
-
-
 def _validate_semantics(
     task: Task,
     spec: TemporalLogicSpec,
@@ -431,7 +427,7 @@ def _validate_semantics(
     severity = Severity.ERROR if strict else Severity.WARNING
 
     for _ in range(semantic_trials):
-        xs = _sample_sequence(
+        xs = sample_sequence(
             length_range=axes.sequence_length_range,
             value_range=axes.value_range,
             rng=rng,
@@ -446,6 +442,21 @@ def _validate_semantics(
                     code=CODE_CODE_RUNTIME_ERROR,
                     severity=severity,
                     message=f"Code raised runtime error for input {xs}: {exc}",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            )
+            continue
+
+        if not _is_int_not_bool(actual):
+            issues.append(
+                Issue(
+                    code=CODE_SEMANTIC_MISMATCH,
+                    severity=severity,
+                    message=(
+                        "Code returned non-int output for input "
+                        f"{xs}: {type(actual).__name__}"
+                    ),
                     location="code",
                     task_id=task.task_id,
                 )
@@ -505,10 +516,29 @@ def validate_temporal_logic_task(
             )
         ]
 
-    if axes is None:
-        axes = TemporalLogicAxes()
-
     issues: list[Issue] = []
+    if axes is None:
+        if task.axes is None:
+            axes = TemporalLogicAxes()
+        else:
+            try:
+                axes = TemporalLogicAxes.model_validate(task.axes)
+            except ValidationError as exc:
+                axes = TemporalLogicAxes()
+                severity = Severity.ERROR if strict else Severity.WARNING
+                issues.append(
+                    Issue(
+                        code=CODE_AXES_DESERIALIZE_ERROR,
+                        severity=severity,
+                        message=(
+                            "Failed to deserialize axes; using defaults: "
+                            f"{exc}"
+                        ),
+                        location="axes",
+                        task_id=task.task_id,
+                    )
+                )
+
     issues.extend(_validate_query_types(task, strict=strict))
     issues.extend(_validate_task_id(task))
 

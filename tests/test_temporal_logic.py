@@ -55,6 +55,20 @@ def _spec(
     return TemporalLogicSpec(output_mode=output_mode, formula=formula)
 
 
+def _formula_depth(node: dict[str, Any]) -> int:
+    op = node.get("op")
+    if op == "atom":
+        return 1
+    child = node.get("child")
+    if isinstance(child, dict):
+        return 1 + _formula_depth(child)
+    left = node.get("left")
+    right = node.get("right")
+    if isinstance(left, dict) and isinstance(right, dict):
+        return 1 + max(_formula_depth(left), _formula_depth(right))
+    return 1
+
+
 class TestTemporalLogicSemantics:
     def test_empty_sequence_semantics(self) -> None:
         formula = _atom(PredicateKind.GE, 0)
@@ -188,6 +202,12 @@ class TestTemporalLogicSemantics:
         with pytest.raises(ValidationError, match="unknown operator 'bad_op'"):
             _spec({"op": "bad_op"})
 
+    def test_spec_validation_rejects_bool_constant(self) -> None:
+        with pytest.raises(
+            ValidationError, match="atom node must include int 'constant'"
+        ):
+            _spec({"op": "atom", "predicate": "eq", "constant": True})
+
     def test_spec_validation_rejects_excessive_depth(self) -> None:
         deep: dict[str, Any] = _atom(PredicateKind.EQ, 0)
         for _ in range(13):
@@ -196,6 +216,12 @@ class TestTemporalLogicSemantics:
             ValidationError, match="formula depth must be <= 12"
         ):
             _spec(deep)
+
+    def test_axes_reject_formula_depth_above_model_limit(self) -> None:
+        with pytest.raises(
+            ValidationError, match="formula_depth_range: high must be <= 12"
+        ):
+            TemporalLogicAxes(formula_depth_range=(1, 13))
 
     def test_sampler_is_deterministic_for_fixed_seed(self) -> None:
         axes = TemporalLogicAxes(
@@ -304,6 +330,42 @@ class TestTemporalLogicSemantics:
         assert {query.tag for query in queries} == set(QueryTag)
         for query in queries:
             assert query.output == eval_temporal_logic(spec, query.input)
+
+    def test_query_lengths_respect_sequence_length_range(self) -> None:
+        axes = TemporalLogicAxes(
+            formula_depth_range=(2, 2),
+            sequence_length_range=(0, 2),
+            value_range=(-2, 2),
+            predicate_constant_range=(-2, 2),
+            operator_mix=list(TemporalOperator),
+        )
+        spec = sample_temporal_logic_spec(axes, random.Random(601))
+        queries = generate_temporal_logic_queries(
+            spec,
+            axes,
+            rng=random.Random(602),
+        )
+
+        assert queries
+        lo, hi = axes.sequence_length_range
+        for query in queries:
+            n = len(query.input)
+            assert lo <= n <= hi
+
+    def test_binary_sampling_honors_fixed_formula_depth(self) -> None:
+        axes = TemporalLogicAxes(
+            formula_depth_range=(5, 5),
+            operator_mix=[
+                TemporalOperator.AND,
+                TemporalOperator.OR,
+                TemporalOperator.UNTIL,
+            ],
+            include_since_choices=[False],
+            output_modes=[TemporalOutputMode.SAT_COUNT],
+        )
+        for seed in range(700, 740):
+            spec = sample_temporal_logic_spec(axes, random.Random(seed))
+            assert _formula_depth(spec.formula) == 5
 
     def test_target_difficulty_sampling_is_monotonic(self) -> None:
         means: list[float] = []

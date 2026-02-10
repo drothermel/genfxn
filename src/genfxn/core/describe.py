@@ -898,18 +898,72 @@ def _describe_graph_queries(spec: dict[str, Any]) -> str:
 def _describe_temporal_logic(spec: dict[str, Any]) -> str:
     output_mode = _enum_text(spec.get("output_mode", "sat_at_start"))
     formula = spec.get("formula", {})
-    formula_text = repr(formula)
+    formula_text = (
+        _describe_temporal_formula_node(formula)
+        if isinstance(formula, dict)
+        else "invalid formula"
+    )
     return _join_description_parts(
         "Implement f(xs: list[int]) -> int over a finite integer sequence.",
         (
             "Evaluate the temporal formula exactly as specified by the "
-            f"formula AST: {formula_text}."
+            f"formula AST ({formula_text})."
         ),
         (
             f"Return output_mode '{output_mode}' "
             "(sat_at_start | sat_count | first_sat_index)."
         ),
     )
+
+
+def _describe_temporal_formula_node(node: dict[str, Any]) -> str:
+    op = node.get("op")
+    if op == "atom":
+        pred = str(node.get("predicate", "eq"))
+        constant = node.get("constant", 0)
+        return (
+            f"x[i] {_describe_temporal_predicate_symbol(pred)} "
+            f"{_format_number(constant)}"
+        )
+    if op == "not":
+        child = node.get("child")
+        if isinstance(child, dict):
+            return f"NOT({_describe_temporal_formula_node(child)})"
+        return "NOT(invalid)"
+    if op in {"and", "or", "until", "since"}:
+        left = node.get("left")
+        right = node.get("right")
+        if isinstance(left, dict) and isinstance(right, dict):
+            op_text = str(op).upper()
+            return (
+                f"({_describe_temporal_formula_node(left)}) "
+                f"{op_text} "
+                f"({_describe_temporal_formula_node(right)})"
+            )
+        return f"{str(op).upper()}(invalid)"
+    if op in {"next", "eventually", "always"}:
+        child = node.get("child")
+        if isinstance(child, dict):
+            child_text = _describe_temporal_formula_node(child)
+            return f"{str(op).upper()}({child_text})"
+        return f"{str(op).upper()}(invalid)"
+    return "invalid formula node"
+
+
+def _describe_temporal_predicate_symbol(kind: str) -> str:
+    if kind == "eq":
+        return "=="
+    if kind == "ne":
+        return "!="
+    if kind == "lt":
+        return "<"
+    if kind == "le":
+        return "<="
+    if kind == "gt":
+        return ">"
+    if kind == "ge":
+        return ">="
+    return "=="
 
 
 def _describe_fsm(spec: dict[str, Any]) -> str:

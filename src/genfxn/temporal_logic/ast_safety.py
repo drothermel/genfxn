@@ -89,8 +89,6 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
 
 CALL_ARITIES: dict[str, set[int]] = {
     "ValueError": {1},
-    "all": {1},
-    "any": {1},
     "enumerate": {1},
     "int": {1},
     "len": {1},

@@ -3,6 +3,7 @@ import random
 from genfxn.core.models import Query, QueryTag
 from genfxn.temporal_logic.eval import eval_temporal_logic
 from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
+from genfxn.temporal_logic.utils import sample_sequence
 
 
 def _append_query(
@@ -21,14 +22,29 @@ def _append_query(
     )
 
 
-def _sample_sequence(
-    *,
+def _fit_sequence_length(
+    xs: list[int],
     length_range: tuple[int, int],
-    value_range: tuple[int, int],
-    rng: random.Random,
+    *,
+    fill_value: int,
 ) -> list[int]:
-    n = rng.randint(length_range[0], length_range[1])
-    return [rng.randint(value_range[0], value_range[1]) for _ in range(n)]
+    lo, hi = length_range
+    target_len = min(max(len(xs), lo), hi)
+    if target_len <= 0:
+        return []
+
+    if not xs:
+        xs = [fill_value]
+
+    if len(xs) >= target_len:
+        return xs[:target_len]
+
+    fitted = list(xs)
+    index = 0
+    while len(fitted) < target_len:
+        fitted.append(xs[index % len(xs)])
+        index += 1
+    return fitted
 
 
 def generate_temporal_logic_queries(
@@ -50,6 +66,11 @@ def generate_temporal_logic_queries(
     ]
     for xs in coverage_cases:
         clipped = [min(max(v, v_lo), v_hi) for v in xs]
+        clipped = _fit_sequence_length(
+            clipped,
+            axes.sequence_length_range,
+            fill_value=mid,
+        )
         _append_query(queries, spec, clipped, QueryTag.COVERAGE)
 
     boundary_cases = [
@@ -59,13 +80,23 @@ def generate_temporal_logic_queries(
         [mid],
     ]
     for xs in boundary_cases:
-        _append_query(queries, spec, xs, QueryTag.BOUNDARY)
+        fitted = _fit_sequence_length(
+            xs,
+            axes.sequence_length_range,
+            fill_value=mid,
+        )
+        _append_query(queries, spec, fitted, QueryTag.BOUNDARY)
 
     for _ in range(4):
-        sampled = _sample_sequence(
+        sampled = sample_sequence(
             length_range=axes.sequence_length_range,
             value_range=axes.value_range,
             rng=rng,
+        )
+        sampled = _fit_sequence_length(
+            sampled,
+            axes.sequence_length_range,
+            fill_value=mid,
         )
         _append_query(queries, spec, sampled, QueryTag.TYPICAL)
 
@@ -75,12 +106,22 @@ def generate_temporal_logic_queries(
         [v_hi] * 4 + [v_lo] * 4,
     ]
     for xs in adversarial_cases:
-        _append_query(queries, spec, xs, QueryTag.ADVERSARIAL)
+        fitted = _fit_sequence_length(
+            xs,
+            axes.sequence_length_range,
+            fill_value=mid,
+        )
+        _append_query(queries, spec, fitted, QueryTag.ADVERSARIAL)
 
     for tag in QueryTag:
         if any(query.tag == tag for query in queries):
             continue
-        _append_query(queries, spec, [mid], tag)
+        fallback = _fit_sequence_length(
+            [mid],
+            axes.sequence_length_range,
+            fill_value=mid,
+        )
+        _append_query(queries, spec, fallback, tag)
 
     deduped: list[Query] = []
     for tag in QueryTag:

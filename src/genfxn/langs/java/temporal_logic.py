@@ -21,7 +21,9 @@ def _java_atom_expression(kind: str, constant: int) -> str:
         return f"xs[i] <= {const}"
     if kind == "gt":
         return f"xs[i] > {const}"
-    return f"xs[i] >= {const}"
+    if kind == "ge":
+        return f"xs[i] >= {const}"
+    raise ValueError(f"Unsupported predicate kind: {kind}")
 
 
 def _emit_java_node(
@@ -135,30 +137,33 @@ def _emit_java_node(
         blocks.append("\n".join(body))
         return node_name
 
-    left_name = _emit_java_node(node["left"], blocks, next_id)
-    right_name = _emit_java_node(node["right"], blocks, next_id)
-    body = [
-        f"private static boolean {node_name}(long[] xs, int i) {{",
-        "    for (int j = i; j >= 0; j--) {",
-        f"        if (!{right_name}(xs, j)) {{",
-        "            continue;",
-        "        }",
-        "        boolean valid = true;",
-        "        for (int k = j + 1; k <= i; k++) {",
-        f"            if (!{left_name}(xs, k)) {{",
-        "                valid = false;",
-        "                break;",
-        "            }",
-        "        }",
-        "        if (valid) {",
-        "            return true;",
-        "        }",
-        "    }",
-        "    return false;",
-        "}",
-    ]
-    blocks.append("\n".join(body))
-    return node_name
+    if op == "since":
+        left_name = _emit_java_node(node["left"], blocks, next_id)
+        right_name = _emit_java_node(node["right"], blocks, next_id)
+        body = [
+            f"private static boolean {node_name}(long[] xs, int i) {{",
+            "    for (int j = i; j >= 0; j--) {",
+            f"        if (!{right_name}(xs, j)) {{",
+            "            continue;",
+            "        }",
+            "        boolean valid = true;",
+            "        for (int k = j + 1; k <= i; k++) {",
+            f"            if (!{left_name}(xs, k)) {{",
+            "                valid = false;",
+            "                break;",
+            "            }",
+            "        }",
+            "        if (valid) {",
+            "            return true;",
+            "        }",
+            "    }",
+            "    return false;",
+            "}",
+        ]
+        blocks.append("\n".join(body))
+        return node_name
+
+    raise ValueError(f"Unsupported operator: {op}")
 
 
 def render_temporal_logic(
