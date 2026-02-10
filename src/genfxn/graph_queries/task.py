@@ -2,6 +2,7 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
@@ -44,6 +45,7 @@ def generate_graph_queries_task(
     trace_steps: list[TraceStep] = []
     spec = sample_graph_queries_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
+    difficulty = compute_difficulty("graph_queries", spec_dict)
 
     return Task(
         task_id=task_id_from_spec("graph_queries", spec_dict),
@@ -53,6 +55,6 @@ def generate_graph_queries_task(
         queries=generate_graph_queries_queries(spec, axes, rng),
         trace=GenerationTrace(family="graph_queries", steps=trace_steps),
         axes=axes.model_dump(),
-        difficulty=None,
+        difficulty=difficulty,
         description=describe_task("graph_queries", spec_dict),
     )

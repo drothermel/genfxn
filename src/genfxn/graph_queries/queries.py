@@ -32,11 +32,12 @@ def generate_graph_queries_queries(
     adjacency = normalize_graph(spec)
     queries: list[Query] = []
     seen: set[tuple[QueryTag, int, int]] = set()
+    tag_to_count: dict[QueryTag, int] = {tag: 0 for tag in QueryTag}
 
-    def _append_query(src: int, dst: int, tag: QueryTag) -> None:
+    def _append_query(src: int, dst: int, tag: QueryTag) -> bool:
         key = (tag, src, dst)
         if key in seen:
-            return
+            return False
         seen.add(key)
         queries.append(
             Query(
@@ -45,6 +46,8 @@ def generate_graph_queries_queries(
                 tag=tag,
             )
         )
+        tag_to_count[tag] += 1
+        return True
 
     _append_query(0, 0, QueryTag.COVERAGE)
     if n_nodes > 1:
@@ -97,11 +100,53 @@ def generate_graph_queries_queries(
     _append_query(0, 0, QueryTag.ADVERSARIAL)
 
     for tag in QueryTag:
-        if any(query.tag == tag for query in queries):
+        if tag_to_count[tag] > 0:
             continue
-        shift = list(QueryTag).index(tag)
-        src = min(shift, n_nodes - 1)
-        dst = n_nodes - 1 - src
-        _append_query(src, dst, tag)
+        shift = list(QueryTag).index(tag) + 1
+        fallback_pairs = [
+            (min(shift, n_nodes - 1), max(0, n_nodes - 1 - shift)),
+            (0, 0),
+            (n_nodes - 1, n_nodes - 1),
+            (0, n_nodes - 1),
+            (n_nodes - 1, 0),
+        ]
+        added = False
+        for src, dst in fallback_pairs:
+            if _append_query(src, dst, tag):
+                added = True
+                break
+        if added:
+            continue
+        for _ in range(32):
+            if _append_query(
+                rng.randrange(n_nodes),
+                rng.randrange(n_nodes),
+                tag,
+            ):
+                added = True
+                break
+        if added:
+            continue
+        raise RuntimeError(
+            "Failed to generate query for missing tag "
+            f"{tag.value}. "
+            f"n_nodes={n_nodes}, "
+            f"query_type={spec.query_type.value}, "
+            f"directed={spec.directed}, "
+            f"weighted={spec.weighted}, "
+            f"existing_tag_counts="
+            f"{ {key.value: value for key, value in tag_to_count.items()} }."
+        )
+
+    missing_tags = [tag.value for tag in QueryTag if tag_to_count[tag] == 0]
+    if missing_tags:
+        raise RuntimeError(
+            "Missing query tags after generation: "
+            f"{missing_tags}. "
+            f"n_nodes={n_nodes}, "
+            f"query_type={spec.query_type.value}, "
+            f"directed={spec.directed}, "
+            f"weighted={spec.weighted}."
+        )
 
     return queries

@@ -2,7 +2,7 @@
 
 Date: 2026-02-10
 Owner: Codex + Danielle
-Status: In progress (M0-M1 complete, M2-M5 pending)
+Status: In progress (M0-M2 complete, M3-M5 pending)
 
 ## Goal
 
@@ -316,7 +316,7 @@ Acceptance:
 
 - [x] M0 complete
 - [x] M1 complete
-- [ ] M2 complete
+- [x] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
 - [ ] M5 complete
@@ -333,3 +333,6 @@ Acceptance:
 - 2026-02-10: M1 completed with hardened spec/evaluator checks, task
   description integration via `src/genfxn/core/describe.py`, and expanded
   evaluator/render parity tests.
+- 2026-02-10: M2 completed with difficulty-aware sampler tuning, new
+  `compute_difficulty("graph_queries", ...)` model integration, task
+  difficulty wiring, and expanded query-quality/multi-seed monotonicity tests.

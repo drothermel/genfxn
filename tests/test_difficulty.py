@@ -700,6 +700,58 @@ class TestComputeDifficulty:
         difficulty = compute_difficulty("sequence_dp", spec)
         assert 1 <= difficulty <= 5
 
+    def test_graph_queries_simple_vs_hard_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.graph_queries.task") is None:
+            pytest.skip("graph_queries family is not available")
+
+        simple = {
+            "query_type": "reachable",
+            "directed": False,
+            "weighted": False,
+            "n_nodes": 3,
+            "edges": [{"u": 0, "v": 1, "w": 1}],
+        }
+        hard = {
+            "query_type": "shortest_path_cost",
+            "directed": True,
+            "weighted": True,
+            "n_nodes": 12,
+            "edges": [
+                {"u": 0, "v": 1, "w": 3},
+                {"u": 0, "v": 2, "w": 4},
+                {"u": 0, "v": 3, "w": 5},
+                {"u": 1, "v": 4, "w": 2},
+                {"u": 2, "v": 4, "w": 6},
+                {"u": 3, "v": 5, "w": 2},
+                {"u": 4, "v": 6, "w": 1},
+                {"u": 5, "v": 6, "w": 7},
+                {"u": 6, "v": 7, "w": 1},
+                {"u": 7, "v": 8, "w": 2},
+                {"u": 8, "v": 9, "w": 2},
+                {"u": 9, "v": 10, "w": 3},
+                {"u": 10, "v": 11, "w": 1},
+                {"u": 1, "v": 9, "w": 8},
+                {"u": 2, "v": 10, "w": 9},
+                {"u": 3, "v": 11, "w": 10},
+                {"u": 4, "v": 8, "w": 4},
+                {"u": 5, "v": 9, "w": 5},
+            ],
+        }
+
+        try:
+            easy_score = compute_difficulty("graph_queries", simple)
+            hard_score = compute_difficulty("graph_queries", hard)
+        except ValueError as exc:
+            if "Unknown family: graph_queries" in str(exc):
+                pytest.skip(
+                    "compute_difficulty('graph_queries', ...) is not available"
+                )
+            raise
+
+        assert 1 <= easy_score <= 5
+        assert 1 <= hard_score <= 5
+        assert hard_score >= easy_score
+
     def test_sequence_dp_monotonic_examples(self) -> None:
         specs = [
             {

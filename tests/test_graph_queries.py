@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.graph_queries.eval import eval_graph_queries, normalize_graph
 from genfxn.graph_queries.models import (
@@ -13,6 +14,7 @@ from genfxn.graph_queries.models import (
     GraphQueriesSpec,
     GraphQueryType,
 )
+from genfxn.graph_queries.queries import generate_graph_queries_queries
 from genfxn.graph_queries.render import render_graph_queries
 from genfxn.graph_queries.sampler import sample_graph_queries_spec
 from genfxn.graph_queries.task import generate_graph_queries_task
@@ -193,6 +195,96 @@ def test_sampler_is_deterministic_for_seed() -> None:
     spec1 = sample_graph_queries_spec(axes, random.Random(42))
     spec2 = sample_graph_queries_spec(axes, random.Random(42))
     assert spec1.model_dump() == spec2.model_dump()
+
+
+def _compute_graph_queries_difficulty(spec: GraphQueriesSpec) -> int:
+    try:
+        return compute_difficulty("graph_queries", spec.model_dump())
+    except ValueError as exc:
+        if "Unknown family: graph_queries" in str(exc):
+            pytest.skip(
+                "compute_difficulty('graph_queries', ...) is not available"
+            )
+        raise
+
+
+def test_queries_cover_all_tags_and_match_eval_across_multiple_seeds() -> None:
+    axes = GraphQueriesAxes(
+        query_types=list(GraphQueryType),
+        directed_choices=[False, True],
+        weighted_choices=[False, True],
+        n_nodes_range=(2, 9),
+        edge_count_range=(1, 24),
+        weight_range=(1, 9),
+        disconnected_prob_range=(0.0, 0.5),
+        multi_edge_prob_range=(0.0, 0.3),
+        hub_bias_prob_range=(0.0, 0.5),
+    )
+
+    for seed in range(220, 236):
+        spec = sample_graph_queries_spec(axes, random.Random(seed))
+        queries = generate_graph_queries_queries(
+            spec,
+            axes,
+            random.Random(seed),
+        )
+        assert queries
+        assert {query.tag for query in queries} == set(QueryTag)
+        for query in queries:
+            assert query.output == eval_graph_queries(
+                spec,
+                query.input["src"],
+                query.input["dst"],
+            )
+
+
+def test_queries_inputs_stay_within_node_bounds_across_multiple_seeds() -> None:
+    axes = GraphQueriesAxes(
+        query_types=list(GraphQueryType),
+        directed_choices=[False, True],
+        weighted_choices=[False, True],
+        n_nodes_range=(1, 10),
+        edge_count_range=(0, 30),
+        weight_range=(1, 12),
+        disconnected_prob_range=(0.0, 0.8),
+        multi_edge_prob_range=(0.0, 0.6),
+        hub_bias_prob_range=(0.0, 0.8),
+    )
+
+    for seed in range(320, 352):
+        spec = sample_graph_queries_spec(axes, random.Random(seed))
+        queries = generate_graph_queries_queries(
+            spec,
+            axes,
+            random.Random(seed),
+        )
+        assert queries
+        for query in queries:
+            src = query.input["src"]
+            dst = query.input["dst"]
+            assert 0 <= src < spec.n_nodes
+            assert 0 <= dst < spec.n_nodes
+
+
+def test_sampler_respects_target_difficulty_axis_when_available() -> None:
+    samples_per_target = 120
+
+    def _sample_difficulty_average(target: int) -> float:
+        axes = GraphQueriesAxes(target_difficulty=target)
+        rng = random.Random(8100 + target)
+        scores = []
+        for _ in range(samples_per_target):
+            spec = sample_graph_queries_spec(axes, rng)
+            scores.append(_compute_graph_queries_difficulty(spec))
+        return sum(scores) / len(scores)
+
+    averages = {
+        target: _sample_difficulty_average(target) for target in range(1, 6)
+    }
+
+    for target in range(1, 5):
+        assert averages[target + 1] >= averages[target] - 0.05
+    assert averages[5] >= averages[1] + 0.7
 
 
 def test_generate_task_deterministic_and_consistent() -> None:
