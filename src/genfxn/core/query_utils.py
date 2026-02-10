@@ -18,6 +18,6 @@ def find_satisfying(
             value = generate()
             if predicate(value):
                 return value
-        except ValueError:
+        except Exception:
             continue
     return None

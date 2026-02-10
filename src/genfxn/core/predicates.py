@@ -39,10 +39,18 @@ class PredicateModEq(BaseModel):
 
     @field_validator("divisor")
     @classmethod
-    def divisor_nonzero(cls, v: int) -> int:
-        if v == 0:
-            raise ValueError("divisor must be non-zero")
+    def divisor_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("divisor must be >= 1")
         return v
+
+    @model_validator(mode="after")
+    def validate_remainder(self) -> "PredicateModEq":
+        if self.remainder < 0:
+            raise ValueError("remainder must be >= 0")
+        if self.remainder >= self.divisor:
+            raise ValueError("remainder must be < divisor")
+        return self
 
 
 class PredicateInSet(BaseModel):

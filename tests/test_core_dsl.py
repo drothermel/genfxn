@@ -94,8 +94,16 @@ class TestPredicates:
         assert render_predicate(p) == "x % 3 == 1"
 
     def test_mod_eq_rejects_zero_divisor(self) -> None:
-        with pytest.raises(ValueError, match="divisor must be non-zero"):
+        with pytest.raises(ValueError, match="divisor must be >= 1"):
             PredicateModEq(divisor=0, remainder=1)
+
+    def test_mod_eq_rejects_negative_remainder(self) -> None:
+        with pytest.raises(ValueError, match="remainder must be >= 0"):
+            PredicateModEq(divisor=3, remainder=-1)
+
+    def test_mod_eq_rejects_large_remainder(self) -> None:
+        with pytest.raises(ValueError, match="remainder must be < divisor"):
+            PredicateModEq(divisor=3, remainder=3)
 
     def test_in_set(self) -> None:
         p = PredicateInSet(values=frozenset({1, 2, 3}))

@@ -25,6 +25,7 @@ eval_temporal_logic = temporal_eval.eval_temporal_logic
 generate_temporal_logic_queries = (
     temporal_queries.generate_temporal_logic_queries
 )
+fit_sequence_length = temporal_queries._fit_sequence_length
 render_temporal_logic = temporal_render.render_temporal_logic
 sample_temporal_logic_spec = temporal_sampler.sample_temporal_logic_spec
 generate_temporal_logic_task = temporal_task.generate_temporal_logic_task
@@ -351,6 +352,38 @@ class TestTemporalLogicSemantics:
         for query in queries:
             n = len(query.input)
             assert lo <= n <= hi
+
+    def test_fit_sequence_length_truncates_and_pads_content(self) -> None:
+        assert fit_sequence_length([1, 2, 3, 4], (1, 3), fill_value=9) == [
+            1,
+            2,
+            3,
+        ]
+        assert fit_sequence_length([7], (3, 5), fill_value=9) == [7, 7, 7]
+        assert fit_sequence_length([], (2, 4), fill_value=6) == [6, 6]
+        assert fit_sequence_length([], (0, 0), fill_value=6) == []
+
+    def test_temporal_queries_dedup_by_tag_and_input(self) -> None:
+        axes = TemporalLogicAxes(
+            formula_depth_range=(1, 1),
+            operator_mix=[TemporalOperator.ATOM],
+            include_since_choices=[False],
+            sequence_length_range=(0, 0),
+            value_range=(0, 0),
+            predicate_constant_range=(0, 0),
+            output_modes=[TemporalOutputMode.SAT_AT_START],
+        )
+        spec = sample_temporal_logic_spec(axes, random.Random(800))
+        queries = generate_temporal_logic_queries(
+            spec, axes, rng=random.Random(801)
+        )
+
+        seen: set[tuple[QueryTag, tuple[int, ...]]] = set()
+        for query in queries:
+            key = (query.tag, tuple(query.input))
+            assert key not in seen
+            seen.add(key)
+        assert {query.tag for query in queries} == set(QueryTag)
 
     def test_binary_sampling_honors_fixed_formula_depth(self) -> None:
         axes = TemporalLogicAxes(

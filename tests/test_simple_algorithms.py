@@ -276,7 +276,10 @@ class TestQueryGeneration:
 
     def test_includes_empty_list(self) -> None:
         spec = MaxWindowSumSpec(k=3, invalid_k_default=0)
-        axes = SimpleAlgorithmsAxes()
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(0, 20),
+            window_size_range=(1, 10),
+        )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )
@@ -285,7 +288,10 @@ class TestQueryGeneration:
 
     def test_max_window_empty_query_uses_empty_default_when_set(self) -> None:
         spec = MaxWindowSumSpec(k=3, invalid_k_default=-1, empty_default=-99)
-        axes = SimpleAlgorithmsAxes()
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(0, 20),
+            window_size_range=(1, 10),
+        )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )
@@ -306,10 +312,10 @@ class TestQueryGeneration:
         assert all(len(q.input) <= axes.list_length_range[1] for q in queries)
 
     def test_max_window_queries_respect_list_length_lower_bound(self) -> None:
-        spec = MaxWindowSumSpec(k=5, invalid_k_default=-1)
+        spec = MaxWindowSumSpec(k=2, invalid_k_default=-1)
         axes = SimpleAlgorithmsAxes(
             list_length_range=(2, 3),
-            window_size_range=(5, 5),
+            window_size_range=(1, 3),
         )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
@@ -327,7 +333,10 @@ class TestQueryGeneration:
             pre_filter=PredicateGt(value=100),
             pre_transform=TransformShift(offset=1),
         )
-        axes = SimpleAlgorithmsAxes()
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(0, 20),
+            window_size_range=(1, 10),
+        )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )

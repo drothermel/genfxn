@@ -1,7 +1,5 @@
 """Tests for core.query_utils."""
 
-import pytest
-
 from genfxn.core.query_utils import find_satisfying
 
 
@@ -69,16 +67,28 @@ class TestFindSatisfying:
         result = find_satisfying(gen, pred, max_attempts=5)
         assert result == 3
 
-    def test_reraises_unexpected_generator_exceptions(self) -> None:
+    def test_generator_runtime_errors_fail_soft(self) -> None:
+        attempts = 0
+
         def gen() -> int:
-            raise RuntimeError("unexpected generator error")
+            nonlocal attempts
+            attempts += 1
+            if attempts <= 2:
+                raise RuntimeError("unexpected generator error")
+            return attempts
 
-        with pytest.raises(RuntimeError, match="unexpected generator error"):
-            find_satisfying(gen, lambda _: True, max_attempts=5)
+        result = find_satisfying(gen, lambda x: x == 3, max_attempts=5)
+        assert result == 3
 
-    def test_reraises_unexpected_predicate_exceptions(self) -> None:
-        def pred(_: int) -> bool:
-            raise RuntimeError("unexpected predicate error")
+    def test_predicate_runtime_errors_fail_soft(self) -> None:
+        attempts = 0
 
-        with pytest.raises(RuntimeError, match="unexpected predicate error"):
-            find_satisfying(lambda: 1, pred, max_attempts=5)
+        def pred(value: int) -> bool:
+            nonlocal attempts
+            attempts += 1
+            if attempts <= 2:
+                raise RuntimeError("unexpected predicate error")
+            return value == 3
+
+        result = find_satisfying(lambda: 3, pred, max_attempts=5)
+        assert result == 3

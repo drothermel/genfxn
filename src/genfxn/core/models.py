@@ -21,7 +21,7 @@ class Query(BaseModel):
 
 
 def dedupe_queries(queries: list[Query]) -> list[Query]:
-    """Deduplicate queries by input, keeping first occurrence."""
+    """Deduplicate queries by input, preserving highest-value tag evidence."""
 
     def _freeze(value: Any) -> Any:
         # Fast paths for common primitive/query container types.
@@ -89,13 +89,36 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
                 return ("__object__", obj_type, _freeze(vars(value)))
             return ("__repr__", repr(value))
 
-    seen: set[Any] = set()
+    tag_priority = {
+        QueryTag.TYPICAL: 0,
+        QueryTag.BOUNDARY: 1,
+        QueryTag.ADVERSARIAL: 2,
+        QueryTag.COVERAGE: 3,
+    }
+
+    seen_idx: dict[Any, int] = {}
     result: list[Query] = []
     for q in queries:
         key = _freeze(q.input)
-        if key not in seen:
-            seen.add(key)
+        idx = seen_idx.get(key)
+        if idx is None:
+            seen_idx[key] = len(result)
             result.append(q)
+            continue
+
+        existing = result[idx]
+        if existing.output != q.output:
+            raise ValueError(
+                "Duplicate query input has conflicting outputs: "
+                f"{existing.input!r} -> {existing.output!r} vs {q.output!r}"
+            )
+
+        if tag_priority[q.tag] > tag_priority[existing.tag]:
+            result[idx] = Query(
+                input=existing.input,
+                output=existing.output,
+                tag=q.tag,
+            )
     return result
 
 

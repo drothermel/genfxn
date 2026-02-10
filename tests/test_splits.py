@@ -156,6 +156,38 @@ class TestSplitTasks:
         assert len(result.test) == 2
         assert result.train[0].task_id == "t1"
 
+    def test_contains_holdout_does_not_match_dict_keys(self) -> None:
+        tasks = [
+            _make_task("t1", {"meta": {"kind": "complex"}}),
+            _make_task("t2", {"meta": {"kind": "simple"}}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="meta",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value="kind",
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.train] == ["t1", "t2"]
+        assert result.test == []
+
+    def test_contains_holdout_does_not_match_string_substrings(self) -> None:
+        tasks = [
+            _make_task("t1", {"name": "complexity"}),
+            _make_task("t2", {"name": "simple"}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="name",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value="complex",
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.train] == ["t1", "t2"]
+        assert result.test == []
+
     def test_multiple_holdouts_or_logic(self) -> None:
         tasks = [
             _make_task("t1", {"template": "a", "predicate": {"kind": "even"}}),

@@ -53,10 +53,9 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
                 return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:
-            try:
-                return holdout.holdout_value in value
-            except TypeError:
+            if not isinstance(value, (list, tuple, set, frozenset)):
                 return False
+            return holdout.holdout_value in value
         case _:
             raise ValueError(f"Unknown holdout type: {holdout.holdout_type}")
 

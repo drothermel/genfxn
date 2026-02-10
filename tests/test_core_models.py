@@ -13,23 +13,25 @@ class _BadReprKey:
         return 1  # type: ignore[return-value]
 
 
-def test_dedupe_queries_first_wins() -> None:
+def test_dedupe_queries_rejects_conflicting_outputs() -> None:
     queries = [
         Query(input=1, output=10, tag=QueryTag.TYPICAL),
         Query(input=1, output=99, tag=QueryTag.BOUNDARY),
         Query(input=2, output=20, tag=QueryTag.COVERAGE),
     ]
 
-    deduped = dedupe_queries(queries)
-
-    assert [q.input for q in deduped] == [1, 2]
-    assert deduped[0].output == 10
+    try:
+        dedupe_queries(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")
 
 
 def test_dedupe_queries_list_input_hashing() -> None:
     queries = [
         Query(input=[1, 2], output=10, tag=QueryTag.TYPICAL),
-        Query(input=[1, 2], output=99, tag=QueryTag.BOUNDARY),
+        Query(input=[1, 2], output=10, tag=QueryTag.BOUNDARY),
         Query(input=[2, 1], output=20, tag=QueryTag.COVERAGE),
     ]
 
@@ -37,6 +39,7 @@ def test_dedupe_queries_list_input_hashing() -> None:
 
     assert [q.input for q in deduped] == [[1, 2], [2, 1]]
     assert [q.output for q in deduped] == [10, 20]
+    assert deduped[0].tag == QueryTag.BOUNDARY
 
 
 def test_dedupe_queries_stable_order_for_unique_values() -> None:
@@ -60,7 +63,7 @@ def test_dedupe_queries_nested_unhashable_inputs_first_wins() -> None:
         ),
         Query(
             input={"b": (4, 5), "a": [1, {"k": {3, 2}}]},
-            output=99,
+            output=10,
             tag=QueryTag.BOUNDARY,
         ),
         Query(
@@ -74,6 +77,7 @@ def test_dedupe_queries_nested_unhashable_inputs_first_wins() -> None:
 
     assert len(deduped) == 2
     assert deduped[0].output == 10
+    assert deduped[0].tag == QueryTag.BOUNDARY
     assert deduped[1].output == 20
 
 
@@ -86,7 +90,7 @@ def test_dedupe_queries_mixed_key_type_dict_does_not_crash() -> None:
         ),
         Query(
             input={"2": "two", 1: "one"},
-            output=2,
+            output=1,
             tag=QueryTag.BOUNDARY,
         ),
         Query(
@@ -99,18 +103,20 @@ def test_dedupe_queries_mixed_key_type_dict_does_not_crash() -> None:
     deduped = dedupe_queries(queries)
     assert len(deduped) == 2
     assert deduped[0].output == 1
+    assert deduped[0].tag == QueryTag.BOUNDARY
     assert deduped[1].output == 3
 
 
 def test_dedupe_queries_unhashable_custom_input_does_not_crash() -> None:
     queries = [
         Query(input=_UnhashableInput(7), output=1, tag=QueryTag.TYPICAL),
-        Query(input=_UnhashableInput(7), output=2, tag=QueryTag.BOUNDARY),
+        Query(input=_UnhashableInput(7), output=1, tag=QueryTag.BOUNDARY),
         Query(input=_UnhashableInput(8), output=3, tag=QueryTag.COVERAGE),
     ]
 
     deduped = dedupe_queries(queries)
     assert [q.output for q in deduped] == [1, 3]
+    assert deduped[0].tag == QueryTag.BOUNDARY
 
 
 def test_dedupe_queries_bad_repr_key_does_not_crash() -> None:
@@ -123,7 +129,7 @@ def test_dedupe_queries_bad_repr_key_does_not_crash() -> None:
         ),
         Query(
             input={1: "one", bad_key: "x"},
-            output=2,
+            output=1,
             tag=QueryTag.BOUNDARY,
         ),
     ]
@@ -131,3 +137,4 @@ def test_dedupe_queries_bad_repr_key_does_not_crash() -> None:
     deduped = dedupe_queries(queries)
     assert len(deduped) == 1
     assert deduped[0].output == 1
+    assert deduped[0].tag == QueryTag.BOUNDARY

@@ -168,7 +168,7 @@ class TestCodeCompilationAndExecution:
 
     def test_runtime_error_caught(self, baseline_task: Task) -> None:
         corrupted = baseline_task.model_copy(
-            update={"code": "def f(xs):\n    return 1/0"}
+            update={"code": "def f(xs):\n    return 1 // 0"}
         )
         issues = validate_stack_bytecode_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
