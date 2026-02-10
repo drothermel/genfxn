@@ -45,7 +45,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.splits import AxisHoldout, HoldoutType
+from genfxn.splits import AxisHoldout, HoldoutType, random_split
 from genfxn.stack_bytecode.models import (
     StackBytecodeAxes,
     StackBytecodeSpec,
@@ -98,6 +98,46 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
             )
         return (lo, hi)
     except (ValueError, IndexError) as err:
+        raise typer.BadParameter(
+            f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
+        ) from err
+
+
+def _parse_numeric_range(
+    value: str | None,
+) -> tuple[int | float, int | float] | None:
+    """Parse 'lo,hi' into numeric tuple (ints or floats)."""
+    if value is None:
+        return None
+    try:
+        parts = value.split(",")
+        if len(parts) != 2:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
+            )
+        lo_s, hi_s = parts[0].strip(), parts[1].strip()
+        if not lo_s or not hi_s:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
+            )
+        lo_f = float(lo_s)
+        hi_f = float(hi_s)
+        if lo_f > hi_f:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': low must be <= high"
+            )
+
+        def _coerce_number(raw: str, value_f: float) -> int | float:
+            if (
+                "." not in raw
+                and "e" not in raw.lower()
+                and value_f.is_integer()
+            ):
+                return int(value_f)
+            return value_f
+
+        return _coerce_number(lo_s, lo_f), _coerce_number(hi_s, hi_f)
+    except ValueError as err:
         raise typer.BadParameter(
             f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
         ) from err
@@ -1043,36 +1083,18 @@ def split(
         if random_ratio < 0 or random_ratio > 1:
             typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
-        total_count = _count_validated_tasks(input_file)
-        target_train_count = int(total_count * random_ratio)
-        rng = random.Random(split_seed)
+        tasks = list(_iter_validated_tasks(input_file))
+        split_result = random_split(tasks, random_ratio, seed=split_seed)
+        train_count = len(split_result.train)
+        test_count = len(split_result.test)
         with (
             train.open("w", encoding="utf-8") as train_handle,
             test.open("w", encoding="utf-8") as test_handle,
         ):
-            remaining_total = total_count
-            remaining_train = target_train_count
-            train_count = 0
-            test_count = 0
-            for task in _iter_validated_tasks(input_file):
-                if remaining_train == 0:
-                    send_to_train = False
-                elif remaining_train == remaining_total:
-                    send_to_train = True
-                else:
-                    send_to_train = rng.random() < (
-                        remaining_train / remaining_total
-                    )
-
-                if send_to_train:
-                    _write_task_line(train_handle, task)
-                    train_count += 1
-                    remaining_train -= 1
-                else:
-                    _write_task_line(test_handle, task)
-                    test_count += 1
-
-                remaining_total -= 1
+            for task in split_result.train:
+                _write_task_line(train_handle, task)
+            for task in split_result.test:
+                _write_task_line(test_handle, task)
     else:
         if holdout_axis is None or holdout_value is None:
             typer.echo(
@@ -1081,9 +1103,16 @@ def split(
             )
             raise typer.Exit(1)
 
-        parsed_value: str | int | float | bool | None | tuple[int, int]
+        parsed_value: (
+            str
+            | int
+            | float
+            | bool
+            | None
+            | tuple[int | float, int | float]
+        )
         if holdout_type == HoldoutType.RANGE:
-            range_val = _parse_range(holdout_value)
+            range_val = _parse_numeric_range(holdout_value)
             if range_val is None:
                 typer.echo(
                     "Error: --holdout-value is required for range holdout",

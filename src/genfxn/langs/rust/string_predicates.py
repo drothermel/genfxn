@@ -47,7 +47,7 @@ def render_string_predicate_rust(pred: StringPredicate, var: str = "s") -> str:
             )
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}
-            return f"{var}.len() {op_map[op]} {v}"
+            return f"{var}.chars().count() {op_map[op]} {v}"
         case StringPredicateNot(operand=op):
             return f"!({render_string_predicate_rust(op, var)})"
         case StringPredicateAnd(operands=ops):

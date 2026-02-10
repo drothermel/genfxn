@@ -50,6 +50,10 @@ _ALLOWED_BUILTINS = {
 }
 
 
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _validate_ast_whitelist(
     code: str, param_name: str = "xs"
 ) -> tuple[list[Issue], ast.Module | None]:
@@ -324,7 +328,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             issues.append(
                 Issue(
@@ -363,7 +367,7 @@ def _validate_query_outputs(
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             continue
         actual = _coerce_query_output(q.output)
@@ -388,8 +392,8 @@ def _validate_query_outputs(
 
 def _coerce_query_output(output: object) -> tuple[int, int] | None:
     if isinstance(output, (tuple, list)) and len(output) == 2:
-        if isinstance(output[0], int) and isinstance(output[1], int):
-            return (output[0], output[1])
+        if _is_int_not_bool(output[0]) and _is_int_not_bool(output[1]):
+            return (cast(int, output[0]), cast(int, output[1]))
     return None
 
 

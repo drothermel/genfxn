@@ -14,15 +14,38 @@ from genfxn.langs.rust.stack_bytecode import (
     render_stack_bytecode as render_stack_bytecode_rust,
 )
 from genfxn.stack_bytecode.eval import eval_stack_bytecode
-from genfxn.stack_bytecode.models import StackBytecodeAxes, StackBytecodeSpec
+from genfxn.stack_bytecode.models import (
+    InputMode,
+    Instruction,
+    InstructionOp,
+    JumpTargetMode,
+    StackBytecodeAxes,
+    StackBytecodeSpec,
+)
 from genfxn.stack_bytecode.sampler import sample_stack_bytecode_spec
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
+
+
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _long_literal(value: int) -> str:
+    if value == -(1 << 63):
+        return "Long.MIN_VALUE"
+    return f"{value}L"
+
+
+def _i64_literal(value: int) -> str:
+    if value == -(1 << 63):
+        return "i64::MIN"
+    return f"{value}i64"
 
 
 def _parse_query_input(input_value: Any) -> list[int]:
     if not isinstance(input_value, list):
         raise TypeError("stack_bytecode query input must be list[int]")
-    if not all(isinstance(v, int) for v in input_value):
+    if not all(_is_int_not_bool(v) for v in input_value):
         raise TypeError("stack_bytecode query input must be list[int]")
     return [int(v) for v in input_value]
 
@@ -30,13 +53,13 @@ def _parse_query_input(input_value: Any) -> list[int]:
 def _run_java_f(
     javac: str, java: str, code: str, xs: list[int]
 ) -> tuple[int, int]:
-    xs_lit = ", ".join(f"{x}" for x in xs)
+    xs_lit = ", ".join(_long_literal(x) for x in xs)
     main_src = (
         "public class Main {\n"
         f"{code}\n"
         "  public static void main(String[] args) {\n"
-        f"    int[] xs = new int[]{{{xs_lit}}};\n"
-        "    int[] out = f(xs);\n"
+        f"    long[] xs = new long[]{{{xs_lit}}};\n"
+        "    long[] out = f(xs);\n"
         "    System.out.print(out[0] + \",\" + out[1]);\n"
         "  }\n"
         "}\n"
@@ -64,7 +87,7 @@ def _run_java_f(
 
 
 def _run_rust_f(rustc: str, code: str, xs: list[int]) -> tuple[int, int]:
-    xs_lit = ", ".join(f"{x}i64" for x in xs)
+    xs_lit = ", ".join(_i64_literal(x) for x in xs)
     main_src = (
         f"{code}\n"
         "fn main() {\n"
@@ -152,3 +175,126 @@ def test_stack_bytecode_runtime_parity_across_sampled_specs() -> None:
             expected = eval_stack_bytecode(spec, list(xs))
             assert _run_java_f(javac, java, java_code, list(xs)) == expected
             assert _run_rust_f(rustc, rust_code, list(xs)) == expected
+
+
+@pytest.mark.full
+def test_stack_bytecode_runtime_parity_forced_modes_and_statuses() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    cases: tuple[tuple[StackBytecodeSpec, list[int]], ...] = (
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=7),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=4,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.JUMP, target=0),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=3,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.POP),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=4,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.JUMP, target=99),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=4,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                    Instruction(op=InstructionOp.PUSH_CONST, value=0),
+                    Instruction(op=InstructionOp.DIV),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=8,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.LOAD_INPUT, index=2),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=4,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[Instruction(op=InstructionOp.HALT)],
+                max_step_count=2,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.JUMP, target=99),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=3,
+                jump_target_mode=JumpTargetMode.CLAMP,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.JUMP, target=-1),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=3,
+                jump_target_mode=JumpTargetMode.WRAP,
+                input_mode=InputMode.DIRECT,
+            ),
+            [],
+        ),
+    )
+
+    for spec, xs in cases:
+        java_code = render_stack_bytecode_java(spec, func_name="f")
+        rust_code = render_stack_bytecode_rust(spec, func_name="f")
+        expected = eval_stack_bytecode(spec, xs)
+        assert _run_java_f(javac, java, java_code, xs) == expected
+        assert _run_rust_f(rustc, rust_code, xs) == expected

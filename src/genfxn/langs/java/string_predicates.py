@@ -48,7 +48,10 @@ def render_string_predicate_java(pred: StringPredicate, var: str = "s") -> str:
             )
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}
-            return f"{var}.length() {op_map[op]} {v}"
+            return (
+                f"{var}.codePointCount(0, {var}.length()) "
+                f"{op_map[op]} {v}"
+            )
         case StringPredicateNot(operand=op):
             return f"!({render_string_predicate_java(op, var)})"
         case StringPredicateAnd(operands=ops):

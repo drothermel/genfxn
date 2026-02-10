@@ -352,7 +352,7 @@ def _coerce_query_input(
         right = pair[1]
         if not _is_int_not_bool(left) or not _is_int_not_bool(right):
             return None
-        intervals.append((left, right))
+        intervals.append((cast(int, left), cast(int, right)))
 
     return intervals
 

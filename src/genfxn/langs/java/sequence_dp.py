@@ -81,7 +81,10 @@ def render_sequence_dp(
         "            if (predicateKind.equals(\"eq\")) {",
         "                isMatch = ai == bj;",
         "            } else if (predicateKind.equals(\"abs_diff_le\")) {",
-        "                isMatch = Math.abs(ai - bj) <= maxDiff;",
+        "                long absDiff = ai >= bj ? (ai - bj) : (bj - ai);",
+        "                isMatch = Long.compareUnsigned(",
+        "                    absDiff, maxDiff",
+        "                ) <= 0;",
         "            } else {",
         "                isMatch = Math.floorMod(ai - bj, divisor) == "
         "remainder;",

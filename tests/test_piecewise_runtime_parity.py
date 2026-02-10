@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from helpers import require_java_runtime, require_rust_runtime
 
+from genfxn.core.predicates import PredicateGe
 from genfxn.langs.java.piecewise import (
     render_piecewise as render_piecewise_java,
 )
@@ -13,7 +14,15 @@ from genfxn.langs.rust.piecewise import (
     render_piecewise as render_piecewise_rust,
 )
 from genfxn.piecewise.eval import eval_piecewise
-from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
+from genfxn.piecewise.models import (
+    Branch,
+    ExprAbs,
+    ExprAffine,
+    ExprMod,
+    ExprQuadratic,
+    PiecewiseAxes,
+    PiecewiseSpec,
+)
 from genfxn.piecewise.sampler import sample_piecewise_spec
 from genfxn.piecewise.task import generate_piecewise_task
 
@@ -124,6 +133,51 @@ def test_piecewise_runtime_parity_across_sampled_specs() -> None:
         java_code = render_piecewise_java(spec, func_name="f")
         rust_code = render_piecewise_rust(spec, func_name="f")
         for x in (-25, -13, -1, 0, 1, 7, 19, 25):
+            expected = eval_piecewise(spec, x)
+            assert _run_java_f(javac, java, java_code, x) == expected
+            assert _run_rust_f(rustc, rust_code, x) == expected
+
+
+@pytest.mark.full
+def test_piecewise_runtime_parity_forced_expression_coverage() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    always_true = PredicateGe(value=-10_000)
+
+    specs: tuple[PiecewiseSpec, ...] = (
+        PiecewiseSpec(
+            branches=[
+                Branch(condition=always_true, expr=ExprAffine(a=2, b=-3))
+            ],
+            default_expr=ExprAffine(a=0, b=0),
+        ),
+        PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=always_true,
+                    expr=ExprQuadratic(a=1, b=-2, c=5),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=0),
+        ),
+        PiecewiseSpec(
+            branches=[Branch(condition=always_true, expr=ExprAbs(a=-3, b=4))],
+            default_expr=ExprAffine(a=0, b=0),
+        ),
+        PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=always_true,
+                    expr=ExprMod(divisor=5, a=7, b=-1),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=0),
+        ),
+    )
+    for spec in specs:
+        java_code = render_piecewise_java(spec, func_name="f")
+        rust_code = render_piecewise_rust(spec, func_name="f")
+        for x in (-9, -1, 0, 3, 9):
             expected = eval_piecewise(spec, x)
             assert _run_java_f(javac, java, java_code, x) == expected
             assert _run_rust_f(rustc, rust_code, x) == expected

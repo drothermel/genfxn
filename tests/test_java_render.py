@@ -315,7 +315,9 @@ class TestStringPredicateJava:
         result = render_string_predicate_java(
             StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == f"s.length() {expected_op} 5"
+        assert result == (
+            f"s.codePointCount(0, s.length()) {expected_op} 5"
+        )
 
     def test_not(self) -> None:
         result = render_string_predicate_java(
@@ -874,8 +876,8 @@ class TestMultiLanguageGeneration:
         assert "python" in code
         assert "java" in code
         assert "def f(" in code["python"]
-        assert "public static int[] f(int[] xs)" in code["java"]
-        assert "return new int[] {" in code["java"]
+        assert "public static long[] f(long[] xs)" in code["java"]
+        assert "return new long[] {" in code["java"]
 
     def test_python_only(self) -> None:
         task = generate_piecewise_task(

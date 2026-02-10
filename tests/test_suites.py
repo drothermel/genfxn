@@ -2063,6 +2063,14 @@ class TestDeterminism:
 
 
 class TestSuiteGenerationValidation:
+    def test_generate_suite_rejects_non_positive_pool_size(self) -> None:
+        with pytest.raises(ValueError, match="pool_size must be >= 1"):
+            generate_suite("stringrules", 3, seed=7, pool_size=0)
+
+    def test_generate_pool_rejects_non_positive_pool_size(self) -> None:
+        with pytest.raises(ValueError, match="pool_size must be >= 1"):
+            generate_pool("stringrules", 3, seed=7, pool_size=0)
+
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
         with pytest.raises(ValueError, match="max_retries must be >= 0"):
             generate_suite("stringrules", 3, seed=7, max_retries=-1)

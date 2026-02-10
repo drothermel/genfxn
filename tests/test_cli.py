@@ -23,6 +23,7 @@ from genfxn.sequence_dp.validate import (
     CODE_UNSAFE_AST as SEQUENCE_DP_CODE_UNSAFE_AST,
 )
 from genfxn.sequence_dp.validate import validate_sequence_dp_task
+from genfxn.splits import random_split
 from genfxn.stack_bytecode.models import StackBytecodeSpec
 from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.validate import (
@@ -982,7 +983,7 @@ class TestGenerate:
         )
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
-        assert "public static int[] f(int[] xs)" in tasks[0]["code"]
+        assert "public static long[] f(long[] xs)" in tasks[0]["code"]
         output0 = tasks[0]["queries"][0]["output"]
         assert isinstance(output0, list)
         assert len(output0) == 2
@@ -1304,6 +1305,71 @@ class TestSplit:
         )
         assert result.exit_code != 0
         assert "low must be <= high" in result.output
+
+    def test_split_range_parses_float_bounds(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"score": 0.25},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "score 0.25",
+            },
+            {
+                "task_id": "task-2",
+                "family": "stateful",
+                "spec": {"score": 0.5},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "score 0.5",
+            },
+            {
+                "task_id": "task-3",
+                "family": "stateful",
+                "spec": {"score": 1.25},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 3, "output": 3, "tag": "typical"}],
+                "description": "score 1.25",
+            },
+            {
+                "task_id": "task-4",
+                "family": "stateful",
+                "spec": {"score": 2.0},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 4, "output": 4, "tag": "typical"}],
+                "description": "score 2.0",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "score",
+                "--holdout-value",
+                "0.5,1.25",
+                "--holdout-type",
+                "range",
+            ],
+        )
+        assert result.exit_code == 0
+
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert {task["task_id"] for task in test} == {"task-2", "task-3"}
+        assert {task["task_id"] for task in train} == {"task-1", "task-4"}
 
     def test_split_exact_parses_numeric_holdout_value(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
@@ -1754,6 +1820,58 @@ class TestSplit:
         test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
         assert len(train) == 2
         assert len(test) == 5
+
+    def test_split_random_ratio_matches_library_split(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks: list[dict[str, Any]] = []
+        for i in range(10):
+            tasks.append(
+                {
+                    "task_id": f"task-{i}",
+                    "family": "stateful",
+                    "spec": {"n": i},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [
+                        {"input": i, "output": i, "tag": "typical"}
+                    ],
+                    "description": f"task {i}",
+                }
+            )
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0.6",
+                "--seed",
+                "123",
+            ],
+        )
+        assert result.exit_code == 0
+
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        expected = random_split(
+            [Task.model_validate(task) for task in tasks],
+            0.6,
+            seed=123,
+        )
+        assert [task["task_id"] for task in train] == [
+            task.task_id for task in expected.train
+        ]
+        assert [task["task_id"] for task in test] == [
+            task.task_id for task in expected.test
+        ]
 
 
 class TestInfo:

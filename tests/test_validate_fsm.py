@@ -175,6 +175,22 @@ class TestQueryAndSemantics:
         issues = validate_fsm_task(corrupted)
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
+    def test_bool_query_values_are_rejected(self, baseline_task: Task) -> None:
+        corrupted = baseline_task.model_copy(
+            update={
+                "queries": [
+                    Query(
+                        input=[True, 1],
+                        output=False,
+                        tag=QueryTag.TYPICAL,
+                    )
+                ]
+            }
+        )
+        issues = validate_fsm_task(corrupted)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+        assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+
     def test_wrong_query_output_caught(self, baseline_task: Task) -> None:
         query = baseline_task.queries[0]
         bad_query = Query(

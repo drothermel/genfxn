@@ -8,7 +8,12 @@ import pytest
 from helpers import require_java_runtime, require_rust_runtime
 
 from genfxn.graph_queries.eval import eval_graph_queries
-from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
+from genfxn.graph_queries.models import (
+    GraphEdge,
+    GraphQueriesAxes,
+    GraphQueriesSpec,
+    GraphQueryType,
+)
 from genfxn.graph_queries.sampler import sample_graph_queries_spec
 from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.langs.registry import get_render_fn
@@ -169,6 +174,52 @@ def test_graph_queries_runtime_parity_across_sampled_specs() -> None:
         rust_code = render_graph_queries_rust(spec, func_name="f")
 
         for src, dst in _sample_pairs(spec.n_nodes):
+            expected = eval_graph_queries(spec, src, dst)
+            assert _run_java_f(javac, java, java_code, src, dst) == expected
+            assert _run_rust_f(rustc, rust_code, src, dst) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_forced_query_types() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    base_edges = [
+        GraphEdge(u=0, v=1, w=2),
+        GraphEdge(u=1, v=2, w=3),
+        GraphEdge(u=0, v=2, w=10),
+    ]
+    specs: tuple[GraphQueriesSpec, ...] = (
+        GraphQueriesSpec(
+            query_type=GraphQueryType.REACHABLE,
+            directed=False,
+            weighted=False,
+            n_nodes=3,
+            edges=base_edges,
+        ),
+        GraphQueriesSpec(
+            query_type=GraphQueryType.MIN_HOPS,
+            directed=True,
+            weighted=False,
+            n_nodes=3,
+            edges=base_edges,
+        ),
+        GraphQueriesSpec(
+            query_type=GraphQueryType.SHORTEST_PATH_COST,
+            directed=True,
+            weighted=True,
+            n_nodes=3,
+            edges=base_edges,
+        ),
+    )
+    pairs = ((0, 2), (2, 0), (1, 1))
+
+    for spec in specs:
+        java_code = render_graph_queries_java(spec, func_name="f")
+        rust_code = render_graph_queries_rust(spec, func_name="f")
+        for src, dst in pairs:
             expected = eval_graph_queries(spec, src, dst)
             assert _run_java_f(javac, java, java_code, src, dst) == expected
             assert _run_rust_f(rustc, rust_code, src, dst) == expected

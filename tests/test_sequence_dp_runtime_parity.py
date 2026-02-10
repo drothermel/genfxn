@@ -14,7 +14,16 @@ from genfxn.langs.rust.sequence_dp import (
     render_sequence_dp as render_sequence_dp_rust,
 )
 from genfxn.sequence_dp.eval import eval_sequence_dp
-from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
+from genfxn.sequence_dp.models import (
+    OutputMode,
+    PredicateAbsDiffLe,
+    PredicateEq,
+    PredicateModEq,
+    SequenceDpAxes,
+    SequenceDpSpec,
+    TemplateType,
+    TieBreakOrder,
+)
 from genfxn.sequence_dp.sampler import sample_sequence_dp_spec
 from genfxn.sequence_dp.task import generate_sequence_dp_task
 
@@ -174,3 +183,83 @@ def test_sequence_dp_runtime_parity_across_sampled_specs() -> None:
                 expected
             )
             assert _run_rust_f(rustc, rust_code, a_vals, b_vals) == expected
+
+
+@pytest.mark.full
+def test_sequence_dp_runtime_parity_forced_predicate_output_coverage() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    CaseInputPairs = list[tuple[list[int], list[int]]]
+    cases: tuple[tuple[SequenceDpSpec, CaseInputPairs], ...] = (
+        (
+            SequenceDpSpec(
+                template=TemplateType.GLOBAL,
+                output_mode=OutputMode.SCORE,
+                match_predicate=PredicateEq(),
+                match_score=3,
+                mismatch_score=-2,
+                gap_score=-1,
+                step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+            ),
+            [([1, 2, 3], [1, 2, 3]), ([1, 2, 3], [3, 2, 1])],
+        ),
+        (
+            SequenceDpSpec(
+                template=TemplateType.LOCAL,
+                output_mode=OutputMode.ALIGNMENT_LEN,
+                match_predicate=PredicateAbsDiffLe(max_diff=1),
+                match_score=4,
+                mismatch_score=-3,
+                gap_score=-1,
+                step_tie_break=TieBreakOrder.LEFT_DIAG_UP,
+            ),
+            [([0, 1, 2, 3], [0, 2, 4]), ([5, 5, 5], [4, 6, 5])],
+        ),
+        (
+            SequenceDpSpec(
+                template=TemplateType.GLOBAL,
+                output_mode=OutputMode.GAP_COUNT,
+                match_predicate=PredicateModEq(divisor=3, remainder=1),
+                match_score=2,
+                mismatch_score=-1,
+                gap_score=-2,
+                step_tie_break=TieBreakOrder.UP_LEFT_DIAG,
+            ),
+            [([1, 4, 7], [1, 2, 3]), ([2, 5], [8, 11, 14])],
+        ),
+    )
+
+    for spec, query_inputs in cases:
+        java_code = render_sequence_dp_java(spec, func_name="f")
+        rust_code = render_sequence_dp_rust(spec, func_name="f")
+        for a_vals, b_vals in query_inputs:
+            expected = eval_sequence_dp(spec, a_vals, b_vals)
+            assert _run_java_f(javac, java, java_code, a_vals, b_vals) == (
+                expected
+            )
+            assert _run_rust_f(rustc, rust_code, a_vals, b_vals) == expected
+
+
+@pytest.mark.full
+def test_sequence_dp_abs_diff_extreme_values_parity() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    spec = SequenceDpSpec(
+        template=TemplateType.GLOBAL,
+        output_mode=OutputMode.SCORE,
+        match_predicate=PredicateAbsDiffLe(max_diff=0),
+        match_score=5,
+        mismatch_score=-4,
+        gap_score=-1,
+        step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+    )
+    a_vals = [-(1 << 63)]
+    b_vals = [(1 << 63) - 1]
+    expected = eval_sequence_dp(spec, a_vals, b_vals)
+
+    java_code = render_sequence_dp_java(spec, func_name="f")
+    rust_code = render_sequence_dp_rust(spec, func_name="f")
+    assert _run_java_f(javac, java, java_code, a_vals, b_vals) == expected
+    assert _run_rust_f(rustc, rust_code, a_vals, b_vals) == expected

@@ -7,12 +7,21 @@ from typing import Any
 import pytest
 from helpers import require_java_runtime, require_rust_runtime
 
+from genfxn.core.string_predicates import StringPredicateLengthCmp
+from genfxn.core.string_transforms import (
+    StringTransformAppend,
+    StringTransformIdentity,
+)
 from genfxn.langs.java._helpers import java_string_literal
 from genfxn.langs.java.stringrules import render_stringrules as render_java
 from genfxn.langs.rust._helpers import rust_string_literal
 from genfxn.langs.rust.stringrules import render_stringrules as render_rust
 from genfxn.stringrules.eval import eval_stringrules
-from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
+from genfxn.stringrules.models import (
+    StringRule,
+    StringRulesAxes,
+    StringRulesSpec,
+)
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.stringrules.task import generate_stringrules_task
 
@@ -140,3 +149,26 @@ def test_stringrules_runtime_parity_across_sampled_specs() -> None:
             expected = eval_stringrules(spec, s)
             assert _run_java_f(javac, java, java_code, s) == expected
             assert _run_rust_f(rustc, rust_code, s) == expected
+
+
+@pytest.mark.full
+def test_stringrules_runtime_parity_non_ascii_length_cmp() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    spec = StringRulesSpec(
+        rules=[
+            StringRule(
+                predicate=StringPredicateLengthCmp(op="eq", value=1),
+                transform=StringTransformAppend(suffix="!"),
+            )
+        ],
+        default_transform=StringTransformIdentity(),
+    )
+    java_code = render_java(spec, func_name="f")
+    rust_code = render_rust(spec, func_name="f")
+
+    for s in ("🙂", "é", "a", "éβ", "🙂🙂"):
+        expected = eval_stringrules(spec, s)
+        assert _run_java_f(javac, java, java_code, s) == expected
+        assert _run_rust_f(rustc, rust_code, s) == expected

@@ -1319,6 +1319,9 @@ def generate_pool(
     pool_size: int,
 ) -> tuple[list[Candidate], PoolStats]:
     """Generate a candidate pool of specs at the target difficulty."""
+    if pool_size <= 0:
+        raise ValueError(f"pool_size must be >= 1, got {pool_size}")
+
     _validate_family_key(
         family=family,
         family_keys=set(_POOL_AXES_FNS.keys()),
@@ -1757,6 +1760,8 @@ def generate_suite(
     max_retries: int = 2,
 ) -> list[Task]:
     """Generate a balanced 50-task suite for (family, difficulty)."""
+    if pool_size <= 0:
+        raise ValueError(f"pool_size must be >= 1, got {pool_size}")
     if max_retries < 0:
         raise ValueError(f"max_retries must be >= 0, got {max_retries}")
 

@@ -50,6 +50,10 @@ _ALLOWED_BUILTINS = {
 }
 
 
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _validate_ast_whitelist(
     code: str, param_name: str = "xs"
 ) -> tuple[list[Issue], ast.Module | None]:
@@ -323,7 +327,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             issues.append(
                 Issue(
@@ -335,7 +339,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                 )
             )
 
-        if not isinstance(q.output, int):
+        if not _is_int_not_bool(q.output):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -359,10 +363,10 @@ def _validate_query_outputs(
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             continue
-        if not isinstance(q.output, int):
+        if not _is_int_not_bool(q.output):
             continue
         try:
             expected = eval_fsm(spec, q.input)

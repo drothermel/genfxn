@@ -12,7 +12,11 @@ from genfxn.langs.registry import get_render_fn
 from genfxn.langs.rust.temporal_logic import _i64_literal
 from genfxn.langs.types import Language
 from genfxn.temporal_logic.eval import eval_temporal_logic
-from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
+from genfxn.temporal_logic.models import (
+    TemporalLogicAxes,
+    TemporalLogicSpec,
+    TemporalOutputMode,
+)
 from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
 from genfxn.temporal_logic.task import generate_temporal_logic_task
 
@@ -152,6 +156,25 @@ def test_temporal_logic_runtime_parity_across_sampled_specs() -> None:
     )
     for _ in range(8):
         spec = sample_temporal_logic_spec(axes, rng=rng)
+        java_code = render_java(spec, func_name="f")
+        rust_code = render_rust(spec, func_name="f")
+        for xs in sample_inputs:
+            expected = eval_temporal_logic(spec, list(xs))
+            assert _run_java_f(javac, java, java_code, list(xs)) == expected
+            assert _run_rust_f(rustc, rust_code, list(xs)) == expected
+
+
+@pytest.mark.full
+def test_temporal_logic_runtime_parity_forced_output_modes() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_java = get_render_fn(Language.JAVA, "temporal_logic")
+    render_rust = get_render_fn(Language.RUST, "temporal_logic")
+
+    formula = {"op": "atom", "predicate": "gt", "constant": 0}
+    sample_inputs = ([1, -1, 2], [-5, -4, -3], [0, 1, 0, 1])
+    for output_mode in TemporalOutputMode:
+        spec = TemporalLogicSpec(output_mode=output_mode, formula=formula)
         java_code = render_java(spec, func_name="f")
         rust_code = render_rust(spec, func_name="f")
         for xs in sample_inputs:

@@ -48,6 +48,10 @@ _ALLOWED_BUILTINS = {
 }
 
 
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _validate_ast_whitelist(
     code: str,
     param_names: tuple[str, ...] = ("src", "dst"),
@@ -326,9 +330,9 @@ def _coerce_query_input(input_value: object) -> tuple[int, int] | None:
     typed_input = cast(dict[str, object], input_value)
     src = typed_input.get("src")
     dst = typed_input.get("dst")
-    if not isinstance(src, int) or not isinstance(dst, int):
+    if not _is_int_not_bool(src) or not _is_int_not_bool(dst):
         return None
-    return src, dst
+    return cast(int, src), cast(int, dst)
 
 
 def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
@@ -346,7 +350,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     task_id=task.task_id,
                 )
             )
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -372,7 +376,7 @@ def _validate_query_outputs(
         coerced = _coerce_query_input(query.input)
         if coerced is None:
             continue
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             continue
 
         src, dst = coerced

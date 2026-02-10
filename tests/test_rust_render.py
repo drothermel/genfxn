@@ -303,7 +303,7 @@ class TestStringPredicateRust:
         result = render_string_predicate_rust(
             StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == f"s.len() {expected_op} 5"
+        assert result == f"s.chars().count() {expected_op} 5"
 
     def test_not(self) -> None:
         result = render_string_predicate_rust(

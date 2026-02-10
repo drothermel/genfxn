@@ -286,6 +286,22 @@ class TestQueryTypeValidation:
         issues = validate_stack_bytecode_task(corrupted, strict=True)
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
+    def test_bool_query_values_are_rejected(self, baseline_task: Task) -> None:
+        corrupted = baseline_task.model_copy(
+            update={
+                "queries": [
+                    Query(
+                        input=[True, 1],
+                        output=(True, 0),
+                        tag=QueryTag.TYPICAL,
+                    )
+                ]
+            }
+        )
+        issues = validate_stack_bytecode_task(corrupted, strict=True)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+        assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+
     def test_location_includes_specific_query_index(
         self, baseline_task: Task
     ) -> None:
