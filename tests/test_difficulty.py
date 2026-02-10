@@ -789,6 +789,80 @@ class TestComputeDifficulty:
         assert 1 <= easy_score <= 5
         assert 1 <= hard_score <= 5
 
+    def test_intervals_family_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.intervals.task") is None:
+            pytest.skip("intervals family is not available")
+        spec = {
+            "operation": "merged_count",
+            "boundary_mode": "closed_open",
+            "merge_touching": True,
+            "endpoint_clip_abs": 12,
+        }
+        difficulty = compute_difficulty("intervals", spec)
+        assert 1 <= difficulty <= 5
+
+    def test_intervals_monotonic_examples_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.intervals.task") is None:
+            pytest.skip("intervals family is not available")
+
+        specs = [
+            {
+                "operation": "total_coverage",
+                "boundary_mode": "closed_closed",
+                "merge_touching": False,
+                "endpoint_clip_abs": 20,
+            },
+            {
+                "operation": "merged_count",
+                "boundary_mode": "closed_open",
+                "merge_touching": False,
+                "endpoint_clip_abs": 14,
+            },
+            {
+                "operation": "merged_count",
+                "boundary_mode": "open_closed",
+                "merge_touching": True,
+                "endpoint_clip_abs": 10,
+            },
+            {
+                "operation": "max_overlap_count",
+                "boundary_mode": "open_closed",
+                "merge_touching": True,
+                "endpoint_clip_abs": 7,
+            },
+            {
+                "operation": "gap_count",
+                "boundary_mode": "open_open",
+                "merge_touching": True,
+                "endpoint_clip_abs": 4,
+            },
+        ]
+        scores = [compute_difficulty("intervals", spec) for spec in specs]
+        assert scores == sorted(scores)
+
+    def test_intervals_difficulty_clamped_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.intervals.task") is None:
+            pytest.skip("intervals family is not available")
+
+        very_simple = {
+            "operation": "total_coverage",
+            "boundary_mode": "closed_closed",
+            "merge_touching": False,
+            "endpoint_clip_abs": 20,
+        }
+        hard = {
+            "operation": "gap_count",
+            "boundary_mode": "open_open",
+            "merge_touching": True,
+            "endpoint_clip_abs": 3,
+        }
+        easy_score = compute_difficulty("intervals", very_simple)
+        hard_score = compute_difficulty("intervals", hard)
+        assert easy_score == 1
+        assert hard_score == 5
+        assert 1 <= easy_score <= 5
+        assert 1 <= hard_score <= 5
+
     def test_stack_bytecode_monotonic_examples_when_available(self) -> None:
         if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
             pytest.skip("stack_bytecode family is not available")

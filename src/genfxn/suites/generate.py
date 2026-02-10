@@ -33,6 +33,14 @@ from genfxn.fsm.models import (
 from genfxn.fsm.queries import generate_fsm_queries
 from genfxn.fsm.render import render_fsm
 from genfxn.fsm.sampler import sample_fsm_spec
+from genfxn.intervals.models import (
+    BoundaryMode,
+    IntervalsAxes,
+    OperationType,
+)
+from genfxn.intervals.queries import generate_intervals_queries
+from genfxn.intervals.render import render_intervals
+from genfxn.intervals.sampler import sample_intervals_spec
 from genfxn.sequence_dp.models import (
     OutputMode as SequenceDpOutputMode,
 )
@@ -78,6 +86,7 @@ from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.suites.features import (
     bitops_features,
     fsm_features,
+    intervals_features,
     sequence_dp_features,
     simple_algorithms_features,
     stack_bytecode_features,
@@ -827,6 +836,94 @@ def _pool_axes_sequence_dp_d5(_: random.Random) -> SequenceDpAxes:
     )
 
 
+def _pool_axes_intervals_d1(_: random.Random) -> IntervalsAxes:
+    return IntervalsAxes(
+        target_difficulty=1,
+        operation_types=[
+            OperationType.TOTAL_COVERAGE,
+            OperationType.MERGED_COUNT,
+        ],
+        boundary_modes=[BoundaryMode.CLOSED_CLOSED],
+        merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(12, 20),
+        endpoint_quantize_step_range=(1, 4),
+    )
+
+
+def _pool_axes_intervals_d2(_: random.Random) -> IntervalsAxes:
+    return IntervalsAxes(
+        target_difficulty=2,
+        operation_types=[
+            OperationType.TOTAL_COVERAGE,
+            OperationType.MERGED_COUNT,
+            OperationType.MAX_OVERLAP_COUNT,
+        ],
+        boundary_modes=[
+            BoundaryMode.CLOSED_CLOSED,
+            BoundaryMode.CLOSED_OPEN,
+            BoundaryMode.OPEN_CLOSED,
+            BoundaryMode.OPEN_OPEN,
+        ],
+        merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(8, 15),
+        endpoint_quantize_step_range=(1, 5),
+    )
+
+
+def _pool_axes_intervals_d3(_: random.Random) -> IntervalsAxes:
+    return IntervalsAxes(
+        target_difficulty=3,
+        operation_types=[
+            OperationType.TOTAL_COVERAGE,
+            OperationType.MERGED_COUNT,
+            OperationType.MAX_OVERLAP_COUNT,
+            OperationType.GAP_COUNT,
+        ],
+        boundary_modes=[
+            BoundaryMode.CLOSED_CLOSED,
+            BoundaryMode.CLOSED_OPEN,
+            BoundaryMode.OPEN_CLOSED,
+            BoundaryMode.OPEN_OPEN,
+        ],
+        merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(8, 14),
+        endpoint_quantize_step_range=(1, 5),
+    )
+
+
+def _pool_axes_intervals_d4(_: random.Random) -> IntervalsAxes:
+    return IntervalsAxes(
+        target_difficulty=4,
+        operation_types=[
+            OperationType.MAX_OVERLAP_COUNT,
+            OperationType.GAP_COUNT,
+        ],
+        boundary_modes=[
+            BoundaryMode.CLOSED_OPEN,
+            BoundaryMode.OPEN_CLOSED,
+            BoundaryMode.OPEN_OPEN,
+        ],
+        merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(5, 10),
+        endpoint_quantize_step_range=(1, 6),
+    )
+
+
+def _pool_axes_intervals_d5(_: random.Random) -> IntervalsAxes:
+    return IntervalsAxes(
+        target_difficulty=5,
+        operation_types=[OperationType.GAP_COUNT],
+        boundary_modes=[
+            BoundaryMode.CLOSED_OPEN,
+            BoundaryMode.OPEN_CLOSED,
+            BoundaryMode.OPEN_OPEN,
+        ],
+        merge_touching_choices=[False, True],
+        endpoint_clip_abs_range=(3, 7),
+        endpoint_quantize_step_range=(1, 6),
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -873,6 +970,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_sequence_dp_d4,
         5: _pool_axes_sequence_dp_d5,
     },
+    "intervals": {
+        1: _pool_axes_intervals_d1,
+        2: _pool_axes_intervals_d2,
+        3: _pool_axes_intervals_d3,
+        4: _pool_axes_intervals_d4,
+        5: _pool_axes_intervals_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -885,6 +989,7 @@ _FEATURE_FNS = {
     "fsm": fsm_features,
     "bitops": bitops_features,
     "sequence_dp": sequence_dp_features,
+    "intervals": intervals_features,
 }
 
 
@@ -942,6 +1047,8 @@ def _sample_spec(
         return sample_bitops_spec(axes, rng, trace=trace)
     elif family == "sequence_dp":
         return sample_sequence_dp_spec(axes, rng, trace=trace)
+    elif family == "intervals":
+        return sample_intervals_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -1261,6 +1368,11 @@ def _generate_task_from_candidate(
             axes = SequenceDpAxes()
         py_code = render_sequence_dp(spec)
         queries = generate_sequence_dp_queries(spec, axes, rng)
+    elif family == "intervals":
+        if axes is None:
+            axes = IntervalsAxes()
+        py_code = render_intervals(spec)
+        queries = generate_intervals_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 

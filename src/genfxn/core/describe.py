@@ -20,6 +20,8 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_bitops(spec)
     elif family == "sequence_dp":
         return _describe_sequence_dp(spec)
+    elif family == "intervals":
+        return _describe_intervals(spec)
     return ""
 
 
@@ -825,6 +827,45 @@ def _describe_sequence_dp(spec: dict[str, Any]) -> str:
             f"Break ties with '{tie_break}' move ordering and return "
             f"'{output_mode}'."
         ),
+    )
+
+
+def _describe_intervals(spec: dict[str, Any]) -> str:
+    operation = _enum_text(spec.get("operation", "total_coverage"))
+    boundary_mode = _enum_text(spec.get("boundary_mode", "closed_closed"))
+    merge_touching = bool(spec.get("merge_touching", True))
+    endpoint_clip_abs = spec.get("endpoint_clip_abs", 20)
+    endpoint_quantize_step = spec.get("endpoint_quantize_step", 1)
+    try:
+        clip_value = max(1, abs(int(endpoint_clip_abs)))
+    except (TypeError, ValueError):
+        clip_value = 20
+    try:
+        quantize_step = max(1, abs(int(endpoint_quantize_step)))
+    except (TypeError, ValueError):
+        quantize_step = 1
+    if merge_touching:
+        merge_text = "merge touching spans"
+    else:
+        merge_text = "do not merge touching spans"
+
+    return _join_description_parts(
+        "Implement f(intervals: list[tuple[int, int]]) -> int.",
+        (
+            f"Clamp each endpoint into [-{clip_value}, {clip_value}] "
+            "before further processing."
+        ),
+        (
+            "Quantize endpoints toward zero to multiples of "
+            f"{quantize_step}."
+        ),
+        "Normalize each interval so lo <= hi.",
+        (
+            f"Apply boundary mode '{boundary_mode}' to map intervals onto "
+            "inclusive integer spans and ignore empty spans."
+        ),
+        f"Then {merge_text}.",
+        f"Return operation '{operation}'.",
     )
 
 

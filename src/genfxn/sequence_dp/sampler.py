@@ -1,5 +1,6 @@
 import random
 
+from genfxn.core.sampling import pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.sequence_dp.models import (
     OutputMode,
@@ -109,7 +110,6 @@ _TARGET_DIVISOR: dict[int, tuple[int, int]] = {
     5: (4, 12),
 }
 
-
 def _intersect_ranges(
     a: tuple[int, int], b: tuple[int, int]
 ) -> tuple[int, int] | None:
@@ -118,15 +118,6 @@ def _intersect_ranges(
     if lo > hi:
         return None
     return (lo, hi)
-
-
-def _pick_from_preferred[T](
-    available: list[T], preferred: list[T], rng: random.Random
-) -> T:
-    preferred_available = [value for value in preferred if value in available]
-    if preferred_available:
-        return rng.choice(preferred_available)
-    return rng.choice(available)
 
 
 def _pick_targeted_int(
@@ -193,22 +184,22 @@ def sample_sequence_dp_spec(
         mismatch_score = rng.randint(*axes.mismatch_score_range)
         gap_score = rng.randint(*axes.gap_score_range)
     else:
-        template = _pick_from_preferred(
+        template = pick_from_preferred(
             axes.templates,
             _TARGET_TEMPLATE_PREFS[target_difficulty],
             rng,
         )
-        output_mode = _pick_from_preferred(
+        output_mode = pick_from_preferred(
             axes.output_modes,
             _TARGET_OUTPUT_PREFS[target_difficulty],
             rng,
         )
-        predicate_type = _pick_from_preferred(
+        predicate_type = pick_from_preferred(
             axes.predicate_types,
             _TARGET_PREDICATE_PREFS[target_difficulty],
             rng,
         )
-        tie_break = _pick_from_preferred(
+        tie_break = pick_from_preferred(
             axes.tie_break_orders,
             _TARGET_TIE_BREAK_PREFS[target_difficulty],
             rng,

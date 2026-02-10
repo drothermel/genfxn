@@ -43,6 +43,7 @@ def _expected_all_families() -> set[str]:
         "stateful",
         "simple_algorithms",
         "stringrules",
+        "intervals",
         "fsm",
         "sequence_dp",
     }
@@ -139,6 +140,19 @@ class TestGenerate:
             assert not any(
                 i.code == SEQUENCE_DP_CODE_UNSAFE_AST for i in issues
             )
+
+    def test_generate_intervals(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app, ["generate", "-o", str(output), "-f", "intervals", "-n", "5"]
+        )
+
+        assert result.exit_code == 0
+        assert "Generated 5 tasks" in result.stdout
+
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 5
+        assert all(t["family"] == "intervals" for t in tasks)
 
     def test_generate_sequence_dp_honors_shared_ranges(
         self, tmp_path
@@ -411,6 +425,7 @@ class TestGenerate:
 
     def test_generate_all_rust_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
+        n_families = len(_expected_all_families())
         result = runner.invoke(
             app,
             [
@@ -420,7 +435,7 @@ class TestGenerate:
                 "-f",
                 "all",
                 "-n",
-                "8",
+                str(n_families),
                 "--language",
                 "rust",
             ],
@@ -436,7 +451,7 @@ class TestGenerate:
 
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
-        assert len(tasks) == 8
+        assert len(tasks) == n_families
         families = {t["family"] for t in tasks}
         assert families == _expected_all_families()
         assert all("def f(" not in cast(str, t["code"]) for t in tasks)
@@ -1565,6 +1580,7 @@ class TestInfo:
         assert "stateful:" in result.stdout
         assert "simple_algorithms:" in result.stdout
         assert "stringrules:" in result.stdout
+        assert "intervals:" in result.stdout
         assert "fsm:" in result.stdout
         assert "sequence_dp:" in result.stdout
         if _supports_stack_bytecode_family():

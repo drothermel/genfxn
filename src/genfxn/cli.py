@@ -21,6 +21,8 @@ from genfxn.core.trace import GenerationTrace
 from genfxn.core.transforms import TransformType
 from genfxn.fsm.models import FsmAxes, FsmSpec
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
 from genfxn.piecewise.models import ExprType, PiecewiseAxes, PiecewiseSpec
@@ -60,6 +62,7 @@ _simple_algorithms_spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 _fsm_spec_adapter = TypeAdapter(FsmSpec)
 _bitops_spec_adapter = TypeAdapter(BitopsSpec)
 _sequence_dp_spec_adapter = TypeAdapter(SequenceDpSpec)
+_intervals_spec_adapter = TypeAdapter(IntervalsSpec)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -192,6 +195,10 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
             )
         case "sequence_dp":
             spec_obj = _sequence_dp_spec_adapter.validate_python(
+                task.spec, strict=True
+            )
+        case "intervals":
+            spec_obj = _intervals_spec_adapter.validate_python(
                 task.spec, strict=True
             )
         case _:
@@ -390,6 +397,18 @@ def _build_sequence_dp_axes(
     return SequenceDpAxes(**kwargs)
 
 
+def _build_intervals_axes(
+    value_range: str | None,
+    list_length_range: str | None,
+) -> IntervalsAxes:
+    kwargs: dict[str, Any] = {}
+    if value_range:
+        kwargs["endpoint_range"] = _parse_range(value_range)
+    if list_length_range:
+        kwargs["n_intervals_range"] = _parse_range(list_length_range)
+    return IntervalsAxes(**kwargs)
+
+
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
     return render_stack_bytecode(spec)
 
@@ -436,7 +455,7 @@ def generate(
             "-f",
             help=(
                 "piecewise, stateful, simple_algorithms, stringrules, "
-                "bitops, sequence_dp, stack_bytecode, fsm, or all"
+                "bitops, sequence_dp, intervals, stack_bytecode, fsm, or all"
             ),
         ),
     ] = "all",
@@ -705,6 +724,10 @@ def generate(
             divisor_range=divisor_range,
             list_length_range=list_length_range,
         )
+        intervals_axes = _build_intervals_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
 
     with output.open("w", encoding="utf-8") as output_handle:
 
@@ -723,6 +746,7 @@ def generate(
                 "stringrules",
                 "bitops",
                 "sequence_dp",
+                "intervals",
                 "stack_bytecode",
                 "fsm",
             ]
@@ -750,6 +774,8 @@ def generate(
                 emit(generate_bitops_task(axes=bitops_axes, rng=rng))
             for _ in range(family_counts["sequence_dp"]):
                 emit(generate_sequence_dp_task(axes=sequence_dp_axes, rng=rng))
+            for _ in range(family_counts["intervals"]):
+                emit(generate_intervals_task(axes=intervals_axes, rng=rng))
             for _ in range(family_counts["stack_bytecode"]):
                 emit(_build_stack_bytecode_task(stack_bytecode_axes, rng))
             for _ in range(family_counts["fsm"]):
@@ -770,6 +796,18 @@ def generate(
                 emit(
                     generate_sequence_dp_task(
                         axes=cast(SequenceDpAxes, axes),
+                        rng=rng,
+                    )
+                )
+        elif family == "intervals":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = intervals_axes
+                emit(
+                    generate_intervals_task(
+                        axes=cast(IntervalsAxes, axes),
                         rng=rng,
                     )
                 )

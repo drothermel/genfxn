@@ -16,6 +16,7 @@ from genfxn.simple_algorithms.models import (
 from genfxn.suites.features import (
     bitops_features,
     fsm_features,
+    intervals_features,
     sequence_dp_features,
     simple_algorithms_features,
     stateful_features,
@@ -37,6 +38,7 @@ StackBytecodeRenderFn = Callable[[list[int]], tuple[int, int]]
 FsmRenderFn = Callable[[list[int]], int]
 BitopsRenderFn = Callable[[int], int]
 SequenceDpRenderFn = Callable[[list[int], list[int]], int]
+IntervalsRenderFn = Callable[[list[tuple[int, int]]], int]
 
 
 def _stack_suite_available() -> bool:
@@ -64,6 +66,13 @@ def _sequence_dp_suite_available() -> bool:
     return (
         "sequence_dp" in QUOTAS
         and importlib.util.find_spec("genfxn.sequence_dp.task") is not None
+    )
+
+
+def _intervals_suite_available() -> bool:
+    return (
+        "intervals" in QUOTAS
+        and importlib.util.find_spec("genfxn.intervals.task") is not None
     )
 
 # ── Feature extraction tests ─────────────────────────────────────────────
@@ -646,6 +655,52 @@ class TestSequenceDpFeatures:
         assert f["divisor_bucket"] == "8+"
         assert f["tie_break_bucket"] == "left_first"
         assert f["score_profile"] == "tie_heavy"
+
+
+class TestIntervalsFeatures:
+    def test_total_coverage_closed(self) -> None:
+        spec = {
+            "operation": "total_coverage",
+            "boundary_mode": "closed_closed",
+            "merge_touching": True,
+            "endpoint_clip_abs": 18,
+            "endpoint_quantize_step": 1,
+        }
+        f = intervals_features(spec)
+        assert f["operation"] == "total_coverage"
+        assert f["boundary_mode"] == "closed_closed"
+        assert f["boundary_bucket"] == "closed"
+        assert f["merge_touching"] == "true"
+        assert f["clip_bucket"] == "very_wide"
+        assert f["quantize_bucket"] == "none"
+
+    def test_gap_count_open_boundary(self) -> None:
+        spec = {
+            "operation": "gap_count",
+            "boundary_mode": "open_open",
+            "merge_touching": False,
+            "endpoint_clip_abs": 5,
+            "endpoint_quantize_step": 2,
+        }
+        f = intervals_features(spec)
+        assert f["operation"] == "gap_count"
+        assert f["boundary_bucket"] == "open"
+        assert f["merge_touching"] == "false"
+        assert f["clip_bucket"] == "tight"
+        assert f["quantize_bucket"] == "step2"
+
+    def test_mixed_boundary_bucket(self) -> None:
+        spec = {
+            "operation": "merged_count",
+            "boundary_mode": "closed_open",
+            "merge_touching": False,
+            "endpoint_clip_abs": 10,
+            "endpoint_quantize_step": 4,
+        }
+        f = intervals_features(spec)
+        assert f["boundary_bucket"] == "mixed"
+        assert f["clip_bucket"] == "medium"
+        assert f["quantize_bucket"] == "step3-4"
 
 
 class _FixedChoiceRng:
@@ -1277,6 +1332,54 @@ class TestPoolGeneration:
                     f"{bucket.axis}={bucket.value}"
                 )
 
+    def test_intervals_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
+
+        for difficulty in sorted(QUOTAS["intervals"].keys()):
+            candidates, stats = generate_pool(
+                "intervals",
+                difficulty,
+                seed=42,
+                pool_size=120,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                assert (
+                    compute_difficulty("intervals", cand.spec_dict)
+                    == difficulty
+                )
+
+    def test_intervals_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["intervals"].keys()):
+            candidates, _ = generate_pool(
+                "intervals",
+                difficulty,
+                seed=43,
+                pool_size=120,
+            )
+            assert candidates
+            quota = QUOTAS["intervals"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for intervals "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1527,6 +1630,50 @@ class TestDeterminism:
                 spec, q_input["a"], q_input["b"]
             )
 
+    def test_intervals_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+        difficulty = sorted(QUOTAS["intervals"].keys())[0]
+        a = generate_suite("intervals", difficulty, seed=19, pool_size=300)
+        b = generate_suite("intervals", difficulty, seed=19, pool_size=300)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_intervals_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+        from genfxn.intervals.eval import eval_intervals
+        from genfxn.intervals.models import IntervalsSpec
+
+        difficulty = sorted(QUOTAS["intervals"].keys())[0]
+        tasks = generate_suite(
+            "intervals",
+            difficulty,
+            seed=42,
+            pool_size=300,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = IntervalsSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(IntervalsRenderFn, f_obj)
+
+        for q in task.queries:
+            assert isinstance(q.output, int)
+            intervals_input = cast(list[tuple[int, int]], list(q.input))
+            expected = eval_intervals(spec, intervals_input)
+            result = f(intervals_input)
+            assert q.output == expected
+            assert result == expected
+
 
 class TestSuiteGenerationValidation:
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
@@ -1765,6 +1912,48 @@ class TestIntegration:
             quota = QUOTAS["sequence_dp"][difficulty]
             assert len(tasks) == quota.total
             report = quota_report(tasks, "sequence_dp", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_intervals_suite_generation_when_available(self) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["intervals"].keys())[0]
+        tasks = generate_suite(
+            "intervals",
+            difficulty,
+            seed=82,
+            pool_size=1200,
+        )
+        quota = QUOTAS["intervals"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "intervals", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.75))
+            assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_intervals_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["intervals"].keys()):
+            tasks = generate_suite(
+                "intervals",
+                difficulty,
+                seed=501 + difficulty,
+                pool_size=1200,
+            )
+            quota = QUOTAS["intervals"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "intervals", difficulty)
             for _, _, target, achieved, _ in report:
                 min_acceptable = max(1, int(target * 0.75))
                 assert achieved >= min_acceptable

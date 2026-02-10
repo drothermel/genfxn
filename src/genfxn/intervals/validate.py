@@ -5,7 +5,14 @@ from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
-from genfxn.bitops.ast_safety import (
+from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.models import Task
+from genfxn.core.safe_exec import (
+    SafeExecMissingFunctionError,
+    execute_code_restricted,
+)
+from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
+from genfxn.intervals.ast_safety import (
     ALLOWED_ANNOTATION_NAMES,
     ALLOWED_AST_NODES,
     ALLOWED_CALL_NAMES,
@@ -14,15 +21,8 @@ from genfxn.bitops.ast_safety import (
     CALL_ARITIES,
     METHOD_ARITIES,
 )
-from genfxn.bitops.eval import eval_bitops
-from genfxn.bitops.models import BitopsAxes, BitopsSpec
-from genfxn.core.codegen import task_id_from_spec
-from genfxn.core.models import Task
-from genfxn.core.safe_exec import (
-    SafeExecMissingFunctionError,
-    execute_code_restricted,
-)
-from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
+from genfxn.intervals.eval import eval_intervals
+from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -37,16 +37,24 @@ CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "CODE_UNSAFE_AST"
-CURRENT_FAMILY = "bitops"
+CURRENT_FAMILY = "intervals"
 PYTHON_CODE_KEY = "python"
 
-_spec_adapter = TypeAdapter(BitopsSpec)
-_ALLOWED_BUILTINS = {}
+_spec_adapter = TypeAdapter(IntervalsSpec)
+_ALLOWED_BUILTINS = {
+    "ValueError": ValueError,
+    "abs": abs,
+    "len": len,
+    "max": max,
+    "min": min,
+    "range": range,
+    "sorted": sorted,
+}
 
 
 def _validate_ast_whitelist(
     code: str,
-    param_name: str = "x",
+    param_name: str = "intervals",
 ) -> tuple[list[Issue], ast.Module | None]:
     allowed_names = ALLOWED_CALL_NAMES | ALLOWED_VAR_NAMES | {param_name}
     issues: list[Issue] = []
@@ -62,22 +70,37 @@ def _validate_ast_whitelist(
             for arg in node.args.args:
                 if arg.annotation is None:
                     continue
-                for n in ast.walk(arg.annotation):
-                    if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                for ann_node in ast.walk(arg.annotation):
+                    if hasattr(ann_node, "lineno") and hasattr(
+                        ann_node, "col_offset"
+                    ):
                         annotation_positions.add(
-                            cast(tuple[int, int], (n.lineno, n.col_offset))
+                            cast(
+                                tuple[int, int],
+                                (ann_node.lineno, ann_node.col_offset),
+                            )
                         )
             if node.returns is not None:
-                for n in ast.walk(node.returns):
-                    if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+                for ann_node in ast.walk(node.returns):
+                    if hasattr(ann_node, "lineno") and hasattr(
+                        ann_node, "col_offset"
+                    ):
                         annotation_positions.add(
-                            cast(tuple[int, int], (n.lineno, n.col_offset))
+                            cast(
+                                tuple[int, int],
+                                (ann_node.lineno, ann_node.col_offset),
+                            )
                         )
         elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
-            for n in ast.walk(node.annotation):
-                if hasattr(n, "lineno") and hasattr(n, "col_offset"):
+            for ann_node in ast.walk(node.annotation):
+                if hasattr(ann_node, "lineno") and hasattr(
+                    ann_node, "col_offset"
+                ):
                     annotation_positions.add(
-                        cast(tuple[int, int], (n.lineno, n.col_offset))
+                        cast(
+                            tuple[int, int],
+                            (ann_node.lineno, ann_node.col_offset),
+                        )
                     )
 
     for node in ast.walk(tree):
@@ -165,35 +188,6 @@ def _validate_ast_whitelist(
     return issues, tree if not issues else None
 
 
-def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
-    issues: list[Issue] = []
-    severity = Severity.ERROR if strict else Severity.WARNING
-
-    for i, query in enumerate(task.queries):
-        if not isinstance(query.input, int):
-            issues.append(
-                Issue(
-                    code=CODE_QUERY_INPUT_TYPE,
-                    severity=severity,
-                    message="Query input must be int",
-                    location=f"queries[{i}].input",
-                    task_id=task.task_id,
-                )
-            )
-        if not isinstance(query.output, int):
-            issues.append(
-                Issue(
-                    code=CODE_QUERY_OUTPUT_TYPE,
-                    severity=severity,
-                    message="Query output must be int",
-                    location=f"queries[{i}].output",
-                    task_id=task.task_id,
-                )
-            )
-
-    return issues
-
-
 def _validate_task_id(task: Task) -> list[Issue]:
     expected = task_id_from_spec(family=task.family, spec=task.spec)
     if task.task_id == expected:
@@ -214,7 +208,7 @@ def _validate_task_id(task: Task) -> list[Issue]:
 
 def _validate_spec_deserialize(
     task: Task,
-) -> tuple[list[Issue], BitopsSpec | None]:
+) -> tuple[list[Issue], IntervalsSpec | None]:
     try:
         spec = _spec_adapter.validate_python(task.spec, strict=True)
         return [], spec
@@ -235,7 +229,7 @@ def _validate_code_compile(
     code: str | None = None,
     parsed_tree: ast.Module | None = None,
     execute_untrusted_code: bool = True,
-) -> tuple[list[Issue], Callable[[int], int] | None]:
+) -> tuple[list[Issue], Callable[[list[tuple[int, int]]], int] | None]:
     if code is None:
         if isinstance(task.code, str):
             code = task.code
@@ -245,15 +239,29 @@ def _validate_code_compile(
     if code is None:
         return [], None
 
+    if not isinstance(code, str):
+        return [
+            Issue(
+                code=CODE_CODE_PARSE_ERROR,
+                severity=Severity.ERROR,
+                message=(
+                    "Code payload must be a string, got "
+                    f"{type(code).__name__}"
+                ),
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
+
     if parsed_tree is None:
         try:
             parsed_tree = ast.parse(code)
-        except SyntaxError as e:
+        except (SyntaxError, TypeError) as e:
             return [
                 Issue(
                     code=CODE_CODE_PARSE_ERROR,
                     severity=Severity.ERROR,
-                    message=f"Syntax error in code: {e}",
+                    message=f"Failed to parse code: {e}",
                     location="code",
                     task_id=task.task_id,
                 )
@@ -323,32 +331,84 @@ def _validate_code_compile(
             )
         ], None
 
-    return [], cast(Callable[[int], int], fn_obj)
+    return [], cast(Callable[[list[tuple[int, int]]], int], fn_obj)
+
+
+def _coerce_query_input(
+    input_value: object,
+) -> list[tuple[int, int]] | None:
+    if not isinstance(input_value, list):
+        return None
+
+    intervals: list[tuple[int, int]] = []
+    for pair in input_value:
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            return None
+        left = pair[0]
+        right = pair[1]
+        if not isinstance(left, int) or not isinstance(right, int):
+            return None
+        intervals.append((left, right))
+
+    return intervals
+
+
+def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
+    issues: list[Issue] = []
+    severity = Severity.ERROR if strict else Severity.WARNING
+
+    for i, query in enumerate(task.queries):
+        if _coerce_query_input(query.input) is None:
+            issues.append(
+                Issue(
+                    code=CODE_QUERY_INPUT_TYPE,
+                    severity=severity,
+                    message=(
+                        "Query input must be list[tuple[int, int]] "
+                        "(tuple/list pairs accepted)"
+                    ),
+                    location=f"queries[{i}].input",
+                    task_id=task.task_id,
+                )
+            )
+        if not isinstance(query.output, int):
+            issues.append(
+                Issue(
+                    code=CODE_QUERY_OUTPUT_TYPE,
+                    severity=severity,
+                    message="Query output must be int",
+                    location=f"queries[{i}].output",
+                    task_id=task.task_id,
+                )
+            )
+
+    return issues
 
 
 def _validate_query_outputs(
     task: Task,
-    spec: BitopsSpec,
+    spec: IntervalsSpec,
     strict: bool,
 ) -> list[Issue]:
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
 
     for i, query in enumerate(task.queries):
-        if not isinstance(query.input, int):
+        intervals = _coerce_query_input(query.input)
+        if intervals is None:
             continue
         if not isinstance(query.output, int):
             continue
 
-        expected = eval_bitops(spec, query.input)
+        expected = eval_intervals(spec, intervals)
         if query.output != expected:
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_MISMATCH,
                     severity=severity,
                     message=(
-                        f"Expected output {expected} but found {query.output} "
-                        f"for input {query.input}"
+                        f"Expected output {expected} but found "
+                        f"{query.output} for input {query.input}"
                     ),
                     location=f"queries[{i}].output",
                     task_id=task.task_id,
@@ -358,11 +418,57 @@ def _validate_query_outputs(
     return issues
 
 
+def _clamp(value: int, lo: int, hi: int) -> int:
+    return min(max(value, lo), hi)
+
+
+def _sample_intervals_from_axes(
+    axes: IntervalsAxes,
+    rng: random.Random,
+) -> list[tuple[int, int]]:
+    n_lo, n_hi = axes.n_intervals_range
+    endpoint_lo, endpoint_hi = axes.endpoint_range
+    span_lo, span_hi = axes.max_span_range
+    count = rng.randint(n_lo, n_hi)
+
+    span_low = max(0, span_lo)
+    span_high = max(span_low, span_hi)
+    reverse_prob = rng.uniform(*axes.allow_reversed_interval_prob_range)
+    degenerate_prob = rng.uniform(*axes.degenerate_interval_prob_range)
+    nested_prob = rng.uniform(*axes.nested_interval_prob_range)
+
+    intervals: list[tuple[int, int]] = []
+    for _ in range(count):
+        use_nested = len(intervals) > 0 and rng.random() < nested_prob
+
+        if use_nested:
+            parent_a, parent_b = intervals[rng.randrange(len(intervals))]
+            parent_lo = min(parent_a, parent_b)
+            parent_hi = max(parent_a, parent_b)
+            start = rng.randint(parent_lo, parent_hi)
+            end = rng.randint(start, parent_hi)
+        else:
+            start = rng.randint(endpoint_lo, endpoint_hi)
+            if rng.random() < degenerate_prob:
+                end = start
+            else:
+                span = rng.randint(span_low, span_high)
+                direction = -1 if rng.random() < 0.5 else 1
+                end = _clamp(start + direction * span, endpoint_lo, endpoint_hi)
+
+        if rng.random() < reverse_prob and start != end:
+            start, end = end, start
+
+        intervals.append((start, end))
+
+    return intervals
+
+
 def _validate_semantics(
     task: Task,
-    spec: BitopsSpec,
-    fn: Callable[[int], int] | None,
-    axes: BitopsAxes,
+    spec: IntervalsSpec,
+    fn: Callable[[list[tuple[int, int]]], int] | None,
+    axes: IntervalsAxes,
     strict: bool,
     semantic_trials: int,
     max_semantic_issues: int,
@@ -373,20 +479,22 @@ def _validate_semantics(
 
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
-    lo, hi = axes.value_range
 
     for _ in range(semantic_trials):
-        x = rng.randint(lo, hi)
-        expected = eval_bitops(spec, x)
+        intervals = _sample_intervals_from_axes(axes, rng)
+        expected = eval_intervals(spec, intervals)
 
         try:
-            actual = fn(x)
+            actual = fn(list(intervals))
         except Exception as e:
             issues.append(
                 Issue(
                     code=CODE_CODE_RUNTIME_ERROR,
                     severity=severity,
-                    message=f"Code raised runtime error for input {x}: {e}",
+                    message=(
+                        "Code raised runtime error for input "
+                        f"{intervals}: {e}"
+                    ),
                     location="code",
                     task_id=task.task_id,
                 )
@@ -399,8 +507,8 @@ def _validate_semantics(
                     code=CODE_SEMANTIC_MISMATCH,
                     severity=severity,
                     message=(
-                        f"Semantic mismatch for input {x}: "
-                        f"expected {expected}, got {actual}"
+                        f"Semantic mismatch for input {intervals}: expected "
+                        f"{expected}, got {actual}"
                     ),
                     location="code",
                     task_id=task.task_id,
@@ -424,9 +532,9 @@ def _validate_semantics(
     return issues
 
 
-def validate_bitops_task(
+def validate_intervals_task(
     task: Task,
-    axes: BitopsAxes | None = None,
+    axes: IntervalsAxes | None = None,
     strict: bool = True,
     execute_untrusted_code: bool = True,
     max_semantic_issues: int = 10,
@@ -447,7 +555,7 @@ def validate_bitops_task(
         ]
 
     if axes is None:
-        axes = BitopsAxes()
+        axes = IntervalsAxes()
 
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
@@ -471,7 +579,7 @@ def validate_bitops_task(
         issues.extend(ast_issues)
 
     fn = None
-    has_unsafe_ast = any(i.code == CODE_UNSAFE_AST for i in ast_issues)
+    has_unsafe_ast = any(issue.code == CODE_UNSAFE_AST for issue in ast_issues)
     if not has_unsafe_ast:
         compile_issues, fn = _validate_code_compile(
             task,

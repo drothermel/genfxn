@@ -7,6 +7,12 @@
 - `simple_algorithms` - Simple algorithms (most_frequent, count_pairs_sum, max_window_sum)
 - `stringrules` - String transformation rules with predicates
 
+## Family Roadmap
+
+We are implementing new families in the order tracked by
+`docs/shared_rec_list.md`. Treat that file as the source-of-truth ordering
+unless a newer planning doc explicitly supersedes it.
+
 ## Core Modules
 
 - `src/genfxn/core/difficulty.py` - Difficulty scoring (1-5) per family

@@ -388,6 +388,71 @@ _SEQUENCE_DP_D5 = QuotaSpec(
     ],
 )
 
+# ── Intervals quotas ────────────────────────────────────────────────────
+
+_INTERVALS_D1 = QuotaSpec(
+    hard_constraints={"boundary_mode": "closed_closed"},
+    buckets=[
+        Bucket("operation", "total_coverage", 33),
+        Bucket("operation", "merged_count", 17),
+        Bucket("merge_touching", "false", 33),
+        Bucket("merge_touching", "true", 17),
+        Bucket("clip_bucket", "wide", 10),
+        Bucket("clip_bucket", "very_wide", 40),
+    ],
+)
+
+_INTERVALS_D2 = QuotaSpec(
+    hard_constraints={},
+    buckets=[
+        Bucket("operation", "total_coverage", 20),
+        Bucket("operation", "merged_count", 20),
+        Bucket("operation", "max_overlap_count", 10),
+        Bucket("boundary_bucket", "closed", 10),
+        Bucket("boundary_bucket", "open", 16),
+        Bucket("boundary_bucket", "mixed", 24),
+        Bucket("clip_bucket", "medium", 10),
+        Bucket("clip_bucket", "wide", 40),
+    ],
+)
+
+_INTERVALS_D3 = QuotaSpec(
+    hard_constraints={},
+    buckets=[
+        Bucket("operation", "merged_count", 35),
+        Bucket("operation", "max_overlap_count", 15),
+        Bucket("boundary_bucket", "mixed", 30),
+        Bucket("boundary_bucket", "open", 20),
+        Bucket("clip_bucket", "medium", 28),
+        Bucket("clip_bucket", "wide", 22),
+    ],
+)
+
+_INTERVALS_D4 = QuotaSpec(
+    hard_constraints={},
+    buckets=[
+        Bucket("operation", "max_overlap_count", 30),
+        Bucket("operation", "gap_count", 20),
+        Bucket("boundary_bucket", "mixed", 22),
+        Bucket("boundary_bucket", "open", 28),
+        Bucket("clip_bucket", "tight", 10),
+        Bucket("clip_bucket", "medium", 40),
+    ],
+)
+
+_INTERVALS_D5 = QuotaSpec(
+    hard_constraints={"operation": "gap_count"},
+    buckets=[
+        Bucket("boundary_mode", "closed_open", 15),
+        Bucket("boundary_mode", "open_closed", 15),
+        Bucket("boundary_mode", "open_open", 20),
+        Bucket("merge_touching", "false", 5),
+        Bucket("merge_touching", "true", 45),
+        Bucket("clip_bucket", "tight", 35),
+        Bucket("clip_bucket", "medium", 15),
+    ],
+)
+
 # ── Combined lookup ──────────────────────────────────────────────────────
 
 QUOTAS: dict[str, dict[int, QuotaSpec]] = {
@@ -425,5 +490,12 @@ QUOTAS: dict[str, dict[int, QuotaSpec]] = {
         3: _SEQUENCE_DP_D3,
         4: _SEQUENCE_DP_D4,
         5: _SEQUENCE_DP_D5,
+    },
+    "intervals": {
+        1: _INTERVALS_D1,
+        2: _INTERVALS_D2,
+        3: _INTERVALS_D3,
+        4: _INTERVALS_D4,
+        5: _INTERVALS_D5,
     },
 }

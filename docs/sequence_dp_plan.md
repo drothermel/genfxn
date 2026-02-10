@@ -2,8 +2,7 @@
 
 Date: 2026-02-09
 Owner: Codex + Danielle
-Status: Near-complete (M0-M5 + suite integration + calibration script;
-PR notes/test evidence pending)
+Status: Complete (M0-M5 + suite integration + calibration script)
 
 ## Goal
 
@@ -347,7 +346,7 @@ Required completion gate for this family:
 - [x] M5 complete
 - [x] Full `ruff` and full `pytest` pass
 - [x] Calibration script strict mode pass
-- [ ] PR updated with behavior notes + test evidence
+- [x] PR updated with behavior notes + test evidence
 
 ## Notes Log
 

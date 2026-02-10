@@ -1,6 +1,7 @@
 import random
 
 from genfxn.bitops.models import BitInstruction, BitOp, BitopsAxes, BitopsSpec
+from genfxn.core.sampling import pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 
 _TARGET_N_OPS: dict[int, tuple[int, int]] = {
@@ -33,7 +34,6 @@ _TARGET_OP_PREFS: dict[int, list[BitOp]] = {
     ],
 }
 
-
 def _intersect_ranges(
     a: tuple[int, int],
     b: tuple[int, int],
@@ -43,17 +43,6 @@ def _intersect_ranges(
     if lo > hi:
         return None
     return (lo, hi)
-
-
-def _pick_from_preferred[T](
-    available: list[T],
-    preferred: list[T],
-    rng: random.Random,
-) -> T:
-    preferred_available = [item for item in preferred if item in available]
-    if preferred_available:
-        return rng.choice(preferred_available)
-    return rng.choice(available)
 
 
 def _pick_targeted_int(
@@ -105,7 +94,7 @@ def sample_bitops_spec(
         n_ops = rng.randint(*axes.n_ops_range)
         op_pool = axes.allowed_ops
     else:
-        width_bits = _pick_from_preferred(
+        width_bits = pick_from_preferred(
             axes.width_choices,
             _TARGET_WIDTHS[target_difficulty],
             rng,

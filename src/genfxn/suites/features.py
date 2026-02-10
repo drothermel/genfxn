@@ -170,6 +170,24 @@ def _majority_vote(categories: list[str], tie_order: list[str]) -> str:
     return tie_order[0]
 
 
+def _enum_or_str(value: Any, default: str) -> str:
+    if value is None:
+        return default
+    if hasattr(value, "value"):
+        enum_value = value.value
+        return str(enum_value)
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 # ── Public feature extractors ────────────────────────────────────────────
 
 
@@ -553,17 +571,6 @@ def stack_bytecode_features(spec: dict[str, Any]) -> dict[str, str]:
 
 
 def fsm_features(spec: dict[str, Any]) -> dict[str, str]:
-    def _enum_or_str(value: Any, default: str) -> str:
-        if value is None:
-            return default
-        if hasattr(value, "value"):
-            enum_value = value.value
-            if isinstance(enum_value, str):
-                return enum_value
-        if isinstance(value, str):
-            return value
-        return str(value)
-
     states = spec.get("states", [])
     n_states = len(states) if isinstance(states, list) else 0
 
@@ -629,17 +636,6 @@ def fsm_features(spec: dict[str, Any]) -> dict[str, str]:
 
 
 def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
-    def _enum_or_str(value: Any, default: str) -> str:
-        if value is None:
-            return default
-        if hasattr(value, "value"):
-            enum_value = value.value
-            if isinstance(enum_value, str):
-                return enum_value
-        if isinstance(value, str):
-            return value
-        return str(value)
-
     def _safe_int(value: Any, default: int) -> int:
         if isinstance(value, int) and not isinstance(value, bool):
             return value
@@ -710,4 +706,49 @@ def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
         "score_profile": score_profile,
         "abs_diff_bucket": abs_diff_bucket,
         "divisor_bucket": divisor_bucket,
+    }
+
+
+def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
+    operation = _enum_or_str(spec.get("operation"), "total_coverage")
+    boundary_mode = _enum_or_str(spec.get("boundary_mode"), "closed_closed")
+    merge_touching = str(bool(spec.get("merge_touching", False))).lower()
+    endpoint_clip_abs = _coerce_int(spec.get("endpoint_clip_abs"), 20)
+    endpoint_quantize_step = _coerce_int(
+        spec.get("endpoint_quantize_step"),
+        1,
+    )
+
+    if boundary_mode == "closed_closed":
+        boundary_bucket = "closed"
+    elif boundary_mode == "open_open":
+        boundary_bucket = "open"
+    else:
+        boundary_bucket = "mixed"
+
+    if endpoint_clip_abs <= 5:
+        clip_bucket = "tight"
+    elif endpoint_clip_abs <= 10:
+        clip_bucket = "medium"
+    elif endpoint_clip_abs <= 15:
+        clip_bucket = "wide"
+    else:
+        clip_bucket = "very_wide"
+
+    if endpoint_quantize_step <= 1:
+        quantize_bucket = "none"
+    elif endpoint_quantize_step <= 2:
+        quantize_bucket = "step2"
+    elif endpoint_quantize_step <= 4:
+        quantize_bucket = "step3-4"
+    else:
+        quantize_bucket = "step5+"
+
+    return {
+        "operation": operation,
+        "boundary_mode": boundary_mode,
+        "boundary_bucket": boundary_bucket,
+        "merge_touching": merge_touching,
+        "clip_bucket": clip_bucket,
+        "quantize_bucket": quantize_bucket,
     }

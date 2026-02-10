@@ -13,6 +13,7 @@ from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.presets import (
     BITOPS_PRESETS,
     FSM_PRESETS,
+    INTERVALS_PRESETS,
     PIECEWISE_PRESETS,
     SEQUENCE_DP_PRESETS,
     SIMPLE_ALGORITHMS_PRESETS,
@@ -25,6 +26,8 @@ from genfxn.core.presets import (
 )
 from genfxn.fsm.models import FsmAxes
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.intervals.models import IntervalsAxes
+from genfxn.intervals.task import generate_intervals_task
 from genfxn.piecewise.models import PiecewiseAxes
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.sequence_dp.models import SequenceDpAxes
@@ -79,6 +82,10 @@ class TestGetValidDifficulties:
 
     def test_sequence_dp_range(self) -> None:
         valid = get_valid_difficulties("sequence_dp")
+        assert valid == [1, 2, 3, 4, 5]
+
+    def test_intervals_range(self) -> None:
+        valid = get_valid_difficulties("intervals")
         assert valid == [1, 2, 3, 4, 5]
 
     def test_unknown_family_raises(self) -> None:
@@ -136,6 +143,22 @@ class TestGetDifficultyAxes:
     def test_sequence_dp_returns_correct_type(self) -> None:
         axes = get_difficulty_axes("sequence_dp", 3)
         assert isinstance(axes, SequenceDpAxes)
+
+    def test_intervals_returns_correct_type(self) -> None:
+        axes = get_difficulty_axes("intervals", 3)
+        assert isinstance(axes, IntervalsAxes)
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_intervals_sets_target_difficulty(self, difficulty: int) -> None:
+        axes = cast(
+            IntervalsAxes,
+            get_difficulty_axes(
+                "intervals",
+                difficulty,
+                variant=f"{difficulty}A",
+            ),
+        )
+        assert axes.target_difficulty == difficulty
 
     def test_variant_selects_specific_preset(self) -> None:
         axes_a = cast(
@@ -226,6 +249,10 @@ class TestPresetAccuracy:
                 task = generate_sequence_dp_task(
                     axes=cast(SequenceDpAxes, axes), rng=rng
                 )
+            elif family == "intervals":
+                task = generate_intervals_task(
+                    axes=cast(IntervalsAxes, axes), rng=rng
+                )
             else:
                 raise ValueError(f"Unknown family: {family}")
 
@@ -268,6 +295,13 @@ class TestPresetAccuracy:
             "sequence_dp", difficulty
         )
         self._verify_accuracy(difficulties, difficulty, "sequence_dp")
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_intervals_preset_accuracy(self, difficulty: int) -> None:
+        difficulties = self._generate_tasks_for_preset(
+            "intervals", difficulty
+        )
+        self._verify_accuracy(difficulties, difficulty, "intervals")
 
     def _verify_accuracy(
         self, difficulties: list[int], target: int, family: str
@@ -479,6 +513,14 @@ class TestPresetCompleteness:
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
 
+    def test_intervals_presets_structure(self) -> None:
+        for difficulty, presets in INTERVALS_PRESETS.items():
+            assert isinstance(difficulty, int)
+            assert 1 <= difficulty <= 5
+            assert len(presets) >= 1
+            for preset in presets:
+                assert preset.name.startswith(f"{difficulty}")
+
     def test_all_presets_produce_valid_axes(self) -> None:
         """Verify all preset overrides create valid axes objects."""
         for family, preset_dict in [
@@ -489,6 +531,7 @@ class TestPresetCompleteness:
             ("fsm", FSM_PRESETS),
             ("bitops", BITOPS_PRESETS),
             ("sequence_dp", SEQUENCE_DP_PRESETS),
+            ("intervals", INTERVALS_PRESETS),
         ]:
             for difficulty, presets in preset_dict.items():
                 for preset in presets:

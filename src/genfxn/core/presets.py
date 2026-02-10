@@ -22,6 +22,7 @@ from genfxn.fsm.models import (
 from genfxn.fsm.models import (
     PredicateType as FsmPredicateType,
 )
+from genfxn.intervals.models import BoundaryMode, IntervalsAxes, OperationType
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.sequence_dp.models import (
     OutputMode as SequenceDpOutputMode,
@@ -1121,6 +1122,86 @@ SEQUENCE_DP_PRESETS: dict[int, list[DifficultyPreset]] = {
     ],
 }
 
+# =============================================================================
+# Intervals Presets
+# Difficulty maps directly from target_difficulty in intervals axes.
+# =============================================================================
+
+INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
+    1: [
+        DifficultyPreset(
+            "1A",
+            "closed intervals with coverage/merge counting",
+            {
+                "target_difficulty": 1,
+                "operation_types": [
+                    OperationType.TOTAL_COVERAGE,
+                ],
+                "boundary_modes": [BoundaryMode.CLOSED_CLOSED],
+                "merge_touching_choices": [False, True],
+                "endpoint_clip_abs_range": (12, 20),
+                "endpoint_quantize_step_range": (1, 4),
+            },
+        )
+    ],
+    2: [
+        DifficultyPreset(
+            "2A",
+            "total coverage with open-open boundary variants",
+            {
+                "target_difficulty": 2,
+                "operation_types": [OperationType.TOTAL_COVERAGE],
+                "boundary_modes": [BoundaryMode.OPEN_OPEN],
+                "merge_touching_choices": [False, True],
+                "endpoint_clip_abs_range": (8, 15),
+                "endpoint_quantize_step_range": (1, 5),
+            },
+        )
+    ],
+    3: [
+        DifficultyPreset(
+            "3A",
+            "merged count with open-open and touching merge",
+            {
+                "target_difficulty": 3,
+                "operation_types": [OperationType.MERGED_COUNT],
+                "boundary_modes": [BoundaryMode.OPEN_OPEN],
+                "merge_touching_choices": [True],
+                "endpoint_clip_abs_range": (8, 14),
+                "endpoint_quantize_step_range": (1, 5),
+            },
+        )
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "max-overlap with open-open boundary variants",
+            {
+                "target_difficulty": 4,
+                "operation_types": [OperationType.MAX_OVERLAP_COUNT],
+                "boundary_modes": [BoundaryMode.OPEN_OPEN],
+                "merge_touching_choices": [False, True],
+                "endpoint_clip_abs_range": (5, 10),
+                "endpoint_quantize_step_range": (1, 6),
+            },
+        )
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "gap counting with open boundaries and touching merge",
+            {
+                "target_difficulty": 5,
+                "operation_types": [OperationType.GAP_COUNT],
+                "boundary_modes": [BoundaryMode.OPEN_OPEN],
+                "merge_touching_choices": [True],
+                "endpoint_clip_abs_range": (3, 7),
+                "endpoint_quantize_step_range": (1, 6),
+            },
+        )
+    ],
+}
+
 
 # =============================================================================
 # Lookup Functions
@@ -1135,6 +1216,7 @@ _FAMILY_PRESETS: dict[str, dict[int, list[DifficultyPreset]]] = {
     "fsm": FSM_PRESETS,
     "bitops": BITOPS_PRESETS,
     "sequence_dp": SEQUENCE_DP_PRESETS,
+    "intervals": INTERVALS_PRESETS,
 }
 
 
@@ -1177,6 +1259,7 @@ def get_difficulty_axes(
     | FsmAxes
     | BitopsAxes
     | SequenceDpAxes
+    | IntervalsAxes
 ):
     """Return axes for target difficulty.
 
@@ -1222,6 +1305,7 @@ def _build_axes(
     | FsmAxes
     | BitopsAxes
     | SequenceDpAxes
+    | IntervalsAxes
 ):
     """Build axes object from overrides."""
     match family:
@@ -1241,5 +1325,7 @@ def _build_axes(
             return BitopsAxes(**overrides)
         case "sequence_dp":
             return SequenceDpAxes(**overrides)
+        case "intervals":
+            return IntervalsAxes(**overrides)
         case _:
             raise ValueError(f"Unknown family: {family}")
