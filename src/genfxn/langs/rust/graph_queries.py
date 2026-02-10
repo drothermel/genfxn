@@ -13,7 +13,7 @@ def render_graph_queries(
         f"    let directed = {str(spec.directed).lower()};",
         f"    let weighted = {str(spec.weighted).lower()};",
         f'    let query_type = "{spec.query_type.value}";',
-        "    let edges: Vec<(usize, usize, i64)> = vec![",
+        "    let edges: Vec<(i64, i64, i64)> = vec![",
     ]
 
     for edge in spec.edges:
@@ -42,7 +42,14 @@ def render_graph_queries(
             "",
             "    let mut best = "
             "std::collections::HashMap::<(usize, usize), i64>::new();",
-            "    for &(raw_u, raw_v, raw_w) in &edges {",
+            "    for &(raw_u_i64, raw_v_i64, raw_w) in &edges {",
+            "        if raw_u_i64 < 0 || raw_u_i64 >= n_nodes as i64 || "
+            "raw_v_i64 < 0 || raw_v_i64 >= n_nodes as i64 {",
+            '            panic!("edge endpoint out of range for '
+            'n_nodes={}", n_nodes);',
+            "        }",
+            "        let raw_u = raw_u_i64 as usize;",
+            "        let raw_v = raw_v_i64 as usize;",
             "        let weight = if weighted { raw_w } else { 1 };",
             "        let key = (raw_u, raw_v);",
             "        match best.get(&key) {",

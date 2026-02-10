@@ -543,18 +543,19 @@ def _pool_axes_simple_algorithms_d5(rng: random.Random) -> SimpleAlgorithmsAxes:
     }
 
     # 2 edge defaults
-    if template == SATemplateType.MOST_FREQUENT:
-        axes_kwargs["tie_default_range"] = (-10, 10)
-        axes_kwargs["empty_default_range"] = (-5, 5)
-    elif template == SATemplateType.COUNT_PAIRS_SUM:
+    if template == SATemplateType.COUNT_PAIRS_SUM:
         axes_kwargs["no_result_default_range"] = (-10, 10)
         axes_kwargs["short_list_default_range"] = (-5, 5)
-    else:
+    elif template == SATemplateType.MAX_WINDOW_SUM:
         # max_window_sum: empty_default is the edge field, and
         # invalid_k_default != 0 adds to base_edge_score for D5 scoring
         axes_kwargs["empty_default_for_empty_range"] = (-10, 10)
         axes_kwargs["empty_default_range"] = (-10, -1)  # invalid_k_default ≠ 0
         axes_kwargs["window_size_range"] = (6, 10)
+    else:
+        raise ValueError(
+            f"unsupported simple_algorithms D5 template: {template}"
+        )
 
     return SimpleAlgorithmsAxes(**axes_kwargs)
 
@@ -1347,7 +1348,7 @@ def generate_pool(
     seen_ids: set[str] = set()
     stats = PoolStats()
     # Surface systemic sampling failures instead of silently degrading pools.
-    max_failures = max(10, pool_size // 5)
+    max_failures = min(pool_size, max(10, pool_size // 5))
 
     for i in range(pool_size):
         stats.total_sampled += 1

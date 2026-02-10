@@ -1685,6 +1685,24 @@ class TestPoolGeneration:
         with pytest.raises(RuntimeError, match="Sampling failed"):
             generate_pool("stateful", 3, seed=42, pool_size=50)
 
+    def test_pool_raises_on_small_pool_when_all_samples_fail(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        def always_fail(
+            _family: str,
+            _axes: object,
+            _rng: random.Random,
+            trace: object = None,
+        ) -> object:
+            raise ValueError("forced sampler failure")
+
+        monkeypatch.setattr(suite_generate, "_sample_spec", always_fail)
+
+        with pytest.raises(RuntimeError, match="Sampling failed"):
+            generate_pool("stateful", 3, seed=42, pool_size=1)
+
 
 # ── Determinism test ─────────────────────────────────────────────────────
 

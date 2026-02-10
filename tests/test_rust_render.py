@@ -243,6 +243,25 @@ class TestGraphQueriesRust:
         assert "if cost > i64::MAX - weight" in code
         assert "i64::MAX" in code
 
+    def test_rejects_invalid_edge_endpoints_at_runtime(self) -> None:
+        spec = GraphQueriesSpec(
+            query_type=GraphQueryType.MIN_HOPS,
+            directed=True,
+            weighted=False,
+            n_nodes=2,
+            edges=[GraphEdge(u=0, v=1, w=1)],
+        )
+        # Mutate post-validation to exercise runtime edge checks.
+        spec.edges[0].v = 99
+
+        code = render_graph_queries(spec)
+        assert "if raw_u_i64 < 0 || raw_u_i64 >= n_nodes as i64 || " in code
+        assert "raw_v_i64 < 0 || raw_v_i64 >= n_nodes as i64 {" in code
+        assert (
+            'panic!("edge endpoint out of range for '
+            'n_nodes={}", n_nodes);' in code
+        )
+
 
 # ── Transforms ─────────────────────────────────────────────────────────
 
