@@ -1,6 +1,29 @@
 from enum import Enum, IntEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+
+_INT_RANGE_FIELDS = (
+    "value_range",
+    "list_length_range",
+    "const_range",
+    "max_step_count_range",
+)
+
+
+def _validate_no_bool_int_range_bounds(data: Any) -> None:
+    if not isinstance(data, dict):
+        return
+
+    for field_name in _INT_RANGE_FIELDS:
+        value = data.get(field_name)
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            continue
+        low, high = value
+        if isinstance(low, bool) or isinstance(high, bool):
+            raise ValueError(
+                f"{field_name}: bool is not allowed for int range bounds"
+            )
 
 
 class InstructionOp(str, Enum):
@@ -99,6 +122,12 @@ class StackBytecodeAxes(BaseModel):
     input_modes: list[InputMode] = Field(
         default_factory=lambda: list(InputMode)
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_axes(cls, data: Any) -> Any:
+        _validate_no_bool_int_range_bounds(data)
+        return data
 
     @model_validator(mode="after")
     def validate_axes(self) -> "StackBytecodeAxes":

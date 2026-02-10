@@ -1,6 +1,7 @@
 import random
 
 import pytest
+from pydantic import ValidationError
 
 from genfxn.core.models import QueryTag
 from genfxn.core.predicates import PredicateGt, PredicateModEq, PredicateType
@@ -456,6 +457,29 @@ class TestAxesValidation:
             ValueError, match="pre_transform_types contains unsupported"
         ):
             SimpleAlgorithmsAxes(pre_transform_types=[TransformType.CLIP])
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (False, 5)),
+            ("list_length_range", (1, True)),
+            ("target_range", (True, 5)),
+            ("window_size_range", (1, False)),
+            ("empty_default_range", (False, 0)),
+            ("tie_default_range", (0, True)),
+            ("no_result_default_range", (False, 0)),
+            ("short_list_default_range", (0, True)),
+            ("empty_default_for_empty_range", (False, 0)),
+        ],
+    )
+    def test_rejects_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            SimpleAlgorithmsAxes.model_validate({field_name: range_value})
 
 
 class TestTaskGeneration:

@@ -1,6 +1,7 @@
 import random
 
 import pytest
+from pydantic import ValidationError
 
 from genfxn.core.models import QueryTag
 from genfxn.core.predicates import (
@@ -361,6 +362,26 @@ class TestAxesValidation:
     def test_negative_divisor(self) -> None:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(-1, 5))
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (False, 5)),
+            ("list_length_range", (1, True)),
+            ("threshold_range", (True, 5)),
+            ("divisor_range", (2, True)),
+            ("shift_range", (False, 5)),
+            ("scale_range", (1, False)),
+        ],
+    )
+    def test_rejects_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            StatefulAxes.model_validate({field_name: range_value})
 
     def test_min_composed_operands_rejected_for_and_or(self) -> None:
         with pytest.raises(ValueError, match=r"min_composed_operands.*<= 3"):

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -16,6 +16,32 @@ _SUPPORTED_PRE_TRANSFORM_TYPES = frozenset(
     for trans_type in TransformType
     if trans_type != TransformType.CLIP
 )
+_INT_RANGE_FIELDS = (
+    "value_range",
+    "list_length_range",
+    "target_range",
+    "window_size_range",
+    "empty_default_range",
+    "tie_default_range",
+    "no_result_default_range",
+    "short_list_default_range",
+    "empty_default_for_empty_range",
+)
+
+
+def _validate_no_bool_int_range_bounds(data: Any) -> None:
+    if not isinstance(data, dict):
+        return
+
+    for field_name in _INT_RANGE_FIELDS:
+        value = data.get(field_name)
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            continue
+        low, high = value
+        if isinstance(low, bool) or isinstance(high, bool):
+            raise ValueError(
+                f"{field_name}: bool is not allowed for int range bounds"
+            )
 
 
 class TemplateType(str, Enum):
@@ -95,6 +121,12 @@ class SimpleAlgorithmsAxes(BaseModel):
     no_result_default_range: tuple[int, int] | None = None
     short_list_default_range: tuple[int, int] | None = None
     empty_default_for_empty_range: tuple[int, int] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_axes(cls, data: Any) -> Any:
+        _validate_no_bool_int_range_bounds(data)
+        return data
 
     @model_validator(mode="after")
     def validate_axes(self) -> "SimpleAlgorithmsAxes":

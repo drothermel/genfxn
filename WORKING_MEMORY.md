@@ -275,6 +275,85 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   - default standard suite: 1831 passed, 101 skipped
   - ruff + ty on touched files: passed
 
+## Latest Intake Extension (2026-02-10, FSM machine_type deprecation docs)
+- `machine_type` in FSM is intentionally retained for schema compatibility but
+  has no evaluator/renderer semantic effect.
+- Requested action for this pass is deprecation signaling via clear in-code
+  comments/docs (not removal), so future contributors do not assume missing
+  semantics are accidental.
+
+## Latest Intake Extension (2026-02-10, Follow-up Review Issues)
+- `render_tests(...)` still emits direct equality assertions for NaN outputs,
+  which are semantically impossible (`nan != nan`) even when runtime behavior
+  is correct.
+- `dedupe_queries` still lacks explicit `frozenset` canonicalization/equality
+  handling for NaN-bearing structures, causing missed dedupes/false conflicts.
+- Split warning first-sample capture in CLI holdout flow uses `None` as a
+  sentinel, so real `None` first values can be overwritten by later values.
+- Bool-as-int range bound rejection remains inconsistent across families:
+  piecewise/intervals reject bool bounds, but several other family axes still
+  accept/coerce `False/True` in numeric ranges.
+
+## Completed This Chunk (2026-02-10, Follow-up Review Issues)
+- Fixed NaN assertion semantics in `src/genfxn/core/codegen.py`:
+  - `render_tests(...)` now emits NaN-safe assertions for NaN-bearing outputs
+    using `genfxn.core.models._query_outputs_equal(...)`.
+  - Added execution-semantic regressions in `tests/test_core_dsl.py` for
+    direct and nested NaN outputs (including `frozenset`).
+- Added `frozenset` NaN-safe canonicalization/equality behavior in
+  `src/genfxn/core/models.py`:
+  - `_freeze_query_value(...)` now canonicalizes `frozenset`.
+  - `_query_outputs_equal(...)` now compares `frozenset` structurally.
+  - Added regressions in `tests/test_core_models.py`.
+- Fixed split warning first-sample capture sentinel in `src/genfxn/cli.py`:
+  - replaced `None` sentinel with `_UNSET_SAMPLE` so true first value `None`
+    is preserved in warning output.
+  - Added regression in `tests/test_cli.py`:
+    `test_split_warning_preserves_first_none_axis_value`.
+- Standardized bool bound rejection for int-range axes in:
+  - `src/genfxn/stateful/models.py`
+  - `src/genfxn/simple_algorithms/models.py`
+  - `src/genfxn/bitops/models.py`
+  - `src/genfxn/fsm/models.py`
+  - `src/genfxn/sequence_dp/models.py`
+  - `src/genfxn/stack_bytecode/models.py`
+  Each now rejects bool range bounds via pre-validation with consistent errors.
+- Added focused bool-bound rejection tests in:
+  - `tests/test_stateful.py`
+  - `tests/test_simple_algorithms.py`
+  - `tests/test_bitops.py`
+  - `tests/test_fsm.py`
+  - `tests/test_sequence_dp.py`
+  - `tests/test_stack_bytecode.py`
+- Validation evidence:
+  - `uv run pytest tests/test_core_dsl.py tests/test_core_models.py
+    tests/test_cli.py -v --verification-level=standard -k
+    "render_tests or dedupe_queries_frozenset_nan or
+    warning_preserves_first_none_axis_value"` -> 9 passed.
+  - `uv run pytest tests/test_stateful.py tests/test_simple_algorithms.py
+    tests/test_bitops.py tests/test_fsm.py tests/test_sequence_dp.py
+    tests/test_stack_bytecode.py -v --verification-level=standard -k
+    "bool_in_int_range_bounds or axes_reject_bool_in_int_range_bounds or
+    rejects_bool_in_int_range_bounds"` -> 36 passed.
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1872 passed, 101 skipped.
+
+## Completed This Chunk (2026-02-10, FSM machine_type deprecation docs)
+- Added explicit deprecation/compatibility signaling for FSM `machine_type` in:
+  - `src/genfxn/fsm/models.py` (enum + field descriptions)
+  - `src/genfxn/fsm/eval.py` (non-semantic compatibility comment)
+  - `src/genfxn/fsm/render.py` (non-semantic compatibility comment)
+- Intentionally made no behavior changes and no schema-removal changes.
+- Validation evidence:
+  - `uv run ruff check src/genfxn/fsm/models.py src/genfxn/fsm/eval.py src/genfxn/fsm/render.py`
+    -> passed
+  - `uv run ty check src/genfxn/fsm/models.py src/genfxn/fsm/eval.py src/genfxn/fsm/render.py`
+    -> passed
+  - `uv run pytest tests/test_fsm.py -v --verification-level=standard`
+    -> 26 passed
+
 ## Completed This Chunk (2026-02-10, safe_exec startup-timeout flake)
 - Added startup timeout decoupling in `src/genfxn/core/safe_exec.py`:
   - `_PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC = 1.0`

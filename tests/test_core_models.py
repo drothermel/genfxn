@@ -135,6 +135,42 @@ def test_dedupe_queries_nested_nan_outputs_do_not_conflict() -> None:
     assert nested[1]["k"] != nested[1]["k"]
 
 
+def test_dedupe_queries_frozenset_nan_inputs_dedupe_deterministically() -> None:
+    queries = [
+        Query(
+            input=frozenset({float("nan")}),
+            output=10,
+            tag=QueryTag.TYPICAL,
+        ),
+        Query(
+            input=frozenset({float("nan")}),
+            output=10,
+            tag=QueryTag.BOUNDARY,
+        ),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 1
+    assert deduped[0].tag == QueryTag.BOUNDARY
+
+
+def test_dedupe_queries_frozenset_nan_outputs_do_not_conflict() -> None:
+    queries = [
+        Query(input=1, output=frozenset({float("nan")}), tag=QueryTag.TYPICAL),
+        Query(
+            input=1,
+            output=frozenset({float("nan")}),
+            tag=QueryTag.BOUNDARY,
+        ),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 1
+    assert deduped[0].tag == QueryTag.BOUNDARY
+
+
 def test_dedupe_queries_float_nan_vs_non_nan_outputs_raise() -> None:
     queries = [
         Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),

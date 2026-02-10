@@ -308,6 +308,28 @@ class TestModels:
 
         _assert_has_invalid_rejected(SequenceDpAxes, axes)
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("len_a_range", (False, 3)),
+            ("len_b_range", (0, True)),
+            ("value_range", (False, 5)),
+            ("match_score_range", (0, True)),
+            ("mismatch_score_range", (False, 0)),
+            ("gap_score_range", (0, True)),
+            ("abs_diff_range", (False, 2)),
+            ("divisor_range", (2, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            SequenceDpAxes.model_validate({field_name: range_value})
+
 
 class TestEvaluatorSemantics:
     def test_global_eq_scoring_known_small_case(self) -> None:

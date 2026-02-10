@@ -153,6 +153,24 @@ class TestModels:
         with pytest.raises(Exception):
             AxesCls(width_choices=[8, 64])
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("n_ops_range", (False, 3)),
+            ("value_range", (0, True)),
+            ("mask_range", (False, 255)),
+            ("shift_range", (0, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            AxesCls.model_validate({field_name: range_value})
+
 
 class TestEvaluatorSemantics:
     def test_evaluator_applies_fixed_width_semantics(self) -> None:

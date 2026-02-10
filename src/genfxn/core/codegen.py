@@ -109,12 +109,41 @@ def render_tests(func_name: str, queries: list[Query]) -> str:
             return f"frozenset({{{rendered_items}}})"
         return repr(value)
 
-    lines = []
+    def _contains_nan(value: Any) -> bool:
+        if isinstance(value, float):
+            return math.isnan(value)
+        if isinstance(value, list | tuple | set | frozenset):
+            return any(_contains_nan(item) for item in value)
+        if isinstance(value, dict):
+            return any(
+                _contains_nan(key) or _contains_nan(item)
+                for key, item in value.items()
+            )
+        return False
+
+    lines: list[str] = []
+    if any(_contains_nan(query.output) for query in queries):
+        lines.extend(
+            [
+                "from genfxn.core.models import (",
+                "    _query_outputs_equal as __genfxn_query_outputs_equal,",
+                ")",
+                "",
+            ]
+        )
+
     for i, q in enumerate(queries):
         input_repr = _render_python_literal(q.input)
         output_repr = _render_python_literal(q.output)
         msg = f"query {i} ({q.tag.value})"
-        lines.append(
-            f"assert {func_name}({input_repr}) == {output_repr}, {msg!r}"
-        )
+        if _contains_nan(q.output):
+            lines.append(
+                "assert __genfxn_query_outputs_equal("
+                f"{func_name}({input_repr}), {output_repr}"
+                f"), {msg!r}"
+            )
+        else:
+            lines.append(
+                f"assert {func_name}({input_repr}) == {output_repr}, {msg!r}"
+            )
     return "\n".join(lines)

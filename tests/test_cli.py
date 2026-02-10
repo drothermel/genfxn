@@ -2227,6 +2227,53 @@ class TestSplit:
         assert result.exit_code == 0
         assert "Warning: holdout matched 0" in result.output
 
+    def test_split_warning_preserves_first_none_axis_value(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-first-none",
+                "family": "stateful",
+                "spec": {"probe": None},
+                "code": "def f(x):\n    return x",
+                "queries": [],
+                "description": "first has none",
+            },
+            {
+                "task_id": "task-second-five",
+                "family": "stateful",
+                "spec": {"probe": 5},
+                "code": "def f(x):\n    return x",
+                "queries": [],
+                "description": "second has five",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "probe",
+                "--holdout-value",
+                "definitely_no_match",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Warning: holdout matched 0 of 2 tasks" in result.output
+        assert "First task's value at 'probe': None" in result.output
+
     def test_split_invalid_holdout_type_has_clean_error(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"

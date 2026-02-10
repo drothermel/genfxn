@@ -3,6 +3,9 @@ from genfxn.fsm.models import FsmSpec, OutputMode, UndefinedTransitionPolicy
 
 
 def render_fsm(spec: FsmSpec, func_name: str = "f", var: str = "xs") -> str:
+    # NOTE: `machine_type` is intentionally non-semantic today.
+    # We retain it for schema/backward compatibility, but generated runtime
+    # behavior is identical for MOORE and MEALY values.
     states_by_id = sorted(spec.states, key=lambda state: state.id)
     sink_state_id = max(state.id for state in states_by_id) + 1
 

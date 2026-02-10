@@ -61,6 +61,24 @@ class TestModels:
         with pytest.raises(ValueError, match="value_range"):
             StackBytecodeAxes(value_range=(2, -2))
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (False, 5)),
+            ("list_length_range", (0, True)),
+            ("const_range", (False, 3)),
+            ("max_step_count_range", (1, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            StackBytecodeAxes.model_validate({field_name: range_value})
+
 
 class TestEvaluatorArithmeticAndComparison:
     def test_add_sub_mul_pipeline(self) -> None:

@@ -1,10 +1,34 @@
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 from genfxn.core.predicates import Predicate, PredicateType
 from genfxn.core.transforms import Transform, TransformType
+
+_INT_RANGE_FIELDS = (
+    "value_range",
+    "list_length_range",
+    "threshold_range",
+    "divisor_range",
+    "shift_range",
+    "scale_range",
+)
+
+
+def _validate_no_bool_int_range_bounds(data: Any) -> None:
+    if not isinstance(data, dict):
+        return
+
+    for field_name in _INT_RANGE_FIELDS:
+        value = data.get(field_name)
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            continue
+        low, high = value
+        if isinstance(low, bool) or isinstance(high, bool):
+            raise ValueError(
+                f"{field_name}: bool is not allowed for int range bounds"
+            )
 
 
 class TemplateType(str, Enum):
@@ -92,6 +116,12 @@ class StatefulAxes(BaseModel):
     min_composed_operands: int = Field(
         default=2, ge=2, le=5, description="Min operands for AND/OR predicates"
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_axes(cls, data: Any) -> Any:
+        _validate_no_bool_int_range_bounds(data)
+        return data
 
     @model_validator(mode="after")
     def validate_axes(self) -> "StatefulAxes":

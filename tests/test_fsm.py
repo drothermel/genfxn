@@ -93,6 +93,25 @@ class TestModels:
                 ],
             )
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("n_states_range", (False, 3)),
+            ("transitions_per_state_range", (0, True)),
+            ("value_range", (False, 5)),
+            ("threshold_range", (0, True)),
+            ("divisor_range", (2, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            FsmAxes.model_validate({field_name: range_value})
+
 
 class TestEvaluatorSemantics:
     def test_ordered_transitions_first_match_wins(self) -> None:

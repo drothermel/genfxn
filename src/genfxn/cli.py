@@ -90,6 +90,7 @@ _NON_FINITE_TOKENS = frozenset(
         "-infinity",
     }
 )
+_UNSET_SAMPLE = object()
 
 
 class _TaskRowError(Exception):
@@ -1262,14 +1263,14 @@ def split(
             total_count = 0
             train_count = 0
             test_count = 0
-            first_sample: Any = None
+            first_sample: Any = _UNSET_SAMPLE
             with _atomic_split_outputs(train, test) as (
                 train_handle,
                 test_handle,
             ):
                 for task in _iter_validated_tasks(input_file):
                     total_count += 1
-                    if first_sample is None:
+                    if first_sample is _UNSET_SAMPLE:
                         first_sample = get_spec_value(task.spec, holdout_axis)
                     if any(_matches_holdout(task, h) for h in holdouts):
                         _write_task_line(test_handle, task)

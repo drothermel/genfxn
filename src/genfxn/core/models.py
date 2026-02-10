@@ -91,6 +91,12 @@ def _freeze_query_value(value: Any) -> Any:
             "__set__",
             tuple(sorted(frozen_items, key=_sort_key)),
         )
+    if isinstance(value, frozenset):
+        frozen_items = [_freeze_query_value(item) for item in value]
+        return (
+            "__frozenset__",
+            tuple(sorted(frozen_items, key=_sort_key)),
+        )
     if dataclasses.is_dataclass(value):
         return ("__dataclass__", _freeze_query_value(dataclasses.asdict(value)))
     if hasattr(value, "model_dump") and callable(value.model_dump):
@@ -154,6 +160,9 @@ def _query_outputs_equal(left: Any, right: Any) -> bool:
         )
 
     if isinstance(left, set) and isinstance(right, set):
+        return _freeze_query_value(left) == _freeze_query_value(right)
+
+    if isinstance(left, frozenset) and isinstance(right, frozenset):
         return _freeze_query_value(left) == _freeze_query_value(right)
 
     return left == right

@@ -467,6 +467,44 @@ class TestRenderTests:
         assert 'float("nan")' in rendered_asserts
         assert " == nan" not in rendered_asserts
 
+    def test_render_tests_uses_nan_safe_assertion_for_nan_outputs(self) -> None:
+        queries = [
+            Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),
+        ]
+        rendered_asserts = render_tests("f", queries)
+        assert "__genfxn_query_outputs_equal" in rendered_asserts
+
+    def test_render_tests_executes_with_nan_outputs(self) -> None:
+        queries = [
+            Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),
+            Query(
+                input=2,
+                output=[float("nan"), {"k": float("nan")}],
+                tag=QueryTag.BOUNDARY,
+            ),
+            Query(
+                input=3,
+                output=frozenset({float("nan")}),
+                tag=QueryTag.COVERAGE,
+            ),
+        ]
+        rendered_asserts = render_tests("f", queries)
+        namespace: dict[str, object] = {}
+        exec(  # noqa: S102
+            "\n".join(
+                [
+                    "def f(x):",
+                    "    if x == 1:",
+                    "        return float('nan')",
+                    "    if x == 2:",
+                    "        return [float('nan'), {'k': float('nan')}]",
+                    "    return frozenset({float('nan')})",
+                    rendered_asserts,
+                ]
+            ),
+            namespace,
+        )
+
 
 class TestCorpusIdUniqueness:
     def test_no_cross_family_collisions(self) -> None:

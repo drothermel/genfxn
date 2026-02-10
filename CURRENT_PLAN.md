@@ -1271,3 +1271,94 @@ Validation evidence:
   large_weight_cost_accumulation"` -> 23 passed.
 - `uv run pytest tests/ -q --verification-level=standard`
   -> 1831 passed, 101 skipped.
+
+### 20) FSM `machine_type` Deprecation Signaling (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Add explicit compatibility/deprecation comments around FSM
+      `machine_type` in model, evaluator, and renderer code to signal that the
+      axis is intentionally non-semantic.
+- [x] Keep behavior unchanged (no schema removal, no task-id-affecting edits).
+- [x] Run targeted lint/type/tests for touched FSM files.
+
+Exit criterion:
+- Codebase clearly communicates `machine_type` is retained for compatibility
+  and intentionally does not affect runtime semantics.
+
+Progress update (2026-02-10, FSM machine_type deprecation signaling complete):
+- Added explicit deprecation/compatibility signaling in:
+  - `src/genfxn/fsm/models.py`
+    - `MachineType` enum docstring
+    - `FsmSpec.machine_type` field description
+    - `FsmAxes.machine_types` field description
+  - `src/genfxn/fsm/eval.py`
+    - evaluator comment stating `machine_type` is intentionally non-semantic
+  - `src/genfxn/fsm/render.py`
+    - renderer comment stating `machine_type` is intentionally non-semantic
+- No behavior or schema contract changes were introduced.
+- Validation evidence:
+  - `uv run ruff check src/genfxn/fsm/models.py src/genfxn/fsm/eval.py src/genfxn/fsm/render.py`
+    -> passed.
+  - `uv run ty check src/genfxn/fsm/models.py src/genfxn/fsm/eval.py src/genfxn/fsm/render.py`
+    -> passed.
+  - `uv run pytest tests/test_fsm.py -v --verification-level=standard`
+    -> 26 passed.
+
+### 21) Follow-up Review Fixes (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Fix NaN assertion semantics in `src/genfxn/core/codegen.py` `render_tests`
+      and add execution-semantic regressions in `tests/test_core_dsl.py`.
+- [x] Add `frozenset` NaN-safe canonicalization/equality handling in
+      `src/genfxn/core/models.py` and regressions in `tests/test_core_models.py`.
+- [x] Fix split warning first-sample capture sentinel in `src/genfxn/cli.py`
+      and add a warning-accuracy regression in `tests/test_cli.py`.
+- [x] Align bool range-bound rejection across remaining int-range families:
+      `stateful`, `simple_algorithms`, `bitops`, `fsm`, `sequence_dp`,
+      `stack_bytecode` (plus focused tests).
+- [x] Run focused `ruff`/`ty` and targeted pytest slices, then run default
+      standard suite spot-check.
+
+Exit criterion:
+- All four follow-up findings are fixed with deterministic regressions, and
+  no behavior regressions appear in standard verification checks.
+
+Progress update (2026-02-10, follow-up review fixes complete):
+- Fixed NaN assertion semantics in `render_tests(...)`:
+  - `src/genfxn/core/codegen.py` now emits NaN-safe assertions for NaN-bearing
+    outputs by delegating to `_query_outputs_equal(...)`, while preserving
+    direct `==` assertions for non-NaN outputs.
+  - Added execution-semantic coverage in `tests/test_core_dsl.py` that executes
+    generated assertions for direct and nested NaN outputs (including
+    `frozenset`).
+- Added `frozenset` NaN canonicalization/equality handling in
+  `src/genfxn/core/models.py`:
+  - `_freeze_query_value(...)` now has explicit `frozenset` handling.
+  - `_query_outputs_equal(...)` now compares `frozenset` values structurally.
+  - Added focused regressions in `tests/test_core_models.py`.
+- Fixed split warning first-sample sentinel in `src/genfxn/cli.py`:
+  - replaced `None` sentinel with module-level `_UNSET_SAMPLE`, so true first
+    value `None` is preserved in warning output.
+  - Added regression in `tests/test_cli.py`:
+    `test_split_warning_preserves_first_none_axis_value`.
+- Standardized bool bound rejection for int-range axes in:
+  - `src/genfxn/stateful/models.py`
+  - `src/genfxn/simple_algorithms/models.py`
+  - `src/genfxn/bitops/models.py`
+  - `src/genfxn/fsm/models.py`
+  - `src/genfxn/sequence_dp/models.py`
+  - `src/genfxn/stack_bytecode/models.py`
+  Each now rejects bool bounds in `mode="before"` validators with clear field
+  error text. Added focused tests in corresponding family test modules.
+- Validation evidence:
+  - `uv run pytest tests/test_core_dsl.py tests/test_core_models.py
+    tests/test_cli.py -v --verification-level=standard -k
+    "render_tests or dedupe_queries_frozenset_nan or
+    warning_preserves_first_none_axis_value"` -> 9 passed.
+  - `uv run pytest tests/test_stateful.py tests/test_simple_algorithms.py
+    tests/test_bitops.py tests/test_fsm.py tests/test_sequence_dp.py
+    tests/test_stack_bytecode.py -v --verification-level=standard -k
+    "bool_in_int_range_bounds or axes_reject_bool_in_int_range_bounds or
+    rejects_bool_in_int_range_bounds"` -> 36 passed.
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1872 passed, 101 skipped.
