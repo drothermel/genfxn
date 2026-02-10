@@ -132,6 +132,9 @@ def _query_outputs_equal(left: Any, right: Any) -> bool:
     ):
         return True
 
+    if type(left) is not type(right):
+        return False
+
     if isinstance(left, list) and isinstance(right, list):
         if len(left) != len(right):
             return False
@@ -148,21 +151,7 @@ def _query_outputs_equal(left: Any, right: Any) -> bool:
             for left_item, right_item in zip(left, right, strict=False)
         )
 
-    if isinstance(left, dict) and isinstance(right, dict):
-        if len(left) != len(right):
-            return False
-        if left.keys() != right.keys():
-            # Fall back to canonical structural freeze for corner cases
-            # (for example NaN-ish keys) where direct key comparison fails.
-            return _freeze_query_value(left) == _freeze_query_value(right)
-        return all(
-            _query_outputs_equal(left[key], right[key]) for key in left
-        )
-
-    if isinstance(left, set) and isinstance(right, set):
-        return _freeze_query_value(left) == _freeze_query_value(right)
-
-    if isinstance(left, frozenset) and isinstance(right, frozenset):
+    if isinstance(left, dict | set | frozenset):
         return _freeze_query_value(left) == _freeze_query_value(right)
 
     return left == right

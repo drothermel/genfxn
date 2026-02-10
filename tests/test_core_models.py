@@ -199,6 +199,48 @@ def test_dedupe_queries_nested_nan_vs_non_nan_outputs_raise() -> None:
         raise AssertionError("Expected ValueError for conflicting outputs")
 
 
+def test_dedupe_queries_bool_and_int_outputs_raise() -> None:
+    queries = [
+        Query(input=1, output=False, tag=QueryTag.TYPICAL),
+        Query(input=1, output=0, tag=QueryTag.BOUNDARY),
+    ]
+
+    try:
+        dedupe_queries(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")
+
+
+def test_dedupe_queries_int_and_float_outputs_raise() -> None:
+    queries = [
+        Query(input=1, output=1, tag=QueryTag.TYPICAL),
+        Query(input=1, output=1.0, tag=QueryTag.BOUNDARY),
+    ]
+
+    try:
+        dedupe_queries(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")
+
+
+def test_dedupe_queries_bool_and_int_dict_key_outputs_raise() -> None:
+    queries = [
+        Query(input=1, output={True: "x"}, tag=QueryTag.TYPICAL),
+        Query(input=1, output={1: "x"}, tag=QueryTag.BOUNDARY),
+    ]
+
+    try:
+        dedupe_queries(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")
+
+
 def test_dedupe_queries_type_distinct_inputs_do_not_conflict() -> None:
     queries = [
         Query(input=True, output=10, tag=QueryTag.TYPICAL),
@@ -377,6 +419,20 @@ def test_dedupe_queries_per_tag_input_dedupes_within_tag() -> None:
         QueryTag.TYPICAL,
         QueryTag.BOUNDARY,
     ]
+
+
+def test_dedupe_queries_per_tag_input_type_distinct_outputs_raise() -> None:
+    queries = [
+        Query(input=[(0, 0)], output=False, tag=QueryTag.TYPICAL),
+        Query(input=[(0, 0)], output=0, tag=QueryTag.TYPICAL),
+    ]
+
+    try:
+        dedupe_queries_per_tag_input(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")
 
 
 def test_dedupe_queries_per_tag_input_rejects_conflicting_outputs() -> None:
