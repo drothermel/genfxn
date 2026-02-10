@@ -139,6 +139,24 @@ Temporal logic tasks evaluate a finite-trace formula over integer sequences and
 return either a boolean-at-start signal (`sat_at_start`), count of satisfying
 indices (`sat_count`), or first satisfying index (`first_sat_index`).
 
+## Query and Numeric Semantics
+
+Query uniqueness contract:
+- Default: query inputs are globally deduplicated by input value
+  (`dedupe_queries`), preserving only one query per input (highest tag
+  priority wins) for `piecewise`, `stateful`, `simple_algorithms`,
+  `stringrules`, `stack_bytecode`, `fsm`, and `bitops`.
+- Exception: generators for `intervals`, `graph_queries`, `sequence_dp`, and
+  `temporal_logic` enforce uniqueness per `(tag, input)` via
+  `dedupe_queries_per_tag_input` to preserve per-tag coverage on
+  compact/relation-style input domains.
+
+Overflow semantics (`stack_bytecode` and `sequence_dp`):
+- Python evaluator semantics remain the source for generated expected outputs.
+- Java/Rust runtimes execute with signed 64-bit (`long`/`i64`) behavior; in
+  overflow-adjacent parity tests, evaluator expectations are normalized to
+  signed 64-bit representation before asserting Java/Rust parity.
+
 ## Generation
 
 Generate tasks to JSONL files.
@@ -369,6 +387,16 @@ uv run pytest tests/ -v --verification-level=full
 
 Runtime parity suites are marked `@pytest.mark.full`, so they run only with
 `--verification-level=full`.
+Family-scoped full markers are available for family-owned full tests (for
+example `full_piecewise`, `full_stateful`, `full_sequence_dp`):
+
+```bash
+# Run only piecewise full tests
+uv run pytest tests/ -v --verification-level=full -m "full_piecewise"
+```
+
+Pytest runs in parallel by default with xdist workers (`-n auto`,
+`--dist=worksteal`). Use `-n 0` to force single-process execution.
 
 ### CI Gate
 
@@ -379,16 +407,16 @@ via `.github/workflows/ci.yml`:
 uv sync
 uv run ruff check .
 uv run ty check
-uv run pytest tests/ -v --verification-level=full
+uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal
 ```
 
 ### Local Performance Budgets
 
-Use the helper runner to apply tuned xdist worker counts and optional
+Use the helper runner to apply default max-parallel xdist workers with optional
 runtime budget checks.
 
 ```bash
-# Standard tier with tuned workers and duration report
+# Standard tier with auto-max workers and duration report
 uv run python scripts/run_tests.py --tier standard
 
 # Enforce runtime budget for the selected tier

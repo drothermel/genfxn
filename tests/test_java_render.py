@@ -209,6 +209,29 @@ class TestPredicateJava:
     def test_custom_var(self) -> None:
         assert render_predicate_java(PredicateEven(), var="n") == "n % 2 == 0"
 
+    def test_lt_out_of_int32_unwrapped_preserves_int_input_semantics(
+        self,
+    ) -> None:
+        result = render_predicate_java(
+            PredicateLt(value=1 << 31),
+            int32_wrap=False,
+        )
+        assert result == "true"
+
+    def test_lt_out_of_int32_wrapped_narrows_constant(self) -> None:
+        result = render_predicate_java(
+            PredicateLt(value=1 << 31),
+            int32_wrap=True,
+        )
+        assert result == "x < ((int) 2147483648L)"
+
+    def test_in_set_unwrapped_ignores_out_of_int32_values(self) -> None:
+        result = render_predicate_java(
+            PredicateInSet(values=frozenset({1, 1 << 31})),
+            int32_wrap=False,
+        )
+        assert result == "(x == 1)"
+
 
 # ── Transforms ─────────────────────────────────────────────────────────
 
@@ -789,7 +812,7 @@ class TestMultiLanguageGeneration:
         code = _code_map(task)
         assert "python" in code
         assert "java" in code
-        assert code["python"].startswith("def f(")
+        assert "def f(" in code["python"]
         assert "public static int f(int x)" in code["java"]
 
     def test_stateful_generates_java(self) -> None:

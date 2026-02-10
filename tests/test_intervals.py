@@ -1,4 +1,5 @@
 import random
+from collections import defaultdict
 from typing import Any
 
 import pytest
@@ -350,6 +351,32 @@ class TestQueries:
             assert {q.tag for q in queries} == set(QueryTag)
             for query in queries:
                 assert query.output == eval_intervals(spec, query.input)
+
+    def test_query_input_uniqueness_contract_is_per_tag(self) -> None:
+        axes = IntervalsAxes(
+            n_intervals_range=(1, 1),
+            endpoint_range=(0, 0),
+            max_span_range=(0, 0),
+            allow_reversed_interval_prob_range=(0.0, 0.0),
+            degenerate_interval_prob_range=(1.0, 1.0),
+            nested_interval_prob_range=(0.0, 0.0),
+        )
+        spec = _call_sample(sample_intervals_spec, axes, seed=0)
+        queries = _call_queries(generate_intervals_queries, spec, axes, seed=0)
+
+        seen_by_tag: dict[QueryTag, set[tuple[tuple[int, int], ...]]] = {
+            tag: set() for tag in QueryTag
+        }
+        tags_by_input: dict[tuple[tuple[int, int], ...], set[QueryTag]] = (
+            defaultdict(set)
+        )
+        for query in queries:
+            frozen = tuple((int(a), int(b)) for a, b in query.input)
+            assert frozen not in seen_by_tag[query.tag]
+            seen_by_tag[query.tag].add(frozen)
+            tags_by_input[frozen].add(query.tag)
+
+        assert any(len(tags) > 1 for tags in tags_by_input.values())
 
     def test_queries_respect_narrow_endpoint_range(self) -> None:
         axes = IntervalsAxes(

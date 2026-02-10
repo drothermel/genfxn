@@ -424,6 +424,33 @@ def _enum_text(value: Any) -> str:
     return str(value)
 
 
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value == 0:
+            return False
+        if value == 1:
+            return True
+        return default
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    return default
+
+
+def _coerce_abs_positive_int(value: Any, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    try:
+        return max(1, abs(int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _describe_simple_algorithms(spec: dict[str, Any]) -> str:
     """Generate natural language description for simple_algorithms functions."""
     template = spec.get("template", "")
@@ -837,17 +864,12 @@ def _describe_sequence_dp(spec: dict[str, Any]) -> str:
 def _describe_intervals(spec: dict[str, Any]) -> str:
     operation = _enum_text(spec.get("operation", "total_coverage"))
     boundary_mode = _enum_text(spec.get("boundary_mode", "closed_closed"))
-    merge_touching = bool(spec.get("merge_touching", True))
-    endpoint_clip_abs = spec.get("endpoint_clip_abs", 20)
-    endpoint_quantize_step = spec.get("endpoint_quantize_step", 1)
-    try:
-        clip_value = max(1, abs(int(endpoint_clip_abs)))
-    except (TypeError, ValueError):
-        clip_value = 20
-    try:
-        quantize_step = max(1, abs(int(endpoint_quantize_step)))
-    except (TypeError, ValueError):
-        quantize_step = 1
+    merge_touching = _coerce_bool(spec.get("merge_touching"), False)
+    clip_value = _coerce_abs_positive_int(spec.get("endpoint_clip_abs"), 20)
+    quantize_step = _coerce_abs_positive_int(
+        spec.get("endpoint_quantize_step"),
+        1,
+    )
     if merge_touching:
         merge_text = "merge touching spans"
     else:
@@ -875,10 +897,8 @@ def _describe_intervals(spec: dict[str, Any]) -> str:
 
 def _describe_graph_queries(spec: dict[str, Any]) -> str:
     query_type = _enum_text(spec.get("query_type", "reachable"))
-    directed_raw = spec.get("directed", True)
-    weighted_raw = spec.get("weighted", True)
-    directed = directed_raw if isinstance(directed_raw, bool) else True
-    weighted = weighted_raw if isinstance(weighted_raw, bool) else True
+    directed = _coerce_bool(spec.get("directed"), False)
+    weighted = _coerce_bool(spec.get("weighted"), False)
 
     n_nodes_raw = spec.get("n_nodes", 1)
     if isinstance(n_nodes_raw, int) and not isinstance(n_nodes_raw, bool):

@@ -13,7 +13,7 @@ from genfxn.stateful.models import (
 def _render_conditional_linear_sum(
     spec: ConditionalLinearSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_java(spec.predicate, "x")
+    cond = render_predicate_java(spec.predicate, "x", int32_wrap=True)
     true_expr = render_transform_java(spec.true_transform, "x")
     false_expr = render_transform_java(spec.false_transform, "x")
     init_value = java_int_literal(spec.init_value)
@@ -37,7 +37,9 @@ def _render_conditional_linear_sum(
 def _render_resetting_best_prefix_sum(
     spec: ResettingBestPrefixSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_java(spec.reset_predicate, "x")
+    cond = render_predicate_java(
+        spec.reset_predicate, "x", int32_wrap=True
+    )
     val_expr = (
         render_transform_java(spec.value_transform, "x")
         if spec.value_transform is not None
@@ -66,7 +68,9 @@ def _render_resetting_best_prefix_sum(
 def _render_longest_run(
     spec: LongestRunSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_java(spec.match_predicate, "x")
+    cond = render_predicate_java(
+        spec.match_predicate, "x", int32_wrap=True
+    )
 
     lines = [
         f"public static int {func_name}(int[] {var}) {{",
@@ -89,7 +93,9 @@ def _render_longest_run(
 def _render_toggle_sum(
     spec: ToggleSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_java(spec.toggle_predicate, "x")
+    cond = render_predicate_java(
+        spec.toggle_predicate, "x", int32_wrap=True
+    )
     on_expr = render_transform_java(spec.on_transform, "x")
     off_expr = render_transform_java(spec.off_transform, "x")
     init_value = java_int_literal(spec.init_value)

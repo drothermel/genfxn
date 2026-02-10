@@ -173,8 +173,8 @@ class TestRender:
             target=10, counting_mode=CountingMode.ALL_INDICES
         )
         code = render_simple_algorithms(spec)
-        assert "count += 1" in code
-        assert "== 10" in code
+        assert "count = __i32_add(count, 1)" in code
+        assert "__i32_add(" in code
 
     def test_count_pairs_unique_values(self) -> None:
         spec = CountPairsSumSpec(
@@ -236,6 +236,27 @@ class TestRenderRoundtrip:
                 assert f(xs) == eval_simple_algorithms(spec, xs), (
                     f"k={k}, xs={xs}"
                 )
+
+    def test_count_pairs_roundtrip_int32_wrapped_sum_comparison(self) -> None:
+        spec = CountPairsSumSpec(
+            target=-294_967_296,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
+        code = render_simple_algorithms(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        xs = [2_000_000_000, 2_000_000_000]
+        assert f(xs) == eval_simple_algorithms(spec, xs)
+
+    def test_max_window_roundtrip_int32_large_values(self) -> None:
+        spec = MaxWindowSumSpec(k=2, invalid_k_default=0)
+        code = render_simple_algorithms(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        xs = [2_000_000_000, 2_000_000_000, 0]
+        assert f(xs) == eval_simple_algorithms(spec, xs)
 
 
 class TestSampler:

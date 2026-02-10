@@ -915,6 +915,52 @@ class TestComputeDifficulty:
         assert 1 <= easy_score <= 5
         assert 1 <= hard_score <= 5
 
+    def test_intervals_bool_like_merge_coercion_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.intervals.task") is None:
+            pytest.skip("intervals family is not available")
+
+        bool_spec = {
+            "operation": "merged_count",
+            "boundary_mode": "closed_open",
+            "merge_touching": False,
+            "endpoint_clip_abs": 12,
+            "endpoint_quantize_step": 1,
+        }
+        string_spec = {
+            "operation": "merged_count",
+            "boundary_mode": "closed_open",
+            "merge_touching": "false",
+            "endpoint_clip_abs": 12,
+            "endpoint_quantize_step": 1,
+        }
+
+        string_score = compute_difficulty("intervals", string_spec)
+        bool_score = compute_difficulty("intervals", bool_spec)
+        assert string_score == bool_score
+
+    def test_intervals_quantize_step_affects_difficulty_when_available(
+        self,
+    ) -> None:
+        if importlib.util.find_spec("genfxn.intervals.task") is None:
+            pytest.skip("intervals family is not available")
+
+        base = {
+            "operation": "total_coverage",
+            "boundary_mode": "closed_closed",
+            "merge_touching": True,
+            "endpoint_clip_abs": 20,
+        }
+        easy_score = compute_difficulty(
+            "intervals",
+            {**base, "endpoint_quantize_step": 1},
+        )
+        harder_score = compute_difficulty(
+            "intervals",
+            {**base, "endpoint_quantize_step": 6},
+        )
+
+        assert easy_score < harder_score
+
     def test_temporal_logic_family_when_available(self) -> None:
         if importlib.util.find_spec("genfxn.temporal_logic.task") is None:
             pytest.skip("temporal_logic family is not available")

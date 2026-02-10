@@ -200,30 +200,63 @@ def eval_predicate(
             raise ValueError(f"Unknown predicate: {pred}")
 
 
-def render_predicate(pred: Predicate, var: str = "x") -> str:
+def render_predicate(
+    pred: Predicate,
+    var: str = "x",
+    *,
+    int32_wrap: bool = False,
+) -> str:
     match pred:
         case PredicateEven():
+            if int32_wrap:
+                return f"__i32_wrap({var}) % 2 == 0"
             return f"{var} % 2 == 0"
         case PredicateOdd():
+            if int32_wrap:
+                return f"__i32_wrap({var}) % 2 == 1"
             return f"{var} % 2 == 1"
         case PredicateLt(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) < __i32_wrap({v})"
             return f"{var} < {v}"
         case PredicateLe(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) <= __i32_wrap({v})"
             return f"{var} <= {v}"
         case PredicateGt(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) > __i32_wrap({v})"
             return f"{var} > {v}"
         case PredicateGe(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) >= __i32_wrap({v})"
             return f"{var} >= {v}"
         case PredicateModEq(divisor=d, remainder=r):
+            if int32_wrap:
+                return f"__i32_mod({var}, {d}) == {r}"
             return f"{var} % {d} == {r}"
         case PredicateInSet(values=vals):
+            if int32_wrap:
+                wrapped_values = sorted({wrap_i32(v) for v in vals})
+                values_str = ", ".join(map(str, wrapped_values))
+                return f"__i32_wrap({var}) in {{{values_str}}}"
             return f"{var} in {{{', '.join(map(str, sorted(vals)))}}}"
         case PredicateNot(operand=op):
-            return f"not ({render_predicate(op, var)})"
+            return (
+                f"not ({render_predicate(op, var, int32_wrap=int32_wrap)})"
+            )
         case PredicateAnd(operands=ops):
-            return f"({' and '.join(render_predicate(op, var) for op in ops)})"
+            parts = [
+                render_predicate(op, var, int32_wrap=int32_wrap)
+                for op in ops
+            ]
+            return f"({' and '.join(parts)})"
         case PredicateOr(operands=ops):
-            return f"({' or '.join(render_predicate(op, var) for op in ops)})"
+            parts = [
+                render_predicate(op, var, int32_wrap=int32_wrap)
+                for op in ops
+            ]
+            return f"({' or '.join(parts)})"
         case _:
             raise ValueError(f"Unknown predicate: {pred}")
 

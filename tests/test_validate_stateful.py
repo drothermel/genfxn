@@ -358,6 +358,13 @@ class TestHelperLevelValidation:
         issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
+    def test_ast_whitelist_allows_generated_int32_helpers(
+        self, baseline_task: Task
+    ) -> None:
+        assert isinstance(baseline_task.code, str)
+        issues, _ = _validate_ast_whitelist(baseline_task.code)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
 
 class TestQueryOutputValidation:
     def test_wrong_output_caught(self, baseline_task) -> None:

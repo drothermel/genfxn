@@ -6,6 +6,15 @@ from typing import cast
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.int32 import (
+    i32_abs,
+    i32_add,
+    i32_clip,
+    i32_mod,
+    i32_mul,
+    i32_neg,
+    wrap_i32,
+)
 from genfxn.core.models import Task
 from genfxn.core.safe_exec import (
     SafeExecMissingFunctionError,
@@ -46,6 +55,14 @@ _ALLOWED_BUILTINS = {
     "max": max,
     "min": min,
     "set": set,
+    "ValueError": ValueError,
+    "__i32_wrap": wrap_i32,
+    "__i32_add": i32_add,
+    "__i32_mul": i32_mul,
+    "__i32_neg": i32_neg,
+    "__i32_abs": i32_abs,
+    "__i32_clip": i32_clip,
+    "__i32_mod": i32_mod,
 }
 
 

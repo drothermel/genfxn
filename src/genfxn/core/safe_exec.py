@@ -219,6 +219,11 @@ _SAFE_EXEC_START_METHOD_ENV = "GENFXN_SAFE_EXEC_START_METHOD"
 _DEFAULT_MAX_RESULT_BYTES = 1_000_000
 _RESULT_QUEUE_GRACE_SEC = 0.25
 _RESULT_QUEUE_POLL_SEC = 0.05
+_PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC = 1.0
+
+
+def _persistent_startup_timeout_sec(timeout_sec: float) -> float:
+    return max(timeout_sec, _PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC)
 
 
 def _is_spawn_bootstrap_error(exc: BaseException) -> bool:
@@ -567,8 +572,9 @@ class _PersistentWorker:
             raise
 
         try:
+            startup_timeout_sec = _persistent_startup_timeout_sec(timeout_sec)
             init_result: _WorkerResult = self._response_queue.get(
-                timeout=timeout_sec
+                timeout=startup_timeout_sec
             )
         except Empty:
             self._terminate()
@@ -578,7 +584,8 @@ class _PersistentWorker:
                     f"exit code {self._process.exitcode}"
                 )
             raise SafeExecTimeoutError(
-                f"Code execution timed out after {timeout_sec} seconds"
+                "Code execution startup timed out after "
+                f"{startup_timeout_sec} seconds"
             )
 
         if not init_result.ok:

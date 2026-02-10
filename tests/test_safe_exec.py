@@ -218,6 +218,58 @@ def test_persistent_worker_raises_bootstrap_error(monkeypatch) -> None:
         )
 
 
+def test_persistent_worker_startup_timeout_uses_floor(monkeypatch) -> None:
+    observed_timeouts: list[float] = []
+
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:
+            observed_timeouts.append(timeout)
+            raise safe_exec.Empty
+
+        def close(self) -> None:
+            return
+
+        def join_thread(self) -> None:
+            return
+
+    class _FakeProcess:
+        exitcode = 0
+
+        def start(self) -> None:
+            return
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def is_alive(self) -> bool:
+            return False
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_get_mp_context", lambda: _FakeCtx())
+    monkeypatch.setattr(safe_exec, "_terminate_process_tree", lambda _: None)
+
+    with pytest.raises(SafeExecTimeoutError, match="startup timed out"):
+        safe_exec._PersistentWorker(
+            code="def f(x):\n    return x",
+            allowed_builtins={},
+            memory_limit_mb=None,
+            timeout_sec=0.2,
+        )
+
+    assert observed_timeouts == [
+        safe_exec._persistent_startup_timeout_sec(0.2)
+    ]
+
+
 @pytest.mark.skipif(
     os.name != "posix",
     reason="POSIX start-method preference is only relevant on POSIX",

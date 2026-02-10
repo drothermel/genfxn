@@ -47,6 +47,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.GeneratorExp,
         ast.IfExp,
         ast.Attribute,
+        ast.Raise,
         # Boolean ops
         ast.BoolOp,
         ast.And,
@@ -66,6 +67,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Mult,
         ast.Mod,
         ast.FloorDiv,
+        ast.BitAnd,
         # Unary ops
         ast.USub,
         ast.UAdd,
@@ -89,6 +91,15 @@ ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
         "set",
         "sorted",
         "tuple",
+        "ValueError",
+        "__i32_wrap",
+        "__i32_add",
+        "__i32_sub",
+        "__i32_mul",
+        "__i32_neg",
+        "__i32_abs",
+        "__i32_clip",
+        "__i32_mod",
     }
 )
 
@@ -122,9 +133,21 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         # count_pairs_sum
         "count",
         "seen_pairs",
+        "target",
         # max_window_sum
         "window_sum",
         "max_sum",
+        # int32 helper prelude locals/params
+        "value",
+        "lhs",
+        "rhs",
+        "low",
+        "high",
+        "divisor",
+        "value_i32",
+        "low_i32",
+        "high_i32",
+        "divisor_i32",
     }
 )
 
@@ -144,4 +167,13 @@ CALL_ARITIES: dict[str, set[int]] = {
     "set": {0, 1},
     "sorted": {1},
     "tuple": {1},
+    "ValueError": {1},
+    "__i32_wrap": {1},
+    "__i32_add": {2},
+    "__i32_sub": {2},
+    "__i32_mul": {2},
+    "__i32_neg": {1},
+    "__i32_abs": {1},
+    "__i32_clip": {3},
+    "__i32_mod": {2},
 }

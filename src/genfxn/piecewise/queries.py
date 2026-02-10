@@ -1,5 +1,6 @@
 import random
 
+from genfxn.core.int32 import wrap_i32
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import get_threshold
 from genfxn.piecewise.eval import eval_piecewise
@@ -21,7 +22,7 @@ def _get_branch_threshold(branch: Branch) -> int:
         raise ValueError(
             f"Unsupported predicate for query generation: {branch.condition}"
         )
-    return info.value
+    return wrap_i32(info.value)
 
 
 def generate_piecewise_queries(

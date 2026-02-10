@@ -111,6 +111,7 @@ from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
 
 logger = logging.getLogger(__name__)
 _SELECTION_RESTARTS = 3
+_MAX_POOL_VARIANTS_PER_ATTEMPT = 6
 
 # ── Candidate + PoolStats ────────────────────────────────────────────────
 
@@ -1430,6 +1431,16 @@ def _condition_applies(bucket: Bucket, features: dict[str, str]) -> bool:
     return all(features.get(k) == v for k, v in bucket.condition.items())
 
 
+def _candidate_matches_hard_constraints(
+    candidate: Candidate,
+    hard_constraints: dict[str, str],
+) -> bool:
+    return all(
+        candidate.features.get(key) == val
+        for key, val in hard_constraints.items()
+    )
+
+
 def _quota_targets_met(selected: list[Candidate], quota: QuotaSpec) -> bool:
     """Return True when all bucket targets are met by selected candidates."""
     filled = _bucket_fill_counts(selected, quota)
@@ -1477,6 +1488,48 @@ def _selection_rank(
     return total_deficit, unmet_buckets, -len(selected)
 
 
+def _selection_satisfies_quota(
+    selected: Sequence[Candidate],
+    quota: QuotaSpec,
+) -> bool:
+    return len(selected) >= quota.total and _quota_targets_met(
+        list(selected), quota
+    )
+
+
+def _bucket_supply_shortfall(
+    candidates: Sequence[Candidate],
+    quota: QuotaSpec,
+) -> bool:
+    supply = [0 for _ in range(len(quota.buckets))]
+    for candidate in candidates:
+        if not _candidate_matches_hard_constraints(
+            candidate, quota.hard_constraints
+        ):
+            continue
+        for bi, bucket in enumerate(quota.buckets):
+            if _bucket_applies(bucket, candidate.features):
+                supply[bi] += 1
+    return any(
+        supply[bi] < bucket.target
+        for bi, bucket in enumerate(quota.buckets)
+    )
+
+
+def _merge_unique_candidates(
+    existing: list[Candidate],
+    additions: Sequence[Candidate],
+) -> list[Candidate]:
+    merged = list(existing)
+    seen_ids = {candidate.task_id for candidate in existing}
+    for candidate in additions:
+        if candidate.task_id in seen_ids:
+            continue
+        merged.append(candidate)
+        seen_ids.add(candidate.task_id)
+    return merged
+
+
 def _repair_selection_with_swaps(
     selected: list[Candidate],
     candidates: list[Candidate],
@@ -1490,16 +1543,13 @@ def _repair_selection_with_swaps(
     swap. This pass keeps selection size fixed and only applies improving
     swaps.
     """
-    if len(selected) != quota.total or len(selected) == 0:
+    if len(selected) == 0:
         return selected
 
     filtered = [
         cand
         for cand in candidates
-        if all(
-            cand.features.get(key) == val
-            for key, val in quota.hard_constraints.items()
-        )
+        if _candidate_matches_hard_constraints(cand, quota.hard_constraints)
     ]
     if not filtered:
         return selected
@@ -1517,8 +1567,40 @@ def _repair_selection_with_swaps(
                 applicable.append(bi)
         applicable_buckets[cand.task_id] = applicable
 
-    repaired = list(selected)
+    repaired = list(selected[: quota.total])
     filled = _bucket_fill_counts(repaired, quota)
+
+    while len(repaired) < quota.total and unselected:
+        deficits = _bucket_deficits(filled, quota)
+        best_fill_idx: int | None = None
+        best_fill_rank = (-1, -1, -1, "")
+        for ui, candidate in enumerate(unselected):
+            bucket_indices = applicable_buckets.get(candidate.task_id, [])
+            deficit_hits = sum(
+                1 for bi in bucket_indices if deficits[bi] > 0
+            )
+            deficit_weight = sum(
+                deficits[bi] for bi in bucket_indices if deficits[bi] > 0
+            )
+            fill_rank = (
+                deficit_hits,
+                deficit_weight,
+                len(bucket_indices),
+                candidate.task_id,
+            )
+            if fill_rank > best_fill_rank:
+                best_fill_rank = fill_rank
+                best_fill_idx = ui
+        if best_fill_idx is None:
+            break
+        candidate = unselected.pop(best_fill_idx)
+        repaired.append(candidate)
+        for bi in applicable_buckets.get(candidate.task_id, []):
+            filled[bi] += 1
+
+    if len(repaired) != quota.total:
+        return repaired
+
     for _ in range(max_swaps):
         base_score = _deficit_score(filled, quota)
         if base_score == (0, 0):
@@ -1580,6 +1662,127 @@ def _repair_selection_with_swaps(
     return repaired
 
 
+def _repair_selection_with_backtracking(
+    selected: list[Candidate],
+    candidates: list[Candidate],
+    quota: QuotaSpec,
+    max_rounds: int = 4,
+    max_branch: int = 8,
+) -> list[Candidate]:
+    """Run bounded deterministic backtracking for near-miss deficits."""
+    if len(selected) != quota.total or _quota_targets_met(selected, quota):
+        return selected
+
+    filtered = [
+        candidate
+        for candidate in candidates
+        if _candidate_matches_hard_constraints(
+            candidate, quota.hard_constraints
+        )
+    ]
+    if not filtered:
+        return selected
+
+    applicable_buckets: dict[str, list[int]] = {}
+    for candidate in filtered:
+        applicable_buckets[candidate.task_id] = [
+            bi
+            for bi, bucket in enumerate(quota.buckets)
+            if _bucket_applies(bucket, candidate.features)
+        ]
+
+    repaired = list(selected)
+    for _ in range(max_rounds):
+        base_rank = _selection_rank(repaired, quota)
+        if base_rank[:2] == (0, 0):
+            break
+
+        filled = _bucket_fill_counts(repaired, quota)
+        deficits = _bucket_deficits(filled, quota)
+        deficit_buckets = {bi for bi, deficit in enumerate(deficits) if deficit}
+        if not deficit_buckets:
+            break
+
+        selected_ids = {candidate.task_id for candidate in repaired}
+        unselected = [
+            candidate
+            for candidate in filtered
+            if candidate.task_id not in selected_ids
+        ]
+        if not unselected:
+            break
+
+        replacement_indices = [
+            ui
+            for ui, candidate in enumerate(unselected)
+            if any(
+                bi in deficit_buckets
+                for bi in applicable_buckets.get(candidate.task_id, [])
+            )
+        ]
+        if not replacement_indices:
+            break
+
+        replacement_indices = sorted(
+            replacement_indices,
+            key=lambda ui: (
+                -sum(
+                    1
+                    for bi in applicable_buckets[unselected[ui].task_id]
+                    if deficits[bi] > 0
+                ),
+                -sum(
+                    deficits[bi]
+                    for bi in applicable_buckets[unselected[ui].task_id]
+                    if deficits[bi] > 0
+                ),
+                unselected[ui].task_id,
+            ),
+        )[:max_branch]
+        removable_indices = sorted(
+            range(len(repaired)),
+            key=lambda si: (
+                sum(
+                    1
+                    for bi in applicable_buckets[repaired[si].task_id]
+                    if deficits[bi] > 0
+                ),
+                len(applicable_buckets[repaired[si].task_id]),
+                repaired[si].task_id,
+            ),
+        )[:max_branch]
+
+        best_trial: list[Candidate] | None = None
+        best_rank = base_rank
+        for ui in replacement_indices:
+            replacement = unselected[ui]
+            for si in removable_indices:
+                if repaired[si].task_id == replacement.task_id:
+                    continue
+                trial = list(repaired)
+                trial[si] = replacement
+                trial = _repair_selection_with_swaps(
+                    trial,
+                    filtered,
+                    quota,
+                    max_swaps=16,
+                )
+                rank = _selection_rank(trial, quota)
+                if rank < best_rank:
+                    best_trial = trial
+                    best_rank = rank
+                    if rank[:2] == (0, 0):
+                        break
+            if best_trial is not None and best_rank[:2] == (0, 0):
+                break
+
+        if best_trial is None:
+            break
+        repaired = best_trial
+
+    return repaired
+
+
 def _select_best_with_restarts(
     candidates: list[Candidate],
     quota: QuotaSpec,
@@ -1604,6 +1807,9 @@ def _select_best_with_restarts(
         )
         selected = greedy_select(candidates, quota, select_rng)
         selected = _repair_selection_with_swaps(selected, candidates, quota)
+        selected = _repair_selection_with_backtracking(
+            selected, candidates, quota
+        )
         rank = _selection_rank(selected, quota)
         if rank < best_rank:
             best_selected = selected
@@ -1831,6 +2037,29 @@ def generate_suite(
         candidates, stats = generate_pool(
             family, difficulty, pool_seed, current_pool_size
         )
+        pool_variants_used = 1
+        if candidates and _bucket_supply_shortfall(candidates, quota):
+            for variant in range(1, _MAX_POOL_VARIANTS_PER_ATTEMPT):
+                variant_seed = _stable_seed(
+                    seed,
+                    family,
+                    difficulty,
+                    820000
+                    + attempt * (_MAX_POOL_VARIANTS_PER_ATTEMPT - 1)
+                    + (variant - 1),
+                )
+                extra_candidates, _ = generate_pool(
+                    family,
+                    difficulty,
+                    variant_seed,
+                    current_pool_size,
+                )
+                pool_variants_used += 1
+                candidates = _merge_unique_candidates(
+                    candidates, extra_candidates
+                )
+                if not _bucket_supply_shortfall(candidates, quota):
+                    break
 
         selected = _select_best_with_restarts(
             candidates,
@@ -1841,12 +2070,12 @@ def generate_suite(
             attempt,
         )
 
-        if len(selected) >= quota.total and _quota_targets_met(selected, quota):
+        if _selection_satisfies_quota(selected, quota):
             break
         logger.debug(
             (
                 "%s D%d attempt %d: selected=%d/%d "
-                "targets_met=%s (pool=%d, candidates=%d)"
+                "targets_met=%s (pool=%d, candidates=%d, variants=%d)"
             ),
             family,
             difficulty,
@@ -1855,10 +2084,11 @@ def generate_suite(
             quota.total,
             _quota_targets_met(selected, quota),
             current_pool_size,
-            stats.candidates,
+            len(candidates),
+            pool_variants_used,
         )
 
-    if len(selected) < quota.total or not _quota_targets_met(selected, quota):
+    if not _selection_satisfies_quota(selected, quota):
         raise RuntimeError(
             f"Could not fill suite for {family} D{difficulty}: "
             f"selected {len(selected)}/{quota.total}, "

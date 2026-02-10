@@ -1108,7 +1108,7 @@ class TestGenerate:
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 1
-        assert tasks[0]["code"].startswith("def f(")
+        assert "def f(" in tasks[0]["code"]
 
     def test_generate_unknown_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -1294,6 +1294,52 @@ class TestSplit:
         assert len(train) + len(test) == 20
         assert all(t["spec"]["template"] == "longest_run" for t in test)
         assert all(t["spec"]["template"] != "longest_run" for t in train)
+
+    def test_split_holdout_malformed_second_line_no_partial_outputs(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        first_row = {
+            "task_id": "task-1",
+            "family": "stateful",
+            "spec": {"template": "sum"},
+            "code": "def f(x):\n    return x\n",
+            "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+            "description": "valid row",
+        }
+        input_file.write_text(
+            f"{srsly.json_dumps(first_row)}\n" '{"broken":\n',
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "template",
+                "--holdout-value",
+                "sum",
+                "--holdout-type",
+                "exact",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "invalid JSONL row" in result.output
+        assert "line 2" in result.output
+        assert "malformed JSON" in result.output
+        assert "Traceback" not in result.output
+        assert not train_file.exists()
+        assert not test_file.exists()
 
     def test_split_range(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
@@ -2577,3 +2623,26 @@ class TestInfo:
         assert "7 tasks" in result.stdout
         assert "piecewise: 7" in result.stdout
         assert "stateful" not in result.stdout
+
+    def test_info_malformed_row_has_clean_error(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        first_row = {
+            "task_id": "task-1",
+            "family": "stateful",
+            "spec": {"template": "sum"},
+            "code": "def f(x):\n    return x\n",
+            "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+            "description": "valid row",
+        }
+        input_file.write_text(
+            f"{srsly.json_dumps(first_row)}\n" '{"broken":\n',
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(app, ["info", str(input_file)])
+
+        assert result.exit_code != 0
+        assert "invalid JSONL row" in result.output
+        assert "line 2" in result.output
+        assert "malformed JSON" in result.output
+        assert "Traceback" not in result.output

@@ -25,6 +25,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 pytest_addoption = module.pytest_addoption
+pytest_itemcollected = module.pytest_itemcollected
 pytest_collection_modifyitems = module.pytest_collection_modifyitems
 """
     )
@@ -49,6 +50,43 @@ def test_slow_marked():
 def test_unmarked():
     assert True
 """
+        )
+
+
+def _make_family_full_probe_tests(pytester) -> None:
+    pytester.makepyfile(
+        test_piecewise_runtime_parity="""
+import pytest
+
+
+@pytest.mark.full
+def test_piecewise_runtime_full():
+    assert True
+""",
+        test_validate_piecewise="""
+import pytest
+
+
+@pytest.mark.full
+def test_piecewise_validate_full():
+    assert True
+""",
+        test_stateful_runtime_parity="""
+import pytest
+
+
+@pytest.mark.full
+def test_stateful_runtime_full():
+    assert True
+""",
+        test_misc_full="""
+import pytest
+
+
+@pytest.mark.full
+def test_misc_full():
+    assert True
+""",
     )
 
 
@@ -77,3 +115,33 @@ def test_fast_skips_slow_and_full_marked_tests(pytester) -> None:
     result = pytester.runpytest("--verification-level=fast", "-q")
 
     result.assert_outcomes(passed=1, skipped=2)
+
+
+def test_full_family_marker_selects_only_matching_family_full_tests(
+    pytester,
+) -> None:
+    _install_repo_verification_hooks(pytester)
+    _make_family_full_probe_tests(pytester)
+
+    result = pytester.runpytest(
+        "--verification-level=full",
+        "-m",
+        "full_piecewise",
+        "-q",
+    )
+
+    result.assert_outcomes(passed=2, deselected=2)
+
+
+def test_full_family_marker_respects_standard_full_skip(pytester) -> None:
+    _install_repo_verification_hooks(pytester)
+    _make_family_full_probe_tests(pytester)
+
+    result = pytester.runpytest(
+        "--verification-level=standard",
+        "-m",
+        "full_piecewise",
+        "-q",
+    )
+
+    result.assert_outcomes(skipped=2, deselected=2)

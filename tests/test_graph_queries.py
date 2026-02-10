@@ -1,4 +1,5 @@
 import random
+from collections import defaultdict
 from collections.abc import Callable
 from itertools import product
 from typing import cast
@@ -265,6 +266,41 @@ def test_queries_cover_all_tags_and_match_eval_across_multiple_seeds() -> None:
                 query.input["src"],
                 query.input["dst"],
             )
+
+
+def test_query_input_uniqueness_contract_is_per_tag() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.REACHABLE,
+        directed=False,
+        weighted=False,
+        n_nodes=1,
+        edges=[],
+    )
+    axes = GraphQueriesAxes(
+        query_types=[GraphQueryType.REACHABLE],
+        directed_choices=[False],
+        weighted_choices=[False],
+        n_nodes_range=(1, 1),
+        edge_count_range=(0, 0),
+        weight_range=(1, 1),
+        disconnected_prob_range=(0.0, 0.0),
+        multi_edge_prob_range=(0.0, 0.0),
+        hub_bias_prob_range=(0.0, 0.0),
+    )
+    queries = generate_graph_queries_queries(spec, axes, random.Random(0))
+
+    seen_by_tag: dict[QueryTag, set[tuple[int, int]]] = {
+        tag: set() for tag in QueryTag
+    }
+    tags_by_pair: dict[tuple[int, int], set[QueryTag]] = defaultdict(set)
+    for query in queries:
+        pair = (query.input["src"], query.input["dst"])
+        assert pair not in seen_by_tag[query.tag]
+        seen_by_tag[query.tag].add(pair)
+        tags_by_pair[pair].add(query.tag)
+
+    assert len(tags_by_pair) == 1
+    assert any(len(tags) > 1 for tags in tags_by_pair.values())
 
 
 def test_queries_inputs_stay_within_node_bounds_across_multiple_seeds() -> None:

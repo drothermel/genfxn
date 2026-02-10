@@ -19,6 +19,8 @@ flowchart TD
 
 ## Package Layout
 - `src/genfxn/core/`: shared schemas, validation helpers, tracing, safe exec.
+  Query dedupe contracts are centralized in `core/models.py`
+  (`dedupe_queries` and `dedupe_queries_per_tag_input`).
 - `src/genfxn/<family>/`: family-specific models, generators, validators.
 - `src/genfxn/langs/`: language renderers and runtime integration points.
 - `src/genfxn/suites/`: cross-family suite composition and quota logic.
@@ -35,6 +37,10 @@ flowchart TD
 ## Verification Modes
 - `standard`: default for quick iteration, skips `@pytest.mark.full`.
 - `full`: required to catch deep fuzz/lifecycle/parity edge failures.
+- Pytest executes with xdist by default (`-n auto`, `--dist=worksteal`) to
+  maximize local and CI test parallelism.
+- CI quality gates are fanned out into parallel jobs (`ruff`, `ty`, and full
+  pytest verification).
 
 ## Related Docs
 - `WORKING_MEMORY.md` for current findings and assumptions.

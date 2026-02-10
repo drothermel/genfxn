@@ -11,7 +11,9 @@ def _render_state_transitions(spec: FsmSpec) -> list[str]:
         if not state.transitions:
             lines.append("                // no transitions")
         for t_idx, transition in enumerate(state.transitions):
-            pred = render_predicate_java(transition.predicate, "x")
+            pred = render_predicate_java(
+                transition.predicate, "x", int32_wrap=False
+            )
             if_kw = "if" if t_idx == 0 else "else if"
             lines.append(f"                {if_kw} ({pred}) {{")
             lines.append(

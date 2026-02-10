@@ -5,6 +5,7 @@ from typing import cast
 from pydantic import ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.int32 import i32_abs, i32_add, i32_mod, i32_mul, wrap_i32
 from genfxn.core.models import Task
 from genfxn.core.predicates import get_threshold
 from genfxn.core.safe_exec import (
@@ -12,7 +13,12 @@ from genfxn.core.safe_exec import (
     execute_code_restricted,
 )
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
-from genfxn.piecewise.ast_safety import ALLOWED_AST_NODES, ALLOWED_CALL_NAMES
+from genfxn.piecewise.ast_safety import (
+    ALLOWED_AST_NODES,
+    ALLOWED_CALL_NAMES,
+    ALLOWED_VAR_NAMES,
+    CALL_ARITIES,
+)
 from genfxn.piecewise.eval import eval_piecewise
 from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
 from genfxn.piecewise.queries import SUPPORTED_CONDITION_KINDS
@@ -34,7 +40,16 @@ CODE_NON_MONOTONIC_THRESHOLDS = "NON_MONOTONIC_THRESHOLDS"
 CODE_UNSUPPORTED_CONDITION = "UNSUPPORTED_CONDITION"
 CODE_UNSAFE_AST = "UNSAFE_AST"
 CURRENT_FAMILY = "piecewise"
-_ALLOWED_BUILTINS = {"abs": abs, "int": int}
+_ALLOWED_BUILTINS = {
+    "abs": abs,
+    "int": int,
+    "ValueError": ValueError,
+    "__i32_wrap": wrap_i32,
+    "__i32_add": i32_add,
+    "__i32_mul": i32_mul,
+    "__i32_abs": i32_abs,
+    "__i32_mod": i32_mod,
+}
 SEMANTIC_SAMPLE_MAX_POINTS = 1000
 PYTHON_CODE_KEY = "python"
 
@@ -48,7 +63,7 @@ def _validate_ast_whitelist(
     This prevents accidental bad code and obvious injection vectors,
     but is NOT a security sandbox for adversarial code.
     """
-    allowed_names = ALLOWED_CALL_NAMES | {param_name}
+    allowed_names = ALLOWED_CALL_NAMES | ALLOWED_VAR_NAMES | {param_name}
 
     try:
         tree = ast.parse(code)
@@ -74,14 +89,20 @@ def _validate_ast_whitelist(
             )
             continue
 
-        # Strict Call check: only abs(single_arg)
+        # Strict Call check: only allowed functions with correct arity
         if isinstance(node, ast.Call):
-            valid_call = (
+            valid_call = False
+            if (
                 isinstance(node.func, ast.Name)
                 and node.func.id in ALLOWED_CALL_NAMES
-                and len(node.args) == 1
-                and len(node.keywords) == 0
-            )
+            ):
+                func_name = node.func.id
+                allowed_arities = CALL_ARITIES.get(func_name, set())
+                if (
+                    len(node.args) in allowed_arities
+                    and len(node.keywords) == 0
+                ):
+                    valid_call = True
             if not valid_call:
                 issues.append(
                     Issue(

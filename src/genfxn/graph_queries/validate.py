@@ -33,6 +33,7 @@ CODE_CODE_RUNTIME_ERROR = "CODE_CODE_RUNTIME_ERROR"
 CODE_QUERY_INPUT_TYPE = "CODE_QUERY_INPUT_TYPE"
 CODE_QUERY_OUTPUT_TYPE = "CODE_QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "CODE_QUERY_OUTPUT_MISMATCH"
+CODE_QUERY_INPUT_DUPLICATE = "CODE_QUERY_INPUT_DUPLICATE"
 CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
@@ -364,6 +365,35 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
     return issues
 
 
+def _validate_query_uniqueness(task: Task, strict: bool) -> list[Issue]:
+    issues: list[Issue] = []
+    severity = Severity.ERROR if strict else Severity.WARNING
+    seen: set[tuple[object, tuple[int, int]]] = set()
+
+    for i, query in enumerate(task.queries):
+        coerced = _coerce_query_input(query.input)
+        if coerced is None:
+            continue
+        key = (query.tag, coerced)
+        if key in seen:
+            issues.append(
+                Issue(
+                    code=CODE_QUERY_INPUT_DUPLICATE,
+                    severity=severity,
+                    message=(
+                        "Duplicate query input is not allowed within a single "
+                        f"tag ({query.tag.value})"
+                    ),
+                    location=f"queries[{i}].input",
+                    task_id=task.task_id,
+                )
+            )
+            continue
+        seen.add(key)
+
+    return issues
+
+
 def _validate_query_outputs(
     task: Task,
     spec: GraphQueriesSpec,
@@ -509,6 +539,7 @@ def validate_graph_queries_task(
 
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
+    issues.extend(_validate_query_uniqueness(task, strict=strict))
     issues.extend(_validate_task_id(task))
 
     spec_issues, spec = _validate_spec_deserialize(task)

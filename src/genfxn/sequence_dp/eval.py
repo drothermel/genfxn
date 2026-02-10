@@ -19,6 +19,7 @@ _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
     TieBreakOrder.LEFT_DIAG_UP: ("left", "diag", "up"),
     TieBreakOrder.LEFT_UP_DIAG: ("left", "up", "diag"),
 }
+_I64_MASK = (1 << 64) - 1
 
 
 @dataclass(frozen=True)
@@ -28,23 +29,39 @@ class _Cell:
     gap_count: int
 
 
+def _wrap_i64(value: int) -> int:
+    wrapped = value & _I64_MASK
+    if wrapped >= (1 << 63):
+        return wrapped - (1 << 64)
+    return wrapped
+
+
+def _unsigned_i64(value: int) -> int:
+    return value & _I64_MASK
+
+
 def _predicate_matches(
     predicate: SequenceDpPredicate, a_value: int, b_value: int
 ) -> bool:
     if isinstance(predicate, PredicateEq):
         return a_value == b_value
     if isinstance(predicate, PredicateAbsDiffLe):
-        return abs(a_value - b_value) <= predicate.max_diff
+        if a_value >= b_value:
+            abs_diff = _wrap_i64(a_value - b_value)
+        else:
+            abs_diff = _wrap_i64(b_value - a_value)
+        return _unsigned_i64(abs_diff) <= _unsigned_i64(predicate.max_diff)
     if isinstance(predicate, PredicateModEq):
-        return (a_value - b_value) % predicate.divisor == predicate.remainder
+        diff = _wrap_i64(a_value - b_value)
+        return diff % predicate.divisor == predicate.remainder
     raise ValueError(f"Unsupported predicate: {predicate}")
 
 
 def _advance(prev: _Cell, delta: int, *, is_gap: bool) -> _Cell:
     return _Cell(
-        score=prev.score + delta,
-        alignment_len=prev.alignment_len + 1,
-        gap_count=prev.gap_count + (1 if is_gap else 0),
+        score=_wrap_i64(prev.score + delta),
+        alignment_len=_wrap_i64(prev.alignment_len + 1),
+        gap_count=_wrap_i64(prev.gap_count + (1 if is_gap else 0)),
     )
 
 

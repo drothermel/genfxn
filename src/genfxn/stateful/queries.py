@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.int32 import wrap_i32
+from genfxn.core.int32 import INT32_MAX, INT32_MIN, wrap_i32
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import (
     Predicate,
@@ -52,14 +52,42 @@ def _make_matching_value(
         return start + step * rng.randrange(slots)
 
     def _random_mod_eq(divisor: int, remainder: int) -> int | None:
-        step = abs(divisor)
-        if step == 0:
+        if divisor <= 0:
             return None
-        first = lo + ((remainder - (lo % divisor)) % step)
-        if first > hi:
+
+        int32_cycle = 1 << 32
+
+        # Split [lo, hi] into int32 wrap segments and solve congruence per
+        # segment: (x - k*2^32) % divisor == remainder.
+        k_min = -((-(lo - INT32_MAX)) // int32_cycle)
+        k_max = (hi - INT32_MIN) // int32_cycle
+        if k_min > k_max:
             return None
-        slots = ((hi - first) // step) + 1
-        return first + step * rng.randrange(slots)
+
+        segments: list[tuple[int, int]] = []
+        total_slots = 0
+        for k in range(k_min, k_max + 1):
+            seg_lo = max(lo, INT32_MIN + k * int32_cycle)
+            seg_hi = min(hi, INT32_MAX + k * int32_cycle)
+            if seg_lo > seg_hi:
+                continue
+            target = (remainder + ((k * int32_cycle) % divisor)) % divisor
+            first = seg_lo + ((target - (seg_lo % divisor)) % divisor)
+            if first > seg_hi:
+                continue
+            slots = ((seg_hi - first) // divisor) + 1
+            segments.append((first, slots))
+            total_slots += slots
+
+        if total_slots == 0:
+            return None
+
+        pick = rng.randrange(total_slots)
+        for first, slots in segments:
+            if pick < slots:
+                return first + divisor * pick
+            pick -= slots
+        return None
 
     match pred:
         case PredicateEven():

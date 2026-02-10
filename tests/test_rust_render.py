@@ -787,7 +787,7 @@ class TestMultiLanguageRustGeneration:
         code = _code_map(task)
         assert "python" in code
         assert "rust" in code
-        assert code["python"].startswith("def f(")
+        assert "def f(" in code["python"]
         assert "fn f(x: i64) -> i64" in code["rust"]
 
     def test_stateful_generates_rust(self) -> None:

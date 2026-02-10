@@ -309,6 +309,13 @@ class TestHelperLevelValidation:
         issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
+    def test_ast_whitelist_allows_generated_int32_helpers(
+        self, baseline_task: Task
+    ) -> None:
+        assert isinstance(baseline_task.code, str)
+        issues, _ = _validate_ast_whitelist(baseline_task.code)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
     def test_ast_whitelist_allows_annotation_names(self) -> None:
         code = "def f(xs: list[int]) -> int:\n    return 0"
         issues, _ = _validate_ast_whitelist(code)
@@ -317,6 +324,10 @@ class TestHelperLevelValidation:
     def test_ast_whitelist_rejects_dunder_attribute_read(self) -> None:
         code = "def f(xs):\n    return xs.__class__"
         issues, _ = _validate_ast_whitelist(code)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_rejects_open_name(self) -> None:
+        issues, _ = _validate_ast_whitelist("def f(xs):\n    return open")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
 

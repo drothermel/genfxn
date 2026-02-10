@@ -211,6 +211,33 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   `EXACT`/`CONTAINS`, so direct library use with non-finite holdout values is
   not fail-closed by contract.
 
+## Latest Intake Extension (2026-02-10, safe_exec startup-timeout flake)
+- `execute_code_restricted(timeout_sec=0.2)` can fail during worker startup
+  under load before any function call executes, producing startup crash/timeout
+  noise (`exit code -9` or queue `Empty`) instead of exercising call-timeout
+  semantics.
+- `_PersistentWorker` currently reuses function execution `timeout_sec` for
+  bootstrap initialization, which is too aggressive for process startup jitter.
+- This batch should add a startup-specific timeout floor (or equivalent init
+  timeout separation) while preserving function execution timeout behavior.
+
+## Completed This Chunk (2026-02-10, safe_exec startup-timeout flake)
+- Added startup timeout decoupling in `src/genfxn/core/safe_exec.py`:
+  - `_PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC = 1.0`
+  - `_persistent_startup_timeout_sec(...)`
+  - `_PersistentWorker` init now uses startup timeout for bootstrap handshake.
+- Kept runtime call timeout behavior unchanged for `f(...)` execution path.
+- Added focused regression in `tests/test_safe_exec.py`:
+  - `test_persistent_worker_startup_timeout_uses_floor`
+- Validation evidence:
+  - `uv run pytest tests/test_safe_exec.py::test_timeout_terminates_descendant_processes -v`
+    -> 1 passed
+  - `uv run pytest tests/test_safe_exec.py -k "startup or timeout" -v`
+    -> 2 passed
+  - `uv run ruff check src/genfxn/core/safe_exec.py tests/test_safe_exec.py`
+    -> passed
+  - `uv run ty check` -> passed
+
 ## Active Checklist (Current Batch)
 - [x] Fix scalar key typing in `dedupe_queries` and add type-separation tests.
 - [x] Reject bool values in range holdout matching (library + CLI) and add
@@ -778,3 +805,436 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
     tests/test_piecewise.py` -> All checks passed.
   - `uv run ty check` -> failed only on unrelated existing diagnostics in
     `tests/test_cli.py` (`not-subscriptable` at lines 1647 and 1648).
+
+## Latest Intake Extension (2026-02-10, Java FSM Predicate Semantic Drift)
+- Java predicate rendering currently always uses int32-narrowing literal
+  emission (`java_int_literal`) for numeric predicate constants.
+- This is correct for int32-wrapped families (`piecewise`, `stateful`,
+  `simple_algorithms`) but incorrect for FSM, whose Python evaluator uses
+  unwrapped predicate semantics (`eval_predicate(..., int32_wrap=False)`).
+- Reproduced drift case:
+  - FSM predicate `lt(2147483648)` on `x=2147483647` should match in Python
+    (`True`) but Java wrapped rendering narrows constant to `-2147483648`,
+    producing `False`.
+- Required scope for this pass:
+  - add explicit Java predicate render mode (`int32_wrap` opt-in)
+  - set FSM renderer to unwrapped predicate mode
+  - set int32 families to explicit wrapped predicate mode
+  - add renderer + FSM runtime parity regressions for the `lt(2147483648)`
+    boundary mismatch.
+
+## Completed This Chunk (2026-02-10, Java FSM Predicate Semantic Drift)
+- Added explicit `int32_wrap` mode in
+  `src/genfxn/langs/java/predicates.py` and propagated it through composed
+  predicates (`not`/`and`/`or`).
+- Unwrapped mode now preserves Python evaluator intent for int inputs with
+  out-of-int32 constants by:
+  - constant-folding comparison predicates beyond int32 bounds
+  - filtering unreachable out-of-int32 values in `in_set`.
+- Updated Java renderer call sites:
+  - `src/genfxn/langs/java/fsm.py` -> unwrapped mode (`int32_wrap=False`)
+  - `src/genfxn/langs/java/piecewise.py` -> wrapped mode (`int32_wrap=True`)
+  - `src/genfxn/langs/java/stateful.py` -> wrapped mode (`int32_wrap=True`)
+  - `src/genfxn/langs/java/simple_algorithms.py` -> wrapped mode
+    (`int32_wrap=True`)
+- Added regressions:
+  - `tests/test_java_render.py`:
+    - wrapped vs unwrapped `lt(2147483648)` rendering
+    - unwrapped `in_set` out-of-int32 filtering
+  - `tests/test_fsm_runtime_parity.py`:
+    - `test_fsm_runtime_parity_lt_out_of_int32_threshold`
+- Validation evidence:
+  - `uv run pytest tests/test_java_render.py tests/test_fsm_runtime_parity.py -v --verification-level=full`
+    -> 178 passed.
+  - `uv run ruff check src/genfxn/langs/java/predicates.py src/genfxn/langs/java/fsm.py src/genfxn/langs/java/stateful.py src/genfxn/langs/java/simple_algorithms.py src/genfxn/langs/java/piecewise.py tests/test_java_render.py tests/test_fsm_runtime_parity.py`
+    -> All checks passed.
+  - `uv run ty check` -> All checks passed.
+
+## Latest Intake Extension (2026-02-10, Boundary Query Synthesis Semantics)
+- `stateful` mod-equality matching synthesis currently computes candidates via
+  raw modulo arithmetic, which can return false matches under int32-wrapped
+  predicate semantics when ranges cross/extend past int32 boundaries.
+- `piecewise` boundary query generation currently uses raw predicate threshold
+  constants; out-of-range thresholds are not wrapped to int32, so boundary
+  points near wrapped thresholds can be omitted.
+- This pass scope is limited to:
+  - `src/genfxn/stateful/queries.py`
+  - `src/genfxn/piecewise/queries.py`
+  - focused regressions in `tests/test_stateful.py` and `tests/test_piecewise.py`
+
+## Completed This Chunk (2026-02-10, Boundary Query Synthesis Semantics)
+- `src/genfxn/stateful/queries.py`:
+  - fixed `PredicateModEq` matching-value synthesis to compute candidates using
+    int32-wrap segment congruence (`x - k*2^32`) rather than raw unbounded
+    modulo arithmetic.
+  - avoids false "matching" values for out-of-int32 ranges.
+- `src/genfxn/piecewise/queries.py`:
+  - boundary/coverage threshold extraction now uses wrapped int32 threshold
+    values via `wrap_i32(...)`.
+- Added focused regressions:
+  - `tests/test_stateful.py`:
+    `TestQueryGeneration.test_mod_eq_boundary_uses_wrapped_predicate_truth`
+  - `tests/test_piecewise.py`:
+    `TestQueryGeneration.test_boundary_queries_use_wrapped_thresholds`
+- Validation evidence:
+  - targeted regression slice:
+    `uv run pytest tests/test_stateful.py tests/test_piecewise.py -v -k "mod_eq_boundary_uses_wrapped_predicate_truth or boundary_queries_use_wrapped_thresholds"`
+    -> 2 passed.
+  - requested suite command:
+    `uv run pytest tests/test_stateful.py tests/test_piecewise.py -v`
+    -> 82 passed, 4 failed (pre-existing render string assertions in
+       `tests/test_stateful.py`).
+  - `uv run ruff check src/genfxn/stateful/queries.py
+    src/genfxn/piecewise/queries.py tests/test_stateful.py
+    tests/test_piecewise.py` -> passed.
+  - `uv run ty check` -> passed.
+
+## Latest Intake Extension (2026-02-10, Python Renderer Int32 Semantics)
+- Rendered Python code for int32 families (`piecewise`, `stateful`,
+  `simple_algorithms`) still used unbounded arithmetic even after evaluator
+  int32-contract alignment, causing renderer/evaluator drift on large values.
+- Reproduced deterministic mismatches before fix:
+  - piecewise quadratic at `x=50_000`:
+    rendered `2500000000` vs evaluator `-1794967296`
+  - stateful conditional sum for `[2_000_000_000, 2_000_000_000]`:
+    rendered `4000000000` vs evaluator `-294967296`
+  - simple max-window for `[2_000_000_000, 2_000_000_000, 0]` (`k=2`):
+    rendered `4000000000` vs evaluator `2000000000`
+- Scope for this pass:
+  - add optional int32-aware rendering mode in core predicate/transform
+    renderers with default behavior unchanged
+  - route int32 family Python renderers through that mode and wrapped
+    arithmetic helpers
+  - add high-magnitude regression tests in family suites
+
+## Completed This Chunk (2026-02-10, Python Renderer Int32 Semantics)
+- Added optional int32-aware render modes:
+  - `src/genfxn/core/predicates.py` (`render_predicate(..., int32_wrap=True)`)
+  - `src/genfxn/core/transforms.py` (`render_transform(..., int32_wrap=True)`)
+  Default rendering remains unchanged for other families.
+- Updated family Python renderers to emit int32 helper ops and wrapped
+  arithmetic for parity with evaluators:
+  - `src/genfxn/piecewise/render.py`
+  - `src/genfxn/stateful/render.py`
+  - `src/genfxn/simple_algorithms/render.py`
+- Added high-magnitude regression coverage:
+  - `tests/test_piecewise.py`:
+    `test_render_roundtrip_int32_large_values` (includes quadratic `x=50_000`)
+  - `tests/test_stateful.py`:
+    `test_render_roundtrip_int32_large_values`
+  - `tests/test_simple_algorithms.py`:
+    `test_count_pairs_roundtrip_int32_wrapped_sum_comparison`,
+    `test_max_window_roundtrip_int32_large_values`
+- Validation evidence:
+  - `uv run pytest tests/test_piecewise.py tests/test_stateful.py tests/test_simple_algorithms.py -v`
+    -> 157 passed.
+  - `uv run ruff check src/genfxn/core/predicates.py
+    src/genfxn/core/transforms.py src/genfxn/piecewise/render.py
+    src/genfxn/stateful/render.py src/genfxn/simple_algorithms/render.py
+    tests/test_piecewise.py tests/test_stateful.py
+    tests/test_simple_algorithms.py`
+    -> passed.
+  - `uv run ty check` -> passed.
+
+## Latest Intake Extension (2026-02-10, Test Parallelism Defaults)
+- `pytest-xdist` is installed (`pyproject.toml`) but pytest is not currently
+  configured to run with worker parallelism by default.
+- CI test gate currently runs a single-process pytest invocation in
+  `.github/workflows/ci.yml` (`uv run pytest ... --verification-level=full`)
+  without explicit xdist workers.
+- Repository includes `scripts/run_tests.py` with optional xdist support, but
+  it is opt-in and uses conservative fixed worker defaults (`fast/standard=4`,
+  `full=2`) instead of machine-maximized worker count.
+- README documents the helper runner for tuned worker counts, but primary test
+  commands do not currently signal default parallel execution behavior.
+
+## Completed This Chunk (2026-02-10, Default Test Parallelism + CI Fan-out)
+- Enabled pytest xdist parallelism by default in `pyproject.toml` with:
+  `addopts = "-n auto --dist=worksteal"`.
+- Updated CI workflow `.github/workflows/ci.yml` to fan out gates across three
+  parallel jobs (`lint`, `typecheck`, `test-full`) and run full pytest with
+  explicit parallel workers (`-n auto --dist=worksteal`).
+- Updated `scripts/run_tests.py` worker defaults to `auto` across tiers while
+  preserving explicit worker override and `--workers 0` single-process behavior
+  (`-n 0`).
+- Added runner regressions in `tests/test_run_tests_script.py` for:
+  - default auto workers when xdist is available
+  - explicit `--workers 0` forcing single-process execution (`-n 0`)
+- Updated docs:
+  - `README.md` test/CI sections now state default parallel pytest behavior and
+    single-process override (`-n 0`).
+  - `ARCHITECTURE.md` now documents default xdist and CI gate fan-out.
+- Validation evidence:
+  - `uv run pytest tests/test_run_tests_script.py
+    tests/test_verification_levels.py -v --verification-level=standard`
+    -> 8 passed.
+  - `uv run pytest tests/test_run_tests_script.py -v
+    --verification-level=standard -n 0` -> 5 passed.
+  - `uv run ruff check scripts/run_tests.py tests/test_run_tests_script.py`
+    -> passed.
+  - `uv run ty check scripts/run_tests.py tests/test_run_tests_script.py`
+    -> passed.
+
+## Latest Intake Extension (2026-02-10, AST Compatibility for Int32 Prelude)
+- Validator AST whitelists for `piecewise`, `stateful`, and
+  `simple_algorithms` currently reject renderer-owned int32 helper prelude
+  constructs (`__i32_*` helper names/calls, `Raise ValueError`, bitwise-and
+  wrap expression, helper-local names/args).
+- These AST rejections happen before query/lifecycle checks, causing cascaded
+  failures in strict/lenient query-type tests and exec `close()` lifecycle
+  tests despite validator logic remaining correct.
+- Security-critical rejection paths still need to remain intact after the fix:
+  import nodes, dunder attribute access, and `open` name access/calls.
+
+## Completed This Chunk (2026-02-10, AST Int32 Prelude Compatibility)
+- Updated AST whitelist contracts for int32 helper prelude compatibility in:
+  - `src/genfxn/piecewise/ast_safety.py`
+  - `src/genfxn/stateful/ast_safety.py`
+  - `src/genfxn/simple_algorithms/ast_safety.py`
+  by adding helper-owned nodes (`Raise`, `BitAnd`, assignments/stores where
+  needed), helper call names, explicit helper call arities, and helper-local
+  names.
+- Updated piecewise AST checker logic in `src/genfxn/piecewise/validate.py` to
+  use explicit function arity contracts and helper-local name allowlist.
+- Added safe-exec runtime compatibility aliases for helper symbols in:
+  - `src/genfxn/piecewise/validate.py`
+  - `src/genfxn/stateful/validate.py`
+  - `src/genfxn/simple_algorithms/validate.py`
+  by exposing `__i32_*` helper functions plus `ValueError` via family
+  `_ALLOWED_BUILTINS`, preventing helper-name runtime `NameError` under
+  isolated execution.
+- Added minimal regressions:
+  - `tests/test_validate_piecewise.py`:
+    `test_ast_whitelist_allows_generated_int32_helpers`
+  - `tests/test_validate_stateful.py`:
+    `test_ast_whitelist_allows_generated_int32_helpers`
+  - `tests/test_validate_simple_algorithms.py`:
+    `test_ast_whitelist_allows_generated_int32_helpers`,
+    `test_ast_whitelist_rejects_open_name`
+- Validation evidence:
+  - `uv run pytest tests/test_validate_piecewise.py
+    tests/test_validate_stateful.py tests/test_validate_simple_algorithms.py
+    tests/test_validation_exec_optin.py tests/test_validator_contract_matrix.py
+    -v --verification-level=standard` -> 205 passed, 8 skipped.
+  - `uv run ruff check` on touched validator/ast-safety/test files -> passed.
+  - `uv run ty check` -> passed.
+
+## Latest Intake Extension (2026-02-10, Intervals Quantize Calibration)
+- `tests/test_presets.py -k "intervals_preset_accuracy"` currently fails for
+  target difficulties 1, 2, and 4 with an upward bias (1->2, 2->3, 4->5).
+- Root-cause evidence shows `_intervals_quantize_bonus(...)` is currently too
+  strong for current preset `endpoint_quantize_step_range` values and pushes
+  many specs across round-to-int thresholds.
+- `tests/test_difficulty.py -k "intervals"` currently passes, including bool
+  merge coercion parity and targeted quantize-step effect coverage; this should
+  remain true after calibration.
+
+## Latest Intake Extension (2026-02-10, Intervals D2 Suite Local-Optimum Recovery)
+- Reproduced `tests/test_suites.py::TestIntegration::test_intervals_d2_local_optimum_recovery_when_available` failure at restart-0 where `greedy_select(...)` + `_repair_selection_with_swaps(...)` returns `46/50` instead of full quota size.
+- Root-cause evidence on deterministic seed (`seed=231`, `pool_size=200`) shows attempt-0 pool candidate supply shortfall for D2 quota buckets (`operation=max_overlap_count`, `boundary_bucket=open`, `clip_bucket=medium`), making one-pool selection infeasible even with deterministic 1-for-1 improving swaps.
+- Current repair path exits early when selection length is below `quota.total`, so it cannot deterministically backfill quota slots before swap repair.
+- Required hardening for this batch:
+  - deterministic selection-size repair to fill to `quota.total` when feasible candidates exist
+  - deterministic intra-attempt pool seed diversification (without breaking repeatability)
+  - bounded deterministic backtracking/repair improvement after greedy selection
+
+## Completed This Chunk (2026-02-10, Intervals Quantize Calibration)
+- Calibrated `src/genfxn/core/difficulty.py` quantize-step bonus schedule for
+  intervals so quantization remains represented without over-shifting preset
+  distributions:
+  - `<=1: 0.0`, `<=2: 0.1`, `<=4: 0.15`, `>4: 0.4`.
+- Preserved targeted quantize-effect semantics in
+  `tests/test_difficulty.py` by keeping the strict `easy < harder` assertion
+  and updating the baseline spec so quantize-step remains the only changed
+  field under the calibrated bonus schedule.
+- Validation evidence:
+  - `uv run pytest tests/test_presets.py -k "intervals_preset_accuracy" -v --verification-level=standard`
+    -> 5 passed.
+  - `uv run pytest tests/test_difficulty.py -k "intervals" -v --verification-level=standard`
+    -> 5 passed.
+  - `uv run ruff check src/genfxn/core/difficulty.py tests/test_difficulty.py`
+    -> passed.
+  - `uv run ty check` -> passed.
+
+## Completed This Chunk (2026-02-10, Intervals D2 Local-Optimum Recovery)
+- Hardened suite selection deterministically in
+  `src/genfxn/suites/generate.py`:
+  - `_repair_selection_with_swaps(...)` now backfills undersized selections to
+    `quota.total` before swap improvement.
+  - added `_repair_selection_with_backtracking(...)` for bounded deterministic
+    deficit recovery when 1-for-1 improving swaps stall.
+  - added deterministic intra-attempt pool diversification when an attempt-0
+    pool shows bucket-supply shortfall, merging candidates by stable task-id
+    uniqueness.
+- Kept greedy selection determinism contract intact while improving recovery:
+  same seed/path still reproduces restart-0 near-miss behavior, but
+  `generate_suite(..., max_retries=0)` can now recover on the known
+  `intervals` D2 seed/pathology.
+- Validation evidence:
+  - `uv run pytest tests/test_suites.py::TestIntegration::test_intervals_d2_local_optimum_recovery_when_available -v --verification-level=full`
+    -> 1 passed.
+  - `uv run pytest tests/test_suites.py -k "Determinism or intervals" -v --verification-level=standard`
+    -> 25 passed, 3 skipped.
+  - `uv run ruff check src/genfxn/suites/generate.py` -> passed.
+  - `uv run ty check` -> passed.
+
+## Latest Intake Extension (2026-02-10, Family-Scoped Full Markers)
+- Current full-test selection is coarse (`@pytest.mark.full` only), so running
+  one family's exhaustive suite requires path expressions instead of marker
+  selection.
+- Requested capability: family-scoped full markers (for example
+  `full_piecewise`) so users can run a single family's full tests with `-m`.
+- Existing marker-level verification coverage currently asserts only
+  verification-level gating and does not lock family-scoped marker behavior.
+
+## Latest Intake Extension (2026-02-10, Query-Input Uniqueness Contract)
+- `intervals` and `graph_queries` both currently enforce query-input
+  uniqueness per tag (not globally), but this policy is implicit and not
+  codified as a shared contract.
+- Behavior inspection:
+  - `intervals` dedupes at the end of generation with tag-scoped seen sets.
+  - `graph_queries` gates insertion using `(tag, src, dst)` keys.
+- This means duplicate inputs are prevented within the same tag, while the same
+  input can appear across different tags. In constrained domains this preserves
+  required tag coverage without forcing synthetic/global uniqueness.
+- Existing tests assert tag coverage and output correctness but do not
+  explicitly lock per-tag uniqueness vs global uniqueness semantics.
+
+## Latest Intake Extension (2026-02-10, Uniqueness Codification Ownership Pass)
+- Scope for this pass is limited to `intervals` and `graph_queries` plus shared
+  helpers/tests/docs that define query-input uniqueness expectations.
+- Current behavior check confirms:
+  - both families allow duplicate inputs across different tags
+  - both families prevent duplicate inputs within the same tag
+- Rationale for keeping per-tag uniqueness contract: compact input domains can
+  make global uniqueness incompatible with required tag coverage (for example
+  `graph_queries` with `n_nodes=1` has only one possible `(src, dst)` input).
+
+## Completed This Chunk (2026-02-10, intervals/graph_queries uniqueness codification)
+- Added shared helper `dedupe_queries_per_tag_input(...)` in
+  `src/genfxn/core/models.py` to make `(tag, input)` uniqueness explicit while
+  allowing cross-tag input reuse.
+- Updated generators:
+  - `src/genfxn/intervals/queries.py`
+  - `src/genfxn/graph_queries/queries.py`
+  to use the shared helper and encode compact-domain rationale in comments.
+- Added validator contract checks in:
+  - `src/genfxn/intervals/validate.py`
+  - `src/genfxn/graph_queries/validate.py`
+  so duplicate inputs within the same tag are flagged, while cross-tag
+  duplicates remain valid by contract.
+- Added regression coverage:
+  - helper-level: `tests/test_core_models.py`
+  - family contract: `tests/test_intervals.py`, `tests/test_graph_queries.py`
+  - validator behavior: `tests/test_validate_intervals.py`,
+    `tests/test_validate_graph_queries.py`
+- Updated docs:
+  - `README.md` query uniqueness contract now references
+    `dedupe_queries_per_tag_input`.
+  - `ARCHITECTURE.md` now notes centralized dedupe-contract ownership in
+    `src/genfxn/core/models.py`.
+- Validation evidence:
+  - `uv run pytest tests/test_intervals.py tests/test_graph_queries.py tests/test_core_models.py -v --verification-level=standard`
+    -> 73 passed.
+  - `uv run pytest tests/test_validator_contract_matrix.py -k "intervals or graph_queries" -v --verification-level=standard`
+    -> 8 passed.
+  - `uv run ruff check ...` on touched files -> passed.
+  - `uv run ty check` -> passed.
+
+## Latest Intake Extension (2026-02-10, stack_bytecode + sequence_dp overflow contract)
+- `stack_bytecode` and `sequence_dp` Java/Rust runtime code executes with
+  signed 64-bit overflow semantics, while Python evaluators still compute core
+  arithmetic/predicate paths with unbounded integers.
+- Current runtime parity suites partially mask this evaluator/runtime drift by
+  wrapping Python expectations in test-local helpers (`_i64_wrap`,
+  `_runtime_output_from_eval`) instead of asserting direct evaluator outputs.
+- Overflow-adjacent behavior needing explicit contract lock:
+  - `stack_bytecode`: `+`, `-`, `*`, unary negation, `abs`, `/`, `%` around
+    `Long.MIN_VALUE` and boundary pairs.
+  - `sequence_dp`: DP score accumulation and predicate arithmetic
+    (`abs_diff_le`, `mod_eq`) when subtraction/addition overflows.
+- This batch goal: codify evaluator-level signed i64 semantics (Java-aligned)
+  so parity tests can treat Python evaluator output as the source of truth
+  without ad-hoc wrapping in assertions.
+
+## Completed This Chunk (2026-02-10, Family-Scoped Full Markers)
+- Added family-scoped full marker assignment in `tests/conftest.py`:
+  - full tests in `test_<family>_runtime_parity.py` and
+    `test_validate_<family>.py` now receive dynamic marker `full_<family>`.
+- Registered family-scoped full markers in `pyproject.toml` for:
+  `bitops`, `fsm`, `graph_queries`, `intervals`, `piecewise`, `sequence_dp`,
+  `simple_algorithms`, `stack_bytecode`, `stateful`, `stringrules`,
+  and `temporal_logic`.
+- Added regression coverage in `tests/test_verification_levels.py` to assert:
+  - `-m "full_piecewise"` selects only piecewise-owned full tests in full mode
+  - `-m "full_piecewise"` still yields standard-mode full skips.
+- Updated `README.md` Tests section with family-scoped full marker usage.
+- Validation evidence:
+  - `uv run pytest tests/test_verification_levels.py -v --verification-level=standard`
+    -> 5 passed.
+  - `uv run ruff check tests/conftest.py tests/test_verification_levels.py`
+    -> passed.
+  - `uv run ty check tests/conftest.py tests/test_verification_levels.py`
+    -> passed.
+  - `uv run pytest tests/ --verification-level=full -m "full_piecewise" --collect-only -q`
+    -> 12/1910 tests collected (1898 deselected).
+
+## Latest Intake Extension (2026-02-10, Policy Docs Follow-up)
+- Two policy/doc items remained open:
+  1) query-input uniqueness contract (global input uniqueness vs per-tag)
+  2) overflow semantics expectation clarity for `stack_bytecode` and
+     `sequence_dp`.
+- Current code behavior confirms mixed query-uniqueness ownership by family:
+  - global input dedupe via `dedupe_queries(...)` for
+    `piecewise`, `stateful`, `simple_algorithms`, `stringrules`,
+    `stack_bytecode`, `fsm`, and `bitops`.
+  - per-tag+input uniqueness in generators for
+    `intervals`, `graph_queries`, `sequence_dp`, and `temporal_logic`.
+- Current runtime parity behavior for overflow-adjacent cases confirms
+  Java/Rust `long`/`i64` comparisons use evaluator-derived expectations
+  normalized to signed 64-bit representation.
+
+## Completed This Chunk (2026-02-10, Policy Docs Follow-up)
+- Updated `CURRENT_PLAN.md` to close the remaining query-uniqueness policy
+  item and record explicit per-family uniqueness contracts.
+- Updated `CURRENT_PLAN.md` immediate-actions notes to mark overflow-policy
+  documentation as resolved.
+- Added concise `README.md` contract notes for:
+  - query uniqueness policy (global input dedupe default with explicit
+    per-tag exceptions)
+  - overflow semantics expectations for `stack_bytecode` and `sequence_dp`
+    (Python evaluator as source, parity normalized to signed i64/Java long on
+    overflow-adjacent paths).
+
+## Completed This Chunk (2026-02-10, stack_bytecode + sequence_dp overflow alignment)
+- Established explicit signed i64 overflow contract across evaluator/runtime:
+  - arithmetic wraps in two's-complement i64 space
+  - division/modulo follow Java `long` edge behavior for
+    `Long.MIN_VALUE / -1 == Long.MIN_VALUE` and
+    `Long.MIN_VALUE % -1 == 0`
+  - unary negation and `abs(Long.MIN_VALUE)` both produce
+    `Long.MIN_VALUE`.
+- Applied evaluator changes:
+  - `src/genfxn/stack_bytecode/eval.py`
+  - `src/genfxn/sequence_dp/eval.py`
+- Updated runtime parity suites to assert direct Python evaluator outputs for
+  overflow-adjacent cases (removed test-local expectation wrapping helpers):
+  - `tests/test_stack_bytecode_runtime_parity.py`
+  - `tests/test_sequence_dp_runtime_parity.py`
+- Added focused evaluator regressions to lock edge semantics:
+  - `tests/test_stack_bytecode.py`
+  - `tests/test_sequence_dp.py`
+- Validation evidence:
+  - `uv run pytest tests/test_stack_bytecode_runtime_parity.py
+    tests/test_sequence_dp_runtime_parity.py -v --verification-level=full`
+    -> 11 passed.
+  - `uv run pytest tests/test_stack_bytecode.py tests/test_sequence_dp.py -v
+    --verification-level=standard`
+    -> 77 passed.
+  - `uv run ruff check src/genfxn/stack_bytecode/eval.py
+    src/genfxn/sequence_dp/eval.py tests/test_stack_bytecode_runtime_parity.py
+    tests/test_sequence_dp_runtime_parity.py tests/test_stack_bytecode.py
+    tests/test_sequence_dp.py`
+    -> passed.
+  - `uv run ty check`
+    -> passed.

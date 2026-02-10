@@ -1,12 +1,16 @@
 import json
 import math
+import os
 import random
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, TextIO, cast
 
 import srsly
 import typer
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
@@ -86,6 +90,13 @@ _NON_FINITE_TOKENS = frozenset(
         "-infinity",
     }
 )
+
+
+class _TaskRowError(Exception):
+    def __init__(self, *, line_number: int, reason: str):
+        self.line_number = line_number
+        self.reason = reason
+        super().__init__(reason)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -197,8 +208,72 @@ def _parse_non_range_holdout_value(value: str) -> Any:
 
 
 def _iter_validated_tasks(input_file: Path):
-    for raw in srsly.read_jsonl(input_file):
-        yield Task.model_validate(raw)
+    with input_file.open("r", encoding="utf-8") as input_handle:
+        for line_number, line in enumerate(input_handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                raw = json.loads(stripped)
+            except json.JSONDecodeError as err:
+                raise _TaskRowError(
+                    line_number=line_number,
+                    reason=f"malformed JSON ({err.msg})",
+                ) from err
+            try:
+                yield Task.model_validate(raw)
+            except ValidationError as err:
+                first_error = err.errors(include_url=False)[0]
+                loc = ".".join(str(item) for item in first_error["loc"])
+                message = first_error["msg"]
+                raise _TaskRowError(
+                    line_number=line_number,
+                    reason=f"invalid task row at '{loc}': {message}",
+                ) from err
+
+
+def _render_task_row_error(input_file: Path, error: _TaskRowError) -> str:
+    return (
+        f"Error: invalid JSONL row in {input_file} at line "
+        f"{error.line_number}: {error.reason}"
+    )
+
+
+def _safe_unlink(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+@contextmanager
+def _atomic_split_outputs(
+    train: Path, test: Path
+) -> Iterator[tuple[TextIO, TextIO]]:
+    train_fd, train_tmp_name = tempfile.mkstemp(
+        prefix=f".{train.name}.",
+        suffix=".tmp",
+        dir=train.parent,
+    )
+    test_fd, test_tmp_name = tempfile.mkstemp(
+        prefix=f".{test.name}.",
+        suffix=".tmp",
+        dir=test.parent,
+    )
+    train_tmp = Path(train_tmp_name)
+    test_tmp = Path(test_tmp_name)
+    try:
+        with (
+            os.fdopen(train_fd, "w", encoding="utf-8") as train_handle,
+            os.fdopen(test_fd, "w", encoding="utf-8") as test_handle,
+        ):
+            yield train_handle, test_handle
+        os.replace(train_tmp, train)
+        os.replace(test_tmp, test)
+    except Exception:
+        _safe_unlink(train_tmp)
+        _safe_unlink(test_tmp)
+        raise
 
 
 def _write_task_line(handle, task: Task) -> None:
@@ -1087,118 +1162,125 @@ def split(
     ] = HoldoutType.EXACT,
 ) -> None:
     """Split tasks using random split or axis holdouts."""
-    # Validate options
-    has_random = random_ratio is not None
-    has_holdout = holdout_axis is not None or holdout_value is not None
+    try:
+        # Validate options
+        has_random = random_ratio is not None
+        has_holdout = holdout_axis is not None or holdout_value is not None
 
-    if has_random and has_holdout:
-        typer.echo(
-            "Error: Cannot use both --random-ratio and holdout options",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    if not has_random and not has_holdout:
-        typer.echo(
-            "Error: Must provide --random-ratio or holdout options",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    if has_random:
-        if random_ratio is None:
+        if has_random and has_holdout:
             typer.echo(
-                "Error: --random-ratio is required for random split", err=True
-            )
-            raise typer.Exit(1)
-        if random_ratio < 0 or random_ratio > 1:
-            typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
-            raise typer.Exit(1)
-        total_count = _count_validated_tasks(input_file)
-        train_target = int(total_count * random_ratio)
-        remaining_items = total_count
-        remaining_train = train_target
-        rng = random.Random(split_seed)
-        train_count = 0
-        test_count = 0
-        with (
-            train.open("w", encoding="utf-8") as train_handle,
-            test.open("w", encoding="utf-8") as test_handle,
-        ):
-            for task in _iter_validated_tasks(input_file):
-                assign_to_train = False
-                if remaining_train > 0:
-                    assign_to_train = (
-                        rng.random() * remaining_items < remaining_train
-                    )
-
-                if assign_to_train:
-                    _write_task_line(train_handle, task)
-                    train_count += 1
-                    remaining_train -= 1
-                else:
-                    _write_task_line(test_handle, task)
-                    test_count += 1
-                remaining_items -= 1
-    else:
-        if holdout_axis is None or holdout_value is None:
-            typer.echo(
-                "Error: Both --holdout-axis and --holdout-value are required",
+                "Error: Cannot use both --random-ratio and holdout options",
                 err=True,
             )
             raise typer.Exit(1)
 
-        parsed_value: Any
-        if holdout_type == HoldoutType.RANGE:
-            range_val = _parse_numeric_range(holdout_value)
-            if range_val is None:
+        if not has_random and not has_holdout:
+            typer.echo(
+                "Error: Must provide --random-ratio or holdout options",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        if has_random:
+            if random_ratio is None:
                 typer.echo(
-                    "Error: --holdout-value is required for range holdout",
+                    "Error: --random-ratio is required for random split",
                     err=True,
                 )
                 raise typer.Exit(1)
-            parsed_value = range_val
+            if random_ratio < 0 or random_ratio > 1:
+                typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
+                raise typer.Exit(1)
+            total_count = _count_validated_tasks(input_file)
+            train_target = int(total_count * random_ratio)
+            remaining_items = total_count
+            remaining_train = train_target
+            rng = random.Random(split_seed)
+            train_count = 0
+            test_count = 0
+            with _atomic_split_outputs(train, test) as (
+                train_handle,
+                test_handle,
+            ):
+                for task in _iter_validated_tasks(input_file):
+                    assign_to_train = False
+                    if remaining_train > 0:
+                        assign_to_train = (
+                            rng.random() * remaining_items < remaining_train
+                        )
+
+                    if assign_to_train:
+                        _write_task_line(train_handle, task)
+                        train_count += 1
+                        remaining_train -= 1
+                    else:
+                        _write_task_line(test_handle, task)
+                        test_count += 1
+                    remaining_items -= 1
         else:
-            parsed_value = _parse_non_range_holdout_value(holdout_value)
+            if holdout_axis is None or holdout_value is None:
+                typer.echo(
+                    "Error: Both --holdout-axis and --holdout-value are "
+                    "required",
+                    err=True,
+                )
+                raise typer.Exit(1)
 
-        holdouts = [
-            AxisHoldout(
-                axis_path=holdout_axis,
-                holdout_type=holdout_type,
-                holdout_value=parsed_value,
-            )
-        ]
-        total_count = 0
-        train_count = 0
-        test_count = 0
-        first_sample: Any = None
-        with (
-            train.open("w", encoding="utf-8") as train_handle,
-            test.open("w", encoding="utf-8") as test_handle,
-        ):
-            for task in _iter_validated_tasks(input_file):
-                total_count += 1
-                if first_sample is None:
-                    first_sample = get_spec_value(task.spec, holdout_axis)
-                if any(_matches_holdout(task, h) for h in holdouts):
-                    _write_task_line(test_handle, task)
-                    test_count += 1
-                else:
-                    _write_task_line(train_handle, task)
-                    train_count += 1
+            parsed_value: Any
+            if holdout_type == HoldoutType.RANGE:
+                range_val = _parse_numeric_range(holdout_value)
+                if range_val is None:
+                    typer.echo(
+                        "Error: --holdout-value is required for range holdout",
+                        err=True,
+                    )
+                    raise typer.Exit(1)
+                parsed_value = range_val
+            else:
+                parsed_value = _parse_non_range_holdout_value(holdout_value)
 
-        if test_count == 0 and total_count > 0:
-            typer.echo(
-                f"Warning: holdout matched 0 of {total_count} tasks. "
-                f"Check --holdout-axis spelling (got '{holdout_axis}').",
-                err=True,
-            )
-            typer.echo(
-                f"  First task's value at '{holdout_axis}': {first_sample!r}",
-                err=True,
-            )
+            holdouts = [
+                AxisHoldout(
+                    axis_path=holdout_axis,
+                    holdout_type=holdout_type,
+                    holdout_value=parsed_value,
+                )
+            ]
+            total_count = 0
+            train_count = 0
+            test_count = 0
+            first_sample: Any = None
+            with _atomic_split_outputs(train, test) as (
+                train_handle,
+                test_handle,
+            ):
+                for task in _iter_validated_tasks(input_file):
+                    total_count += 1
+                    if first_sample is None:
+                        first_sample = get_spec_value(task.spec, holdout_axis)
+                    if any(_matches_holdout(task, h) for h in holdouts):
+                        _write_task_line(test_handle, task)
+                        test_count += 1
+                    else:
+                        _write_task_line(train_handle, task)
+                        train_count += 1
 
-    typer.echo(f"Train: {train_count}, Test: {test_count}")
+            if test_count == 0 and total_count > 0:
+                typer.echo(
+                    f"Warning: holdout matched 0 of {total_count} tasks. "
+                    f"Check --holdout-axis spelling (got '{holdout_axis}').",
+                    err=True,
+                )
+                typer.echo(
+                    "  First task's value at "
+                    f"'{holdout_axis}': {first_sample!r}",
+                    err=True,
+                )
+
+        typer.echo(f"Train: {train_count}, Test: {test_count}")
+    except _TaskRowError as err:
+        typer.echo(_render_task_row_error(input_file, err), err=True)
+        raise typer.Exit(1) from err
 
 
 @app.command()
@@ -1206,12 +1288,16 @@ def info(
     input_file: Annotated[Path, typer.Argument(help="Input JSONL file")],
 ) -> None:
     """Show info about tasks file."""
-    by_family: dict[str, int] = {}
-    total = 0
-    for t in _iter_validated_tasks(input_file):
-        total += 1
-        by_family[t.family] = by_family.get(t.family, 0) + 1
+    try:
+        by_family: dict[str, int] = {}
+        total = 0
+        for t in _iter_validated_tasks(input_file):
+            total += 1
+            by_family[t.family] = by_family.get(t.family, 0) + 1
 
-    typer.echo(f"{input_file}: {total} tasks")
-    for fam, cnt in sorted(by_family.items()):
-        typer.echo(f"  {fam}: {cnt}")
+        typer.echo(f"{input_file}: {total} tasks")
+        for fam, cnt in sorted(by_family.items()):
+            typer.echo(f"  {fam}: {cnt}")
+    except _TaskRowError as err:
+        typer.echo(_render_task_row_error(input_file, err), err=True)
+        raise typer.Exit(1) from err

@@ -16,7 +16,7 @@ def _render_preprocess_java(
 ) -> list[str]:
     lines: list[str] = []
     if spec.pre_filter is not None:
-        cond = render_predicate_java(spec.pre_filter, "x")
+        cond = render_predicate_java(spec.pre_filter, "x", int32_wrap=True)
         lines.extend(
             [
                 f"    int[] _filtered = java.util.Arrays.stream({var})"

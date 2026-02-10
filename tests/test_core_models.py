@@ -1,7 +1,12 @@
 from decimal import Decimal
 from fractions import Fraction
 
-from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.models import (
+    Query,
+    QueryTag,
+    dedupe_queries,
+    dedupe_queries_per_tag_input,
+)
 
 
 class _UnhashableInput:
@@ -267,3 +272,48 @@ def test_dedupe_queries_broken_repr_no_dict_does_not_crash() -> None:
     assert len(deduped) == 1
     assert deduped[0].output == 1
     assert deduped[0].tag == QueryTag.BOUNDARY
+
+
+def test_dedupe_queries_per_tag_input_allows_cross_tag_duplicates() -> None:
+    queries = [
+        Query(input={"src": 0, "dst": 0}, output=1, tag=QueryTag.COVERAGE),
+        Query(input={"src": 0, "dst": 0}, output=1, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries_per_tag_input(queries)
+
+    assert len(deduped) == 2
+    assert [query.tag for query in deduped] == [
+        QueryTag.COVERAGE,
+        QueryTag.BOUNDARY,
+    ]
+
+
+def test_dedupe_queries_per_tag_input_dedupes_within_tag() -> None:
+    queries = [
+        Query(input=[(0, 0)], output=1, tag=QueryTag.TYPICAL),
+        Query(input=[(0, 0)], output=1, tag=QueryTag.TYPICAL),
+        Query(input=[(0, 0)], output=1, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries_per_tag_input(queries)
+
+    assert len(deduped) == 2
+    assert [query.tag for query in deduped] == [
+        QueryTag.TYPICAL,
+        QueryTag.BOUNDARY,
+    ]
+
+
+def test_dedupe_queries_per_tag_input_rejects_conflicting_outputs() -> None:
+    queries = [
+        Query(input=[(0, 0)], output=1, tag=QueryTag.TYPICAL),
+        Query(input=[(0, 0)], output=2, tag=QueryTag.TYPICAL),
+    ]
+
+    try:
+        dedupe_queries_per_tag_input(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")

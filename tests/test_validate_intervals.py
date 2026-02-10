@@ -19,6 +19,7 @@ generate_intervals_task = intervals_task.generate_intervals_task
 CODE_CODE_EXEC_ERROR = intervals_validate.CODE_CODE_EXEC_ERROR
 CODE_CODE_MISSING_FUNC = intervals_validate.CODE_CODE_MISSING_FUNC
 CODE_CODE_PARSE_ERROR = intervals_validate.CODE_CODE_PARSE_ERROR
+CODE_QUERY_INPUT_DUPLICATE = intervals_validate.CODE_QUERY_INPUT_DUPLICATE
 CODE_QUERY_INPUT_TYPE = intervals_validate.CODE_QUERY_INPUT_TYPE
 CODE_QUERY_OUTPUT_MISMATCH = intervals_validate.CODE_QUERY_OUTPUT_MISMATCH
 CODE_QUERY_OUTPUT_TYPE = intervals_validate.CODE_QUERY_OUTPUT_TYPE
@@ -97,6 +98,43 @@ def test_query_output_mismatch_detected(baseline_task: Task) -> None:
     corrupted = baseline_task.model_copy(update={"queries": [bad_query]})
     issues = validate_intervals_task(corrupted)
     assert any(issue.code == CODE_QUERY_OUTPUT_MISMATCH for issue in issues)
+
+
+def test_duplicate_query_input_within_tag_is_rejected(
+    baseline_task: Task,
+) -> None:
+    query = baseline_task.queries[0]
+    duplicate = Query(
+        input=query.input,
+        output=query.output,
+        tag=query.tag,
+    )
+    corrupted = baseline_task.model_copy(
+        update={"queries": [query, duplicate]}
+    )
+    issues = validate_intervals_task(corrupted)
+    assert any(issue.code == CODE_QUERY_INPUT_DUPLICATE for issue in issues)
+
+
+def test_duplicate_query_input_across_tags_is_allowed(
+    baseline_task: Task,
+) -> None:
+    query = baseline_task.queries[0]
+    alternate_tag = (
+        QueryTag.BOUNDARY
+        if query.tag != QueryTag.BOUNDARY
+        else QueryTag.COVERAGE
+    )
+    duplicate = Query(
+        input=query.input,
+        output=query.output,
+        tag=alternate_tag,
+    )
+    corrupted = baseline_task.model_copy(
+        update={"queries": [query, duplicate]}
+    )
+    issues = validate_intervals_task(corrupted)
+    assert not any(issue.code == CODE_QUERY_INPUT_DUPLICATE for issue in issues)
 
 
 def test_semantic_mismatch_detected(baseline_task: Task) -> None:

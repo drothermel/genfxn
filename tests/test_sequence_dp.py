@@ -349,6 +349,36 @@ class TestEvaluatorSemantics:
 
         assert eval_sequence_dp(spec, [1, 2], [1, 2]) == 0
 
+    def test_score_accumulation_uses_i64_wrap_semantics(self) -> None:
+        min_i64 = -(1 << 63)
+        spec = SequenceDpSpec(
+            template=TemplateType.GLOBAL,
+            output_mode=OutputMode.SCORE,
+            match_predicate={"kind": "eq"},
+            match_score=1,
+            mismatch_score=-1,
+            gap_score=min_i64,
+            step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+        )
+
+        # Two forced global gap steps: min_i64 + min_i64 wraps to 0.
+        assert eval_sequence_dp(spec, [7, 8], []) == 0
+
+    def test_mod_eq_predicate_subtraction_uses_i64_wrap(self) -> None:
+        max_i64 = (1 << 63) - 1
+        spec = SequenceDpSpec(
+            template=TemplateType.GLOBAL,
+            output_mode=OutputMode.SCORE,
+            match_predicate={"kind": "mod_eq", "divisor": 3, "remainder": 1},
+            match_score=9,
+            mismatch_score=-4,
+            gap_score=-2,
+            step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+        )
+
+        # (max_i64 - (-1)) wraps to min_i64, floorMod(min_i64, 3) == 1.
+        assert eval_sequence_dp(spec, [max_i64], [-1]) == 9
+
     def test_tie_break_order_changes_traceback_output_deterministically(
         self,
     ) -> None:

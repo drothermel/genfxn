@@ -11,7 +11,9 @@ def render_piecewise(
 
     for i, branch in enumerate(spec.branches):
         keyword = "if" if i == 0 else "} else if"
-        cond = render_predicate_java(branch.condition, var)
+        cond = render_predicate_java(
+            branch.condition, var, int32_wrap=True
+        )
         expr = render_expression_java(branch.expr, var)
         lines.append(f"    {keyword} ({cond}) {{")
         lines.append(f"        return {expr};")

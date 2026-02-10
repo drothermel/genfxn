@@ -667,8 +667,12 @@ def _intervals_difficulty(spec: dict[str, Any]) -> int:
     """Compute difficulty for intervals tasks."""
     operation_value = _enum_or_str_value(spec.get("operation"))
     boundary_value = _enum_or_str_value(spec.get("boundary_mode"))
-    merge_touching = bool(spec.get("merge_touching", False))
+    merge_touching = _coerce_bool(spec.get("merge_touching"), False)
     endpoint_clip_abs = _coerce_int(spec.get("endpoint_clip_abs"), 20)
+    endpoint_quantize_step = _coerce_int(
+        spec.get("endpoint_quantize_step"),
+        1,
+    )
 
     operation_score = _intervals_operation_score(operation_value)
     boundary_score = _intervals_boundary_score(boundary_value)
@@ -687,6 +691,7 @@ def _intervals_difficulty(spec: dict[str, Any]) -> int:
         boundary_value,
         merge_touching,
     )
+    raw += _intervals_quantize_bonus(endpoint_quantize_step)
 
     return max(1, min(5, round(raw)))
 
@@ -723,6 +728,16 @@ def _intervals_clip_score(endpoint_clip_abs: int) -> int:
     if endpoint_clip_abs <= 14:
         return 2
     return 1
+
+
+def _intervals_quantize_bonus(endpoint_quantize_step: int) -> float:
+    if endpoint_quantize_step <= 1:
+        return 0.0
+    if endpoint_quantize_step <= 2:
+        return 0.1
+    if endpoint_quantize_step <= 4:
+        return 0.15
+    return 0.4
 
 
 def _intervals_interaction_bonus(

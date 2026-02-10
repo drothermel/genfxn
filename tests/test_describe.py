@@ -907,3 +907,26 @@ class TestDescribeTask:
         result = describe_task("graph_queries", spec)
         assert "graph query 'min_hops'" in result
         assert "undirected, weighted graph with 7 nodes" in result
+
+    def test_graph_queries_family_coerces_bool_like_strings(self) -> None:
+        spec = {
+            "query_type": "reachable",
+            "directed": "false",
+            "weighted": "true",
+            "n_nodes": 4,
+        }
+        result = describe_task("graph_queries", spec)
+        assert "undirected, weighted graph with 4 nodes" in result
+
+    def test_intervals_family_bool_coercion_is_consistent(self) -> None:
+        spec = {
+            "operation": "merged_count",
+            "boundary_mode": "closed_open",
+            "merge_touching": "false",
+            "endpoint_clip_abs": True,
+            "endpoint_quantize_step": True,
+        }
+        result = describe_task("intervals", spec)
+        assert "Clamp each endpoint into [-20, 20]" in result
+        assert "Quantize endpoints toward zero to multiples of 1." in result
+        assert "Then do not merge touching spans." in result

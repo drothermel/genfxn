@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,8 +30,44 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync dependencies
+        run: uv sync
+
       - name: Type check (ty)
         run: uv run ty check
 
+  test-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync dependencies
+        run: uv sync
+
       - name: Test (full verification)
-        run: uv run pytest tests/ -v --verification-level=full
+        run: uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal

@@ -132,7 +132,38 @@ def eval_transform(t: Transform, x: int, *, int32_wrap: bool = False) -> int:
             raise ValueError(f"Unknown transform: {t}")
 
 
-def render_transform(t: Transform, var: str = "x") -> str:
+def render_transform(
+    t: Transform,
+    var: str = "x",
+    *,
+    int32_wrap: bool = False,
+) -> str:
+    if int32_wrap:
+        match t:
+            case TransformIdentity():
+                return f"__i32_wrap({var})"
+            case TransformAbs():
+                return f"__i32_abs({var})"
+            case TransformShift(offset=o):
+                return f"__i32_add({var}, {o})"
+            case TransformClip(low=lo, high=hi):
+                return f"__i32_clip({var}, {lo}, {hi})"
+            case TransformNegate():
+                return f"__i32_neg({var})"
+            case TransformScale(factor=f):
+                return f"__i32_mul({var}, {f})"
+            case TransformPipeline(steps=steps):
+                expr = var
+                for i, step in enumerate(steps):
+                    if i > 0:
+                        expr = f"({expr})"
+                    expr = render_transform(
+                        step, expr, int32_wrap=True
+                    )
+                return expr
+            case _:
+                raise ValueError(f"Unknown transform: {t}")
+
     match t:
         case TransformIdentity():
             return var
@@ -153,7 +184,7 @@ def render_transform(t: Transform, var: str = "x") -> str:
             for i, step in enumerate(steps):
                 if i > 0:
                     expr = f"({expr})"
-                expr = render_transform(step, expr)
+                expr = render_transform(step, expr, int32_wrap=False)
             return expr
         case _:
             raise ValueError(f"Unknown transform: {t}")

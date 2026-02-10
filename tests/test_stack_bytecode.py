@@ -149,6 +149,78 @@ class TestEvaluatorArithmeticAndComparison:
             0,
         )
 
+    def test_i64_arithmetic_wraps_for_add_sub_mul(self) -> None:
+        max_i64 = (1 << 63) - 1
+        min_i64 = -(1 << 63)
+
+        add_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.ADD),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        sub_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.SUB),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        mul_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=2),
+                Instruction(op=InstructionOp.MUL),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+
+        assert eval_stack_bytecode(add_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(sub_spec, []) == (RuntimeStatus.OK, max_i64)
+        assert eval_stack_bytecode(mul_spec, []) == (RuntimeStatus.OK, -2)
+
+    def test_i64_min_edge_ops_match_java_long_semantics(self) -> None:
+        min_i64 = -(1 << 63)
+
+        neg_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.NEG),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        abs_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.ABS),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        div_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                Instruction(op=InstructionOp.DIV),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        mod_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                Instruction(op=InstructionOp.MOD),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+
+        assert eval_stack_bytecode(neg_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(abs_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(div_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(mod_spec, []) == (RuntimeStatus.OK, 0)
+
     def test_comparison_ops(self) -> None:
         spec_eq = _spec(
             [

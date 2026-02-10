@@ -96,3 +96,73 @@ def test_main_adds_xdist_workers_when_available(monkeypatch) -> None:
     assert "-n" in captured["cmd"]
     n_idx = captured["cmd"].index("-n")
     assert captured["cmd"][n_idx + 1] == "3"
+
+
+def test_main_uses_auto_workers_by_default_when_available(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def _fake_run(  # noqa: ARG001
+        cmd: list[str],
+        capture_output: bool,
+        text: bool,
+    ):
+        captured["cmd"] = cmd
+
+        class _Proc:
+            returncode = 0
+            stdout = "== 10 passed in 0.10s =="
+            stderr = ""
+
+        return _Proc()
+
+    monkeypatch.setattr(
+        script_subprocess,
+        "run",
+        _fake_run,
+    )
+    monkeypatch.setattr(_SCRIPT_MODULE, "_has_xdist", lambda: True)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_tests.py", "--tier", "full"],
+    )
+
+    assert run_tests_main() == 0
+    assert "-n" in captured["cmd"]
+    n_idx = captured["cmd"].index("-n")
+    assert captured["cmd"][n_idx + 1] == "auto"
+
+
+def test_main_workers_zero_sets_single_process(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def _fake_run(  # noqa: ARG001
+        cmd: list[str],
+        capture_output: bool,
+        text: bool,
+    ):
+        captured["cmd"] = cmd
+
+        class _Proc:
+            returncode = 0
+            stdout = "== 10 passed in 0.10s =="
+            stderr = ""
+
+        return _Proc()
+
+    monkeypatch.setattr(
+        script_subprocess,
+        "run",
+        _fake_run,
+    )
+    monkeypatch.setattr(_SCRIPT_MODULE, "_has_xdist", lambda: True)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_tests.py", "--tier", "standard", "--workers", "0"],
+    )
+
+    assert run_tests_main() == 0
+    assert "-n" in captured["cmd"]
+    n_idx = captured["cmd"].index("-n")
+    assert captured["cmd"][n_idx + 1] == "0"

@@ -720,6 +720,19 @@ class TestIntervalsFeatures:
         assert f["clip_bucket"] == "medium"
         assert f["quantize_bucket"] == "step3-4"
 
+    def test_bool_like_inputs_use_consistent_coercion(self) -> None:
+        spec = {
+            "operation": "merged_count",
+            "boundary_mode": "closed_open",
+            "merge_touching": "false",
+            "endpoint_clip_abs": True,
+            "endpoint_quantize_step": True,
+        }
+        f = intervals_features(spec)
+        assert f["merge_touching"] == "false"
+        assert f["clip_bucket"] == "very_wide"
+        assert f["quantize_bucket"] == "none"
+
 
 class TestGraphQueriesFeatures:
     def test_directed_unweighted_with_duplicates(self) -> None:
@@ -774,6 +787,19 @@ class TestGraphQueriesFeatures:
         }
         f = graph_queries_features(spec)
         assert f["nodes_bucket"] == "1"
+
+    def test_bool_like_mode_inputs_are_coerced(self) -> None:
+        spec = {
+            "query_type": "reachable",
+            "directed": "false",
+            "weighted": "true",
+            "n_nodes": 4,
+            "edges": [],
+        }
+        f = graph_queries_features(spec)
+        assert f["directed"] == "false"
+        assert f["weighted"] == "true"
+        assert f["mode"] == "undirected_weighted"
 
 
 class TestTemporalLogicFeatures:

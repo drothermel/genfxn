@@ -182,10 +182,32 @@ def _enum_or_str(value: Any, default: str) -> str:
 
 
 def _coerce_int(value: Any, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
     try:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value == 0:
+            return False
+        if value == 1:
+            return True
+        return default
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    return default
 
 
 # ── Public feature extractors ────────────────────────────────────────────
@@ -712,7 +734,9 @@ def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
 def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
     operation = _enum_or_str(spec.get("operation"), "total_coverage")
     boundary_mode = _enum_or_str(spec.get("boundary_mode"), "closed_closed")
-    merge_touching = str(bool(spec.get("merge_touching", False))).lower()
+    merge_touching = str(
+        _coerce_bool(spec.get("merge_touching"), False)
+    ).lower()
     endpoint_clip_abs = _coerce_int(spec.get("endpoint_clip_abs"), 20)
     endpoint_quantize_step = _coerce_int(
         spec.get("endpoint_quantize_step"),
@@ -756,8 +780,8 @@ def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
 
 def graph_queries_features(spec: dict[str, Any]) -> dict[str, str]:
     query_type = _enum_or_str(spec.get("query_type"), "reachable")
-    directed = bool(spec.get("directed", False))
-    weighted = bool(spec.get("weighted", False))
+    directed = _coerce_bool(spec.get("directed"), False)
+    weighted = _coerce_bool(spec.get("weighted"), False)
     n_nodes = max(1, _coerce_int(spec.get("n_nodes"), 1))
 
     edges_raw = spec.get("edges")
