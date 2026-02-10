@@ -1478,3 +1478,33 @@ Progress update (2026-02-10, nested holdout + CLI parse + graph_queries bool har
   - `uv run ty check` on touched files -> passed.
   - `uv run pytest tests/ -q --verification-level=standard`
     -> 1906 passed, 101 skipped.
+
+### 24) CLI Malformed JSON-Scalar Holdout Rejection (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Reject malformed JSON-like scalar tokens for exact/contains holdouts
+      (`tru`, `nul`, `01`, `+1`) instead of silent raw-string fallback.
+- [x] Add focused CLI split regressions for exact/contains scalar-typo cases.
+- [x] Run targeted `pytest` + `ruff` + `ty` and standard-suite spot-check.
+
+Exit criterion:
+- Scalar typo tokens that look like malformed JSON literals are fail-fast with
+  explicit CLI errors; non-JSON plain strings continue to work.
+
+Progress update (2026-02-10, malformed JSON-scalar holdout rejection complete):
+- Updated `src/genfxn/cli.py`:
+  - added `_looks_like_malformed_json_scalar(...)` and numeric-like token
+    detector.
+  - `_parse_non_range_holdout_value(...)` now raises `BadParameter` for
+    malformed scalar-like tokens (for example `tru`, `nul`, `01`, `+1`),
+    instead of treating them as raw strings.
+- Added regressions in `tests/test_cli.py`:
+  - `test_split_exact_contains_reject_malformed_json_scalar_holdout_values`
+    (exact + contains matrix).
+- Validation evidence:
+  - `uv run pytest tests/test_cli.py -v --verification-level=standard -k
+    "malformed_json_like_holdout_values or
+    malformed_json_scalar_holdout_values"` -> 14 passed.
+  - `uv run ruff check src/genfxn/cli.py tests/test_cli.py` -> passed.
+  - `uv run ty check src/genfxn/cli.py tests/test_cli.py` -> passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1914 passed, 101 skipped.

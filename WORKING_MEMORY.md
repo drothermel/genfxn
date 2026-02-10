@@ -322,6 +322,27 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   - prior bool-bound rejection fix in `GraphQueriesAxes` and
     `TemporalLogicAxes` is already effective (no remaining repro there).
 
+## Latest Intake Extension (2026-02-10, malformed JSON-scalar holdout typos)
+- CLI exact/contains holdout parsing still allowed malformed scalar-like tokens
+  (`tru`, `nul`, `01`, `+1`) to silently fall back to raw strings.
+- This can produce successful-but-unintended split runs when the user intended
+  JSON boolean/null/number literals.
+
+## Completed This Chunk (2026-02-10, malformed JSON-scalar holdout typos)
+- Updated `src/genfxn/cli.py`:
+  - added malformed-scalar detection for JSON-ish primitive/number typos in
+    `_parse_non_range_holdout_value(...)`.
+  - `tru`, `nul`, `01`, `+1` now fail with explicit `BadParameter` for
+    exact/contains holdouts.
+- Added focused regressions in `tests/test_cli.py`:
+  - `test_split_exact_contains_reject_malformed_json_scalar_holdout_values`.
+- Validation evidence:
+  - targeted CLI parser pytest slice: 14 passed.
+  - targeted `ruff` + `ty`: passed.
+  - standard suite spot-check:
+    `uv run pytest tests/ -q --verification-level=standard`
+    -> 1914 passed, 101 skipped.
+
 ## Completed This Chunk (2026-02-10, Nested Holdout Typing + JSON-ish Parse + graph_queries bools)
 - Hardened nested holdout matching semantics in `src/genfxn/splits.py`:
   - `EXACT` and `CONTAINS` now compare using deep type-sensitive structural

@@ -2,6 +2,7 @@ import json
 import math
 import os
 import random
+import re
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -91,6 +92,9 @@ _NON_FINITE_TOKENS = frozenset(
     }
 )
 _UNSET_SAMPLE = object()
+_NUMERIC_LIKE_TOKEN_RE = re.compile(
+    r"^[+\-]?(?:\d[\d.eE+\-]*|\.\d[\d.eE+\-]*)$"
+)
 
 
 class _TaskRowError(Exception):
@@ -195,6 +199,19 @@ def _looks_like_json_literal(value: str) -> bool:
     return stripped.startswith(("[", "{", '"'))
 
 
+def _looks_like_malformed_json_scalar(value: str) -> bool:
+    stripped = value.strip()
+    if len(stripped) < 2:
+        return False
+
+    lowered = stripped.lower()
+    for keyword in ("true", "false", "null"):
+        if keyword.startswith(lowered) and lowered != keyword:
+            return True
+
+    return _NUMERIC_LIKE_TOKEN_RE.fullmatch(stripped) is not None
+
+
 def _parse_non_range_holdout_value(value: str) -> Any:
     try:
         parsed_value = json.loads(value)
@@ -208,6 +225,11 @@ def _parse_non_range_holdout_value(value: str) -> Any:
         if _looks_like_json_literal(value):
             raise typer.BadParameter(
                 f"Invalid holdout value '{value}': malformed JSON literal "
+                "for exact/contains holdouts"
+            ) from err
+        if _looks_like_malformed_json_scalar(value):
+            raise typer.BadParameter(
+                f"Invalid holdout value '{value}': malformed JSON scalar "
                 "for exact/contains holdouts"
             ) from err
         return value
