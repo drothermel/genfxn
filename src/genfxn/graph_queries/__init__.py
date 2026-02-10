@@ -11,6 +11,7 @@ from genfxn.graph_queries.queries import generate_graph_queries_queries
 from genfxn.graph_queries.render import render_graph_queries
 from genfxn.graph_queries.sampler import sample_graph_queries_spec
 from genfxn.graph_queries.task import generate_graph_queries_task
+from genfxn.graph_queries.validate import validate_graph_queries_task
 
 __all__ = [
     "GraphEdge",
@@ -23,4 +24,5 @@ __all__ = [
     "normalize_graph",
     "render_graph_queries",
     "sample_graph_queries_spec",
+    "validate_graph_queries_task",
 ]

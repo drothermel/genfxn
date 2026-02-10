@@ -2,7 +2,7 @@
 
 Date: 2026-02-10
 Owner: Codex + Danielle
-Status: In progress (M0-M2 complete, M3-M5 pending)
+Status: In progress (M0-M3 complete, M4-M5 pending)
 
 ## Goal
 
@@ -317,7 +317,7 @@ Acceptance:
 - [x] M0 complete
 - [x] M1 complete
 - [x] M2 complete
-- [ ] M3 complete
+- [x] M3 complete
 - [ ] M4 complete
 - [ ] M5 complete
 - [ ] Full `ruff` and full `pytest` pass
@@ -336,3 +336,6 @@ Acceptance:
 - 2026-02-10: M2 completed with difficulty-aware sampler tuning, new
   `compute_difficulty("graph_queries", ...)` model integration, task
   difficulty wiring, and expanded query-quality/multi-seed monotonicity tests.
+- 2026-02-10: M3 completed with renderer-safe code generation for restricted
+  exec, new AST whitelist policy, `validate_graph_queries_task`, and dedicated
+  validation tests (`tests/test_validate_graph_queries.py`).
