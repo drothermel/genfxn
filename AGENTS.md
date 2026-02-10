@@ -16,7 +16,8 @@ reprioritized in a newer planning document.
 
 ## Build, Test, and Development Commands
 - `uv sync`: install Python dependencies (root project).
-- `uv run pytest tests/ -v`: run the full Python test suite.
+- `uv run pytest tests/ -v --verification-level=standard`: run the default suite (skips `@pytest.mark.full`).
+- `uv run pytest tests/ -v --verification-level=full`: run the full Python test suite (includes `@pytest.mark.full`).
 - `uv run ruff check .`: run lint checks.
 - `uv run ty check`: run static type checks (expected pre-commit).
 - `uv run genfxn generate -f all -n 20 -o /tmp/tasks.jsonl`: generate sample tasks.

@@ -65,6 +65,23 @@ def test_query_input_output_type_mismatch_detected(
     assert any(issue.code == CODE_QUERY_OUTPUT_TYPE for issue in issues)
 
 
+def test_bool_query_values_are_rejected(baseline_task: Task) -> None:
+    corrupted = baseline_task.model_copy(
+        update={
+            "queries": [
+                Query(
+                    input={"a": [True, 1], "b": [0]},
+                    output=False,
+                    tag=QueryTag.TYPICAL,
+                )
+            ]
+        }
+    )
+    issues = validate_sequence_dp_task(corrupted)
+    assert any(issue.code == CODE_QUERY_INPUT_TYPE for issue in issues)
+    assert any(issue.code == CODE_QUERY_OUTPUT_TYPE for issue in issues)
+
+
 def test_query_output_mismatch_detected(baseline_task: Task) -> None:
     query = baseline_task.queries[0]
     bad_query = Query(

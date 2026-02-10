@@ -44,6 +44,10 @@ _spec_adapter = TypeAdapter(BitopsSpec)
 _ALLOWED_BUILTINS = {}
 
 
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _validate_ast_whitelist(
     code: str,
     param_name: str = "x",
@@ -170,7 +174,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
     severity = Severity.ERROR if strict else Severity.WARNING
 
     for i, query in enumerate(task.queries):
-        if not isinstance(query.input, int):
+        if not _is_int_not_bool(query.input):
             issues.append(
                 Issue(
                     code=CODE_QUERY_INPUT_TYPE,
@@ -180,7 +184,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     task_id=task.task_id,
                 )
             )
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -349,9 +353,9 @@ def _validate_query_outputs(
     severity = Severity.ERROR if strict else Severity.WARNING
 
     for i, query in enumerate(task.queries):
-        if not isinstance(query.input, int):
+        if not _is_int_not_bool(query.input):
             continue
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             continue
 
         expected = eval_bitops(spec, query.input)

@@ -1721,6 +1721,40 @@ class TestDeterminism:
                 "stringrules", 3, seed=7, pool_size=20, max_retries=0
             )
 
+    def test_generate_suite_retries_with_distinct_selection_rng(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        draws: list[float] = []
+        monkeypatch.setattr(
+            suite_generate,
+            "generate_pool",
+            lambda *_: ([], PoolStats()),
+        )
+
+        def _capture_rng_draw(
+            _candidates: list[Candidate],
+            _quota: QuotaSpec,
+            rng: random.Random,
+        ) -> list[Candidate]:
+            draws.append(rng.random())
+            return []
+
+        monkeypatch.setattr(suite_generate, "greedy_select", _capture_rng_draw)
+
+        with pytest.raises(RuntimeError, match="Could not fill suite"):
+            suite_generate.generate_suite(
+                "stringrules",
+                3,
+                seed=7,
+                pool_size=20,
+                max_retries=2,
+            )
+
+        assert len(draws) == 3
+        assert len(set(draws)) == 3
+
     def test_stack_bytecode_generate_suite_deterministic_when_available(
         self,
     ) -> None:

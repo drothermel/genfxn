@@ -1428,14 +1428,143 @@ def _condition_applies(bucket: Bucket, features: dict[str, str]) -> bool:
 
 def _quota_targets_met(selected: list[Candidate], quota: QuotaSpec) -> bool:
     """Return True when all bucket targets are met by selected candidates."""
-    filled: dict[int, int] = {i: 0 for i in range(len(quota.buckets))}
+    filled = _bucket_fill_counts(selected, quota)
+    return all(
+        filled[bi] >= bucket.target for bi, bucket in enumerate(quota.buckets)
+    )
+
+
+def _bucket_fill_counts(
+    selected: Sequence[Candidate],
+    quota: QuotaSpec,
+) -> list[int]:
+    """Count how many selected candidates fill each quota bucket."""
+    filled: list[int] = [0 for _ in range(len(quota.buckets))]
     for candidate in selected:
         for bi, bucket in enumerate(quota.buckets):
             if _bucket_applies(bucket, candidate.features):
                 filled[bi] += 1
-    return all(
-        filled[bi] >= bucket.target for bi, bucket in enumerate(quota.buckets)
-    )
+    return filled
+
+
+def _bucket_deficits(
+    filled: Sequence[int],
+    quota: QuotaSpec,
+) -> list[int]:
+    return [
+        max(0, bucket.target - filled[bi])
+        for bi, bucket in enumerate(quota.buckets)
+    ]
+
+
+def _deficit_score(filled: Sequence[int], quota: QuotaSpec) -> tuple[int, int]:
+    deficits = _bucket_deficits(filled, quota)
+    total_deficit = sum(deficits)
+    unmet_buckets = sum(1 for deficit in deficits if deficit > 0)
+    return total_deficit, unmet_buckets
+
+
+def _repair_selection_with_swaps(
+    selected: list[Candidate],
+    candidates: list[Candidate],
+    quota: QuotaSpec,
+    max_swaps: int = 64,
+) -> list[Candidate]:
+    """Repair near-miss selections via deterministic 1-for-1 swaps.
+
+    Greedy selection can get trapped in a local optimum where one bucket
+    remains underfilled even though the candidate pool contains a feasible
+    swap. This pass keeps selection size fixed and only applies improving
+    swaps.
+    """
+    if len(selected) != quota.total or len(selected) == 0:
+        return selected
+
+    filtered = [
+        cand
+        for cand in candidates
+        if all(
+            cand.features.get(key) == val
+            for key, val in quota.hard_constraints.items()
+        )
+    ]
+    if not filtered:
+        return selected
+
+    selected_ids = {cand.task_id for cand in selected}
+    unselected = [cand for cand in filtered if cand.task_id not in selected_ids]
+    if not unselected:
+        return selected
+
+    applicable_buckets: dict[str, list[int]] = {}
+    for cand in filtered:
+        applicable: list[int] = []
+        for bi, bucket in enumerate(quota.buckets):
+            if _bucket_applies(bucket, cand.features):
+                applicable.append(bi)
+        applicable_buckets[cand.task_id] = applicable
+
+    repaired = list(selected)
+    filled = _bucket_fill_counts(repaired, quota)
+    for _ in range(max_swaps):
+        base_score = _deficit_score(filled, quota)
+        if base_score == (0, 0):
+            break
+
+        deficits = _bucket_deficits(filled, quota)
+        deficit_buckets = {
+            bi for bi, deficit in enumerate(deficits) if deficit > 0
+        }
+        candidate_replacements = [
+            ui
+            for ui, cand in enumerate(unselected)
+            if any(
+                bi in deficit_buckets
+                for bi in applicable_buckets.get(cand.task_id, [])
+            )
+        ]
+        if not candidate_replacements:
+            break
+
+        best_swap: tuple[tuple[int, int], int, int, list[int]] | None = None
+        for si, current in enumerate(repaired):
+            current_buckets = applicable_buckets.get(current.task_id, [])
+            for ui in candidate_replacements:
+                replacement = unselected[ui]
+                replacement_buckets = applicable_buckets.get(
+                    replacement.task_id, []
+                )
+                if replacement_buckets == current_buckets:
+                    continue
+
+                new_filled = filled.copy()
+                for bi in current_buckets:
+                    new_filled[bi] -= 1
+                for bi in replacement_buckets:
+                    new_filled[bi] += 1
+
+                new_score = _deficit_score(new_filled, quota)
+                if new_score >= base_score:
+                    continue
+
+                if best_swap is None or new_score < best_swap[0]:
+                    best_swap = (new_score, si, ui, new_filled)
+                    if new_score == (0, 0):
+                        break
+            if best_swap is not None and best_swap[0] == (0, 0):
+                break
+
+        if best_swap is None:
+            break
+
+        _, selected_idx, unselected_idx, next_filled = best_swap
+        replacement = unselected.pop(unselected_idx)
+        removed = repaired[selected_idx]
+        repaired[selected_idx] = replacement
+        unselected.append(removed)
+        filled = next_filled
+
+    return repaired
 
 
 def greedy_select(
@@ -1654,9 +1783,10 @@ def generate_suite(
         )
 
         select_rng = random.Random(
-            _stable_seed(seed, family, difficulty, 999999)
+            _stable_seed(seed, family, difficulty, 999999 + attempt)
         )
         selected = greedy_select(candidates, quota, select_rng)
+        selected = _repair_selection_with_swaps(selected, candidates, quota)
 
         if len(selected) >= quota.total and _quota_targets_met(selected, quota):
             break

@@ -52,6 +52,10 @@ _ALLOWED_BUILTINS = {
 }
 
 
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _validate_ast_whitelist(
     code: str,
     param_name: str = "intervals",
@@ -346,7 +350,7 @@ def _coerce_query_input(
             return None
         left = pair[0]
         right = pair[1]
-        if not isinstance(left, int) or not isinstance(right, int):
+        if not _is_int_not_bool(left) or not _is_int_not_bool(right):
             return None
         intervals.append((left, right))
 
@@ -371,7 +375,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     task_id=task.task_id,
                 )
             )
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -397,7 +401,7 @@ def _validate_query_outputs(
         intervals = _coerce_query_input(query.input)
         if intervals is None:
             continue
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             continue
 
         expected = eval_intervals(spec, intervals)
