@@ -16,7 +16,7 @@ def _available_languages(family: str = "piecewise") -> list[Language]:
         try:
             get_render_fn(lang, family)
             available.append(lang)
-        except (ImportError, ModuleNotFoundError, ValueError):
+        except ValueError:
             pass
     return available
 

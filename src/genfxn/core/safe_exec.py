@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import atexit
 import errno
+import logging
 import math
 import multiprocessing as mp
 import os
@@ -12,6 +13,8 @@ import time
 from dataclasses import dataclass
 from queue import Empty
 from typing import Any, cast
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SafeExecValidationError(ValueError):
@@ -192,14 +195,20 @@ def _terminate_process_tree(process: mp.Process) -> None:
         try:
             process.terminate()
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: process.terminate() failed",
+                exc_info=True,
+            )
         process.join(timeout=0.2)
 
     if process.is_alive():
         try:
             process.kill()
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: process.kill() failed",
+                exc_info=True,
+            )
         process.join(timeout=0.2)
 
 
@@ -591,14 +600,20 @@ class _IsolatedFunction:
         try:
             atexit.unregister(self.close)
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: atexit.unregister() failed",
+                exc_info=True,
+            )
         self._worker.close()
 
     def __del__(self) -> None:
         try:
             self.close()
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: __del__ close() failed",
+                exc_info=True,
+            )
 
 
 def _persistent_worker(
@@ -785,18 +800,27 @@ class _PersistentWorker:
                     )
                     self._process.join(timeout=0.2)
                 except Exception:
-                    pass
+                    _LOGGER.debug(
+                        "safe_exec cleanup: worker shutdown signal failed",
+                        exc_info=True,
+                    )
                 self._terminate()
         finally:
             for q in (self._request_queue, self._response_queue):
                 try:
                     q.close()
                 except Exception:
-                    pass
+                    _LOGGER.debug(
+                        "safe_exec cleanup: queue.close() failed",
+                        exc_info=True,
+                    )
                 try:
                     q.join_thread()
                 except Exception:
-                    pass
+                    _LOGGER.debug(
+                        "safe_exec cleanup: queue.join_thread() failed",
+                        exc_info=True,
+                    )
 
 
 def execute_code_restricted(

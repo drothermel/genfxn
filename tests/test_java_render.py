@@ -1180,6 +1180,30 @@ class TestLangsInfra:
         with pytest.raises(AttributeError, match="missing render function"):
             render_module._available_languages()
 
+    @pytest.mark.parametrize(
+        ("error_type", "expected_message"),
+        [
+            (ImportError, "renderer import failed"),
+            (ModuleNotFoundError, "renderer module missing"),
+        ],
+    )
+    def test_available_languages_raises_import_errors(
+        self, monkeypatch, error_type: type[Exception], expected_message: str
+    ) -> None:
+        from genfxn.langs import render as render_module
+
+        original_get_render_fn = render_module.get_render_fn
+
+        def _fake_get_render_fn(language: Language, family: str):
+            if language == Language.JAVA and family == "piecewise":
+                raise error_type(expected_message)
+            return original_get_render_fn(language, family)
+
+        monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
+
+        with pytest.raises(error_type, match=expected_message):
+            render_module._available_languages()
+
     def test_render_all_languages_default(self) -> None:
         from genfxn.langs.render import render_all_languages
         from genfxn.piecewise.models import Branch, PiecewiseSpec
