@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 
 from genfxn.core.models import Query, QueryTag, Task
-from genfxn.core.validate import Severity
+from genfxn.core.validate import Issue, Severity
 
 intervals_eval = pytest.importorskip("genfxn.intervals.eval")
 intervals_models = pytest.importorskip("genfxn.intervals.models")
@@ -27,7 +27,9 @@ CODE_UNSAFE_AST = intervals_validate.CODE_UNSAFE_AST
 _validate_intervals_task = intervals_validate.validate_intervals_task
 
 
-def validate_intervals_task(*args: Any, **kwargs: Any):
+def validate_intervals_task(
+    *args: Any, **kwargs: Any
+) -> list[Issue]:
     kwargs.setdefault("execute_untrusted_code", True)
     return _validate_intervals_task(*args, **kwargs)
 

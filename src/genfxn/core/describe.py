@@ -850,18 +850,16 @@ def _describe_intervals(spec: dict[str, Any]) -> str:
         merge_text = "do not merge touching spans"
 
     return _join_description_parts(
-        (
-            "Implement f(intervals: list[tuple[int, int]]) -> int. "
-            "Normalize each interval so lo <= hi."
-        ),
+        "Implement f(intervals: list[tuple[int, int]]) -> int.",
         (
             f"Clamp each endpoint into [-{clip_value}, {clip_value}] "
-            "before normalization."
+            "before further processing."
         ),
         (
             "Quantize endpoints toward zero to multiples of "
             f"{quantize_step}."
         ),
+        "Normalize each interval so lo <= hi.",
         (
             f"Apply boundary mode '{boundary_mode}' to map intervals onto "
             "inclusive integer spans and ignore empty spans."

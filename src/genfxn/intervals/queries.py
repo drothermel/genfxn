@@ -32,8 +32,7 @@ def _get_axis_range(
     return fallback
 
 
-def _clamp(value: int, bounds: tuple[int, int]) -> int:
-    lo, hi = bounds
+def _clamp(value: int, lo: int, hi: int) -> int:
     return min(max(value, lo), hi)
 
 
@@ -164,7 +163,7 @@ def generate_intervals_queries(
     ]
     for case in coverage_cases:
         adjusted = [
-            (_clamp(a, endpoint_range), _clamp(b, endpoint_range))
+            (_clamp(a, lo, hi), _clamp(b, lo, hi))
             for a, b in case
         ]
         _append(adjusted, QueryTag.COVERAGE)
@@ -178,7 +177,7 @@ def generate_intervals_queries(
     ]
     for case in boundary_cases:
         adjusted = [
-            (_clamp(a, endpoint_range), _clamp(b, endpoint_range))
+            (_clamp(a, lo, hi), _clamp(b, lo, hi))
             for a, b in case
         ]
         _append(adjusted, QueryTag.BOUNDARY)
@@ -208,7 +207,7 @@ def generate_intervals_queries(
     ]
     for case in adversarial_cases:
         adjusted = [
-            (_clamp(a, endpoint_range), _clamp(b, endpoint_range))
+            (_clamp(a, lo, hi), _clamp(b, lo, hi))
             for a, b in case
         ]
         _append(adjusted, QueryTag.ADVERSARIAL)
@@ -219,8 +218,8 @@ def generate_intervals_queries(
         tag_index = list(QueryTag).index(tag)
         fallback = [
             (
-                _clamp(lo + tag_index, endpoint_range),
-                _clamp(hi - tag_index, endpoint_range),
+                _clamp(lo + tag_index, lo, hi),
+                _clamp(hi - tag_index, lo, hi),
             )
         ]
         _append(fallback, tag)

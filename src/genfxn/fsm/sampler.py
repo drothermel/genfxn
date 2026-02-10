@@ -1,5 +1,4 @@
 import random
-from typing import TypeVar
 
 from genfxn.core.predicates import (
     PredicateEven,
@@ -10,6 +9,7 @@ from genfxn.core.predicates import (
     PredicateModEq,
     PredicateOdd,
 )
+from genfxn.core.sampling import pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.fsm.models import (
     FsmAxes,
@@ -94,9 +94,6 @@ _TARGET_POLICY_PREFS: dict[int, list[UndefinedTransitionPolicy]] = {
     5: [UndefinedTransitionPolicy.ERROR],
 }
 
-T = TypeVar("T")
-
-
 def _intersect_ranges(
     a: tuple[int, int],
     b: tuple[int, int],
@@ -106,17 +103,6 @@ def _intersect_ranges(
     if lo > hi:
         return None
     return (lo, hi)
-
-
-def _pick_from_preferred(
-    available: list[T],
-    preferred: list[T],
-    rng: random.Random,
-) -> T:
-    preferred_available = [item for item in preferred if item in available]
-    if preferred_available:
-        return rng.choice(preferred_available)
-    return rng.choice(available)
 
 
 def _pick_targeted_int(
@@ -229,17 +215,17 @@ def sample_fsm_spec(
         output_mode = rng.choice(axes.output_modes)
         undefined_policy = rng.choice(axes.undefined_transition_policies)
     else:
-        machine_type = _pick_from_preferred(
+        machine_type = pick_from_preferred(
             axes.machine_types,
             _TARGET_MACHINE_PREFS[target_difficulty],
             rng,
         )
-        output_mode = _pick_from_preferred(
+        output_mode = pick_from_preferred(
             axes.output_modes,
             _TARGET_OUTPUT_PREFS[target_difficulty],
             rng,
         )
-        undefined_policy = _pick_from_preferred(
+        undefined_policy = pick_from_preferred(
             axes.undefined_transition_policies,
             _TARGET_POLICY_PREFS[target_difficulty],
             rng,

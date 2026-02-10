@@ -175,11 +175,17 @@ def _enum_or_str(value: Any, default: str) -> str:
         return default
     if hasattr(value, "value"):
         enum_value = value.value
-        if isinstance(enum_value, str):
-            return enum_value
+        return str(enum_value)
     if isinstance(value, str):
         return value
     return str(value)
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 # ── Public feature extractors ────────────────────────────────────────────
@@ -707,16 +713,11 @@ def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
     operation = _enum_or_str(spec.get("operation"), "total_coverage")
     boundary_mode = _enum_or_str(spec.get("boundary_mode"), "closed_closed")
     merge_touching = str(bool(spec.get("merge_touching", False))).lower()
-    raw_clip = spec.get("endpoint_clip_abs", 20)
-    raw_quantize_step = spec.get("endpoint_quantize_step", 1)
-    try:
-        endpoint_clip_abs = int(raw_clip)
-    except (TypeError, ValueError):
-        endpoint_clip_abs = 20
-    try:
-        endpoint_quantize_step = int(raw_quantize_step)
-    except (TypeError, ValueError):
-        endpoint_quantize_step = 1
+    endpoint_clip_abs = _coerce_int(spec.get("endpoint_clip_abs"), 20)
+    endpoint_quantize_step = _coerce_int(
+        spec.get("endpoint_quantize_step"),
+        1,
+    )
 
     if boundary_mode == "closed_closed":
         boundary_bucket = "closed"

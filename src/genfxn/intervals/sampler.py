@@ -1,6 +1,6 @@
 import random
-from typing import TypeVar
 
+from genfxn.core.sampling import pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.intervals.models import (
     BoundaryMode,
@@ -62,9 +62,6 @@ _TARGET_ENDPOINT_CLIP_ABS_RANGES: dict[int, tuple[int, int]] = {
     5: (3, 6),
 }
 
-T = TypeVar("T")
-
-
 def _sample_int_in_range(
     value_range: tuple[int, int],
     rng: random.Random,
@@ -91,15 +88,6 @@ def _sample_probability(
     return rng.uniform(prob_range[0], prob_range[1])
 
 
-def _pick_from_preferred(
-    available: list[T], preferred: list[T], rng: random.Random
-) -> T:
-    preferred_available = [value for value in preferred if value in available]
-    if preferred_available:
-        return rng.choice(preferred_available)
-    return rng.choice(available)
-
-
 def sample_intervals_spec(
     axes: IntervalsAxes,
     rng: random.Random | None = None,
@@ -123,17 +111,17 @@ def sample_intervals_spec(
             rng,
         )
     else:
-        operation = _pick_from_preferred(
+        operation = pick_from_preferred(
             axes.operation_types,
             _TARGET_OPERATION_PREFS[target_difficulty],
             rng,
         )
-        boundary_mode = _pick_from_preferred(
+        boundary_mode = pick_from_preferred(
             axes.boundary_modes,
             _TARGET_BOUNDARY_PREFS[target_difficulty],
             rng,
         )
-        merge_touching = _pick_from_preferred(
+        merge_touching = pick_from_preferred(
             axes.merge_touching_choices,
             _TARGET_MERGE_TOUCHING_PREFS[target_difficulty],
             rng,
