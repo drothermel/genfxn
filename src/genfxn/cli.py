@@ -964,6 +964,10 @@ def generate(
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1) from err
 
+    if count < 0:
+        typer.echo("Error: --count must be >= 0", err=True)
+        raise typer.Exit(1)
+
     # Validate difficulty/variant options
     if difficulty is not None:
         if family == "all":
@@ -1354,7 +1358,11 @@ def split(
                     err=True,
                 )
                 raise typer.Exit(1)
-            if random_ratio < 0 or random_ratio > 1:
+            if (
+                not math.isfinite(random_ratio)
+                or random_ratio < 0
+                or random_ratio > 1
+            ):
                 typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
                 raise typer.Exit(1)
             total_count = _count_validated_tasks(input_file)

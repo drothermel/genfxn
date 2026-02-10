@@ -101,6 +101,25 @@ class TestGenerate:
         assert len(tasks) == 5
         assert all(t["family"] == "piecewise" for t in tasks)
 
+    def test_generate_rejects_negative_count(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "-3",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "Error: --count must be >= 0" in result.output
+        assert "Traceback" not in result.output
+
     def test_generate_stateful(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
@@ -2969,6 +2988,49 @@ class TestSplit:
         test_1 = list(srsly.read_jsonl(test_file))
         assert len(train_1) == 10
         assert len(test_1) == 0
+
+    @pytest.mark.parametrize("ratio", ["nan", "NaN"])
+    def test_split_random_ratio_rejects_non_finite_values(
+        self, tmp_path, ratio: str
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "4",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                ratio,
+                "--seed",
+                "7",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "Error: --random-ratio must be in [0, 1]" in result.output
+        assert "Traceback" not in result.output
 
     def test_split_random_ratio_seed_is_deterministic(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
