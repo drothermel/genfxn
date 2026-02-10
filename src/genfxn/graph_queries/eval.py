@@ -11,14 +11,19 @@ def _validate_node(node: int, n_nodes: int, name: str) -> None:
         raise ValueError(f"{name}={node} must be in [0, {n_nodes - 1}]")
 
 
-def normalize_graph(spec: GraphQueriesSpec) -> Adjacency:
+def _validate_spec_for_eval(spec: GraphQueriesSpec) -> None:
+    if spec.n_nodes < 1:
+        raise ValueError("n_nodes must be >= 1")
+    for index, edge in enumerate(spec.edges):
+        _validate_node(edge.u, spec.n_nodes, f"edges[{index}].u")
+        _validate_node(edge.v, spec.n_nodes, f"edges[{index}].v")
+        if edge.w < 0:
+            raise ValueError(f"edges[{index}].w={edge.w} must be >= 0")
+
+
+def _build_normalized_adjacency(spec: GraphQueriesSpec) -> Adjacency:
     best_weight_by_edge: dict[tuple[int, int], int] = {}
     for edge in spec.edges:
-        if edge.u < 0 or edge.u >= spec.n_nodes:
-            continue
-        if edge.v < 0 or edge.v >= spec.n_nodes:
-            continue
-
         weight = edge.w if spec.weighted else 1
         key = (edge.u, edge.v)
         prior = best_weight_by_edge.get(key)
@@ -39,6 +44,11 @@ def normalize_graph(spec: GraphQueriesSpec) -> Adjacency:
     for neighbors in adjacency.values():
         neighbors.sort(key=lambda item: (item[0], item[1]))
     return adjacency
+
+
+def normalize_graph(spec: GraphQueriesSpec) -> Adjacency:
+    _validate_spec_for_eval(spec)
+    return _build_normalized_adjacency(spec)
 
 
 def _is_reachable(adjacency: Adjacency, src: int, dst: int) -> bool:
@@ -97,6 +107,7 @@ def _shortest_path_cost(adjacency: Adjacency, src: int, dst: int) -> int:
 
 
 def eval_graph_queries(spec: GraphQueriesSpec, src: int, dst: int) -> int:
+    _validate_spec_for_eval(spec)
     _validate_node(src, spec.n_nodes, "src")
     _validate_node(dst, spec.n_nodes, "dst")
 
@@ -105,9 +116,12 @@ def eval_graph_queries(spec: GraphQueriesSpec, src: int, dst: int) -> int:
             return 1
         return 0
 
-    adjacency = normalize_graph(spec)
+    adjacency = _build_normalized_adjacency(spec)
     if spec.query_type == GraphQueryType.REACHABLE:
         return 1 if _is_reachable(adjacency, src, dst) else 0
     if spec.query_type == GraphQueryType.MIN_HOPS:
         return _min_hops(adjacency, src, dst)
-    return _shortest_path_cost(adjacency, src, dst)
+    if spec.query_type == GraphQueryType.SHORTEST_PATH_COST:
+        return _shortest_path_cost(adjacency, src, dst)
+
+    raise ValueError(f"Unsupported query_type: {spec.query_type}")

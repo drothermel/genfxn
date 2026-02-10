@@ -1,6 +1,7 @@
 import random
 
 from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.describe import describe_task
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
@@ -8,16 +9,6 @@ from genfxn.graph_queries.queries import generate_graph_queries_queries
 from genfxn.graph_queries.render import render_graph_queries
 from genfxn.graph_queries.sampler import sample_graph_queries_spec
 from genfxn.langs.types import Language
-
-
-def _describe_graph_queries(spec: GraphQueriesSpec) -> str:
-    direction_text = "directed" if spec.directed else "undirected"
-    weight_text = "weighted" if spec.weighted else "unweighted"
-    return (
-        "Answer graph query "
-        f"{spec.query_type.value!r} on a {direction_text}, {weight_text} "
-        f"graph with {spec.n_nodes} nodes."
-    )
 
 
 def _render_graph_queries_for_languages(
@@ -63,5 +54,5 @@ def generate_graph_queries_task(
         trace=GenerationTrace(family="graph_queries", steps=trace_steps),
         axes=axes.model_dump(),
         difficulty=None,
-        description=_describe_graph_queries(spec),
+        description=describe_task("graph_queries", spec_dict),
     )

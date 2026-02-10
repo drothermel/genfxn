@@ -2,7 +2,7 @@
 
 Date: 2026-02-10
 Owner: Codex + Danielle
-Status: In progress (M0 complete, M1-M5 pending)
+Status: In progress (M0-M1 complete, M2-M5 pending)
 
 ## Goal
 
@@ -315,7 +315,7 @@ Acceptance:
 ## Execution Checklist
 
 - [x] M0 complete
-- [ ] M1 complete
+- [x] M1 complete
 - [ ] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
@@ -330,3 +330,6 @@ Acceptance:
 - 2026-02-10: M0 completed with package skeleton under
   `src/genfxn/graph_queries/` and deterministic smoke tests in
   `tests/test_graph_queries.py`.
+- 2026-02-10: M1 completed with hardened spec/evaluator checks, task
+  description integration via `src/genfxn/core/describe.py`, and expanded
+  evaluator/render parity tests.

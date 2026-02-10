@@ -896,3 +896,14 @@ class TestDescribeTask:
         assert "move to sink state (max_state_id + 1)" in result
         assert "Use output_mode 'accept_bool'" in result
         assert "accepting states: 0" in result
+
+    def test_graph_queries_family(self) -> None:
+        spec = {
+            "query_type": "min_hops",
+            "directed": False,
+            "weighted": True,
+            "n_nodes": 7,
+        }
+        result = describe_task("graph_queries", spec)
+        assert "graph query 'min_hops'" in result
+        assert "undirected, weighted graph with 7 nodes" in result

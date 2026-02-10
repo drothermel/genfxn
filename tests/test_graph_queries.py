@@ -1,9 +1,12 @@
 import random
 from collections.abc import Callable
+from itertools import product
 from typing import cast
 
+import pytest
+
 from genfxn.core.models import QueryTag
-from genfxn.graph_queries.eval import eval_graph_queries
+from genfxn.graph_queries.eval import eval_graph_queries, normalize_graph
 from genfxn.graph_queries.models import (
     GraphEdge,
     GraphQueriesAxes,
@@ -30,6 +33,27 @@ def _spec(query_type: GraphQueryType) -> GraphQueriesSpec:
     )
 
 
+def _matrix_spec(
+    query_type: GraphQueryType,
+    *,
+    directed: bool,
+    weighted: bool,
+) -> GraphQueriesSpec:
+    return GraphQueriesSpec(
+        query_type=query_type,
+        directed=directed,
+        weighted=weighted,
+        n_nodes=6,
+        edges=[
+            GraphEdge(u=0, v=1, w=8),
+            GraphEdge(u=0, v=1, w=2),
+            GraphEdge(u=1, v=2, w=3),
+            GraphEdge(u=2, v=3, w=1),
+            GraphEdge(u=0, v=4, w=10),
+        ],
+    )
+
+
 def test_eval_semantics_for_v1_query_types() -> None:
     reachable_spec = _spec(GraphQueryType.REACHABLE)
     assert eval_graph_queries(reachable_spec, 0, 2) == 1
@@ -47,15 +71,108 @@ def test_eval_semantics_for_v1_query_types() -> None:
     assert eval_graph_queries(cost_spec, 3, 3) == 0
 
 
-def test_rendered_python_matches_evaluator() -> None:
-    spec = _spec(GraphQueryType.SHORTEST_PATH_COST)
+def test_normalize_graph_keeps_min_weight_for_duplicate_edges() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=10),
+            GraphEdge(u=0, v=1, w=2),
+            GraphEdge(u=1, v=2, w=5),
+        ],
+    )
+    adjacency = normalize_graph(spec)
+    assert adjacency == {
+        0: [(1, 2)],
+        1: [(2, 5)],
+        2: [],
+    }
+    assert eval_graph_queries(spec, 0, 2) == 7
+
+
+@pytest.mark.parametrize(
+    ("query_type", "expected"),
+    [
+        (GraphQueryType.REACHABLE, 1),
+        (GraphQueryType.MIN_HOPS, 2),
+        (GraphQueryType.SHORTEST_PATH_COST, 9),
+    ],
+)
+def test_eval_undirected_graph_is_symmetric(
+    query_type: GraphQueryType,
+    expected: int,
+) -> None:
+    spec = GraphQueriesSpec(
+        query_type=query_type,
+        directed=False,
+        weighted=True,
+        n_nodes=4,
+        edges=[
+            GraphEdge(u=0, v=1, w=4),
+            GraphEdge(u=1, v=2, w=5),
+        ],
+    )
+    assert eval_graph_queries(spec, 0, 2) == expected
+    assert eval_graph_queries(spec, 2, 0) == expected
+
+
+@pytest.mark.parametrize(
+    ("src", "dst", "match"),
+    [
+        (-1, 0, "src=-1"),
+        (4, 0, "src=4"),
+        (0, -1, "dst=-1"),
+        (0, 4, "dst=4"),
+    ],
+)
+def test_eval_invalid_nodes_raise_value_error(
+    src: int,
+    dst: int,
+    match: str,
+) -> None:
+    spec = _spec(GraphQueryType.REACHABLE)
+    with pytest.raises(ValueError, match=match):
+        eval_graph_queries(spec, src, dst)
+
+
+@pytest.mark.parametrize(
+    ("query_type", "directed", "weighted"),
+    [
+        (query_type, directed, weighted)
+        for query_type, directed, weighted in product(
+            GraphQueryType,
+            (False, True),
+            (False, True),
+        )
+    ],
+    ids=[
+        f"{query_type.value}-directed-{directed}-weighted-{weighted}"
+        for query_type, directed, weighted in product(
+            GraphQueryType,
+            (False, True),
+            (False, True),
+        )
+    ],
+)
+def test_rendered_python_matches_evaluator_across_v1_matrix(
+    query_type: GraphQueryType,
+    directed: bool,
+    weighted: bool,
+) -> None:
+    spec = _matrix_spec(
+        query_type,
+        directed=directed,
+        weighted=weighted,
+    )
     code = render_graph_queries(spec)
 
     namespace: dict[str, object] = {}
     exec(code, namespace)  # noqa: S102
     rendered = cast(Callable[[int, int], int], namespace["f"])
 
-    inputs = [(0, 2), (2, 0), (3, 3), (0, 1), (1, 2)]
+    inputs = [(0, 2), (2, 0), (0, 4), (4, 0), (5, 0), (5, 5)]
     for src, dst in inputs:
         assert rendered(src, dst) == eval_graph_queries(spec, src, dst)
 

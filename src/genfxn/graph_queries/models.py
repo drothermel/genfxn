@@ -10,8 +10,8 @@ class GraphQueryType(str, Enum):
 
 
 class GraphEdge(BaseModel):
-    u: int
-    v: int
+    u: int = Field(ge=0)
+    v: int = Field(ge=0)
     w: int = Field(default=1, ge=0)
 
 
@@ -24,7 +24,11 @@ class GraphQueriesSpec(BaseModel):
 
     @model_validator(mode="after")
     def validate_spec(self) -> "GraphQueriesSpec":
+        if self.n_nodes < 1:
+            raise ValueError("n_nodes must be >= 1")
         for edge in self.edges:
+            if edge.w < 0:
+                raise ValueError("edge.w must be >= 0")
             if edge.u < 0 or edge.u >= self.n_nodes:
                 raise ValueError(
                     f"edge.u={edge.u} must be in [0, {self.n_nodes - 1}]"
