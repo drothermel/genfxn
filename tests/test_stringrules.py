@@ -487,6 +487,24 @@ class TestAxesValidation:
         with pytest.raises(ValueError, match="string_length_range"):
             StringRulesAxes(string_length_range=(20, 5))
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("string_length_range", (False, 5)),
+            ("prefix_suffix_length_range", (True, 4)),
+            ("substring_length_range", (1, False)),
+            ("length_threshold_range", (1, True)),
+        ],
+    )
+    def test_rejects_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            StringRulesAxes(**{field_name: range_value})
+
     def test_n_rules_too_low(self) -> None:
         with pytest.raises(ValueError):
             StringRulesAxes(n_rules=0)

@@ -1,10 +1,33 @@
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
 from genfxn.core.string_predicates import StringPredicate, StringPredicateType
 from genfxn.core.string_transforms import StringTransform, StringTransformType
 from genfxn.stringrules.utils import _get_charset
+
+_INT_RANGE_FIELDS = (
+    "string_length_range",
+    "prefix_suffix_length_range",
+    "substring_length_range",
+    "length_threshold_range",
+)
+
+
+def _validate_no_bool_int_range_bounds(data: Any) -> None:
+    if not isinstance(data, dict):
+        return
+
+    for field_name in _INT_RANGE_FIELDS:
+        value = data.get(field_name)
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            continue
+        low, high = value
+        if isinstance(low, bool) or isinstance(high, bool):
+            raise ValueError(
+                f"{field_name}: bool is not allowed for int range bounds"
+            )
 
 
 class OverlapLevel(str, Enum):
@@ -57,6 +80,12 @@ class StringRulesAxes(BaseModel):
     prefix_suffix_length_range: tuple[int, int] = Field(default=(1, 4))
     substring_length_range: tuple[int, int] = Field(default=(1, 3))
     length_threshold_range: tuple[int, int] = Field(default=(1, 15))
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_axes(cls, data: Any) -> Any:
+        _validate_no_bool_int_range_bounds(data)
+        return data
 
     @model_validator(mode="after")
     def validate_axes(self) -> "StringRulesAxes":
