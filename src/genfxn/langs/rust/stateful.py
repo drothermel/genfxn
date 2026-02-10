@@ -28,7 +28,7 @@ _I32_HELPERS = [
     "        let value_i32 = value as i32;",
     "        let low_i32 = low as i32;",
     "        let high_i32 = high as i32;",
-    "        value_i32.max(low_i32).min(high_i32) as i64",
+    "        low_i32.max(high_i32.min(value_i32)) as i64",
     "    }",
 ]
 
@@ -36,7 +36,7 @@ _I32_HELPERS = [
 def _render_conditional_linear_sum(
     spec: ConditionalLinearSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_rust(spec.predicate, "x")
+    cond = render_predicate_rust(spec.predicate, "x", int32_wrap=True)
     true_expr = render_transform_rust(
         spec.true_transform, "x", int32_wrap=True
     )
@@ -65,7 +65,9 @@ def _render_conditional_linear_sum(
 def _render_resetting_best_prefix_sum(
     spec: ResettingBestPrefixSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_rust(spec.reset_predicate, "x")
+    cond = render_predicate_rust(
+        spec.reset_predicate, "x", int32_wrap=True
+    )
     val_expr = (
         render_transform_rust(spec.value_transform, "x", int32_wrap=True)
         if spec.value_transform is not None
@@ -96,7 +98,9 @@ def _render_resetting_best_prefix_sum(
 def _render_longest_run(
     spec: LongestRunSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_rust(spec.match_predicate, "x")
+    cond = render_predicate_rust(
+        spec.match_predicate, "x", int32_wrap=True
+    )
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
@@ -121,7 +125,9 @@ def _render_longest_run(
 def _render_toggle_sum(
     spec: ToggleSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
-    cond = render_predicate_rust(spec.toggle_predicate, "x")
+    cond = render_predicate_rust(
+        spec.toggle_predicate, "x", int32_wrap=True
+    )
     on_expr = render_transform_rust(spec.on_transform, "x", int32_wrap=True)
     off_expr = render_transform_rust(spec.off_transform, "x", int32_wrap=True)
 

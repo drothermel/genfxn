@@ -106,6 +106,16 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
                     pass
             return ("__repr__", value_type, _safe_repr(value))
 
+    def _outputs_equal(left: Any, right: Any) -> bool:
+        if (
+            isinstance(left, float)
+            and isinstance(right, float)
+            and math.isnan(left)
+            and math.isnan(right)
+        ):
+            return True
+        return left == right
+
     tag_priority = {
         QueryTag.TYPICAL: 0,
         QueryTag.BOUNDARY: 1,
@@ -124,7 +134,7 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
             continue
 
         existing = result[idx]
-        if existing.output != q.output:
+        if not _outputs_equal(existing.output, q.output):
             raise ValueError(
                 "Duplicate query input has conflicting outputs: "
                 f"{existing.input!r} -> {existing.output!r} vs {q.output!r}"

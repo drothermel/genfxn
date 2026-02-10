@@ -12,9 +12,11 @@ from genfxn.core.predicates import (
     PredicateEven,
     PredicateGe,
     PredicateLt,
+    PredicateModEq,
 )
 from genfxn.core.transforms import (
     TransformAbs,
+    TransformClip,
     TransformIdentity,
     TransformNegate,
     TransformScale,
@@ -280,6 +282,51 @@ def test_stateful_runtime_parity_int32_boundary_cases() -> None:
         expected = eval_stateful(spec, xs)
         assert _run_java_f(javac, java, java_code, xs) == expected
         assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_stateful_runtime_parity_predicate_int32_constant_wrap() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    spec = ConditionalLinearSumSpec(
+        predicate=PredicateGe(value=3_000_000_005),
+        true_transform=TransformIdentity(),
+        false_transform=TransformShift(offset=-9),
+        init_value=0,
+    )
+    xs = [0]
+
+    java_code = render_stateful_java(spec, func_name="f")
+    rust_code = render_stateful_rust(spec, func_name="f")
+    expected = eval_stateful(spec, xs)
+
+    assert expected == 0
+    assert _run_java_f(javac, java, java_code, xs) == expected
+    assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_stateful_runtime_parity_clip_wrapped_bounds() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    spec = ConditionalLinearSumSpec(
+        predicate=PredicateGe(value=-2_147_483_648),
+        true_transform=TransformClip(
+            low=3_000_000_000,
+            high=3_000_000_100,
+        ),
+        false_transform=TransformIdentity(),
+        init_value=0,
+    )
+    xs = [0]
+
+    java_code = render_stateful_java(spec, func_name="f")
+    rust_code = render_stateful_rust(spec, func_name="f")
+    expected = eval_stateful(spec, xs)
+
+    assert expected == -1_294_967_196
+    assert _run_java_f(javac, java, java_code, xs) == expected
+    assert _run_rust_f(rustc, rust_code, xs) == expected
 
 
 @pytest.mark.full

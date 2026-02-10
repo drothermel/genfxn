@@ -229,6 +229,48 @@ class TestSplitTasks:
         assert result.test == []
         assert {t.task_id for t in result.train} == {"t1", "t2"}
 
+    @pytest.mark.parametrize(
+        "bad_value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "inf", "neg-inf"],
+    )
+    def test_exact_holdout_rejects_non_finite_holdout_values(
+        self, bad_value: float
+    ) -> None:
+        tasks = [_make_task("t1", {"value": bad_value})]
+        holdouts = [
+            AxisHoldout(
+                axis_path="value",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=bad_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1"}
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "inf", "neg-inf"],
+    )
+    def test_contains_holdout_rejects_non_finite_holdout_values(
+        self, bad_value: float
+    ) -> None:
+        tasks = [_make_task("t1", {"values": [bad_value]})]
+        holdouts = [
+            AxisHoldout(
+                axis_path="values",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value=bad_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1"}
+
     def test_contains_holdout(self) -> None:
         tasks = [
             _make_task("t1", {"tags": ["fast", "simple"]}),

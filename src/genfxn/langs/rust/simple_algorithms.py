@@ -32,7 +32,7 @@ _I32_HELPERS = [
     "        let value_i32 = value as i32;",
     "        let low_i32 = low as i32;",
     "        let high_i32 = high as i32;",
-    "        value_i32.max(low_i32).min(high_i32) as i64",
+    "        low_i32.max(high_i32.min(value_i32)) as i64",
     "    }",
 ]
 
@@ -42,7 +42,9 @@ def _render_preprocess_rust(
 ) -> list[str]:
     lines: list[str] = []
     if spec.pre_filter is not None:
-        cond = render_predicate_rust(spec.pre_filter, "x")
+        cond = render_predicate_rust(
+            spec.pre_filter, "x", int32_wrap=True
+        )
         lines.extend(
             [
                 f"    let _filtered: Vec<i64> = {var}.iter().copied()"

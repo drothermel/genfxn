@@ -42,6 +42,18 @@ def _i64_literal(value: int) -> str:
     return f"{value}i64"
 
 
+def _i64_wrap(value: int) -> int:
+    wrapped = value & ((1 << 64) - 1)
+    if wrapped >= (1 << 63):
+        return wrapped - (1 << 64)
+    return wrapped
+
+
+def _runtime_output_from_eval(eval_out: tuple[int, int]) -> tuple[int, int]:
+    status, value = eval_out
+    return int(status), _i64_wrap(value)
+
+
 def _parse_query_input(input_value: Any) -> list[int]:
     if not isinstance(input_value, list):
         raise TypeError("stack_bytecode query input must be list[int]")
@@ -397,7 +409,7 @@ def test_stack_bytecode_runtime_parity_overflow_adjacent_cases() -> None:
     )
 
     for spec in cases:
-        expected = eval_stack_bytecode(spec, [])
+        expected = _runtime_output_from_eval(eval_stack_bytecode(spec, []))
         java_code = render_stack_bytecode_java(spec, func_name="f")
         rust_code = render_stack_bytecode_rust(spec, func_name="f")
         assert _run_java_f(javac, java, java_code, []) == expected

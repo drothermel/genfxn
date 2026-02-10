@@ -1,3 +1,4 @@
+import math
 import random
 from enum import Enum
 from typing import Any
@@ -32,6 +33,18 @@ def _is_non_bool_number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
+def _contains_non_finite_number(value: Any) -> bool:
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, list | tuple):
+        return any(_contains_non_finite_number(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            _contains_non_finite_number(item) for item in value.values()
+        )
+    return False
+
+
 def _matches_exact_type_sensitive(value: Any, holdout_value: Any) -> bool:
     return type(value) is type(holdout_value) and value == holdout_value
 
@@ -44,6 +57,8 @@ def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
 
     match holdout.holdout_type:
         case HoldoutType.EXACT:
+            if _contains_non_finite_number(holdout.holdout_value):
+                return False
             return _matches_exact_type_sensitive(
                 value, holdout.holdout_value
             )
@@ -61,6 +76,8 @@ def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
                 return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:
+            if _contains_non_finite_number(holdout.holdout_value):
+                return False
             if not isinstance(value, (list, tuple, set, frozenset)):
                 return False
             return holdout.holdout_value in value

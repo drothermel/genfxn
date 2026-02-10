@@ -18,7 +18,11 @@ def _preprocess(
 ) -> list[int]:
     ys = [wrap_i32(x) for x in xs]
     if spec.pre_filter is not None:
-        ys = [x for x in ys if eval_predicate(spec.pre_filter, x)]
+        ys = [
+            x
+            for x in ys
+            if eval_predicate(spec.pre_filter, x, int32_wrap=True)
+        ]
     if spec.pre_transform is not None:
         ys = [
             eval_transform(spec.pre_transform, x, int32_wrap=True)

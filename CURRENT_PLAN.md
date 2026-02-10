@@ -49,6 +49,56 @@ New intake extension (2026-02-10, CLI range + NaN dedupe):
 - [x] Make `dedupe_queries` NaN keying deterministic and add regression tests in
       `tests/test_core_models.py`.
 
+New intake extension (2026-02-10, CLI exact/contains non-finite holdouts):
+- [x] Audit `split` holdout parsing for `exact`/`contains` to reject
+      non-finite holdout tokens with clear `BadParameter`.
+- [x] Add fail-closed matcher guards for non-finite `EXACT`/`CONTAINS`
+      holdout values in `src/genfxn/splits.py`.
+- [x] Add focused regressions in `tests/test_cli.py` and `tests/test_splits.py`
+      while preserving normal JSON-type holdout behavior.
+
+Progress update (2026-02-10, CLI exact/contains non-finite holdouts):
+- Added `_parse_non_range_holdout_value(...)` in `src/genfxn/cli.py` so
+  `split` now rejects non-finite exact/contains holdout values from both
+  JSON constants (`NaN`, `Infinity`, `-Infinity`) and raw token fallbacks
+  (`nan`, `inf`, `-inf`) with explicit `BadParameter`.
+- Added fail-closed non-finite guard handling for `EXACT` and `CONTAINS` in
+  `src/genfxn/splits.py` to keep direct matcher behavior deterministic.
+- Added focused regression coverage:
+  - `tests/test_cli.py`:
+    `test_split_exact_contains_reject_non_finite_holdout_values`,
+    `test_split_exact_allows_json_string_nan_literal`
+  - `tests/test_splits.py`:
+    `test_exact_holdout_rejects_non_finite_holdout_values`,
+    `test_contains_holdout_rejects_non_finite_holdout_values`
+- Validation evidence:
+  - `uv run pytest tests/test_cli.py tests/test_splits.py -v
+    --verification-level=standard` -> 166 passed
+  - `uv run ruff check src/genfxn/cli.py src/genfxn/splits.py
+    tests/test_cli.py tests/test_splits.py` -> passed
+  - `uv run ty check src/genfxn/cli.py src/genfxn/splits.py
+    tests/test_cli.py tests/test_splits.py` -> passed
+
+New intake extension (2026-02-10, dedupe NaN output equality):
+- [x] Fix `dedupe_queries` conflict detection so duplicate outputs that are both
+      NaN are treated as equal (no false conflict).
+- [x] Add focused `tests/test_core_models.py` coverage for:
+      duplicate NaN outputs (no conflict) and NaN-vs-non-NaN outputs (conflict).
+
+Progress update (2026-02-10, dedupe NaN output equality):
+- `src/genfxn/core/models.py` now uses NaN-aware output equality for duplicate
+  query conflict detection, so `nan` vs `nan` no longer raises a false conflict.
+- Added focused regressions in `tests/test_core_models.py` for:
+  - duplicate NaN outputs on identical input (dedupes, no conflict)
+  - NaN-vs-non-NaN outputs on identical input (raises conflict)
+- Validation evidence:
+  - `uv run pytest tests/test_core_models.py -v --verification-level=standard`
+    -> 16 passed.
+  - `uv run ruff check src/genfxn/core/models.py tests/test_core_models.py`
+    -> passed.
+  - `uv run ty check src/genfxn/core/models.py tests/test_core_models.py`
+    -> passed.
+
 New intake extension (2026-02-10, Java int literal compile safety):
 - [x] Audit Java int-family renderers for raw literal emission paths that can
       trigger `integer number too large`.
@@ -211,15 +261,33 @@ Current execution batch (2026-02-10, issue #3 int32-boundary parity coverage):
       `uv run ruff check` + `uv run ty check` on touched files.
 
 Current execution batch (2026-02-10, review item #6 expected-source cleanup):
-- [ ] Replace hardcoded expected values in overflow-adjacent parity tests with
+- [x] Replace hardcoded expected values in overflow-adjacent parity tests with
       evaluator-derived expected outputs in:
       `tests/test_sequence_dp_runtime_parity.py` and
       `tests/test_stack_bytecode_runtime_parity.py`.
-- [ ] Preserve deterministic inputs/cases and explicit Java/Rust parity
+- [x] Preserve deterministic inputs/cases and explicit Java/Rust parity
       assertions against evaluator-derived expected outputs.
-- [ ] Run targeted validation:
+- [x] Run targeted validation:
       `uv run pytest ... --verification-level=full` for both touched files,
       plus `uv run ruff check` and `uv run ty check` on touched files.
+
+Progress update (2026-02-10, review item #6 expected-source cleanup):
+- Replaced hardcoded expected values in overflow-adjacent parity tests with
+  evaluator-derived expected outputs in:
+  - `tests/test_sequence_dp_runtime_parity.py`
+  - `tests/test_stack_bytecode_runtime_parity.py`
+- Added runtime-output normalization helpers where needed to compare evaluator
+  outputs against Java/Rust `i64` runtime representations.
+- Kept deterministic case coverage and Java/Rust parity assertions intact while
+  using evaluator-derived expected values.
+- Validation evidence:
+  - `uv run pytest tests/test_sequence_dp_runtime_parity.py
+    tests/test_stack_bytecode_runtime_parity.py -v
+    --verification-level=full` -> 11 passed
+  - `uv run ruff check tests/test_sequence_dp_runtime_parity.py
+    tests/test_stack_bytecode_runtime_parity.py` -> passed
+  - `uv run ty check tests/test_sequence_dp_runtime_parity.py
+    tests/test_stack_bytecode_runtime_parity.py` -> passed
 
 Progress update (2026-02-10, issue #3 int32-boundary parity coverage):
 - Added deterministic int32-boundary parity regressions:
@@ -242,37 +310,103 @@ Progress update (2026-02-10, issue #3 int32-boundary parity coverage):
     tests/test_piecewise_runtime_parity.py` -> passed
 
 Current execution batch (2026-02-10, review item #5 oversized-literal parity):
-- [ ] Update oversized-literal tests in:
+- [x] Update oversized-literal tests in:
       `tests/test_piecewise_runtime_parity.py`,
       `tests/test_stateful_runtime_parity.py`,
       `tests/test_simple_algorithms_runtime_parity.py`
       so Java/Rust outputs are asserted against Python evaluator outputs.
-- [ ] Replace oversized divisor/remainder fixtures in parity tests with values
+- [x] Replace oversized divisor/remainder fixtures in parity tests with values
       that remain valid under the current int32 contract.
-- [ ] Expand `tests/test_java_render.py` `TestJavaIntLiteral` assertions to
+- [x] Expand `tests/test_java_render.py` `TestJavaIntLiteral` assertions to
       cover compile-safe boundary/extreme integer rendering.
-- [ ] Run targeted verification commands:
+- [x] Run targeted verification commands:
       `uv run pytest ... --verification-level=full`,
       `uv run ruff check ...`,
       `uv run ty check ...`.
 
+Progress update (2026-02-10, review item #5 oversized-literal parity):
+- Replaced compile-only oversized-literal checks with runtime parity assertions
+  against Python eval in:
+  - `test_piecewise_runtime_parity_with_oversized_int_literals`
+  - `test_stateful_runtime_parity_with_oversized_int_literals`
+  - `test_simple_algorithms_runtime_parity_with_oversized_int_literals`
+- Updated oversized mod fixtures to valid-contract values (for example,
+  `piecewise` now uses `ExprMod.divisor=11`, and the `stateful` oversized case
+  no longer uses oversized `PredicateModEq` divisor/remainder constants).
+- Expanded `TestJavaIntLiteral` coverage in `tests/test_java_render.py` for:
+  - int32 boundary literals
+  - just-outside-int32 casted literals
+  - long-range boundary values rendered via casted `L` literals.
+- Validation evidence:
+  - `uv run pytest tests/test_piecewise_runtime_parity.py
+    tests/test_stateful_runtime_parity.py
+    tests/test_simple_algorithms_runtime_parity.py
+    tests/test_java_render.py -v --verification-level=full -k
+    "oversized_int_literals or TestJavaIntLiteral"` -> 9 passed.
+  - `uv run ruff check tests/test_piecewise_runtime_parity.py
+    tests/test_stateful_runtime_parity.py
+    tests/test_simple_algorithms_runtime_parity.py tests/test_java_render.py`
+    -> passed.
+  - `uv run ty check tests/test_piecewise_runtime_parity.py
+    tests/test_stateful_runtime_parity.py
+    tests/test_simple_algorithms_runtime_parity.py tests/test_java_render.py`
+    -> passed.
+
 Current execution batch (2026-02-10, core semantics blocking fixes #1/#2/#3):
-- [ ] Add int32 predicate evaluation mode in `src/genfxn/core/predicates.py`
+- [x] Add int32 predicate evaluation mode in `src/genfxn/core/predicates.py`
       and wire int32-family eval/query call sites (`piecewise`, `stateful`,
       `simple_algorithms`) to use it.
-- [ ] Align int32 `TransformClip` evaluation semantics in
+- [x] Align int32 `TransformClip` evaluation semantics in
       `src/genfxn/core/transforms.py` with Java/Rust wrapped-bound behavior.
-- [ ] Harden modulo divisor safety at model layer:
+- [x] Harden modulo divisor safety at model layer:
       `src/genfxn/core/predicates.py` (`PredicateModEq`) and
       `src/genfxn/piecewise/models.py` (`ExprMod`) with int32-safe divisor
       bounds to prevent zero/negative-after-wrap divergence.
-- [ ] Update Rust predicate rendering and affected family renderers as needed to
+- [x] Update Rust predicate rendering and affected family renderers as needed to
       preserve int32 parity with new core predicate semantics.
-- [ ] Add/adjust regression and parity tests for int32 predicate semantics,
+- [x] Add/adjust regression and parity tests for int32 predicate semantics,
       clip alignment, and modulo-divisor safety.
-- [ ] Run targeted validation for touched files:
+- [x] Run targeted validation for touched files:
       `uv run pytest ... --verification-level=full`,
       `uv run ruff check ...`, and `uv run ty check ...`.
+
+Progress update (2026-02-10, core semantics blocking fixes #1/#2/#3):
+- Added int32 predicate evaluation mode in `src/genfxn/core/predicates.py` and
+  switched int32-family eval/query call sites in:
+  `src/genfxn/piecewise/eval.py`,
+  `src/genfxn/stateful/eval.py`,
+  `src/genfxn/stateful/queries.py`,
+  `src/genfxn/simple_algorithms/eval.py`, and
+  `src/genfxn/simple_algorithms/queries.py`.
+- Aligned int32 clip semantics via new helpers in `src/genfxn/core/int32.py`
+  and `src/genfxn/core/transforms.py`, and synchronized Rust helper ordering in
+  `src/genfxn/langs/rust/stateful.py` and
+  `src/genfxn/langs/rust/simple_algorithms.py`.
+- Hardened divisor bounds for int32 parity safety in:
+  `src/genfxn/core/predicates.py` (`PredicateModEq`) and
+  `src/genfxn/piecewise/models.py` (`ExprMod` + `PiecewiseAxes.divisor_range`).
+- Updated Rust predicate rendering for int32 mode in
+  `src/genfxn/langs/rust/predicates.py` and applied it in
+  `src/genfxn/langs/rust/piecewise.py`,
+  `src/genfxn/langs/rust/stateful.py`, and
+  `src/genfxn/langs/rust/simple_algorithms.py`.
+- Added targeted regressions in:
+  `tests/test_core_dsl.py`,
+  `tests/test_piecewise.py`,
+  `tests/test_piecewise_runtime_parity.py`,
+  `tests/test_stateful_runtime_parity.py`,
+  `tests/test_simple_algorithms_runtime_parity.py`,
+  and `tests/test_rust_render.py`.
+- Validation evidence:
+  - `uv run pytest tests/test_core_dsl.py tests/test_piecewise.py
+    tests/test_rust_render.py -v --verification-level=standard`
+    -> 232 passed.
+  - `uv run pytest tests/test_piecewise_runtime_parity.py
+    tests/test_stateful_runtime_parity.py
+    tests/test_simple_algorithms_runtime_parity.py -v
+    --verification-level=full` -> 25 passed.
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
 
 Exit criterion:
 - Each family parity file contains both sampled and forced-variant sections.

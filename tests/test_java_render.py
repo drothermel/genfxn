@@ -120,11 +120,27 @@ class TestJavaIntLiteral:
     def test_small_int(self) -> None:
         assert java_int_literal(123) == "123"
 
+    def test_int32_boundary_values_stay_plain_literals(self) -> None:
+        assert java_int_literal((1 << 31) - 1) == "2147483647"
+        assert java_int_literal(-(1 << 31)) == "-2147483648"
+
+    def test_int32_overflow_boundary_values_use_long_cast(self) -> None:
+        assert java_int_literal(1 << 31) == "((int) 2147483648L)"
+        assert java_int_literal(-(1 << 31) - 1) == "((int) -2147483649L)"
+
     def test_large_positive_int_uses_long_cast(self) -> None:
         assert java_int_literal(3_000_000_001) == "((int) 3000000001L)"
 
     def test_large_negative_int_uses_long_cast(self) -> None:
         assert java_int_literal(-3_000_000_001) == "((int) -3000000001L)"
+
+    def test_extreme_long_range_values_use_long_cast(self) -> None:
+        max_long = (1 << 63) - 1
+        min_long_plus_one = -(1 << 63) + 1
+        assert java_int_literal(max_long) == f"((int) {max_long}L)"
+        assert java_int_literal(min_long_plus_one) == (
+            f"((int) {min_long_plus_one}L)"
+        )
 
 
 class TestRegexCharClassEscape:

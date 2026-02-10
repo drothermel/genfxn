@@ -167,6 +167,20 @@ class TestPredicateRust:
     def test_custom_var(self) -> None:
         assert render_predicate_rust(PredicateEven(), var="n") == "n % 2 == 0"
 
+    def test_int32_wrap_mode_comparison(self) -> None:
+        result = render_predicate_rust(
+            PredicateGe(value=3_000_000_005),
+            int32_wrap=True,
+        )
+        assert result == "i32_wrap(x) >= i32_wrap(3000000005)"
+
+    def test_int32_wrap_mode_mod_eq(self) -> None:
+        result = render_predicate_rust(
+            PredicateModEq(divisor=3, remainder=1),
+            int32_wrap=True,
+        )
+        assert result == "i32_wrap(x).rem_euclid(3) == i32_wrap(1)"
+
 
 # ── Transforms ─────────────────────────────────────────────────────────
 
@@ -441,7 +455,7 @@ class TestPiecewiseRust:
         )
         code = render_piecewise(spec)
         assert "fn f(x: i64) -> i64" in code
-        assert "if x > 0 {" in code
+        assert "if i32_wrap(x) > i32_wrap(0) {" in code
         assert "i32_mul(2, x)" in code
         assert "-1" in code
 
@@ -472,8 +486,8 @@ class TestPiecewiseRust:
             default_expr=ExprAffine(a=1, b=0),
         )
         code = render_piecewise(spec)
-        assert "if x < -5 {" in code
-        assert "} else if x > 5 {" in code
+        assert "if i32_wrap(x) < i32_wrap(-5) {" in code
+        assert "} else if i32_wrap(x) > i32_wrap(5) {" in code
         assert "} else {" in code
 
     def test_in_set_condition_uses_array_contains(self) -> None:
@@ -490,7 +504,7 @@ class TestPiecewiseRust:
             default_expr=ExprAffine(a=0, b=0),
         )
         code = render_piecewise(spec)
-        assert "[1, 2].contains(&x)" in code
+        assert "[i32_wrap(1), i32_wrap(2)].contains(&i32_wrap(x))" in code
 
 
 class TestBitopsRust:
@@ -540,7 +554,7 @@ class TestStatefulRust:
         code = render_stateful(spec)
         assert "fn f(xs: &[i64]) -> i64" in code
         assert "for &x_raw in xs" in code
-        assert "x % 2 == 0" in code
+        assert "i32_wrap(x) % 2 == 0" in code
         assert "i32_neg(x)" in code
 
     def test_longest_run(self) -> None:

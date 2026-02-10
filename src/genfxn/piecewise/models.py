@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from genfxn.core.int32 import INT32_MAX
 from genfxn.core.predicates import Predicate
 
 
@@ -37,7 +38,11 @@ class ExprAbs(BaseModel):
 
 class ExprMod(BaseModel):
     kind: Literal["mod"] = "mod"
-    divisor: int = Field(description="Divisor for x % divisor", gt=0)
+    divisor: int = Field(
+        description="Divisor for x % divisor",
+        ge=1,
+        le=INT32_MAX,
+    )
     a: int = Field(description="Coefficient for (x % divisor)")
     b: int = Field(description="Constant term")
 
@@ -88,6 +93,16 @@ class PiecewiseAxes(BaseModel):
             lo, hi = getattr(self, name)
             if lo > hi:
                 raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+
+        div_lo, div_hi = self.divisor_range
+        if div_lo < 1:
+            raise ValueError(
+                f"divisor_range: low ({div_lo}) must be >= 1"
+            )
+        if div_hi > INT32_MAX:
+            raise ValueError(
+                f"divisor_range: high ({div_hi}) must be <= {INT32_MAX}"
+            )
 
         lo, hi = self.threshold_range
         available = hi - lo + 1

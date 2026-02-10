@@ -73,6 +73,19 @@ _sequence_dp_spec_adapter = TypeAdapter(SequenceDpSpec)
 _intervals_spec_adapter = TypeAdapter(IntervalsSpec)
 _graph_queries_spec_adapter = TypeAdapter(GraphQueriesSpec)
 _temporal_logic_spec_adapter = TypeAdapter(TemporalLogicSpec)
+_NON_FINITE_TOKENS = frozenset(
+    {
+        "nan",
+        "+nan",
+        "-nan",
+        "inf",
+        "+inf",
+        "-inf",
+        "infinity",
+        "+infinity",
+        "-infinity",
+    }
+)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -146,6 +159,38 @@ def _parse_numeric_range(
         raise typer.BadParameter(
             f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
         ) from err
+
+
+def _contains_non_finite_number(value: Any) -> bool:
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, list | tuple):
+        return any(_contains_non_finite_number(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            _contains_non_finite_number(item) for item in value.values()
+        )
+    return False
+
+
+def _parse_non_range_holdout_value(value: str) -> Any:
+    try:
+        parsed_value = json.loads(value)
+    except json.JSONDecodeError:
+        if value.strip().lower() in _NON_FINITE_TOKENS:
+            raise typer.BadParameter(
+                f"Invalid holdout value '{value}': non-finite numbers "
+                "(nan/inf/-inf) are not allowed for exact/contains "
+                "holdouts"
+            )
+        return value
+
+    if _contains_non_finite_number(parsed_value):
+        raise typer.BadParameter(
+            f"Invalid holdout value '{value}': non-finite numbers "
+            "(nan/inf/-inf) are not allowed for exact/contains holdouts"
+        )
+    return parsed_value
 
 
 def _iter_validated_tasks(input_file: Path):
@@ -1100,14 +1145,7 @@ def split(
             )
             raise typer.Exit(1)
 
-        parsed_value: (
-            str
-            | int
-            | float
-            | bool
-            | None
-            | tuple[int | float, int | float]
-        )
+        parsed_value: Any
         if holdout_type == HoldoutType.RANGE:
             range_val = _parse_numeric_range(holdout_value)
             if range_val is None:
@@ -1118,10 +1156,7 @@ def split(
                 raise typer.Exit(1)
             parsed_value = range_val
         else:
-            try:
-                parsed_value = json.loads(holdout_value)
-            except json.JSONDecodeError:
-                parsed_value = holdout_value
+            parsed_value = _parse_non_range_holdout_value(holdout_value)
 
         holdouts = [
             AxisHoldout(

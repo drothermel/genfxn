@@ -278,16 +278,57 @@ def test_simple_algorithms_runtime_parity_int32_boundary_cases() -> None:
 
 
 @pytest.mark.full
-def test_simple_algorithms_java_compiles_with_oversized_int_literals() -> None:
+def test_simple_algorithms_runtime_parity_predicate_i32_wrap() -> None:
     javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
     spec = MostFrequentSpec(
         tie_break=TieBreakMode.SMALLEST,
-        empty_default=3_000_000_001,
-        tie_default=-3_000_000_003,
+        empty_default=-1,
         pre_filter=PredicateGe(value=3_000_000_005),
-        pre_transform=TransformShift(offset=3_000_000_007),
     )
-    java_code = render_simple_algorithms_java(spec, func_name="f")
+    xs = [0]
 
-    result = _run_java_f(javac, java, java_code, [1, 1, 2])
-    assert isinstance(result, int)
+    java_code = render_simple_algorithms_java(spec, func_name="f")
+    rust_code = render_simple_algorithms_rust(spec, func_name="f")
+    expected = eval_simple_algorithms(spec, xs)
+
+    assert expected == 0
+    assert _run_java_f(javac, java, java_code, xs) == expected
+    assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_simple_algorithms_runtime_parity_with_oversized_int_literals() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    cases: tuple[tuple[SimpleAlgorithmsSpec, tuple[list[int], ...]], ...] = (
+        (
+            MostFrequentSpec(
+                tie_break=TieBreakMode.SMALLEST,
+                empty_default=3_000_000_001,
+                tie_default=-3_000_000_003,
+                pre_filter=PredicateGe(value=0),
+                pre_transform=TransformShift(offset=3_000_000_007),
+            ),
+            ([], [1, 1, 2, 2], [-2, -1, -3]),
+        ),
+        (
+            CountPairsSumSpec(
+                target=3_000_000_011,
+                counting_mode=CountingMode.ALL_INDICES,
+                no_result_default=-3_000_000_013,
+                short_list_default=3_000_000_015,
+                pre_transform=TransformShift(offset=3_000_000_017),
+            ),
+            ([], [1], [1, 2, 3], [-10, 0, 10, 20]),
+        ),
+    )
+
+    for spec, inputs in cases:
+        java_code = render_simple_algorithms_java(spec, func_name="f")
+        rust_code = render_simple_algorithms_rust(spec, func_name="f")
+        for xs in inputs:
+            expected = eval_simple_algorithms(spec, list(xs))
+            assert _run_java_f(javac, java, java_code, list(xs)) == expected
+            assert _run_rust_f(rustc, rust_code, list(xs)) == expected

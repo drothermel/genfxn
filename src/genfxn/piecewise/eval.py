@@ -37,6 +37,6 @@ def eval_piecewise(spec: PiecewiseSpec, x: int) -> int:
     x = wrap_i32(x)
 
     for branch in spec.branches:
-        if eval_predicate(branch.condition, x):
+        if eval_predicate(branch.condition, x, int32_wrap=True):
             return eval_expression(branch.expr, x)
     return eval_expression(spec.default_expr, x)

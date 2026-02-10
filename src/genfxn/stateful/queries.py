@@ -1,5 +1,6 @@
 import random
 
+from genfxn.core.int32 import wrap_i32
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import (
     Predicate,
@@ -68,27 +69,31 @@ def _make_matching_value(
             first = lo if lo % 2 == 1 else lo + 1
             return _random_parity(first, 2)
         case PredicateLt(value=v):
-            if lo <= v - 1:
-                return rng.randint(lo, min(v - 1, hi))
+            v_i32 = wrap_i32(v)
+            if lo <= v_i32 - 1:
+                return rng.randint(lo, min(v_i32 - 1, hi))
             return None
         case PredicateLe(value=v):
-            if lo <= v:
-                return rng.randint(lo, min(v, hi))
+            v_i32 = wrap_i32(v)
+            if lo <= v_i32:
+                return rng.randint(lo, min(v_i32, hi))
             return None
         case PredicateGt(value=v):
-            if v + 1 <= hi:
-                return rng.randint(max(v + 1, lo), hi)
+            v_i32 = wrap_i32(v)
+            if v_i32 + 1 <= hi:
+                return rng.randint(max(v_i32 + 1, lo), hi)
             return None
         case PredicateGe(value=v):
-            if v <= hi:
-                return rng.randint(max(v, lo), hi)
+            v_i32 = wrap_i32(v)
+            if v_i32 <= hi:
+                return rng.randint(max(v_i32, lo), hi)
             return None
         case PredicateModEq(divisor=d, remainder=r):
             return _random_mod_eq(d, r)
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(
                 lambda: rng.randint(lo, hi),
-                lambda v: eval_predicate(pred, v),
+                lambda v: eval_predicate(pred, v, int32_wrap=True),
             )
         case _:
             return rng.randint(lo, hi)
@@ -113,39 +118,46 @@ def _make_non_matching_value(
             slots = ((hi - first) // 2) + 1
             return first + 2 * rng.randrange(slots)
         case PredicateLt(value=v):
-            if v <= hi:
-                return rng.randint(max(v, lo), hi)
+            v_i32 = wrap_i32(v)
+            if v_i32 <= hi:
+                return rng.randint(max(v_i32, lo), hi)
             return None
         case PredicateLe(value=v):
-            if v + 1 <= hi:
-                return rng.randint(max(v + 1, lo), hi)
+            v_i32 = wrap_i32(v)
+            if v_i32 + 1 <= hi:
+                return rng.randint(max(v_i32 + 1, lo), hi)
             return None
         case PredicateGt(value=v):
-            if lo <= v:
-                return rng.randint(lo, min(v, hi))
+            v_i32 = wrap_i32(v)
+            if lo <= v_i32:
+                return rng.randint(lo, min(v_i32, hi))
             return None
         case PredicateGe(value=v):
-            if lo <= v - 1:
-                return rng.randint(lo, min(v - 1, hi))
+            v_i32 = wrap_i32(v)
+            if lo <= v_i32 - 1:
+                return rng.randint(lo, min(v_i32 - 1, hi))
             return None
-        case PredicateModEq(divisor=d, remainder=r):
+        case PredicateModEq():
+            def _matches(value: int) -> bool:
+                return eval_predicate(pred, value, int32_wrap=True)
+
             candidate = rng.randint(lo, hi)
-            if candidate % d != r:
+            if not _matches(candidate):
                 return candidate
             if lo == hi:
                 return None
-            if candidate < hi and (candidate + 1) % d != r:
+            if candidate < hi and not _matches(candidate + 1):
                 return candidate + 1
-            if candidate > lo and (candidate - 1) % d != r:
+            if candidate > lo and not _matches(candidate - 1):
                 return candidate - 1
             for value in range(lo, hi + 1):
-                if value % d != r:
+                if not _matches(value):
                     return value
             return None
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(
                 lambda: rng.randint(lo, hi),
-                lambda v: not eval_predicate(pred, v),
+                lambda v: not eval_predicate(pred, v, int32_wrap=True),
             )
         case _:
             return rng.randint(lo, hi)
@@ -279,7 +291,7 @@ def _generate_adversarial_queries(
         else None
     )
     if fitted_all_match is not None and all(
-        eval_predicate(pred, x) for x in fitted_all_match
+        eval_predicate(pred, x, int32_wrap=True) for x in fitted_all_match
     ):
         queries.append(
             Query(
@@ -300,7 +312,8 @@ def _generate_adversarial_queries(
         else None
     )
     if fitted_all_non_match is not None and all(
-        not eval_predicate(pred, x) for x in fitted_all_non_match
+        not eval_predicate(pred, x, int32_wrap=True)
+        for x in fitted_all_non_match
     ):
         queries.append(
             Query(

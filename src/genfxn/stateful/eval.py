@@ -16,7 +16,7 @@ def eval_conditional_linear_sum(
     acc = wrap_i32(spec.init_value)
     for x in xs:
         x = wrap_i32(x)
-        if eval_predicate(spec.predicate, x):
+        if eval_predicate(spec.predicate, x, int32_wrap=True):
             acc = i32_add(
                 acc,
                 eval_transform(spec.true_transform, x, int32_wrap=True),
@@ -37,7 +37,7 @@ def eval_resetting_best_prefix_sum(
     best_sum = init
     for x in xs:
         x = wrap_i32(x)
-        if eval_predicate(spec.reset_predicate, x):
+        if eval_predicate(spec.reset_predicate, x, int32_wrap=True):
             current_sum = init
         else:
             val = (
@@ -55,7 +55,7 @@ def eval_longest_run(spec: LongestRunSpec, xs: list[int]) -> int:
     longest_run = 0
     for x in xs:
         x = wrap_i32(x)
-        if eval_predicate(spec.match_predicate, x):
+        if eval_predicate(spec.match_predicate, x, int32_wrap=True):
             current_run = i32_add(current_run, 1)
             longest_run = max(longest_run, current_run)
         else:
@@ -68,7 +68,7 @@ def eval_toggle_sum(spec: ToggleSumSpec, xs: list[int]) -> int:
     acc = wrap_i32(spec.init_value)
     for x in xs:
         x = wrap_i32(x)
-        if eval_predicate(spec.toggle_predicate, x):
+        if eval_predicate(spec.toggle_predicate, x, int32_wrap=True):
             on = not on
         if on:
             acc = i32_add(

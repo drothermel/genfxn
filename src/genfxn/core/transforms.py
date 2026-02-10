@@ -3,7 +3,14 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from genfxn.core.int32 import i32_abs, i32_add, i32_mul, i32_neg, wrap_i32
+from genfxn.core.int32 import (
+    i32_abs,
+    i32_add,
+    i32_clip,
+    i32_mul,
+    i32_neg,
+    wrap_i32,
+)
 
 
 class TransformIdentity(BaseModel):
@@ -102,9 +109,9 @@ def eval_transform(t: Transform, x: int, *, int32_wrap: bool = False) -> int:
                 return i32_add(x, o)
             return x + o
         case TransformClip(low=lo, high=hi):
-            clipped = max(lo, min(hi, x))
             if int32_wrap:
-                return wrap_i32(clipped)
+                return i32_clip(x, lo, hi)
+            clipped = max(lo, min(hi, x))
             return clipped
         case TransformNegate():
             if int32_wrap:

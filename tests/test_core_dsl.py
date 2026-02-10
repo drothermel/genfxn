@@ -3,6 +3,7 @@ import random
 import pytest
 
 from genfxn.core.codegen import render_tests, task_id_from_spec
+from genfxn.core.int32 import INT32_MAX
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
     PredicateAnd,
@@ -104,6 +105,24 @@ class TestPredicates:
     def test_mod_eq_rejects_large_remainder(self) -> None:
         with pytest.raises(ValueError, match="remainder must be < divisor"):
             PredicateModEq(divisor=3, remainder=3)
+
+    def test_mod_eq_rejects_divisor_above_int32_max(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"divisor must be <= {INT32_MAX}",
+        ):
+            PredicateModEq(divisor=INT32_MAX + 1, remainder=0)
+
+    def test_int32_wrap_mode_wraps_comparison_constants(self) -> None:
+        p = PredicateGe(value=3_000_000_005)
+        assert eval_predicate(p, 0, int32_wrap=False) is False
+        assert eval_predicate(p, 0, int32_wrap=True) is True
+
+    def test_int32_wrap_mode_wraps_input_before_mod_eq(self) -> None:
+        p = PredicateModEq(divisor=3, remainder=1)
+        x = (1 << 32) + 1
+        assert eval_predicate(p, x, int32_wrap=False) is False
+        assert eval_predicate(p, x, int32_wrap=True) is True
 
     def test_in_set(self) -> None:
         p = PredicateInSet(values=frozenset({1, 2, 3}))
@@ -299,6 +318,10 @@ class TestTransforms:
     def test_clip_rejects_invalid_bounds(self) -> None:
         with pytest.raises(ValueError, match="low .* must be <= high"):
             TransformClip(low=10, high=0)
+
+    def test_clip_int32_wrap_uses_wrapped_bounds(self) -> None:
+        t = TransformClip(low=3_000_000_000, high=3_000_000_100)
+        assert eval_transform(t, 0, int32_wrap=True) == -1_294_967_196
 
     def test_negate(self) -> None:
         t = TransformNegate()

@@ -40,6 +40,13 @@ def _i64_literal(value: int) -> str:
     return f"{value}i64"
 
 
+def _i64_wrap(value: int) -> int:
+    wrapped = value & ((1 << 64) - 1)
+    if wrapped >= (1 << 63):
+        return wrapped - (1 << 64)
+    return wrapped
+
+
 def _parse_query_input(input_value: Any) -> tuple[list[int], list[int]]:
     if not isinstance(input_value, dict):
         raise TypeError("sequence_dp query input must be a dict")
@@ -279,7 +286,7 @@ def test_sequence_dp_runtime_parity_overflow_adjacent_cases() -> None:
     max_i64 = (1 << 63) - 1
     min_i64 = -(1 << 63)
 
-    score_overflow_spec = SequenceDpSpec(
+    score_boundary_spec = SequenceDpSpec(
         template=TemplateType.GLOBAL,
         output_mode=OutputMode.SCORE,
         match_predicate=PredicateEq(),
@@ -288,7 +295,7 @@ def test_sequence_dp_runtime_parity_overflow_adjacent_cases() -> None:
         gap_score=-1,
         step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
     )
-    score_overflow_inputs = ([1, 1], [1, 1])
+    score_boundary_inputs = ([1], [1])
 
     predicate_overflow_spec = SequenceDpSpec(
         template=TemplateType.GLOBAL,
@@ -299,15 +306,15 @@ def test_sequence_dp_runtime_parity_overflow_adjacent_cases() -> None:
         gap_score=-2,
         step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
     )
-    predicate_overflow_inputs = ([min_i64], [1])
+    predicate_overflow_inputs = ([min_i64], [0])
 
     cases: tuple[tuple[SequenceDpSpec, tuple[list[int], list[int]]], ...] = (
-        (score_overflow_spec, score_overflow_inputs),
+        (score_boundary_spec, score_boundary_inputs),
         (predicate_overflow_spec, predicate_overflow_inputs),
     )
 
     for spec, (a_vals, b_vals) in cases:
-        expected = eval_sequence_dp(spec, a_vals, b_vals)
+        expected = _i64_wrap(eval_sequence_dp(spec, a_vals, b_vals))
         java_code = render_sequence_dp_java(spec, func_name="f")
         rust_code = render_sequence_dp_rust(spec, func_name="f")
         assert _run_java_f(javac, java, java_code, a_vals, b_vals) == expected

@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.int32 import INT32_MAX
 from genfxn.core.predicates import PredicateLe, PredicateLt
 from genfxn.piecewise.eval import eval_expression, eval_piecewise
 from genfxn.piecewise.models import (
@@ -46,6 +47,10 @@ class TestExpressionEval:
         assert eval_expression(expr, 1) == 3
         assert eval_expression(expr, 3) == 1
         assert eval_expression(expr, 7) == 3
+
+    def test_mod_rejects_divisor_above_int32_max(self) -> None:
+        with pytest.raises(ValueError):
+            ExprMod(divisor=INT32_MAX + 1, a=1, b=0)
 
 
 class TestBranchSelection:
@@ -205,6 +210,17 @@ class TestAxesValidation:
     def test_invalid_divisor_range(self) -> None:
         with pytest.raises(ValueError, match="divisor_range"):
             PiecewiseAxes(divisor_range=(10, 2))
+
+    def test_divisor_range_low_must_be_positive(self) -> None:
+        with pytest.raises(ValueError, match=r"divisor_range: low .*>= 1"):
+            PiecewiseAxes(divisor_range=(0, 10))
+
+    def test_divisor_range_high_must_fit_int32(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"divisor_range: high .*<= {INT32_MAX}",
+        ):
+            PiecewiseAxes(divisor_range=(2, INT32_MAX + 1))
 
     def test_n_branches_exceeds_threshold_range(self) -> None:
         with pytest.raises(
