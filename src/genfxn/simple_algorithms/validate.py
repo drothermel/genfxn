@@ -259,21 +259,32 @@ def _validate_ast_whitelist(
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
-    expected = task_id_from_spec(family=task.family, spec=task.spec)
-    if task.task_id != expected:
+    try:
+        expected = task_id_from_spec(family=task.family, spec=task.spec)
+    except Exception as e:
         return [
             Issue(
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
-                message=(
-                    f"task_id '{task.task_id}' does not match spec hash "
-                    f"'{expected}'"
-                ),
+                message=f"Failed to compute task_id from spec: {e}",
                 location="task_id",
                 task_id=task.task_id,
             )
         ]
-    return []
+    if task.task_id == expected:
+        return []
+    return [
+        Issue(
+            code=CODE_TASK_ID_MISMATCH,
+            severity=Severity.ERROR,
+            message=(
+                f"task_id '{task.task_id}' does not match spec hash "
+                f"'{expected}'"
+            ),
+            location="task_id",
+            task_id=task.task_id,
+        )
+    ]
 
 
 def _validate_spec_deserialize(

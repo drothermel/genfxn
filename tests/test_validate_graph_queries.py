@@ -18,6 +18,7 @@ from genfxn.graph_queries.validate import (
     CODE_QUERY_OUTPUT_TYPE,
     CODE_SEMANTIC_ISSUES_CAPPED,
     CODE_SEMANTIC_MISMATCH,
+    CODE_TASK_ID_MISMATCH,
     CODE_UNSAFE_AST,
 )
 from genfxn.graph_queries.validate import (
@@ -202,6 +203,16 @@ def test_execute_untrusted_code_false_skips_exec_errors(
     assert not any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
 
 
+def test_default_execute_untrusted_code_false_skips_exec_errors(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(
+        update={"code": "def f(src, dst=len(1)):\n    return 0"}
+    )
+    issues = _validate_graph_queries_task(corrupted)
+    assert not any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
+
+
 def test_execute_untrusted_code_true_reports_exec_error(
     baseline_task: Task,
 ) -> None:
@@ -213,6 +224,19 @@ def test_execute_untrusted_code_true_reports_exec_error(
         execute_untrusted_code=True,
     )
     assert any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
+
+
+def test_unhashable_spec_reports_task_id_issue_without_raising(
+    baseline_task: Task,
+) -> None:
+    class _Unserializable:
+        pass
+
+    corrupted = baseline_task.model_copy(
+        update={"spec": {**baseline_task.spec, "x": _Unserializable()}}
+    )
+    issues = _validate_graph_queries_task(corrupted)
+    assert any(issue.code == CODE_TASK_ID_MISMATCH for issue in issues)
 
 
 def test_non_string_python_code_payload_reports_parse_error(

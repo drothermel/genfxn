@@ -405,6 +405,27 @@ def test_rendered_python_rejects_non_int_src_dst_inputs(
         rendered(src, dst)
 
 
+def test_rendered_python_rejects_invalid_edge_endpoints() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    # Mutate post-validation to exercise runtime edge checks.
+    spec.edges[0].v = 99
+
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[int, int], int], namespace["f"])
+
+    with pytest.raises(ValueError, match=r"edges\[0\]\.v=99 must be in"):
+        eval_graph_queries(spec, 0, 1)
+    with pytest.raises(ValueError, match=r"edge\.v out of range"):
+        rendered(0, 1)
+
+
 def test_sampler_is_deterministic_for_seed() -> None:
     axes = GraphQueriesAxes(
         target_difficulty=3,
