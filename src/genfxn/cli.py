@@ -246,6 +246,12 @@ def _safe_unlink(path: Path) -> None:
         return
 
 
+def _paths_resolve_to_same_target(left: Path, right: Path) -> bool:
+    left_resolved = left.expanduser().resolve(strict=False)
+    right_resolved = right.expanduser().resolve(strict=False)
+    return left_resolved == right_resolved
+
+
 @contextmanager
 def _atomic_split_outputs(
     train: Path, test: Path
@@ -1177,6 +1183,13 @@ def split(
         if not has_random and not has_holdout:
             typer.echo(
                 "Error: Must provide --random-ratio or holdout options",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        if _paths_resolve_to_same_target(train, test):
+            typer.echo(
+                "Error: --train and --test must be different output paths",
                 err=True,
             )
             raise typer.Exit(1)

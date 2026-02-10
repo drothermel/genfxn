@@ -1,9 +1,13 @@
 import importlib.util
 import shutil
+import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+
+RUNTIME_SUBPROCESS_TIMEOUT_SEC = 30.0
 
 
 def load_script_module(script: Path, module_name: str) -> ModuleType:
@@ -19,7 +23,7 @@ def require_java_runtime() -> tuple[str, str]:
     javac = shutil.which("javac")
     java = shutil.which("java")
     if not javac or not java:
-        pytest.skip("Java runtime tools (javac/java) not available")
+        pytest.fail("Java runtime tools (javac/java) not available")
     assert javac is not None
     assert java is not None
     return javac, java
@@ -28,6 +32,22 @@ def require_java_runtime() -> tuple[str, str]:
 def require_rust_runtime() -> str:
     rustc = shutil.which("rustc")
     if not rustc:
-        pytest.skip("Rust compiler (rustc) not available")
+        pytest.fail("Rust compiler (rustc) not available")
     assert rustc is not None
     return rustc
+
+
+def run_checked_subprocess(
+    cmd: Sequence[str],
+    *,
+    cwd: Path,
+    timeout_sec: float = RUNTIME_SUBPROCESS_TIMEOUT_SEC,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        list(cmd),
+        check=True,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout_sec,
+    )

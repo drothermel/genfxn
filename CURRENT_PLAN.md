@@ -1186,3 +1186,88 @@ Progress update (2026-02-10, stack_bytecode + sequence_dp overflow alignment com
     -> passed.
   - `uv run ty check`
     -> passed.
+
+### 19) Review Comment Sweep (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Fix xdist import-mismatch collisions in
+      `tests/test_verification_levels.py` by using unique pytester probe module
+      names that cannot shadow repo test modules.
+- [x] Add CLI split guard in `src/genfxn/cli.py` rejecting identical
+      `--train`/`--test` destination paths and add regression tests in
+      `tests/test_cli.py`.
+- [x] Fix `graph_queries` Java renderer overflow in shortest-path accumulation
+      (`src/genfxn/langs/java/graph_queries.py`) and add runtime parity
+      regression coverage.
+- [x] Align Python renderers to evaluator i64 semantics for:
+      `src/genfxn/stack_bytecode/render.py` and
+      `src/genfxn/sequence_dp/render.py`, with regression tests in
+      `tests/test_stack_bytecode.py` and `tests/test_sequence_dp.py`.
+- [x] Treat structurally equivalent nested NaN outputs as equal in
+      `dedupe_queries` conflict checks (`src/genfxn/core/models.py`) and add
+      focused tests in `tests/test_core_models.py`.
+- [x] Make `render_tests(...)` emit valid Python for non-finite values in
+      `src/genfxn/core/codegen.py` and add regressions in
+      `tests/test_core_dsl.py`.
+- [x] Improve runtime parity reliability:
+      add subprocess timeout wrapper(s) in `tests/helpers.py`, apply them in
+      all `tests/test_*_runtime_parity.py` suites, and fail-closed on missing
+      Java/Rust toolchains.
+- [x] Update `.github/workflows/ci.yml` to explicitly install Java and Rust
+      before full verification.
+
+Exit criterion:
+- All eight reported review comments are resolved with regression coverage,
+  standard/full verification behavior remains deterministic, and CI parity
+  gates are fail-closed for missing toolchains.
+
+Progress update (2026-02-10, review comment sweep complete):
+- Fixed xdist import-mismatch regression in `tests/test_verification_levels.py`
+  by writing family-marker probe files under a dedicated subdirectory rather
+  than shadowing repository module basenames.
+- Added CLI split destination guard in `src/genfxn/cli.py`:
+  `--train` and `--test` now reject the same resolved path, with coverage in
+  `tests/test_cli.py::test_split_rejects_same_train_and_test_path`.
+- Fixed graph_queries Java overflow path in
+  `src/genfxn/langs/java/graph_queries.py` by moving shortest-path cost
+  bookkeeping/return to `long` while keeping node indices as `int`.
+- Added large-weight parity regression in
+  `tests/test_graph_queries_runtime_parity.py` that now asserts
+  `4_000_000_000` round-trips across Python/Java/Rust.
+- Aligned Python renderers with evaluator i64 semantics:
+  - `src/genfxn/stack_bytecode/render.py` now emits explicit `wrap_i64`
+    helpers and edge-safe div/mod handling (`MIN / -1`, `MIN % -1`).
+  - `src/genfxn/sequence_dp/render.py` now emits i64 wrap helpers for DP
+    score/len/gap arithmetic and wrapped predicate subtraction paths.
+  - Added regressions in `tests/test_stack_bytecode.py` and
+    `tests/test_sequence_dp.py`.
+- Hardened dedupe output equality for nested NaN structures in
+  `src/genfxn/core/models.py` and added focused coverage in
+  `tests/test_core_models.py`.
+- Updated `render_tests(...)` in `src/genfxn/core/codegen.py` to emit valid
+  Python literals for non-finite floats (`float("nan")`, `float("inf")`,
+  `float("-inf")`) recursively through container outputs, with regressions in
+  `tests/test_core_dsl.py`.
+- Added shared runtime subprocess helper in `tests/helpers.py`:
+  `run_checked_subprocess(...)` with explicit timeout, and switched all runtime
+  parity suites to use it.
+- Changed `require_java_runtime()` / `require_rust_runtime()` to fail-closed
+  via `pytest.fail(...)` instead of skip in runtime parity contexts.
+- Updated `.github/workflows/ci.yml` `test-full` job to explicitly install:
+  - Java via `actions/setup-java@v4` (`temurin`, `21`)
+  - Rust via `dtolnay/rust-toolchain@stable`
+
+Validation evidence:
+- `uv run ruff check <touched Python files>` -> passed.
+- `uv run ty check <touched files>` -> passed.
+- `uv run pytest tests/test_cli.py::TestGenerate::test_generate_sequence_dp
+  tests/test_cli.py::TestGenerate::test_generate_stack_bytecode_when_available
+  -v --verification-level=standard` -> 2 passed.
+- `uv run pytest tests/test_verification_levels.py tests/test_cli.py
+  tests/test_core_models.py tests/test_core_dsl.py tests/test_stack_bytecode.py
+  tests/test_sequence_dp.py -v --verification-level=standard`
+  -> 282 passed.
+- `uv run pytest tests/test_*_runtime_parity.py -v --verification-level=full
+  -k "java_runtime_parity or rust_runtime_parity or
+  large_weight_cost_accumulation"` -> 23 passed.
+- `uv run pytest tests/ -q --verification-level=standard`
+  -> 1831 passed, 101 skipped.

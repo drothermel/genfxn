@@ -1248,6 +1248,59 @@ class TestGenerate:
 
 
 class TestSplit:
+    @pytest.mark.parametrize(
+        "mode_args",
+        [
+            ("--random-ratio", "0.5", "--seed", "42"),
+            (
+                "--holdout-axis",
+                "template",
+                "--holdout-value",
+                "longest_run",
+            ),
+        ],
+    )
+    def test_split_rejects_same_train_and_test_path(
+        self, tmp_path, mode_args: tuple[str, ...]
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        same_output = tmp_path / "split.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "8",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(same_output),
+                "--test",
+                str(same_output),
+                *mode_args,
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert (
+            "--train and --test must be different output paths"
+            in result.output
+        )
+        assert not same_output.exists()
+
     def test_split_exact(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"

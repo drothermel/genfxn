@@ -221,6 +221,60 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
 - This batch should add a startup-specific timeout floor (or equivalent init
   timeout separation) while preserving function execution timeout behavior.
 
+## Latest Intake Extension (2026-02-10, Review Comment Sweep)
+- `tests/test_verification_levels.py` creates pytester probe files whose module
+  basenames collide with real suite modules (`test_piecewise_runtime_parity`,
+  `test_stateful_runtime_parity`, `test_validate_piecewise`), producing xdist
+  import-mismatch collection failures in default (`standard`) runs.
+- CLI split currently allows `--train` and `--test` to resolve to the same
+  output target path, which can silently clobber one partition during atomic
+  replace.
+- `graph_queries` Java renderer uses `int` accumulation for shortest-path cost,
+  diverging from Python/Rust behavior on valid large-weight specs.
+- Python renderers for `stack_bytecode` and `sequence_dp` do not fully mirror
+  evaluator i64 wrapping semantics on overflow-adjacent arithmetic paths.
+- `dedupe_queries` output conflict checks only special-case top-level NaN;
+  structurally equivalent nested NaN outputs are falsely treated as conflicts.
+- `render_tests(...)` emits invalid Python for non-finite floats because raw
+  `repr(float('nan'/'inf'))` is not a bound name in generated code.
+- Runtime parity reliability gaps:
+  - subprocess compile/run calls lack explicit timeouts
+  - toolchain guards skip on missing Java/Rust instead of fail-closed
+  - CI does not explicitly install Java/Rust toolchains before full parity run
+
+## Completed This Chunk (2026-02-10, Review Comment Sweep)
+- Fixed xdist import-mismatch in `tests/test_verification_levels.py` by
+  moving pytester family probes into an isolated subdirectory with unique
+  module paths.
+- Added split-output collision guard in `src/genfxn/cli.py` so identical
+  resolved `--train`/`--test` paths fail fast; added end-to-end regressions in
+  `tests/test_cli.py` for random and holdout modes.
+- Fixed graph_queries Java shortest-path cost overflow by using `long`
+  bookkeeping/return types in `src/genfxn/langs/java/graph_queries.py`;
+  added large-weight parity regression in
+  `tests/test_graph_queries_runtime_parity.py`.
+- Aligned Python renderers with evaluator i64 behavior:
+  - `src/genfxn/stack_bytecode/render.py`
+  - `src/genfxn/sequence_dp/render.py`
+  Added focused renderer-vs-evaluator regressions in
+  `tests/test_stack_bytecode.py` and `tests/test_sequence_dp.py`.
+- Extended NaN output equality in `src/genfxn/core/models.py` to treat nested
+  structurally equivalent NaN values as equal; added regressions in
+  `tests/test_core_models.py`.
+- Hardened `render_tests(...)` in `src/genfxn/core/codegen.py` to emit valid
+  Python for non-finite values, with regression coverage in
+  `tests/test_core_dsl.py`.
+- Added timeout-enforced subprocess helper in `tests/helpers.py` and migrated
+  all runtime parity suites to use it; toolchain requirements now fail-closed
+  via `pytest.fail(...)` instead of skip.
+- Updated CI `test-full` workflow to explicitly install Java and Rust before
+  full verification (`.github/workflows/ci.yml`).
+- Validation evidence:
+  - focused standard slice: 282 passed
+  - runtime parity smoke slice: 23 passed
+  - default standard suite: 1831 passed, 101 skipped
+  - ruff + ty on touched files: passed
+
 ## Completed This Chunk (2026-02-10, safe_exec startup-timeout flake)
 - Added startup timeout decoupling in `src/genfxn/core/safe_exec.py`:
   - `_PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC = 1.0`

@@ -111,10 +111,48 @@ def test_dedupe_queries_float_nan_outputs_do_not_conflict() -> None:
     assert deduped[0].output != deduped[0].output
 
 
+def test_dedupe_queries_nested_nan_outputs_do_not_conflict() -> None:
+    queries = [
+        Query(
+            input=1,
+            output=[float("nan"), {"k": float("nan")}],
+            tag=QueryTag.TYPICAL,
+        ),
+        Query(
+            input=1,
+            output=[float("nan"), {"k": float("nan")}],
+            tag=QueryTag.BOUNDARY,
+        ),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 1
+    assert deduped[0].tag == QueryTag.BOUNDARY
+    nested = deduped[0].output
+    assert isinstance(nested, list)
+    assert nested[0] != nested[0]
+    assert nested[1]["k"] != nested[1]["k"]
+
+
 def test_dedupe_queries_float_nan_vs_non_nan_outputs_raise() -> None:
     queries = [
         Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),
         Query(input=1, output=10, tag=QueryTag.BOUNDARY),
+    ]
+
+    try:
+        dedupe_queries(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")
+
+
+def test_dedupe_queries_nested_nan_vs_non_nan_outputs_raise() -> None:
+    queries = [
+        Query(input=1, output=[float("nan")], tag=QueryTag.TYPICAL),
+        Query(input=1, output=[0.0], tag=QueryTag.BOUNDARY),
     ]
 
     try:

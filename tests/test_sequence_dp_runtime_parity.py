@@ -1,11 +1,14 @@
 import random
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import pytest
-from helpers import require_java_runtime, require_rust_runtime
+from helpers import (
+    require_java_runtime,
+    require_rust_runtime,
+    run_checked_subprocess,
+)
 
 from genfxn.langs.java.sequence_dp import (
     render_sequence_dp as render_sequence_dp_java,
@@ -73,19 +76,13 @@ def _run_java_f(
         tmp = Path(tmp_dir)
         src = tmp / "Main.java"
         src.write_text(main_src, encoding="utf-8")
-        subprocess.run(  # noqa: S603
+        run_checked_subprocess(
             [javac, str(src)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
-        proc = subprocess.run(  # noqa: S603
+        proc = run_checked_subprocess(
             [java, "-cp", str(tmp), "Main"],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
         return int(proc.stdout.strip())
 
@@ -117,19 +114,13 @@ def _run_rust_f(
         if optimize:
             compile_cmd.append("-O")
         compile_cmd.extend(["-o", str(out)])
-        subprocess.run(  # noqa: S603
+        run_checked_subprocess(
             compile_cmd,
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
-        proc = subprocess.run(  # noqa: S603
+        proc = run_checked_subprocess(
             [str(out)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
         return int(proc.stdout.strip())
 

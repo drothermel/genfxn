@@ -54,8 +54,9 @@ def test_unmarked():
 
 
 def _make_family_full_probe_tests(pytester) -> None:
-    pytester.makepyfile(
-        test_piecewise_runtime_parity="""
+    probe_dir = Path(str(pytester.mkpydir("probe_family_markers")))
+    (probe_dir / "test_piecewise_runtime_parity.py").write_text(
+        """
 import pytest
 
 
@@ -63,7 +64,10 @@ import pytest
 def test_piecewise_runtime_full():
     assert True
 """,
-        test_validate_piecewise="""
+        encoding="utf-8",
+    )
+    (probe_dir / "test_validate_piecewise.py").write_text(
+        """
 import pytest
 
 
@@ -71,7 +75,10 @@ import pytest
 def test_piecewise_validate_full():
     assert True
 """,
-        test_stateful_runtime_parity="""
+        encoding="utf-8",
+    )
+    (probe_dir / "test_stateful_runtime_parity.py").write_text(
+        """
 import pytest
 
 
@@ -79,7 +86,10 @@ import pytest
 def test_stateful_runtime_full():
     assert True
 """,
-        test_misc_full="""
+        encoding="utf-8",
+    )
+    (probe_dir / "test_misc_full.py").write_text(
+        """
 import pytest
 
 
@@ -87,6 +97,7 @@ import pytest
 def test_misc_full():
     assert True
 """,
+        encoding="utf-8",
     )
 
 

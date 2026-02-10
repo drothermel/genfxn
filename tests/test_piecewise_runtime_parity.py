@@ -1,10 +1,13 @@
 import random
-import subprocess
 import tempfile
 from pathlib import Path
 
 import pytest
-from helpers import require_java_runtime, require_rust_runtime
+from helpers import (
+    require_java_runtime,
+    require_rust_runtime,
+    run_checked_subprocess,
+)
 
 from genfxn.core.predicates import PredicateGe, PredicateLt
 from genfxn.langs.java.piecewise import (
@@ -41,19 +44,13 @@ def _run_java_f(javac: str, java: str, code: str, x: int) -> int:
         tmp = Path(tmp_dir)
         src = tmp / "Main.java"
         src.write_text(main_src, encoding="utf-8")
-        subprocess.run(  # noqa: S603
+        run_checked_subprocess(
             [javac, str(src)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
-        proc = subprocess.run(  # noqa: S603
+        proc = run_checked_subprocess(
             [java, "-cp", str(tmp), "Main"],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
         return int(proc.stdout.strip())
 
@@ -71,19 +68,13 @@ def _run_rust_f(rustc: str, code: str, x: int) -> int:
         src = tmp / "main.rs"
         out = tmp / "main_bin"
         src.write_text(main_src, encoding="utf-8")
-        subprocess.run(  # noqa: S603
+        run_checked_subprocess(
             [rustc, str(src), "-O", "-o", str(out)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
-        proc = subprocess.run(  # noqa: S603
+        proc = run_checked_subprocess(
             [str(out)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
         return int(proc.stdout.strip())
 

@@ -125,6 +125,37 @@ def _query_outputs_equal(left: Any, right: Any) -> bool:
         and math.isnan(right)
     ):
         return True
+
+    if isinstance(left, list) and isinstance(right, list):
+        if len(left) != len(right):
+            return False
+        return all(
+            _query_outputs_equal(left_item, right_item)
+            for left_item, right_item in zip(left, right, strict=False)
+        )
+
+    if isinstance(left, tuple) and isinstance(right, tuple):
+        if len(left) != len(right):
+            return False
+        return all(
+            _query_outputs_equal(left_item, right_item)
+            for left_item, right_item in zip(left, right, strict=False)
+        )
+
+    if isinstance(left, dict) and isinstance(right, dict):
+        if len(left) != len(right):
+            return False
+        if left.keys() != right.keys():
+            # Fall back to canonical structural freeze for corner cases
+            # (for example NaN-ish keys) where direct key comparison fails.
+            return _freeze_query_value(left) == _freeze_query_value(right)
+        return all(
+            _query_outputs_equal(left[key], right[key]) for key in left
+        )
+
+    if isinstance(left, set) and isinstance(right, set):
+        return _freeze_query_value(left) == _freeze_query_value(right)
+
     return left == right
 
 

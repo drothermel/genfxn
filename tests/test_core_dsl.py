@@ -444,6 +444,29 @@ class TestRenderTests:
         result = render_tests("f", [])
         assert result == ""
 
+    def test_render_tests_emits_valid_non_finite_literals(self) -> None:
+        queries = [
+            Query(
+                input=[float("inf"), float("-inf")],
+                output=[float("inf"), float("-inf")],
+                tag=QueryTag.TYPICAL,
+            )
+        ]
+        rendered_asserts = render_tests("f", queries)
+        namespace: dict[str, object] = {}
+        exec(  # noqa: S102
+            "def f(x):\n    return x\n" + rendered_asserts,
+            namespace,
+        )
+
+    def test_render_tests_emits_nan_expression_not_bare_name(self) -> None:
+        queries = [
+            Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),
+        ]
+        rendered_asserts = render_tests("f", queries)
+        assert 'float("nan")' in rendered_asserts
+        assert " == nan" not in rendered_asserts
+
 
 class TestCorpusIdUniqueness:
     def test_no_cross_family_collisions(self) -> None:

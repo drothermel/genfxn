@@ -39,6 +39,8 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Mult,
         ast.FloorDiv,
         ast.Mod,
+        ast.LShift,
+        ast.BitAnd,
         ast.BitXor,
         ast.BitOr,
         ast.USub,
@@ -69,6 +71,7 @@ ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
         "div_trunc_zero",
         "mod_trunc_zero",
         "normalize_target",
+        "wrap_i64",
     }
 )
 
@@ -94,6 +97,10 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         "cond",
         "resolved",
         "sign",
+        "i64_mask",
+        "i64_min",
+        "value",
+        "wrapped",
     }
 )
 
@@ -108,6 +115,7 @@ CALL_ARITIES: dict[str, set[int]] = {
     "div_trunc_zero": {2},
     "mod_trunc_zero": {2},
     "normalize_target": {1},
+    "wrap_i64": {1},
 }
 
 METHOD_ARITIES: dict[str, set[int]] = {

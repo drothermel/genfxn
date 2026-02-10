@@ -8,7 +8,7 @@ def render_graph_queries(
     dst_var: str = "dst",
 ) -> str:
     lines = [
-        f"public static int {func_name}(int {src_var}, int {dst_var}) {{",
+        f"public static long {func_name}(int {src_var}, int {dst_var}) {{",
         f"    int nNodes = {spec.n_nodes};",
         f"    boolean directed = {str(spec.directed).lower()};",
         f"    boolean weighted = {str(spec.weighted).lower()};",
@@ -139,19 +139,19 @@ def render_graph_queries(
             "        return -1;",
             "    }",
             "",
-            "    java.util.HashMap<Integer, Integer> bestCost = "
+            "    java.util.HashMap<Integer, Long> bestCost = "
             "new java.util.HashMap<>();",
             "    java.util.ArrayList<Integer> frontier = "
             "new java.util.ArrayList<>();",
-            f"    bestCost.put({src_var}, 0);",
+            f"    bestCost.put({src_var}, 0L);",
             f"    frontier.add({src_var});",
             "    while (!frontier.isEmpty()) {",
             "        int bestIdx = 0;",
             "        int bestNode = frontier.get(0);",
-            "        int bestValue = bestCost.get(bestNode);",
+            "        long bestValue = bestCost.get(bestNode);",
             "        for (int i = 1; i < frontier.size(); i++) {",
             "            int candidateNode = frontier.get(i);",
-            "            int candidateValue = bestCost.get(candidateNode);",
+            "            long candidateValue = bestCost.get(candidateNode);",
             "            if (candidateValue < bestValue || "
             "(candidateValue == bestValue && candidateNode < bestNode)) {",
             "                bestIdx = i;",
@@ -161,7 +161,7 @@ def render_graph_queries(
             "        }",
             "",
             "        int node = frontier.get(bestIdx);",
-            "        int cost = bestCost.get(node);",
+            "        long cost = bestCost.get(node);",
             "        int last = frontier.size() - 1;",
             "        frontier.set(bestIdx, frontier.get(last));",
             "        frontier.remove(last);",
@@ -171,8 +171,8 @@ def render_graph_queries(
             "        for (int[] pair : adjacency[node]) {",
             "            int neighbor = pair[0];",
             "            int weight = pair[1];",
-            "            int nextCost = cost + weight;",
-            "            Integer prev = bestCost.get(neighbor);",
+            "            long nextCost = cost + (long) weight;",
+            "            Long prev = bestCost.get(neighbor);",
             "            if (prev != null && nextCost >= prev) {",
             "                continue;",
             "            }",
@@ -182,7 +182,7 @@ def render_graph_queries(
             "            }",
             "        }",
             "    }",
-            "    return -1;",
+            "    return -1L;",
             "}",
         ]
     )

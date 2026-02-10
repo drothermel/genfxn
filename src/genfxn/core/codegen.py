@@ -1,4 +1,5 @@
 import hashlib
+import math
 from typing import Any
 
 import srsly
@@ -64,10 +65,54 @@ def _canonicalize_for_hash(value: Any) -> Any:
 
 
 def render_tests(func_name: str, queries: list[Query]) -> str:
+    def _render_python_literal(value: Any) -> str:
+        if isinstance(value, float):
+            if math.isnan(value):
+                return 'float("nan")'
+            if math.isinf(value):
+                if value > 0:
+                    return 'float("inf")'
+                return 'float("-inf")'
+            return repr(value)
+        if isinstance(value, list):
+            return (
+                "["
+                + ", ".join(_render_python_literal(item) for item in value)
+                + "]"
+            )
+        if isinstance(value, tuple):
+            inner = ", ".join(_render_python_literal(item) for item in value)
+            if len(value) == 1:
+                inner += ","
+            return f"({inner})"
+        if isinstance(value, dict):
+            parts = [
+                f"{_render_python_literal(key)}: "
+                f"{_render_python_literal(item)}"
+                for key, item in value.items()
+            ]
+            return "{" + ", ".join(parts) + "}"
+        if isinstance(value, set):
+            if not value:
+                return "set()"
+            return (
+                "{"
+                + ", ".join(_render_python_literal(item) for item in value)
+                + "}"
+            )
+        if isinstance(value, frozenset):
+            if not value:
+                return "frozenset()"
+            rendered_items = ", ".join(
+                _render_python_literal(item) for item in value
+            )
+            return f"frozenset({{{rendered_items}}})"
+        return repr(value)
+
     lines = []
     for i, q in enumerate(queries):
-        input_repr = repr(q.input)
-        output_repr = repr(q.output)
+        input_repr = _render_python_literal(q.input)
+        output_repr = _render_python_literal(q.output)
         msg = f"query {i} ({q.tag.value})"
         lines.append(
             f"assert {func_name}({input_repr}) == {output_repr}, {msg!r}"

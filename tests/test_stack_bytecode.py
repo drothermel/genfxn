@@ -541,6 +541,25 @@ class TestRenderRoundtrip:
             eval_out = eval_stack_bytecode(spec, xs)
             assert rendered_out == eval_out
 
+    def test_python_render_matches_i64_min_edge_semantics(self) -> None:
+        min_i64 = -(1 << 63)
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.NEG),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+
+        code = render_stack_bytecode(spec)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(RenderedStackFn, f_obj)
+
+        assert f([]) == eval_stack_bytecode(spec, [])
+
 
 class TestTaskGeneration:
     def test_generate_task_reproducible_with_seed(self) -> None:

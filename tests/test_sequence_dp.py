@@ -574,3 +574,28 @@ class TestTaskGeneration:
             expected = eval_sequence_dp(spec, a, b)
             actual = fn(a, b)
             assert actual == expected
+
+    def test_rendered_python_matches_evaluator_overflow_score_case(
+        self,
+    ) -> None:
+        spec = SequenceDpSpec.model_validate(
+            {
+                "template": "global",
+                "output_mode": "score",
+                "match_predicate": {"kind": "eq"},
+                "match_score": (1 << 63) - 1,
+                "mismatch_score": 0,
+                "gap_score": 0,
+                "step_tie_break": TieBreakOrder.DIAG_UP_LEFT.value,
+            }
+        )
+        code = render_sequence_dp(spec, func_name="f")
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        fn_obj = namespace["f"]
+        assert callable(fn_obj)
+        fn = cast(Callable[[list[int], list[int]], int], fn_obj)
+
+        a = [1, 1]
+        b = [1, 1]
+        assert fn(a, b) == eval_sequence_dp(spec, a, b)
