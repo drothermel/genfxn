@@ -1,0 +1,120 @@
+import random
+from collections.abc import Callable
+from typing import cast
+
+from genfxn.core.models import QueryTag
+from genfxn.graph_queries.eval import eval_graph_queries
+from genfxn.graph_queries.models import (
+    GraphEdge,
+    GraphQueriesAxes,
+    GraphQueriesSpec,
+    GraphQueryType,
+)
+from genfxn.graph_queries.render import render_graph_queries
+from genfxn.graph_queries.sampler import sample_graph_queries_spec
+from genfxn.graph_queries.task import generate_graph_queries_task
+from genfxn.langs.types import Language
+
+
+def _spec(query_type: GraphQueryType) -> GraphQueriesSpec:
+    return GraphQueriesSpec(
+        query_type=query_type,
+        directed=True,
+        weighted=True,
+        n_nodes=4,
+        edges=[
+            GraphEdge(u=0, v=1, w=2),
+            GraphEdge(u=1, v=2, w=3),
+            GraphEdge(u=0, v=2, w=20),
+        ],
+    )
+
+
+def test_eval_semantics_for_v1_query_types() -> None:
+    reachable_spec = _spec(GraphQueryType.REACHABLE)
+    assert eval_graph_queries(reachable_spec, 0, 2) == 1
+    assert eval_graph_queries(reachable_spec, 2, 0) == 0
+    assert eval_graph_queries(reachable_spec, 3, 3) == 1
+
+    hops_spec = _spec(GraphQueryType.MIN_HOPS)
+    assert eval_graph_queries(hops_spec, 0, 2) == 1
+    assert eval_graph_queries(hops_spec, 2, 0) == -1
+    assert eval_graph_queries(hops_spec, 3, 3) == 0
+
+    cost_spec = _spec(GraphQueryType.SHORTEST_PATH_COST)
+    assert eval_graph_queries(cost_spec, 0, 2) == 5
+    assert eval_graph_queries(cost_spec, 2, 0) == -1
+    assert eval_graph_queries(cost_spec, 3, 3) == 0
+
+
+def test_rendered_python_matches_evaluator() -> None:
+    spec = _spec(GraphQueryType.SHORTEST_PATH_COST)
+    code = render_graph_queries(spec)
+
+    namespace: dict[str, object] = {}
+    exec(code, namespace)  # noqa: S102
+    rendered = cast(Callable[[int, int], int], namespace["f"])
+
+    inputs = [(0, 2), (2, 0), (3, 3), (0, 1), (1, 2)]
+    for src, dst in inputs:
+        assert rendered(src, dst) == eval_graph_queries(spec, src, dst)
+
+
+def test_sampler_is_deterministic_for_seed() -> None:
+    axes = GraphQueriesAxes(
+        target_difficulty=3,
+        query_types=[GraphQueryType.MIN_HOPS],
+        directed_choices=[True],
+        weighted_choices=[True],
+        n_nodes_range=(5, 5),
+        edge_count_range=(7, 7),
+        weight_range=(2, 2),
+        disconnected_prob_range=(0.0, 0.0),
+        multi_edge_prob_range=(0.0, 0.0),
+        hub_bias_prob_range=(0.0, 0.0),
+    )
+    spec1 = sample_graph_queries_spec(axes, random.Random(42))
+    spec2 = sample_graph_queries_spec(axes, random.Random(42))
+    assert spec1.model_dump() == spec2.model_dump()
+
+
+def test_generate_task_deterministic_and_consistent() -> None:
+    axes = GraphQueriesAxes(
+        target_difficulty=2,
+        query_types=[GraphQueryType.REACHABLE],
+        directed_choices=[False],
+        weighted_choices=[False],
+        n_nodes_range=(4, 4),
+        edge_count_range=(3, 3),
+        weight_range=(1, 1),
+        disconnected_prob_range=(0.0, 0.0),
+        multi_edge_prob_range=(0.0, 0.0),
+        hub_bias_prob_range=(0.0, 0.0),
+    )
+
+    task1 = generate_graph_queries_task(axes=axes, rng=random.Random(123))
+    task2 = generate_graph_queries_task(axes=axes, rng=random.Random(123))
+
+    assert task1.family == "graph_queries"
+    assert task1.task_id == task2.task_id
+    assert task1.spec == task2.spec
+    assert task1.queries == task2.queries
+    assert task1.description
+    assert set(query.tag for query in task1.queries) == set(QueryTag)
+
+    spec = GraphQueriesSpec.model_validate(task1.spec)
+    for query in task1.queries:
+        assert query.output == eval_graph_queries(
+            spec,
+            query.input["src"],
+            query.input["dst"],
+        )
+
+
+def test_m0_language_behavior() -> None:
+    task = generate_graph_queries_task(
+        rng=random.Random(7),
+        languages=[Language.PYTHON],
+    )
+    assert isinstance(task.code, dict)
+    assert set(task.code) == {Language.PYTHON.value}
