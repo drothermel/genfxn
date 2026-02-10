@@ -501,7 +501,7 @@ _TEMPORAL_LOGIC_D2 = QuotaSpec(
         "output_mode": "sat_at_start",
         "depth_bucket": "2",
     },
-    buckets=[Bucket("temporal_bucket", "none", 50)],
+    buckets=[Bucket("depth_bucket", "2", 50)],
 )
 
 _TEMPORAL_LOGIC_D3 = QuotaSpec(

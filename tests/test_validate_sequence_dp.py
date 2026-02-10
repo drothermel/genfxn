@@ -147,7 +147,7 @@ def test_execute_untrusted_code_true_reports_exec_error(
     baseline_task: Task,
 ) -> None:
     corrupted = baseline_task.model_copy(
-        update={"code": "raise RuntimeError(1)"}
+        update={"code": "def f(a, b=len(1)):\n    return 0"}
     )
     issues = _validate_sequence_dp_task(corrupted, execute_untrusted_code=True)
     assert any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)

@@ -14,6 +14,112 @@ from genfxn.core.string_predicates import (
 )
 from genfxn.langs.rust._helpers import rust_string_literal
 
+_PYTHON_ISDIGIT_RANGES: tuple[tuple[int, int], ...] = (
+    (48, 57),
+    (178, 179),
+    (185, 185),
+    (1632, 1641),
+    (1776, 1785),
+    (1984, 1993),
+    (2406, 2415),
+    (2534, 2543),
+    (2662, 2671),
+    (2790, 2799),
+    (2918, 2927),
+    (3046, 3055),
+    (3174, 3183),
+    (3302, 3311),
+    (3430, 3439),
+    (3558, 3567),
+    (3664, 3673),
+    (3792, 3801),
+    (3872, 3881),
+    (4160, 4169),
+    (4240, 4249),
+    (4969, 4977),
+    (6112, 6121),
+    (6160, 6169),
+    (6470, 6479),
+    (6608, 6618),
+    (6784, 6793),
+    (6800, 6809),
+    (6992, 7001),
+    (7088, 7097),
+    (7232, 7241),
+    (7248, 7257),
+    (8304, 8304),
+    (8308, 8313),
+    (8320, 8329),
+    (9312, 9320),
+    (9332, 9340),
+    (9352, 9360),
+    (9450, 9450),
+    (9461, 9469),
+    (9471, 9471),
+    (10102, 10110),
+    (10112, 10120),
+    (10122, 10130),
+    (42528, 42537),
+    (43216, 43225),
+    (43264, 43273),
+    (43472, 43481),
+    (43504, 43513),
+    (43600, 43609),
+    (44016, 44025),
+    (65296, 65305),
+    (66720, 66729),
+    (68160, 68163),
+    (68912, 68921),
+    (69216, 69224),
+    (69714, 69722),
+    (69734, 69743),
+    (69872, 69881),
+    (69942, 69951),
+    (70096, 70105),
+    (70384, 70393),
+    (70736, 70745),
+    (70864, 70873),
+    (71248, 71257),
+    (71360, 71369),
+    (71472, 71481),
+    (71904, 71913),
+    (72016, 72025),
+    (72784, 72793),
+    (73040, 73049),
+    (73120, 73129),
+    (73552, 73561),
+    (92768, 92777),
+    (92864, 92873),
+    (93008, 93017),
+    (120782, 120831),
+    (123200, 123209),
+    (123632, 123641),
+    (124144, 124153),
+    (125264, 125273),
+    (127232, 127242),
+    (130032, 130041),
+)
+
+
+def _python_isdigit_condition_rust(cp_var: str = "cp") -> str:
+    parts: list[str] = []
+    for low, high in _PYTHON_ISDIGIT_RANGES:
+        if low == high:
+            parts.append(f"{cp_var} == {low}")
+        else:
+            parts.append(f"({cp_var} >= {low} && {cp_var} <= {high})")
+    return " || ".join(parts)
+
+
+def render_python_isdigit_helper_rust(
+    helper_name: str = "__genfxn_is_python_digit",
+) -> str:
+    condition = _python_isdigit_condition_rust("cp")
+    return (
+        f"let {helper_name} = |c: char| -> bool {{ "
+        f"let cp = c as u32; {condition} }};"
+    )
+
 
 def render_string_predicate_rust(pred: StringPredicate, var: str = "s") -> str:
     """Render a string predicate as a Rust boolean expression."""
@@ -31,19 +137,19 @@ def render_string_predicate_rust(pred: StringPredicate, var: str = "s") -> str:
         case StringPredicateIsDigit():
             return (
                 f"!{var}.is_empty() && "
-                f"{var}.chars().all(|c| c.is_numeric())"
+                f"{var}.chars().all(|c| __genfxn_is_python_digit(c))"
             )
         case StringPredicateIsUpper():
             return (
                 f"!{var}.is_empty() && "
-                f"{var}.chars().any(|c| c.is_alphabetic()) && "
-                f"{var}.to_uppercase() == {var}"
+                f"{var}.chars().any(|c| c.is_uppercase() || c.is_lowercase()) "
+                f"&& {var}.chars().all(|c| !c.is_lowercase())"
             )
         case StringPredicateIsLower():
             return (
                 f"!{var}.is_empty() && "
-                f"{var}.chars().any(|c| c.is_alphabetic()) && "
-                f"{var}.to_lowercase() == {var}"
+                f"{var}.chars().any(|c| c.is_uppercase() || c.is_lowercase()) "
+                f"&& {var}.chars().all(|c| !c.is_uppercase())"
             )
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}

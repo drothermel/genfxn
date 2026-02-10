@@ -129,7 +129,9 @@ def test_execute_untrusted_code_false_skips_exec(baseline_task: Task) -> None:
 def test_execute_untrusted_code_true_reports_exec_error(
     baseline_task: Task,
 ) -> None:
-    corrupted = baseline_task.model_copy(update={"code": "raise ValueError(1)"})
+    corrupted = baseline_task.model_copy(
+        update={"code": "def f(x=ValueError(1)):\n    return 0"}
+    )
     issues = _validate_bitops_task(corrupted, execute_untrusted_code=True)
     assert any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
 

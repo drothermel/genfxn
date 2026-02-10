@@ -67,6 +67,28 @@ def _validate_ast_whitelist(
     except (SyntaxError, TypeError):
         return [], None
 
+    for stmt in tree.body:
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
+        if not isinstance(stmt, ast.FunctionDef):
+            return [
+                Issue(
+                    code=CODE_UNSAFE_AST,
+                    severity=Severity.ERROR,
+                    message=(
+                        "Top-level statement "
+                        f"{type(stmt).__name__} at line "
+                        f"{getattr(stmt, 'lineno', '?')} is not allowed; "
+                        "only function definitions are permitted"
+                    ),
+                    location="code",
+                )
+            ], None
+
     annotation_positions: set[tuple[int, int]] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
@@ -142,6 +164,18 @@ def _validate_ast_whitelist(
                 )
         elif isinstance(node, ast.Attribute):
             if node.attr.startswith("__") and node.attr.endswith("__"):
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{node.attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
+            elif node.attr not in ALLOWED_METHOD_NAMES:
                 issues.append(
                     Issue(
                         code=CODE_UNSAFE_AST,

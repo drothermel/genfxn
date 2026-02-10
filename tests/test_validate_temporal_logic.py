@@ -146,7 +146,9 @@ def test_execute_untrusted_code_false_skips_exec_errors(
 def test_execute_untrusted_code_true_reports_exec_error(
     baseline_task: Task,
 ) -> None:
-    corrupted = baseline_task.model_copy(update={"code": "raise ValueError(1)"})
+    corrupted = baseline_task.model_copy(
+        update={"code": "def f(xs=len(1)):\n    return 0"}
+    )
     issues = _validate_temporal_logic_task(
         corrupted,
         execute_untrusted_code=True,

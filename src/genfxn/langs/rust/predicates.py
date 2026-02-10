@@ -63,7 +63,8 @@ def render_predicate_rust(
             rr = _i64_expr(r)
             if int32_wrap:
                 return (
-                    f"i32_wrap({var}).rem_euclid({rd}) == i32_wrap({rr})"
+                    f"i32_wrap({var}).rem_euclid(i32_wrap({rd})) =="
+                    f" i32_wrap({rr})"
                 )
             return f"{var}.rem_euclid({rd}) == {rr}"
         case PredicateInSet(values=vals):

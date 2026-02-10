@@ -128,7 +128,7 @@ def render_graph_queries(
             "                continue;",
             "            };",
             "            for &(neighbor, weight) in &adjacency[node] {",
-            "                let next_cost = cost + weight;",
+            "                let next_cost = cost.wrapping_add(weight);",
             "                if let Some(prev) = best_cost_curr[neighbor] {",
             "                    if next_cost >= prev {",
             "                        continue;",

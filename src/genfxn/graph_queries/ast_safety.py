@@ -19,6 +19,7 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Continue,
         ast.Expr,
         ast.BinOp,
+        ast.BitAnd,
         ast.UnaryOp,
         ast.BoolOp,
         ast.IfExp,
@@ -34,9 +35,12 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.comprehension,
         ast.Subscript,
         ast.Attribute,
+        ast.Break,
         ast.Load,
+        ast.LShift,
         ast.Store,
         ast.Add,
+        ast.Sub,
         ast.USub,
         ast.Eq,
         ast.Gt,
@@ -54,6 +58,8 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
 ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
     {
         "ValueError",
+        "_wrap_i64",
+        "dict",
         "len",
         "range",
     }
@@ -74,12 +80,17 @@ ALLOWED_METHOD_NAMES: frozenset[str] = frozenset(
 ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
     {
         "_",
+        "_i64_mask",
+        "_wrap_i64",
         "adjacency",
         "best",
+        "best_cost_curr",
+        "best_cost_prev",
         "best_cost",
         "best_idx",
         "best_node",
         "best_pair",
+        "changed",
         "candidate_node",
         "candidate_pair",
         "cost",
@@ -105,14 +116,18 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         "rev_prev",
         "u",
         "v",
+        "value",
         "visited",
         "weight",
         "weighted",
+        "wrapped",
     }
 )
 
 CALL_ARITIES: dict[str, set[int]] = {
     "ValueError": {1},
+    "_wrap_i64": {1},
+    "dict": {1},
     "len": {1},
     "range": {1, 2, 3},
 }

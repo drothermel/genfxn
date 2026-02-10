@@ -58,10 +58,20 @@ from genfxn.core.transforms import (
     TransformShift,
 )
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.graph_queries.models import (
+    GraphEdge,
+    GraphQueriesSpec,
+    GraphQueryType,
+)
 from genfxn.graph_queries.task import generate_graph_queries_task
+from genfxn.intervals.models import BoundaryMode, IntervalsSpec, OperationType
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.rust._helpers import rust_i64_literal, rust_string_literal
 from genfxn.langs.rust.expressions import render_expression_rust
+from genfxn.langs.rust.graph_queries import render_graph_queries
+from genfxn.langs.rust.intervals import (
+    render_intervals as render_intervals_rust,
+)
 from genfxn.langs.rust.predicates import render_predicate_rust
 from genfxn.langs.rust.string_predicates import render_string_predicate_rust
 from genfxn.langs.rust.string_transforms import render_string_transform_rust
@@ -196,7 +206,41 @@ class TestPredicateRust:
             PredicateModEq(divisor=3, remainder=1),
             int32_wrap=True,
         )
-        assert result == "i32_wrap(x).rem_euclid(3) == i32_wrap(1)"
+        assert result == "i32_wrap(x).rem_euclid(i32_wrap(3)) == i32_wrap(1)"
+
+
+class TestIntervalsRust:
+    def test_wrapping_i64_arithmetic(self) -> None:
+        spec = IntervalsSpec(
+            operation=OperationType.TOTAL_COVERAGE,
+            boundary_mode=BoundaryMode.OPEN_OPEN,
+            merge_touching=True,
+            endpoint_clip_abs=20,
+            endpoint_quantize_step=1,
+        )
+        code = render_intervals_rust(spec)
+        assert "hi.wrapping_sub(1)" in code
+        assert "lo.wrapping_add(1)" in code
+        assert "prev_end.wrapping_add(1)" in code
+        assert "end.wrapping_sub(start).wrapping_add(1)" in code
+        assert "end.wrapping_add(1)" in code
+        assert "active = active.wrapping_add(*delta);" in code
+
+
+class TestGraphQueriesRust:
+    def test_shortest_path_cost_uses_wrapping_add(self) -> None:
+        spec = GraphQueriesSpec(
+            query_type=GraphQueryType.SHORTEST_PATH_COST,
+            directed=True,
+            weighted=True,
+            n_nodes=3,
+            edges=[
+                GraphEdge(u=0, v=1, w=1),
+                GraphEdge(u=1, v=2, w=2),
+            ],
+        )
+        code = render_graph_queries(spec)
+        assert "let next_cost = cost.wrapping_add(weight);" in code
 
 
 # ── Transforms ─────────────────────────────────────────────────────────
@@ -295,25 +339,25 @@ class TestStringPredicateRust:
     def test_is_digit(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsDigit())
         assert result == (
-            "!s.is_empty() && s.chars().all(|c| c.is_numeric())"
+            "!s.is_empty() && s.chars().all(|c| __genfxn_is_python_digit(c))"
         )
 
-    def test_is_digit_uses_unicode_aware_numeric_check(self) -> None:
+    def test_is_digit_uses_python_authoritative_digit_helper(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsDigit())
-        assert "is_numeric()" in result
+        assert "__genfxn_is_python_digit" in result
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsUpper())
         assert result == (
-            "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && "
-            "s.to_uppercase() == s"
+            "!s.is_empty() && s.chars().any(|c| c.is_uppercase() || "
+            "c.is_lowercase()) && s.chars().all(|c| !c.is_lowercase())"
         )
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsLower())
         assert result == (
-            "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && "
-            "s.to_lowercase() == s"
+            "!s.is_empty() && s.chars().any(|c| c.is_uppercase() || "
+            "c.is_lowercase()) && s.chars().all(|c| !c.is_uppercase())"
         )
 
     @pytest.mark.parametrize(

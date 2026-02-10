@@ -87,6 +87,61 @@ Exit criterion:
 - All three reported findings are fixed with regression tests, and full/standard
   behavior is unambiguous in docs/tests.
 
+New intake extension (2026-02-10, standards lock follow-through):
+- [x] Fix `graph_queries` strict renderer-structure validator drift:
+      align AST whitelist with emitted code and sandbox builtins.
+- [x] Fix `intervals` strict renderer-structure validator drift:
+      align AST whitelist with emitted i64-wrap helper code.
+- [x] Align Java/Rust `stringrules` Unicode predicate semantics to Python:
+      `is_alpha`, `is_digit`, `is_upper`, `is_lower`.
+- [x] Expand `stringrules` runtime parity coverage with focused Unicode
+      predicate regressions (non-BMP letters/digits and uncased-script cases).
+- [x] Add/strengthen validator contract regressions that lock renderer output as
+      accepted by same-family AST/safe-exec validation paths.
+- [x] Run targeted standard/full pytest slices plus `ruff` and `ty`, then
+      record validation evidence and outcomes.
+
+Progress update (2026-02-10, standards lock follow-through):
+- Validator strictness alignment:
+  - Updated `graph_queries` and `intervals` AST safety allowlists to match
+    current renderer output (new i64-wrap helper names/calls/nodes).
+  - Added missing `dict` sandbox builtin in
+    `src/genfxn/graph_queries/validate.py` to match emitted `dict(...)` copy
+    usage.
+  - Standardized strict top-level and non-call attribute enforcement across
+    family validators (`bitops`, `fsm`, `graph_queries`, `intervals`,
+    `sequence_dp`, `stack_bytecode`, `temporal_logic`, `piecewise`,
+    `stateful`, `simple_algorithms`, `stringrules`).
+- Python-authoritative Unicode predicate alignment:
+  - Java predicate renderer now uses code-point semantics for `is_alpha` and
+    Python-compatible cased-character gating for `is_upper`/`is_lower`.
+  - Java and Rust `is_digit` now share a Python-authoritative helper based on
+    precomputed Unicode `str.isdigit()` code-point ranges.
+  - Rust `is_upper`/`is_lower` now enforce Python-style cased-character
+    requirements (uncased-script strings no longer pass).
+- Regression/contract coverage added or updated:
+  - `tests/test_stringrules_runtime_parity.py`: new full-mode Unicode parity
+    tests for non-BMP alpha/digit and uncased-script case predicates.
+  - `tests/test_validator_contract_matrix.py`: added cross-family checks for
+    top-level side-effect rejection and non-call attribute rejection.
+  - Updated validator exec-error tests where strict top-level checks changed
+    trigger shape (bitops/graph_queries/intervals/sequence_dp/temporal_logic).
+  - Updated Java/Rust renderer expectation tests for new predicate semantics in
+    `tests/test_java_render.py` and `tests/test_rust_render.py`.
+- Validation evidence:
+  - `uv run pytest tests/test_validate_graph_queries.py
+    tests/test_validate_intervals.py tests/test_validate_bitops.py
+    tests/test_validate_temporal_logic.py tests/test_validator_contract_matrix.py
+    -q --verification-level=standard` -> 116 passed.
+  - `uv run pytest tests/test_stringrules_runtime_parity.py -v
+    --verification-level=full -k
+    "unicode_is_alpha_non_bmp or unicode_is_digit or
+    uncased_scripts_for_case_predicates"` -> 3 passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 2032 passed, 110 skipped.
+  - `uv run ruff check` on touched source/test files -> passed.
+  - `uv run ty check` on touched source/test files -> passed.
+
 New intake extension (2026-02-10):
 - [x] Make EXACT holdout type-sensitive in both `splits.py` and CLI matching.
 - [x] Fix `dedupe_queries` hashable fallback type-collision risk.
@@ -1908,3 +1963,60 @@ Progress update (2026-02-10, review follow-up recs complete):
     -> 49 passed.
   - `uv run ruff check` on touched source/test files -> passed.
   - `uv run ty check` on touched source/test files -> passed.
+
+### 33) CodeRabbit committed-scope follow-up
+Current execution batch (2026-02-10):
+- [x] Replace raw i64 arithmetic with wrapping ops in generated Rust intervals
+      code (`src/genfxn/langs/rust/intervals.py`) for boundary adjustment,
+      merge/gap thresholds, coverage accumulation, and overlap event updates.
+- [x] Fix `_TEMPORAL_LOGIC_D2` bucket axis drift in
+      `src/genfxn/suites/quotas.py` (`depth_bucket` should be used for bucketing
+      to match hard constraints).
+- [x] Fix `PredicateModEq` int32-wrap rendering in
+      `src/genfxn/langs/rust/predicates.py` so divisor is i32-wrapped.
+- [x] Fix shortest-path accumulation wrapping in
+      `src/genfxn/langs/rust/graph_queries.py` (`wrapping_add`).
+- [x] Extend `test_validation_closes_exec_func_when_semantics_raises` in
+      `tests/test_validation_exec_optin.py` to include `piecewise`, `stateful`,
+      `simple_algorithms`, and `stringrules`.
+- [x] Add/update focused regression assertions for touched renderer/quota paths
+      and run targeted `uv run pytest`, `uv run ruff check`, and
+      `uv run ty check`.
+
+Exit criterion:
+- All accepted committed-scope CodeRabbit findings are implemented with
+  regression coverage and targeted validation passes on touched files.
+
+Progress update (2026-02-10, CodeRabbit committed-scope follow-up complete):
+- Implemented committed-scope renderer/quota fixes:
+  - `src/genfxn/langs/rust/intervals.py`
+    - switched boundary adjustments, merge/gap thresholds, coverage
+      accumulation, overlap events (`end + 1`), and overlap active accumulation
+      to explicit wrapping arithmetic.
+  - `src/genfxn/suites/quotas.py`
+    - corrected `_TEMPORAL_LOGIC_D2` bucket axis/value to
+      `Bucket("depth_bucket", "2", 50)`.
+  - `src/genfxn/langs/rust/predicates.py`
+    - wrapped divisor in `PredicateModEq` int32-wrap mode.
+  - `src/genfxn/langs/rust/graph_queries.py`
+    - switched shortest-path `next_cost` accumulation to `wrapping_add`.
+- Expanded/hardened coverage:
+  - `tests/test_validation_exec_optin.py`
+    - extended semantics-raise lifecycle matrix to include
+      `piecewise`/`stateful`/`simple_algorithms`/`stringrules`.
+    - stabilized lifecycle-close tests across families by stubbing
+      `_validate_ast_whitelist` and `_validate_code_compile` so assertions
+      always exercise the close path directly.
+  - `tests/test_rust_render.py`
+    - added wrapping arithmetic assertions for intervals and graph_queries
+      renderers.
+    - updated int32 `PredicateModEq` expectation to require wrapped divisor.
+  - `tests/test_suites.py`
+    - added regression for temporal-logic D2 quota-axis consistency.
+- Validation evidence:
+  - `uv run pytest tests/test_validation_exec_optin.py tests/test_rust_render.py tests/test_suites.py -v --verification-level=standard -k "closes_exec_func or semantics_raises or int32_wrap_mode_mod_eq or wrapping_i64_arithmetic or shortest_path_cost_uses_wrapping_add or temporal_logic_d2_uses_depth_bucket_quota_axis"`
+    -> 26 passed.
+  - `uv run pytest tests/test_graph_queries_runtime_parity.py tests/test_intervals_runtime_parity.py -v --verification-level=full -k "i64_overflow_accumulation or late_better_wrapped_path or total_coverage_i64_overflow or max_overlap_end_plus_one_wrap"`
+    -> 4 passed.
+  - `uv run ruff check` on touched Python files -> passed.
+  - `uv run ty check` on touched Python files -> passed.

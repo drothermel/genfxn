@@ -198,7 +198,7 @@ def test_execute_untrusted_code_true_reports_exec_error(
     baseline_task: Task,
 ) -> None:
     corrupted = baseline_task.model_copy(
-        update={"code": "raise ValueError(1)"}
+        update={"code": "def f(src, dst=len(1)):\n    return 0"}
     )
     issues = _validate_graph_queries_task(
         corrupted,

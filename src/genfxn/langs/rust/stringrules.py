@@ -1,4 +1,7 @@
-from genfxn.langs.rust.string_predicates import render_string_predicate_rust
+from genfxn.langs.rust.string_predicates import (
+    render_python_isdigit_helper_rust,
+    render_string_predicate_rust,
+)
 from genfxn.langs.rust.string_transforms import render_string_transform_rust
 from genfxn.stringrules.models import StringRulesSpec
 
@@ -8,6 +11,7 @@ def render_stringrules(
 ) -> str:
     """Render string rules as a Rust function."""
     lines = [f"fn {func_name}({var}: &str) -> String {{"]
+    lines.append(f"    {render_python_isdigit_helper_rust()}")
 
     for i, rule in enumerate(spec.rules):
         cond = render_string_predicate_rust(rule.predicate, var)

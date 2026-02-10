@@ -1772,3 +1772,103 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
     - piecewise eval/branch selection: 9 passed.
     - simple_algorithms max-window/axes subset: 9 passed.
     - full-mode sequence_dp extreme abs-diff parity: 1 passed.
+
+## Latest Intake Extension (2026-02-10, CodeRabbit committed-scope follow-up)
+- A committed-scope CodeRabbit review against `main` reported five actionable
+  findings in the current branch:
+  - `src/genfxn/langs/rust/intervals.py`: raw i64 arithmetic in generated code
+    should use explicit wrapping ops for parity/consistency.
+  - `src/genfxn/suites/quotas.py`: `_TEMPORAL_LOGIC_D2` bucket axis/value drift
+    (`temporal_bucket:none`) conflicts with hard constraint (`depth_bucket:2`).
+  - `src/genfxn/langs/rust/predicates.py`: `PredicateModEq` int32-wrap branch
+    leaves divisor unwrapped.
+  - `src/genfxn/langs/rust/graph_queries.py`: shortest-path accumulation uses
+    plain `+` instead of wrapping add.
+  - `tests/test_validation_exec_optin.py`: semantics-raise lifecycle test omits
+    four families that have `_validate_semantics` paths.
+- Separate interactive review suggestions for Java piecewise/piecewise eval/
+  sequence_dp/simple_algorithms are stale in this tree and already addressed in
+  prior chunks; no additional edits needed for those items.
+
+## Completed This Chunk (2026-02-10, CodeRabbit committed-scope follow-up)
+- Applied all five committed-scope CodeRabbit fixes:
+  - `src/genfxn/langs/rust/intervals.py`: replaced raw i64 arithmetic in
+    generated boundary/merge/gap/coverage/event/sweep paths with explicit
+    wrapping operations.
+  - `src/genfxn/suites/quotas.py`: aligned `_TEMPORAL_LOGIC_D2` buckets with
+    hard constraints via `depth_bucket=2`.
+  - `src/genfxn/langs/rust/predicates.py`: wrapped `PredicateModEq` divisor in
+    int32-wrap rendering path.
+  - `src/genfxn/langs/rust/graph_queries.py`: switched shortest-path cost
+    accumulation to `wrapping_add`.
+  - `tests/test_validation_exec_optin.py`: expanded semantics-raise lifecycle
+    coverage to `piecewise`, `stateful`, `simple_algorithms`, `stringrules`.
+- Hardened related regression coverage:
+  - `tests/test_rust_render.py`: added intervals/graph rust-wrapping assertions
+    and updated int32 mod-eq rendering expectation.
+  - `tests/test_suites.py`: added temporal-logic D2 quota-axis consistency test.
+  - `tests/test_validation_exec_optin.py`: lifecycle-close harness now stubs
+    AST/compile steps so close assertions consistently exercise `fn.close()`
+    behavior across families.
+- Validation evidence:
+  - focused standard pytest slice: 26 passed.
+  - focused full runtime-parity overflow slice: 4 passed.
+  - targeted `ruff` + `ty` on touched Python files: passed.
+
+## Latest Intake Extension (2026-02-10, Standards Lock: Python Unicode + Strict Renderer AST)
+- Decision locked for this repo:
+  - Python evaluator semantics are authoritative for cross-language runtime
+    parity (including Unicode behavior).
+  - Family validators should enforce strict renderer-structure parity rather
+    than broad permissive AST acceptance.
+- Reproduced hard regressions from this pass:
+  - `graph_queries` renderer output is rejected by its own AST whitelist and
+    also fails runtime sandbox execution due to missing `dict` builtin.
+  - `intervals` renderer output is rejected by its own AST whitelist after
+    i64-wrap helper additions.
+- Reproduced Unicode parity drift in `stringrules`:
+  - Java `is_alpha("𝔘")` returns `false` while Python returns `True`.
+  - Java/Rust `is_upper("漢字")` return `true` while Python returns `False`.
+  - Rust `is_digit("Ⅷ")` returns `true` while Python returns `False`.
+- Coverage gap confirmed:
+  - `tests/test_stringrules_runtime_parity.py` sampled parity remains
+    ASCII-biased and non-ASCII coverage currently focuses on length predicates,
+    not Unicode predicate semantics.
+
+## Completed This Chunk (2026-02-10, standards lock follow-through)
+- Locked implementation to chosen standards:
+  - Python evaluator semantics remain authoritative for Unicode parity.
+  - Validators enforce strict renderer-structure AST expectations.
+- Fixed strict-validator regressions:
+  - `graph_queries` AST/sandbox drift fixed by updating
+    `src/genfxn/graph_queries/ast_safety.py` and
+    `src/genfxn/graph_queries/validate.py` (`dict` builtin + helper names/nodes).
+  - `intervals` AST drift fixed by updating
+    `src/genfxn/intervals/ast_safety.py`.
+  - Added top-level statement and non-call attribute rejection hardening in:
+    `src/genfxn/{bitops,fsm,graph_queries,intervals,sequence_dp,`
+    `stack_bytecode,temporal_logic,piecewise,stateful,`
+    `simple_algorithms,stringrules}/validate.py`.
+- Fixed Unicode predicate parity drift:
+  - `src/genfxn/langs/java/string_predicates.py` now uses code-point paths and
+    Python-style cased-character checks for case predicates.
+  - `src/genfxn/langs/rust/string_predicates.py` now uses Python-authoritative
+    digit helper gating and stricter cased-character checks.
+  - Added Python-authoritative `isdigit` helper wiring in:
+    `src/genfxn/langs/java/stringrules.py`,
+    `src/genfxn/langs/rust/stringrules.py`.
+- Strengthened coverage:
+  - Added Unicode full-mode parity tests in
+    `tests/test_stringrules_runtime_parity.py`.
+  - Added cross-family AST-contract checks in
+    `tests/test_validator_contract_matrix.py`
+    (top-level side effects + non-call attributes).
+  - Updated affected validator and renderer expectation tests:
+    `tests/test_validate_{bitops,graph_queries,intervals,sequence_dp,temporal_logic}.py`,
+    `tests/test_java_render.py`,
+    `tests/test_rust_render.py`.
+- Validation evidence:
+  - targeted strictness slice: 116 passed.
+  - targeted Unicode full parity slice: 3 passed.
+  - full standard suite: 2032 passed, 110 skipped.
+  - touched-file `ruff` + `ty`: passed.

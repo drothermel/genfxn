@@ -353,27 +353,32 @@ class TestStringPredicateJava:
     def test_is_alpha(self) -> None:
         result = render_string_predicate_java(StringPredicateIsAlpha())
         assert result == (
-            "!s.isEmpty() && s.chars().allMatch(Character::isLetter)"
+            "!s.isEmpty() && s.codePoints().allMatch(Character::isLetter)"
         )
 
     def test_is_digit(self) -> None:
         result = render_string_predicate_java(StringPredicateIsDigit())
         assert result == (
-            "!s.isEmpty() && s.chars().allMatch(Character::isDigit)"
+            "!s.isEmpty() && s.codePoints().allMatch(c -> "
+            "__genfxn_is_python_digit.test(c))"
         )
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_java(StringPredicateIsUpper())
         assert result == (
-            "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
-            "s.equals(s.toUpperCase(java.util.Locale.ROOT))"
+            "!s.isEmpty() && s.codePoints().anyMatch(c -> "
+            "Character.isUpperCase(c) || Character.isLowerCase(c) || "
+            "Character.isTitleCase(c)) && s.codePoints().allMatch(c -> "
+            "!Character.isLowerCase(c) && !Character.isTitleCase(c))"
         )
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_java(StringPredicateIsLower())
         assert result == (
-            "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
-            "s.equals(s.toLowerCase(java.util.Locale.ROOT))"
+            "!s.isEmpty() && s.codePoints().anyMatch(c -> "
+            "Character.isUpperCase(c) || Character.isLowerCase(c) || "
+            "Character.isTitleCase(c)) && s.codePoints().allMatch(c -> "
+            "!Character.isUpperCase(c) && !Character.isTitleCase(c))"
         )
 
     @pytest.mark.parametrize(

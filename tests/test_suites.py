@@ -1069,6 +1069,11 @@ class TestHardConstraints:
         for key, val in quota.hard_constraints.items():
             assert features_ok.get(key) == val
 
+    def test_temporal_logic_d2_uses_depth_bucket_quota_axis(self) -> None:
+        quota = QUOTAS["temporal_logic"][2]
+        assert quota.hard_constraints["depth_bucket"] == "2"
+        assert quota.buckets == [Bucket("depth_bucket", "2", 50)]
+
     def test_temporal_logic_d5_filters_when_available(self) -> None:
         if not _temporal_logic_suite_available():
             pytest.skip("temporal_logic suite generation is not available")

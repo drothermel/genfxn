@@ -1,4 +1,7 @@
-from genfxn.langs.java.string_predicates import render_string_predicate_java
+from genfxn.langs.java.string_predicates import (
+    render_python_isdigit_helper_java,
+    render_string_predicate_java,
+)
 from genfxn.langs.java.string_transforms import render_string_transform_java
 from genfxn.stringrules.models import StringRulesSpec
 
@@ -8,6 +11,7 @@ def render_stringrules(
 ) -> str:
     """Render string rules as a Java static method."""
     lines = [f"public static String {func_name}(String {var}) {{"]
+    lines.append(f"    {render_python_isdigit_helper_java()}")
 
     for i, rule in enumerate(spec.rules):
         cond = render_string_predicate_java(rule.predicate, var)

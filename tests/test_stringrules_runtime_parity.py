@@ -10,7 +10,13 @@ from helpers import (
     run_checked_subprocess,
 )
 
-from genfxn.core.string_predicates import StringPredicateLengthCmp
+from genfxn.core.string_predicates import (
+    StringPredicateIsAlpha,
+    StringPredicateIsDigit,
+    StringPredicateIsLower,
+    StringPredicateIsUpper,
+    StringPredicateLengthCmp,
+)
 from genfxn.core.string_transforms import (
     StringTransformAppend,
     StringTransformIdentity,
@@ -194,3 +200,88 @@ def test_stringrules_runtime_parity_non_ascii_length_cmp_eq_two() -> None:
         expected = eval_stringrules(spec, s)
         assert _run_java_f(javac, java, java_code, s) == expected
         assert _run_rust_f(rustc, rust_code, s) == expected
+
+
+@pytest.mark.full
+def test_stringrules_runtime_parity_unicode_is_alpha_non_bmp() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    spec = StringRulesSpec(
+        rules=[
+            StringRule(
+                predicate=StringPredicateIsAlpha(),
+                transform=StringTransformAppend(suffix="!"),
+            )
+        ],
+        default_transform=StringTransformIdentity(),
+    )
+    java_code = render_java(spec, func_name="f")
+    rust_code = render_rust(spec, func_name="f")
+
+    for s in ("𝔘", "é", "A", "🙂"):
+        expected = eval_stringrules(spec, s)
+        assert _run_java_f(javac, java, java_code, s) == expected
+        assert _run_rust_f(rustc, rust_code, s) == expected
+
+
+@pytest.mark.full
+def test_stringrules_runtime_parity_unicode_is_digit() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    spec = StringRulesSpec(
+        rules=[
+            StringRule(
+                predicate=StringPredicateIsDigit(),
+                transform=StringTransformAppend(suffix="!"),
+            )
+        ],
+        default_transform=StringTransformIdentity(),
+    )
+    java_code = render_java(spec, func_name="f")
+    rust_code = render_rust(spec, func_name="f")
+
+    for s in ("𝟘", "٣", "7", "Ⅷ", "¼"):
+        expected = eval_stringrules(spec, s)
+        assert _run_java_f(javac, java, java_code, s) == expected
+        assert _run_rust_f(rustc, rust_code, s) == expected
+
+
+@pytest.mark.full
+def test_stringrules_runtime_parity_uncased_scripts_for_case_predicates(
+) -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    upper_spec = StringRulesSpec(
+        rules=[
+            StringRule(
+                predicate=StringPredicateIsUpper(),
+                transform=StringTransformAppend(suffix="U"),
+            )
+        ],
+        default_transform=StringTransformIdentity(),
+    )
+    lower_spec = StringRulesSpec(
+        rules=[
+            StringRule(
+                predicate=StringPredicateIsLower(),
+                transform=StringTransformAppend(suffix="L"),
+            )
+        ],
+        default_transform=StringTransformIdentity(),
+    )
+
+    upper_java = render_java(upper_spec, func_name="f")
+    upper_rust = render_rust(upper_spec, func_name="f")
+    lower_java = render_java(lower_spec, func_name="f")
+    lower_rust = render_rust(lower_spec, func_name="f")
+
+    for s in ("漢字", "ABC", "abc", "AbC"):
+        expected_upper = eval_stringrules(upper_spec, s)
+        expected_lower = eval_stringrules(lower_spec, s)
+        assert _run_java_f(javac, java, upper_java, s) == expected_upper
+        assert _run_rust_f(rustc, upper_rust, s) == expected_upper
+        assert _run_java_f(javac, java, lower_java, s) == expected_lower
+        assert _run_rust_f(rustc, lower_rust, s) == expected_lower

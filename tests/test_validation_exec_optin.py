@@ -169,8 +169,13 @@ def test_validation_closes_exec_func(
     isolated = _IsolatedFunc()
     monkeypatch.setattr(
         module,
-        "execute_code_restricted",
-        lambda *_args, **_kwargs: {"f": isolated},
+        "_validate_ast_whitelist",
+        lambda *_args, **_kwargs: ([], None),
+    )
+    monkeypatch.setattr(
+        module,
+        "_validate_code_compile",
+        lambda *_args, **_kwargs: ([], isolated),
     )
     monkeypatch.setattr(
         module,
@@ -207,14 +212,34 @@ def test_validation_closes_exec_func(
             intervals_validate,
         ),
         (
+            generate_piecewise_task,
+            piecewise_validate.validate_piecewise_task,
+            piecewise_validate,
+        ),
+        (
             generate_sequence_dp_task,
             sequence_dp_validate.validate_sequence_dp_task,
             sequence_dp_validate,
         ),
         (
+            generate_stateful_task,
+            stateful_validate.validate_stateful_task,
+            stateful_validate,
+        ),
+        (
+            generate_simple_algorithms_task,
+            simple_validate.validate_simple_algorithms_task,
+            simple_validate,
+        ),
+        (
             generate_stack_bytecode_task,
             stack_bytecode_validate.validate_stack_bytecode_task,
             stack_bytecode_validate,
+        ),
+        (
+            generate_stringrules_task,
+            stringrules_validate.validate_stringrules_task,
+            stringrules_validate,
         ),
         (
             generate_temporal_logic_task,
@@ -227,8 +252,12 @@ def test_validation_closes_exec_func(
         "fsm",
         "graph_queries",
         "intervals",
+        "piecewise",
         "sequence_dp",
+        "stateful",
+        "simple_algorithms",
         "stack_bytecode",
+        "stringrules",
         "temporal_logic",
     ],
 )
@@ -239,8 +268,13 @@ def test_validation_closes_exec_func_when_semantics_raises(
     isolated = _IsolatedFunc()
     monkeypatch.setattr(
         module,
-        "execute_code_restricted",
-        lambda *_args, **_kwargs: {"f": isolated},
+        "_validate_ast_whitelist",
+        lambda *_args, **_kwargs: ([], None),
+    )
+    monkeypatch.setattr(
+        module,
+        "_validate_code_compile",
+        lambda *_args, **_kwargs: ([], isolated),
     )
     monkeypatch.setattr(
         module,

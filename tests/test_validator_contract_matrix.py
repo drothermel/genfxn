@@ -122,6 +122,7 @@ class ValidatorContractCase:
     code_parse_error_code: str
     code_exec_error_code: str
     code_missing_func_code: str
+    code_unsafe_ast_code: str
     strictness_query: QueryBuilder
     bool_query: QueryBuilder
     task_kwargs: KwargsFactory = _no_kwargs
@@ -142,6 +143,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=bitops_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=bitops_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=bitops_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=bitops_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_scalar_query,
         lifecycle_kwargs=_sampled_lifecycle_kwargs,
@@ -155,6 +157,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=fsm_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=fsm_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=fsm_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=fsm_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_list_query,
         lifecycle_kwargs=_sampled_lifecycle_kwargs,
@@ -168,6 +171,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=graph_queries_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=graph_queries_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=graph_queries_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=graph_queries_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_graph_queries_query,
         lifecycle_kwargs=_sampled_lifecycle_kwargs,
@@ -181,6 +185,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=intervals_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=intervals_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=intervals_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=intervals_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_intervals_query,
         lifecycle_kwargs=_sampled_lifecycle_kwargs,
@@ -194,6 +199,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=piecewise_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=piecewise_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=piecewise_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=piecewise_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_scalar_query,
         lifecycle_kwargs=_piecewise_lifecycle_kwargs,
@@ -207,6 +213,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=sequence_dp_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=sequence_dp_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=sequence_dp_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=sequence_dp_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_sequence_dp_query,
         lifecycle_kwargs=_sampled_lifecycle_kwargs,
@@ -228,6 +235,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_missing_func_code=(
             simple_algorithms_validate.CODE_CODE_MISSING_FUNC
         ),
+        code_unsafe_ast_code=simple_algorithms_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_list_query,
         lifecycle_kwargs=_simple_algorithms_lifecycle_kwargs,
@@ -241,6 +249,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=stack_bytecode_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=stack_bytecode_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=stack_bytecode_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=stack_bytecode_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_stack_bytecode_query,
         lifecycle_kwargs=_sampled_lifecycle_kwargs,
@@ -254,6 +263,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=stateful_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=stateful_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=stateful_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=stateful_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_list_query,
         lifecycle_kwargs=_stateful_lifecycle_kwargs,
@@ -267,6 +277,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_parse_error_code=temporal_logic_validate.CODE_CODE_PARSE_ERROR,
         code_exec_error_code=temporal_logic_validate.CODE_CODE_EXEC_ERROR,
         code_missing_func_code=temporal_logic_validate.CODE_CODE_MISSING_FUNC,
+        code_unsafe_ast_code=temporal_logic_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_list_query,
         task_kwargs=_temporal_task_kwargs,
@@ -280,6 +291,30 @@ def _baseline_task(case: ValidatorContractCase) -> Task:
         rng=random.Random(42),
         **case.task_kwargs(),
     )
+
+
+def _f_signature(case_name: str) -> str:
+    signature_by_case = {
+        "bitops": "x",
+        "fsm": "xs",
+        "graph_queries": "src, dst",
+        "intervals": "intervals",
+        "piecewise": "x",
+        "sequence_dp": "a, b",
+        "simple_algorithms": "xs",
+        "stack_bytecode": "xs",
+        "stateful": "xs",
+        "temporal_logic": "xs",
+    }
+    return signature_by_case[case_name]
+
+
+def _top_level_side_effect_code(case_name: str) -> str:
+    return f"sentinel = 1\ndef f({_f_signature(case_name)}):\n    return 0"
+
+
+def _non_call_attribute_code(case_name: str) -> str:
+    return f"def f({_f_signature(case_name)}):\n    return (1).real"
 
 
 def _query_type_issues(
@@ -409,3 +444,47 @@ def test_exec_function_close_lifecycle_contract(
 
     assert state["calls"] >= 1
     assert state["closed"] is True
+
+
+@pytest.mark.parametrize(
+    "case",
+    VALIDATOR_CASES,
+    ids=[case.name for case in VALIDATOR_CASES],
+)
+def test_top_level_side_effects_rejected_by_ast_contract(
+    case: ValidatorContractCase,
+) -> None:
+    task = _baseline_task(case)
+    corrupted = task.model_copy(
+        update={"code": _top_level_side_effect_code(case.name)}
+    )
+
+    issues = case.validate_task(
+        corrupted,
+        strict=True,
+        execute_untrusted_code=False,
+    )
+    codes = {issue.code for issue in issues}
+    assert case.code_unsafe_ast_code in codes
+
+
+@pytest.mark.parametrize(
+    "case",
+    VALIDATOR_CASES,
+    ids=[case.name for case in VALIDATOR_CASES],
+)
+def test_non_call_attributes_rejected_by_ast_contract(
+    case: ValidatorContractCase,
+) -> None:
+    task = _baseline_task(case)
+    corrupted = task.model_copy(
+        update={"code": _non_call_attribute_code(case.name)}
+    )
+
+    issues = case.validate_task(
+        corrupted,
+        strict=True,
+        execute_untrusted_code=False,
+    )
+    codes = {issue.code for issue in issues}
+    assert case.code_unsafe_ast_code in codes
