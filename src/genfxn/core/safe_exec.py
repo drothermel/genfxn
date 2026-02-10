@@ -163,11 +163,32 @@ def _set_process_group() -> None:
         return
 
 
+def _can_kill_process_group(pid: int | None) -> bool:
+    if os.name != "posix" or pid is None or pid <= 0:
+        return False
+    try:
+        return os.getpgid(pid) == pid
+    except ProcessLookupError:
+        return False
+    except OSError as exc:
+        if exc.errno == errno.ESRCH:
+            return False
+        return False
+    except Exception:
+        return False
+
+
 def _terminate_process_tree(process: mp.Process) -> None:
     pid = process.pid
+    can_killpg = os.name == "posix" and pid is not None and pid > 0
+    # If the worker is still alive, only use killpg when it is clearly a
+    # process-group leader. If it already exited, keep the historical killpg
+    # attempt so lingering descendants in that group are still cleaned up.
+    if can_killpg and process.is_alive():
+        can_killpg = _can_kill_process_group(pid)
 
     def _killpg(sig: signal.Signals) -> None:
-        if pid is None or pid <= 0:
+        if not can_killpg or pid is None or pid <= 0:
             return
         try:
             os.killpg(pid, sig)

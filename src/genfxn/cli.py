@@ -444,6 +444,16 @@ def _atomic_output_file(path: Path) -> Iterator[TextIO]:
         raise
 
 
+@contextmanager
+def _atomic_output_file_or_exit(path: Path) -> Iterator[TextIO]:
+    try:
+        with _atomic_output_file(path) as handle:
+            yield handle
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
+
+
 def _write_task_line(handle, task: Task) -> None:
     handle.write(srsly.json_dumps(task.model_dump()))
     handle.write("\n")
@@ -1119,7 +1129,7 @@ def generate(
             list_length_range=list_length_range,
         )
 
-    with _atomic_output_file(output) as output_handle:
+    with _atomic_output_file_or_exit(output) as output_handle:
 
         def emit(task: Task) -> None:
             nonlocal generated_count
@@ -1382,6 +1392,18 @@ def split(
         if _paths_resolve_to_same_target(train, test):
             typer.echo(
                 "Error: --train and --test must be different output paths",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if _paths_resolve_to_same_target(input_file, train):
+            typer.echo(
+                "Error: input file and --train must be different paths",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if _paths_resolve_to_same_target(input_file, test):
+            typer.echo(
+                "Error: input file and --test must be different paths",
                 err=True,
             )
             raise typer.Exit(1)

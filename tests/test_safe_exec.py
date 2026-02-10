@@ -720,3 +720,56 @@ def test_get_mp_context_prefers_non_fork_defaults(monkeypatch) -> None:
     monkeypatch.setattr(safe_exec.mp, "get_context", _fake_get_context)
     ctx = safe_exec._get_mp_context()
     assert ctx.get_start_method() == "forkserver"
+
+
+def test_can_kill_process_group_requires_group_leader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(safe_exec.os, "name", "posix")
+    monkeypatch.setattr(safe_exec.os, "getpgid", lambda pid: pid + 1)
+    assert not safe_exec._can_kill_process_group(1234)
+
+    monkeypatch.setattr(safe_exec.os, "getpgid", lambda pid: pid)
+    assert safe_exec._can_kill_process_group(1234)
+
+
+def test_terminate_process_tree_skips_killpg_for_non_leader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeProcess:
+        pid = 1234
+
+        def __init__(self) -> None:
+            self._alive = True
+            self.terminated = False
+            self.killed = False
+
+        def is_alive(self) -> bool:
+            return self._alive
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self._alive = False
+
+        def kill(self) -> None:
+            self.killed = True
+            self._alive = False
+
+    process = _FakeProcess()
+    killpg_calls: list[tuple[int, signal.Signals]] = []
+
+    monkeypatch.setattr(safe_exec.os, "name", "posix")
+    monkeypatch.setattr(safe_exec, "_can_kill_process_group", lambda pid: False)
+    monkeypatch.setattr(
+        safe_exec.os,
+        "killpg",
+        lambda pid, sig: killpg_calls.append((pid, sig)),
+    )
+
+    safe_exec._terminate_process_tree(process)
+
+    assert killpg_calls == []
+    assert process.terminated is True

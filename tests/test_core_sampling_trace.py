@@ -1,5 +1,7 @@
 import random
 
+import pytest
+
 from genfxn.core.sampling import pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 
@@ -18,6 +20,14 @@ def test_pick_from_preferred_falls_back_to_available() -> None:
     preferred = ["x", "y"]
     result = pick_from_preferred(available, preferred, rng)
     assert result in set(available)
+
+
+def test_pick_from_preferred_rejects_empty_available() -> None:
+    rng = random.Random(42)
+    with pytest.raises(
+        ValueError, match="available must contain at least one item"
+    ):
+        pick_from_preferred([], ["x"], rng)
 
 
 def test_trace_step_appends_when_trace_is_present() -> None:

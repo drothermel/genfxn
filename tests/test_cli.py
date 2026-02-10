@@ -122,6 +122,27 @@ class TestGenerate:
         assert "Error: --count must be >= 0" in result.output
         assert "Traceback" not in result.output
 
+    def test_generate_output_io_error_has_clean_message(self, tmp_path) -> None:
+        missing_dir = tmp_path / "missing"
+        output = missing_dir / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "1",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "file operation failed" in result.output
+        assert str(missing_dir) in result.output
+        assert "Traceback" not in result.output
+
     def test_generate_stateful(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
@@ -1408,6 +1429,68 @@ class TestSplit:
             in result.output
         )
         assert not same_output.exists()
+
+    @pytest.mark.parametrize(
+        ("clashing_option", "expected_error"),
+        [
+            (
+                "--train",
+                "Error: input file and --train must be different paths",
+            ),
+            (
+                "--test",
+                "Error: input file and --test must be different paths",
+            ),
+        ],
+    )
+    def test_split_rejects_input_path_as_output(
+        self,
+        tmp_path,
+        clashing_option: str,
+        expected_error: str,
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        other_train = tmp_path / "train.jsonl"
+        other_test = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "stateful",
+                "-n",
+                "4",
+                "-s",
+                "7",
+            ],
+        )
+
+        train_target = (
+            input_file if clashing_option == "--train" else other_train
+        )
+        test_target = input_file if clashing_option == "--test" else other_test
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_target),
+                "--test",
+                str(test_target),
+                "--random-ratio",
+                "0.5",
+                "--seed",
+                "11",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert expected_error in result.output
+        assert "Traceback" not in result.output
 
     def test_split_rejects_random_and_holdout_options_together(
         self, tmp_path
