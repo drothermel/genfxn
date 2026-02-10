@@ -12,6 +12,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
     Language.PYTHON: {
         "bitops": "genfxn.bitops.render",
         "fsm": "genfxn.fsm.render",
+        "graph_queries": "genfxn.graph_queries.render",
         "intervals": "genfxn.intervals.render",
         "piecewise": "genfxn.piecewise.render",
         "sequence_dp": "genfxn.sequence_dp.render",
@@ -23,6 +24,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
     Language.JAVA: {
         "bitops": "genfxn.langs.java.bitops",
         "fsm": "genfxn.langs.java.fsm",
+        "graph_queries": "genfxn.langs.java.graph_queries",
         "intervals": "genfxn.langs.java.intervals",
         "piecewise": "genfxn.langs.java.piecewise",
         "sequence_dp": "genfxn.langs.java.sequence_dp",
@@ -34,6 +36,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
     Language.RUST: {
         "bitops": "genfxn.langs.rust.bitops",
         "fsm": "genfxn.langs.rust.fsm",
+        "graph_queries": "genfxn.langs.rust.graph_queries",
         "intervals": "genfxn.langs.rust.intervals",
         "piecewise": "genfxn.langs.rust.piecewise",
         "sequence_dp": "genfxn.langs.rust.sequence_dp",
@@ -48,6 +51,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
 _RENDER_FUNCTIONS: dict[str, str] = {
     "bitops": "render_bitops",
     "fsm": "render_fsm",
+    "graph_queries": "render_graph_queries",
     "intervals": "render_intervals",
     "piecewise": "render_piecewise",
     "sequence_dp": "render_sequence_dp",

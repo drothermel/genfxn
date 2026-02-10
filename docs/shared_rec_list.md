@@ -9,8 +9,12 @@ Date: 2026-02-09
 - Completed: `Finite-State Transducer (FSM/Mealy/Moore)`
 - Completed: `Bit Manipulation Pipelines` (implemented as `bitops`)
 - Completed: `Sequence DP With Custom Scoring` (implemented as `sequence_dp`)
+- Completed: `Interval Operations` (implemented as `intervals`)
+- Completed: `Graph Query Functions` (implemented as `graph_queries`)
+- In progress: `Temporal Logic Over Streams`
 - Implementation plans:
-  `docs/fsm_plan.md`, `docs/bitops_plan.md`, `docs/sequence_dp_plan.md`
+  `docs/fsm_plan.md`, `docs/bitops_plan.md`, `docs/sequence_dp_plan.md`,
+  `docs/intervals_plan.md`, `docs/graph_queries_plan.md`
 
 1. Stack/Bytecode Interpreter
 Signature: `f(xs: list[int]) -> int` (program baked into spec; optional `f(program, xs)` variant)

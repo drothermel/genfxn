@@ -23,6 +23,13 @@ INTERVALS_WEIGHTS = {
     "merge": 0.15,
     "clip": 0.25,
 }
+GRAPH_QUERIES_WEIGHTS = {
+    "size": 0.25,
+    "density": 0.20,
+    "query": 0.20,
+    "mode": 0.15,
+    "structure": 0.20,
+}
 
 
 def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
@@ -45,6 +52,8 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _sequence_dp_difficulty(spec)
     elif family == "intervals":
         return _intervals_difficulty(spec)
+    elif family == "graph_queries":
+        return _graph_queries_difficulty(spec)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -731,6 +740,222 @@ def _intervals_interaction_bonus(
     return bonus
 
 
+def _graph_queries_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for graph query tasks.
+
+    Scoring:
+    - Graph size (25%): score from `n_nodes`
+    - Edge density (20%): score from unique edge density
+    - Query type (20%): reachable < min_hops < shortest_path_cost
+    - Mode (15%): directed/weighted combination
+    - Structure (20%): disconnectedness, duplicates, antiparallel edges,
+      and hub skew
+    """
+    n_nodes = max(1, _coerce_int(spec.get("n_nodes"), 1))
+    directed = _coerce_bool(spec.get("directed"), False)
+    weighted = _coerce_bool(spec.get("weighted"), False)
+    query_type = _enum_or_str_value(spec.get("query_type"))
+
+    edges = _graph_edges(spec.get("edges"), n_nodes=n_nodes)
+    unique_edges = _graph_unique_edges(edges, directed=directed)
+
+    size_score = _graph_size_score(n_nodes)
+    density_score = _graph_density_score(
+        unique_edge_count=len(unique_edges),
+        n_nodes=n_nodes,
+        directed=directed,
+    )
+    query_score = _graph_query_type_score(query_type)
+    mode_score = _graph_mode_score(directed=directed, weighted=weighted)
+    structure_score = _graph_structure_score(
+        edges=edges,
+        unique_edges=unique_edges,
+        n_nodes=n_nodes,
+        directed=directed,
+    )
+
+    w = GRAPH_QUERIES_WEIGHTS
+    raw = (
+        w["size"] * size_score
+        + w["density"] * density_score
+        + w["query"] * query_score
+        + w["mode"] * mode_score
+        + w["structure"] * structure_score
+    )
+    raw += _graph_interaction_adjustment(
+        query_type=query_type,
+        directed=directed,
+        weighted=weighted,
+        size_score=size_score,
+        density_score=density_score,
+        structure_score=structure_score,
+    )
+    return max(1, min(5, round(raw)))
+
+
+def _graph_edges(
+    value: Any,
+    *,
+    n_nodes: int,
+) -> list[tuple[int, int]]:
+    if not isinstance(value, list):
+        return []
+
+    edges: list[tuple[int, int]] = []
+    for edge in value:
+        if not isinstance(edge, dict):
+            continue
+        u = _coerce_int(edge.get("u"), -1)
+        v = _coerce_int(edge.get("v"), -1)
+        if u < 0 or v < 0 or u >= n_nodes or v >= n_nodes:
+            continue
+        if u == v:
+            continue
+        edges.append((u, v))
+    return edges
+
+
+def _graph_unique_edges(
+    edges: list[tuple[int, int]], *, directed: bool
+) -> set[tuple[int, int]]:
+    if directed:
+        return set(edges)
+    return {(min(u, v), max(u, v)) for u, v in edges}
+
+
+def _graph_size_score(n_nodes: int) -> int:
+    if n_nodes <= 3:
+        return 1
+    if n_nodes <= 5:
+        return 2
+    if n_nodes <= 7:
+        return 3
+    if n_nodes <= 9:
+        return 4
+    return 5
+
+
+def _graph_density_score(
+    *,
+    unique_edge_count: int,
+    n_nodes: int,
+    directed: bool,
+) -> int:
+    if n_nodes <= 1:
+        return 1
+
+    if directed:
+        max_edges = n_nodes * (n_nodes - 1)
+    else:
+        max_edges = n_nodes * (n_nodes - 1) // 2
+    if max_edges <= 0:
+        return 1
+
+    density = unique_edge_count / max_edges
+    if density <= 0.10:
+        return 1
+    if density <= 0.30:
+        return 2
+    if density <= 0.50:
+        return 3
+    if density <= 0.70:
+        return 4
+    return 5
+
+
+def _graph_query_type_score(query_type: str) -> int:
+    if query_type == "reachable":
+        return 1
+    if query_type == "min_hops":
+        return 3
+    if query_type == "shortest_path_cost":
+        return 5
+    return 2
+
+
+def _graph_mode_score(*, directed: bool, weighted: bool) -> int:
+    if not directed and not weighted:
+        return 1
+    if directed and not weighted:
+        return 3
+    if not directed and weighted:
+        return 4
+    return 5
+
+
+def _graph_structure_score(
+    *,
+    edges: list[tuple[int, int]],
+    unique_edges: set[tuple[int, int]],
+    n_nodes: int,
+    directed: bool,
+) -> int:
+    if n_nodes <= 1:
+        return 1
+
+    flags = 0
+    duplicate_count = max(0, len(edges) - len(unique_edges))
+    if duplicate_count > 0:
+        flags += 1
+
+    degrees = [0] * n_nodes
+    for u, v in unique_edges:
+        degrees[u] += 1
+        degrees[v] += 1
+
+    isolated = sum(1 for degree in degrees if degree == 0)
+    if isolated >= max(1, n_nodes // 4):
+        flags += 1
+
+    total_degree = sum(degrees)
+    avg_degree = total_degree / n_nodes
+    max_degree = max(degrees) if degrees else 0
+    if avg_degree > 0 and max_degree >= max(3, int(avg_degree * 1.75)):
+        flags += 1
+
+    if directed:
+        for u, v in unique_edges:
+            if (v, u) in unique_edges:
+                flags += 1
+                break
+
+    return min(5, 1 + flags)
+
+
+def _graph_interaction_adjustment(
+    *,
+    query_type: str,
+    directed: bool,
+    weighted: bool,
+    size_score: int,
+    density_score: int,
+    structure_score: int,
+) -> float:
+    adjustment = 0.0
+
+    # Keep very simple reachable settings in D1 by easing sparse
+    # undirected/unweighted specs that otherwise round up to D2.
+    if (
+        query_type == "reachable"
+        and not directed
+        and not weighted
+        and size_score <= 2
+        and density_score <= 2
+    ):
+        adjustment -= 0.35
+
+    # Promote the most complex shortest-path settings into D5 when graph
+    # structure and mode already indicate high complexity.
+    if query_type == "shortest_path_cost" and directed and weighted:
+        adjustment += 0.35
+        if size_score >= 4:
+            adjustment += 0.15
+        if density_score >= 4 and structure_score >= 3:
+            adjustment += 0.1
+
+    return adjustment
+
+
 def _enum_or_str_value(value: Any) -> str:
     if isinstance(value, str):
         return value
@@ -749,6 +974,24 @@ def _coerce_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value == 0:
+            return False
+        if value == 1:
+            return True
+        return default
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    return default
 
 
 def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:

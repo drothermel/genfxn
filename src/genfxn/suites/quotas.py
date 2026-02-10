@@ -453,6 +453,39 @@ _INTERVALS_D5 = QuotaSpec(
     ],
 )
 
+# ── Graph queries quotas ────────────────────────────────────────────────
+
+_GRAPH_QUERIES_D1 = QuotaSpec(
+    hard_constraints={
+        "query_type": "reachable",
+        "mode": "undirected_unweighted",
+    },
+    buckets=[Bucket("mode", "undirected_unweighted", 50)],
+)
+
+_GRAPH_QUERIES_D2 = QuotaSpec(
+    hard_constraints={"weighted": "false"},
+    buckets=[Bucket("weighted", "false", 50)],
+)
+
+_GRAPH_QUERIES_D3 = QuotaSpec(
+    hard_constraints={"query_type": "min_hops"},
+    buckets=[Bucket("query_type", "min_hops", 50)],
+)
+
+_GRAPH_QUERIES_D4 = QuotaSpec(
+    hard_constraints={"mode": "directed_weighted"},
+    buckets=[Bucket("mode", "directed_weighted", 50)],
+)
+
+_GRAPH_QUERIES_D5 = QuotaSpec(
+    hard_constraints={
+        "query_type": "shortest_path_cost",
+        "mode": "directed_weighted",
+    },
+    buckets=[Bucket("query_type", "shortest_path_cost", 50)],
+)
+
 # ── Combined lookup ──────────────────────────────────────────────────────
 
 QUOTAS: dict[str, dict[int, QuotaSpec]] = {
@@ -497,5 +530,12 @@ QUOTAS: dict[str, dict[int, QuotaSpec]] = {
         3: _INTERVALS_D3,
         4: _INTERVALS_D4,
         5: _INTERVALS_D5,
+    },
+    "graph_queries": {
+        1: _GRAPH_QUERIES_D1,
+        2: _GRAPH_QUERIES_D2,
+        3: _GRAPH_QUERIES_D3,
+        4: _GRAPH_QUERIES_D4,
+        5: _GRAPH_QUERIES_D5,
     },
 }

@@ -445,6 +445,49 @@ Interval-statistics tasks over integer endpoints:
 
 ---
 
+## Graph Queries
+
+Deterministic graph-query tasks over a fixed spec graph:
+`f(src: int, dst: int) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
+| `query_types` | list | all | — | Allowed query outputs |
+| `directed_choices` | list[bool] | `[False, True]` | — | Directed/undirected graph sampling |
+| `weighted_choices` | list[bool] | `[False, True]` | — | Weighted/unweighted sampling |
+| `n_nodes_range` | (lo, hi) | (2, 8) | `--list-length-range` | Range for sampled node count |
+| `edge_count_range` | (lo, hi) | (1, 16) | — | Range for sampled edge count |
+| `weight_range` | (lo, hi) | (1, 9) | `--value-range` | Edge weight range (effective non-negative interval) |
+| `disconnected_prob_range` | (lo, hi) | (0.1, 0.4) | — | Probability range for disconnected graph sampling |
+| `multi_edge_prob_range` | (lo, hi) | (0.0, 0.25) | — | Probability range for duplicate edge injection |
+| `hub_bias_prob_range` | (lo, hi) | (0.0, 0.4) | — | Probability range for hub-biased edge sampling |
+
+### Query Types
+
+| Value | Description |
+|-------|-------------|
+| `reachable` | Return `1` if any path exists, else `0` |
+| `min_hops` | Return BFS hop count, else `-1` |
+| `shortest_path_cost` | Return non-negative shortest-path cost, else `-1` |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `query_type` | query type values | Query semantics family |
+| `directed` | `true`, `false` | Directed adjacency interpretation |
+| `weighted` | `true`, `false` | Weighted cost mode |
+| `n_nodes` | positive integer | Node count (`0..n_nodes-1`) |
+| `edges` | list | Edge list payload |
+| `edges.0.u` | integer | Source node of first edge |
+| `edges.0.v` | integer | Destination node of first edge |
+| `edges.0.w` | integer | Weight of first edge |
+
+---
+
 ## Using Spec Field Paths
 
 Spec field paths use dot notation to access nested fields. List indices are supported.

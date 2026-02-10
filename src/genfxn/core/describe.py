@@ -22,6 +22,8 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_sequence_dp(spec)
     elif family == "intervals":
         return _describe_intervals(spec)
+    elif family == "graph_queries":
+        return _describe_graph_queries(spec)
     return ""
 
 
@@ -866,6 +868,28 @@ def _describe_intervals(spec: dict[str, Any]) -> str:
         ),
         f"Then {merge_text}.",
         f"Return operation '{operation}'.",
+    )
+
+
+def _describe_graph_queries(spec: dict[str, Any]) -> str:
+    query_type = _enum_text(spec.get("query_type", "reachable"))
+    directed_raw = spec.get("directed", True)
+    weighted_raw = spec.get("weighted", True)
+    directed = directed_raw if isinstance(directed_raw, bool) else True
+    weighted = weighted_raw if isinstance(weighted_raw, bool) else True
+
+    n_nodes_raw = spec.get("n_nodes", 1)
+    if isinstance(n_nodes_raw, int) and not isinstance(n_nodes_raw, bool):
+        n_nodes = max(1, n_nodes_raw)
+    else:
+        n_nodes = 1
+
+    direction_text = "directed" if directed else "undirected"
+    weight_text = "weighted" if weighted else "unweighted"
+    return (
+        "Answer graph query "
+        f"{query_type!r} on a {direction_text}, {weight_text} "
+        f"graph with {n_nodes} nodes."
     )
 
 

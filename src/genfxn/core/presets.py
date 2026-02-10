@@ -22,6 +22,7 @@ from genfxn.fsm.models import (
 from genfxn.fsm.models import (
     PredicateType as FsmPredicateType,
 )
+from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueryType
 from genfxn.intervals.models import BoundaryMode, IntervalsAxes, OperationType
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.sequence_dp.models import (
@@ -1202,6 +1203,110 @@ INTERVALS_PRESETS: dict[int, list[DifficultyPreset]] = {
     ],
 }
 
+# =============================================================================
+# Graph Queries Presets
+# Difficulty maps directly from target_difficulty in graph_queries axes.
+# =============================================================================
+
+GRAPH_QUERIES_PRESETS: dict[int, list[DifficultyPreset]] = {
+    1: [
+        DifficultyPreset(
+            "1A",
+            "small undirected reachability with sparse edges",
+            {
+                "target_difficulty": 1,
+                "query_types": [GraphQueryType.REACHABLE],
+                "directed_choices": [False],
+                "weighted_choices": [False],
+                "n_nodes_range": (5, 5),
+                "edge_count_range": (1, 1),
+                "weight_range": (1, 20),
+                "disconnected_prob_range": (0.0, 0.0),
+                "multi_edge_prob_range": (0.0, 0.0),
+                "hub_bias_prob_range": (0.0, 0.0),
+            },
+        )
+    ],
+    2: [
+        DifficultyPreset(
+            "2A",
+            "reachable/min-hops on small mostly unweighted graphs",
+            {
+                "target_difficulty": 2,
+                "query_types": [
+                    GraphQueryType.REACHABLE,
+                    GraphQueryType.MIN_HOPS,
+                ],
+                "directed_choices": [False, True],
+                "weighted_choices": [False],
+                "n_nodes_range": (3, 6),
+                "edge_count_range": (2, 10),
+                "weight_range": (1, 5),
+                "disconnected_prob_range": (0.2, 0.5),
+                "multi_edge_prob_range": (0.0, 0.18),
+                "hub_bias_prob_range": (0.0, 0.25),
+            },
+        )
+    ],
+    3: [
+        DifficultyPreset(
+            "3A",
+            "min-hops focused medium graph size",
+            {
+                "target_difficulty": 3,
+                "query_types": [GraphQueryType.MIN_HOPS],
+                "directed_choices": [False, True],
+                "weighted_choices": [False, True],
+                "n_nodes_range": (5, 8),
+                "edge_count_range": (6, 20),
+                "weight_range": (1, 8),
+                "disconnected_prob_range": (0.1, 0.35),
+                "multi_edge_prob_range": (0.0, 0.22),
+                "hub_bias_prob_range": (0.0, 0.3),
+            },
+        )
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "directed weighted shortest-path focused graphs",
+            {
+                "target_difficulty": 4,
+                "query_types": [
+                    GraphQueryType.MIN_HOPS,
+                    GraphQueryType.SHORTEST_PATH_COST,
+                ],
+                "directed_choices": [True],
+                "weighted_choices": [True],
+                "n_nodes_range": (7, 10),
+                "edge_count_range": (12, 36),
+                "weight_range": (1, 9),
+                "disconnected_prob_range": (0.05, 0.2),
+                "multi_edge_prob_range": (0.06, 0.25),
+                "hub_bias_prob_range": (0.0, 0.2),
+            },
+        )
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "largest directed weighted shortest-path instances",
+            {
+                "target_difficulty": 5,
+                "query_types": [GraphQueryType.SHORTEST_PATH_COST],
+                "directed_choices": [True],
+                "weighted_choices": [True],
+                "n_nodes_range": (11, 12),
+                "edge_count_range": (96, 132),
+                "weight_range": (1, 20),
+                "disconnected_prob_range": (0.0, 0.05),
+                "multi_edge_prob_range": (0.18, 0.4),
+                "hub_bias_prob_range": (0.0, 0.15),
+            },
+        )
+    ],
+}
+
 
 # =============================================================================
 # Lookup Functions
@@ -1217,6 +1322,7 @@ _FAMILY_PRESETS: dict[str, dict[int, list[DifficultyPreset]]] = {
     "bitops": BITOPS_PRESETS,
     "sequence_dp": SEQUENCE_DP_PRESETS,
     "intervals": INTERVALS_PRESETS,
+    "graph_queries": GRAPH_QUERIES_PRESETS,
 }
 
 
@@ -1260,6 +1366,7 @@ def get_difficulty_axes(
     | BitopsAxes
     | SequenceDpAxes
     | IntervalsAxes
+    | GraphQueriesAxes
 ):
     """Return axes for target difficulty.
 
@@ -1306,6 +1413,7 @@ def _build_axes(
     | BitopsAxes
     | SequenceDpAxes
     | IntervalsAxes
+    | GraphQueriesAxes
 ):
     """Build axes object from overrides."""
     match family:
@@ -1327,5 +1435,7 @@ def _build_axes(
             return SequenceDpAxes(**overrides)
         case "intervals":
             return IntervalsAxes(**overrides)
+        case "graph_queries":
+            return GraphQueriesAxes(**overrides)
         case _:
             raise ValueError(f"Unknown family: {family}")
