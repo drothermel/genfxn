@@ -33,6 +33,10 @@ def _is_non_bool_number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
+def _is_finite_non_bool_number(value: Any) -> bool:
+    return _is_non_bool_number(value) and math.isfinite(value)
+
+
 def _contains_non_finite_number(value: Any) -> bool:
     if isinstance(value, float):
         return not math.isfinite(value)
@@ -70,9 +74,12 @@ def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
             ):
                 return False
             lo, hi = range_value
-            if not _is_non_bool_number(lo) or not _is_non_bool_number(hi):
+            if (
+                not _is_finite_non_bool_number(lo)
+                or not _is_finite_non_bool_number(hi)
+            ):
                 return False
-            if not _is_non_bool_number(value):
+            if not _is_finite_non_bool_number(value):
                 return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:

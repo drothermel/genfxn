@@ -133,28 +133,31 @@ def _parse_numeric_range(
             raise typer.BadParameter(
                 f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
             )
-        lo_f = float(lo_s)
-        hi_f = float(hi_s)
-        if not math.isfinite(lo_f) or not math.isfinite(hi_f):
-            raise typer.BadParameter(
-                f"Invalid range '{value}': bounds must be finite numbers "
-                "(no nan/inf/-inf)"
-            )
-        if lo_f > hi_f:
+
+        def _parse_bound(raw: str) -> int | float:
+            # Parse integer-looking tokens as ints first to avoid precision loss
+            # from float round-trips on large values.
+            if "." not in raw and "e" not in raw.lower():
+                try:
+                    return int(raw)
+                except ValueError:
+                    pass
+
+            parsed_float = float(raw)
+            if not math.isfinite(parsed_float):
+                raise typer.BadParameter(
+                    f"Invalid range '{value}': bounds must be finite numbers "
+                    "(no nan/inf/-inf)"
+                )
+            return parsed_float
+
+        lo = _parse_bound(lo_s)
+        hi = _parse_bound(hi_s)
+        if lo > hi:
             raise typer.BadParameter(
                 f"Invalid range '{value}': low must be <= high"
             )
-
-        def _coerce_number(raw: str, value_f: float) -> int | float:
-            if (
-                "." not in raw
-                and "e" not in raw.lower()
-                and value_f.is_integer()
-            ):
-                return int(value_f)
-            return value_f
-
-        return _coerce_number(lo_s, lo_f), _coerce_number(hi_s, hi_f)
+        return lo, hi
     except ValueError as err:
         raise typer.BadParameter(
             f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"

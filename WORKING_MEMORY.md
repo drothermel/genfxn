@@ -695,6 +695,33 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   - `uv run ty check src/genfxn/core/models.py tests/test_core_models.py`
     -> passed.
 
+## Latest Intake Extension (2026-02-10, CLI numeric range precision)
+- `_parse_numeric_range` currently parses bounds via `float(...)` first, then
+  back-coerces integer-looking values with `int(value_f)`.
+- This introduces precision loss for large integer bounds beyond IEEE-754 exact
+  integer range (for example `9223372036854775807` rounds to
+  `9223372036854775808.0`), causing incorrect range endpoints in CLI split
+  holdout parsing.
+- Required contract for this pass:
+  - integer-looking bounds must parse as exact Python `int` without float
+    round-trip
+  - decimal/scientific notation bounds must still parse as `float`
+  - non-finite bounds (`nan`/`inf`/`-inf`) must remain rejected.
+
+## Completed This Chunk (2026-02-10, CLI numeric range precision)
+- Fixed `src/genfxn/cli.py` `_parse_numeric_range(...)` to parse integer-like
+  bounds as exact `int` values before float fallback, eliminating large-int
+  precision loss from float round-trip conversion.
+- Preserved finite-bound validation behavior for range parsing (`nan`/`inf`/
+  `-inf` rejected with explicit `BadParameter`).
+- Added focused CLI regressions in `tests/test_cli.py`:
+  - `test_split_range_parses_large_integer_bounds_exactly`
+  - `test_parse_numeric_range_scientific_notation_uses_float`
+- Validation evidence:
+  - `uv run pytest tests/test_cli.py -v` -> 111 passed.
+  - `uv run ruff check src/genfxn/cli.py tests/test_cli.py` -> passed.
+  - `uv run ty check` -> passed.
+
 ## Why Coverage Is Uneven
 - Early families received concentrated test quality investment before family
   count scaled.
@@ -717,3 +744,37 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   families?
 - Should suite generation include generic local-repair/backtracking hooks to
   avoid family-specific quota traps?
+
+## Latest Intake Extension (2026-02-10, Axes Bool-As-Int Hardening)
+- `IntervalsAxes` and `PiecewiseAxes` int tuple range fields currently accept
+  bool values via pydantic int coercion (`False -> 0`, `True -> 1`), allowing
+  invalid axes input to pass silently.
+- Reproduced acceptance cases before fix:
+  - `IntervalsAxes(endpoint_range=(False, 5))` accepted as `(0, 5)`
+  - `IntervalsAxes(n_intervals_range=(True, 5))` accepted as `(1, 5)`
+  - `PiecewiseAxes(value_range=(False, 5))` accepted as `(0, 5)`
+  - `PiecewiseAxes(divisor_range=(True, 5))` accepted as `(1, 5)`
+- This pass scope:
+  - add explicit, model-local helpers for int range tuple validation with bool
+    rejection
+  - add focused regressions in `tests/test_intervals.py` and
+    `tests/test_piecewise.py`
+
+## Completed This Chunk (2026-02-10, Axes Bool-As-Int Hardening)
+- Added explicit model-local pre-validation helpers in:
+  - `src/genfxn/intervals/models.py`
+  - `src/genfxn/piecewise/models.py`
+  to reject bool bounds for int tuple range fields before pydantic coercion.
+- Added focused regression coverage:
+  - `tests/test_intervals.py`:
+    `TestModels.test_axes_reject_bool_in_int_range_bounds`
+  - `tests/test_piecewise.py`:
+    `TestAxesValidation.test_rejects_bool_in_int_range_bounds`
+- Validation evidence:
+  - `uv run pytest tests/test_intervals.py tests/test_piecewise.py -v`
+    -> 55 passed.
+  - `uv run ruff check src/genfxn/intervals/models.py
+    src/genfxn/piecewise/models.py tests/test_intervals.py
+    tests/test_piecewise.py` -> All checks passed.
+  - `uv run ty check` -> failed only on unrelated existing diagnostics in
+    `tests/test_cli.py` (`not-subscriptable` at lines 1647 and 1648).

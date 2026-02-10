@@ -229,6 +229,66 @@ class TestSplitTasks:
         assert result.test == []
         assert {t.task_id for t in result.train} == {"t1", "t2"}
 
+    def test_range_holdout_rejects_non_finite_bounds_neg_inf_to_inf(
+        self,
+    ) -> None:
+        tasks = [
+            _make_task("t1", {"score": -5}),
+            _make_task("t2", {"score": 0}),
+            _make_task("t3", {"score": 5}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(float("-inf"), float("inf")),
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1", "t2", "t3"}
+
+    def test_range_holdout_rejects_non_finite_bounds_nan_lower(self) -> None:
+        tasks = [
+            _make_task("t1", {"score": 0}),
+            _make_task("t2", {"score": 10}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(float("nan"), 10),
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1", "t2"}
+
+    def test_range_holdout_rejects_non_finite_spec_values(self) -> None:
+        tasks = [
+            _make_task("t-nan", {"score": float("nan")}),
+            _make_task("t-inf", {"score": float("inf")}),
+            _make_task("t-neg-inf", {"score": float("-inf")}),
+            _make_task("t-finite", {"score": 5}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(0, 10),
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert {t.task_id for t in result.test} == {"t-finite"}
+        assert {t.task_id for t in result.train} == {
+            "t-nan",
+            "t-inf",
+            "t-neg-inf",
+        }
+
     @pytest.mark.parametrize(
         "bad_value",
         [float("nan"), float("inf"), float("-inf")],

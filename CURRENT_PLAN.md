@@ -158,6 +158,29 @@ Progress update (2026-02-10, CLI range + NaN dedupe):
   - `uv run ty check src/genfxn/cli.py src/genfxn/core/models.py
     tests/test_cli.py tests/test_core_models.py` -> passed
 
+New intake extension (2026-02-10, CLI numeric range precision):
+- [x] Fix `_parse_numeric_range` integer-bound parsing in `src/genfxn/cli.py`
+      to avoid float round-trip precision loss for integer-looking values.
+- [x] Preserve float/scientific notation support and non-finite rejection
+      behavior in `_parse_numeric_range`.
+- [x] Add focused regression coverage in `tests/test_cli.py` for large integer
+      range bounds (for example `9223372036854775807`) and validate requested
+      `pytest`/`ruff`/`ty` commands.
+
+Progress update (2026-02-10, CLI numeric range precision):
+- Updated `src/genfxn/cli.py` `_parse_numeric_range(...)` so integer-looking
+  bounds are parsed as exact `int` before float fallback, preventing precision
+  loss on large integers while preserving float/scientific parsing.
+- Preserved non-finite bound rejection (`nan`/`inf`/`-inf`) with the existing
+  `BadParameter` finite-bounds message path.
+- Added focused tests in `tests/test_cli.py`:
+  - `test_split_range_parses_large_integer_bounds_exactly`
+  - `test_parse_numeric_range_scientific_notation_uses_float`
+- Validation evidence:
+  - `uv run pytest tests/test_cli.py -v` -> 111 passed
+  - `uv run ruff check src/genfxn/cli.py tests/test_cli.py` -> passed
+  - `uv run ty check` -> passed
+
 ### 1) Validator Contract Parity (Cross-Family)
 Add/standardize tests in each `tests/test_validate_<family>.py` for:
 - bool-rejection where numeric ints are expected.
@@ -614,3 +637,71 @@ Exit criterion:
 2. Decide and document policy for Python evaluator semantics vs Java/Rust
    wrapping semantics in overflow-only domains for `stack_bytecode` and
    `sequence_dp` (renderer/runtime parity is now hardened for Java/Rust).
+
+### 8) Axes Bool-As-Int Coercion Hardening (Intervals/Piecewise)
+Current execution batch (2026-02-10):
+- [x] Add explicit model-level int-range helpers in:
+      `src/genfxn/intervals/models.py` and
+      `src/genfxn/piecewise/models.py`
+      so bool values are rejected for int tuple range fields.
+- [x] Add focused bool-rejection tests in:
+      `tests/test_intervals.py` and `tests/test_piecewise.py`.
+- [x] Run requested validation commands:
+      `uv run pytest tests/test_intervals.py tests/test_piecewise.py -v`,
+      `uv run ruff check src/genfxn/intervals/models.py src/genfxn/piecewise/models.py tests/test_intervals.py tests/test_piecewise.py`,
+      and `uv run ty check`.
+
+Progress update (2026-02-10, axes bool-as-int hardening complete):
+- Added explicit pre-validation helpers in both model modules to reject bool
+  bounds for int tuple range axes fields before pydantic int coercion:
+  - `src/genfxn/intervals/models.py`
+  - `src/genfxn/piecewise/models.py`
+- Added focused bool-rejection regressions:
+  - `tests/test_intervals.py` (`TestModels.test_axes_reject_bool_in_int_range_bounds`)
+  - `tests/test_piecewise.py`
+    (`TestAxesValidation.test_rejects_bool_in_int_range_bounds`)
+- Validation evidence:
+  - `uv run pytest tests/test_intervals.py tests/test_piecewise.py -v`
+    -> 55 passed.
+  - `uv run ruff check src/genfxn/intervals/models.py
+    src/genfxn/piecewise/models.py tests/test_intervals.py
+    tests/test_piecewise.py`
+    -> All checks passed.
+  - `uv run ty check`
+    -> failed on pre-existing unrelated diagnostics in `tests/test_cli.py`
+       (`not-subscriptable` at lines 1647 and 1648).
+
+Exit criterion:
+- Bool values no longer coerce into int tuple axis ranges for intervals and
+  piecewise, with regression coverage guarding behavior.
+
+### 9) Split Parsing/Matching Consistency Hardening (Current Batch)
+Intake covered:
+- Blocking: CLI large-int range parsing precision loss.
+- Important: library range matcher non-finite behavior drift from CLI.
+- Important: bool-as-int coercion in axes/spec model ranges.
+- Important (policy): query-input uniqueness contract across tags/families.
+
+Completed in this batch:
+- [x] `src/genfxn/cli.py`: `_parse_numeric_range` now parses integer-looking
+      bounds directly as `int` (no float round-trip), preserving exact large
+      integers while keeping float/scientific notation support.
+- [x] `src/genfxn/splits.py`: range matching now rejects non-finite bounds and
+      non-finite spec values; bool rejection remains intact.
+- [x] `src/genfxn/intervals/models.py` and
+      `src/genfxn/piecewise/models.py`: pre-validators now reject bool bounds
+      for int tuple range fields before coercion.
+- [x] Added focused regression tests:
+      `tests/test_cli.py`, `tests/test_splits.py`,
+      `tests/test_intervals.py`, `tests/test_piecewise.py`.
+
+Consolidated validation evidence (post-merge in this branch):
+- `uv run pytest tests/test_cli.py tests/test_splits.py tests/test_intervals.py tests/test_piecewise.py -v`
+  -> 226 passed.
+- `uv run ruff check .` -> passed.
+- `uv run ty check` -> passed.
+
+Remaining decision/pending item:
+- [ ] Define and codify query-input uniqueness contract (global input uniqueness
+      vs per-tag uniqueness) for families like `intervals` and
+      `graph_queries`, then align generator + tests accordingly.

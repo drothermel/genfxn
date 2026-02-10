@@ -6,7 +6,7 @@ import srsly
 from typer.testing import CliRunner
 
 from genfxn.cli import _matches_holdout as cli_matches_holdout
-from genfxn.cli import app
+from genfxn.cli import _parse_numeric_range, app
 from genfxn.core.models import Task
 from genfxn.fsm.models import FsmSpec
 from genfxn.fsm.render import render_fsm
@@ -1588,6 +1588,64 @@ class TestSplit:
         test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
         assert {task["task_id"] for task in test} == {"task-2", "task-3"}
         assert {task["task_id"] for task in train} == {"task-1", "task-4"}
+
+    def test_split_range_parses_large_integer_bounds_exactly(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-large",
+                "family": "stateful",
+                "spec": {"score": 9_223_372_036_854_775_807},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "max int64",
+            },
+            {
+                "task_id": "task-neighbor",
+                "family": "stateful",
+                "spec": {"score": 9_223_372_036_854_775_806},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "max int64 minus one",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "score",
+                "--holdout-value",
+                "9223372036854775807,9223372036854775807",
+                "--holdout-type",
+                "range",
+            ],
+        )
+        assert result.exit_code == 0
+
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert [task["task_id"] for task in test] == ["task-large"]
+        assert [task["task_id"] for task in train] == ["task-neighbor"]
+
+    def test_parse_numeric_range_scientific_notation_uses_float(self) -> None:
+        parsed = _parse_numeric_range("1e3,2.5e3")
+        assert parsed is not None
+        assert parsed == (1000.0, 2500.0)
+        assert isinstance(parsed[0], float)
+        assert isinstance(parsed[1], float)
 
     def test_split_range_bool_axis_values_do_not_match(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

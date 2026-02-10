@@ -267,6 +267,25 @@ class TestModels:
         with pytest.raises(ValidationError):
             IntervalsAxes(endpoint_clip_abs_range=(0, 5))
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("n_intervals_range", (False, 5)),
+            ("endpoint_range", (-5, True)),
+            ("max_span_range", (True, 5)),
+            ("endpoint_clip_abs_range", (False, 5)),
+            ("endpoint_quantize_step_range", (1, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            IntervalsAxes.model_validate({field_name: range_value})
+
 
 class TestSampler:
     def test_sampler_is_deterministic_for_seed(self) -> None:

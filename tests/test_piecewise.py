@@ -1,6 +1,7 @@
 import random
 
 import pytest
+from pydantic import ValidationError
 
 from genfxn.core.int32 import INT32_MAX
 from genfxn.core.predicates import PredicateLe, PredicateLt
@@ -231,6 +232,24 @@ class TestAxesValidation:
     def test_empty_expr_types(self) -> None:
         with pytest.raises(ValueError, match="expr_types must not be empty"):
             PiecewiseAxes(expr_types=[])
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (False, 5)),
+            ("coeff_range", (True, 5)),
+            ("threshold_range", (-5, False)),
+            ("divisor_range", (2, True)),
+        ],
+    )
+    def test_rejects_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            PiecewiseAxes.model_validate({field_name: range_value})
 
 
 class TestTaskGeneration:

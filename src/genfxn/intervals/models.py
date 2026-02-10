@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -15,6 +16,30 @@ class BoundaryMode(str, Enum):
     CLOSED_OPEN = "closed_open"
     OPEN_CLOSED = "open_closed"
     OPEN_OPEN = "open_open"
+
+
+_INT_RANGE_FIELDS = (
+    "n_intervals_range",
+    "endpoint_range",
+    "max_span_range",
+    "endpoint_clip_abs_range",
+    "endpoint_quantize_step_range",
+)
+
+
+def _validate_no_bool_int_range_bounds(data: Any) -> None:
+    if not isinstance(data, dict):
+        return
+
+    for field_name in _INT_RANGE_FIELDS:
+        value = data.get(field_name)
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            continue
+        low, high = value
+        if isinstance(low, bool) or isinstance(high, bool):
+            raise ValueError(
+                f"{field_name}: bool is not allowed for int range bounds"
+            )
 
 
 class IntervalsSpec(BaseModel):
@@ -53,6 +78,12 @@ class IntervalsAxes(BaseModel):
     nested_interval_prob_range: tuple[float, float] = Field(
         default=(0.0, 0.3)
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_axes(cls, data: Any) -> Any:
+        _validate_no_bool_int_range_bounds(data)
+        return data
 
     @model_validator(mode="after")
     def validate_axes(self) -> "IntervalsAxes":
