@@ -374,6 +374,37 @@ def test_rendered_python_rejects_bool_src_dst_inputs() -> None:
         rendered(0, False)
 
 
+@pytest.mark.parametrize(
+    ("src", "dst", "match"),
+    [
+        (1.2, 0, "src must be int"),
+        ("0", 0, "src must be int"),
+        (None, 0, "src must be int"),
+        (0, 1.2, "dst must be int"),
+        (0, "0", "dst must be int"),
+        (0, None, "dst must be int"),
+    ],
+)
+def test_rendered_python_rejects_non_int_src_dst_inputs(
+    src: object,
+    dst: object,
+    match: str,
+) -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[object, object], int], namespace["f"])
+
+    with pytest.raises(ValueError, match=match):
+        rendered(src, dst)
+
+
 def test_sampler_is_deterministic_for_seed() -> None:
     axes = GraphQueriesAxes(
         target_difficulty=3,

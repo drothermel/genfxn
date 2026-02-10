@@ -58,10 +58,10 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
 ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
     {
         "ValueError",
-        "_wrap_i64",
         "dict",
         "len",
         "range",
+        "type",
     }
 )
 
@@ -80,8 +80,6 @@ ALLOWED_METHOD_NAMES: frozenset[str] = frozenset(
 ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
     {
         "_",
-        "_i64_mask",
-        "_wrap_i64",
         "adjacency",
         "best",
         "best_cost_curr",
@@ -100,6 +98,7 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         "head",
         "hops",
         "i",
+        "int",
         "key",
         "n_nodes",
         "neighbor",
@@ -120,16 +119,15 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         "visited",
         "weight",
         "weighted",
-        "wrapped",
     }
 )
 
 CALL_ARITIES: dict[str, set[int]] = {
     "ValueError": {1},
-    "_wrap_i64": {1},
     "dict": {1},
     "len": {1},
     "range": {1, 2, 3},
+    "type": {1},
 }
 
 METHOD_ARITIES: dict[str, set[int]] = {

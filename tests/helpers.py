@@ -69,11 +69,11 @@ def require_java_runtime() -> tuple[str, str]:
 
 
 def require_rust_runtime() -> str:
-    rustc = shutil.which("rustc")
-    if not rustc:
-        pytest.fail("Rust compiler (rustc) not available")
-    assert rustc is not None
-    return rustc
+    return _require_runnable_tool(
+        tool_name="rustc",
+        tool_path=shutil.which("rustc"),
+        version_args=("--version",),
+    )
 
 
 def run_checked_subprocess(

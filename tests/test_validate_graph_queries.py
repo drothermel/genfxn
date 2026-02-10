@@ -51,6 +51,14 @@ def test_unsafe_ast_is_rejected(baseline_task: Task) -> None:
     assert any(issue.code == CODE_UNSAFE_AST for issue in issues)
 
 
+def test_stale_wrap_helper_call_is_rejected(baseline_task: Task) -> None:
+    corrupted = baseline_task.model_copy(
+        update={"code": "def f(src, dst):\n    return _wrap_i64(src + dst)"}
+    )
+    issues = validate_graph_queries_task(corrupted)
+    assert any(issue.code == CODE_UNSAFE_AST for issue in issues)
+
+
 def test_query_input_output_type_mismatch_detected(
     baseline_task: Task,
 ) -> None:
