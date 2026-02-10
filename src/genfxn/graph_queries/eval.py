@@ -7,6 +7,8 @@ Adjacency = dict[int, list[tuple[int, int]]]
 
 
 def _validate_node(node: int, n_nodes: int, name: str) -> None:
+    if type(node) is not int:
+        raise ValueError(f"{name} must be int, got {type(node).__name__}")
     if node < 0 or node >= n_nodes:
         raise ValueError(f"{name}={node} must be in [0, {n_nodes - 1}]")
 

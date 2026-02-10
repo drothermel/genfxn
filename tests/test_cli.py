@@ -1574,6 +1574,51 @@ class TestSplit:
         assert "non-finite numbers" in result.output
         assert "exact/contains holdouts" in result.output
 
+    @pytest.mark.parametrize("holdout_type", ["exact", "contains"])
+    @pytest.mark.parametrize(
+        "bad_value",
+        ["[1,2", '{"k": 1', '"unterminated'],
+    )
+    def test_split_exact_contains_reject_malformed_json_like_holdout_values(
+        self, tmp_path, holdout_type: str, bad_value: str
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+        axis_path = "value" if holdout_type == "exact" else "values"
+
+        tasks = [
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"value": 1, "values": [1, 2]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "finite values",
+            }
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                axis_path,
+                "--holdout-value",
+                bad_value,
+                "--holdout-type",
+                holdout_type,
+            ],
+        )
+        assert result.exit_code != 0
+        assert "malformed JSON literal" in result.output
+
     def test_split_exact_allows_json_string_nan_literal(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"
@@ -1863,6 +1908,85 @@ class TestSplit:
         )
 
         assert cli_matches_holdout(task, holdout) is expected
+
+    @pytest.mark.parametrize(
+        ("spec_value", "holdout_value", "expected"),
+        [
+            pytest.param(
+                [False],
+                0,
+                False,
+                id="contains-bool-false-vs-int-zero",
+            ),
+            pytest.param([0], 0, True, id="contains-int-zero-vs-int-zero"),
+            pytest.param(
+                [0.0],
+                0,
+                False,
+                id="contains-float-zero-vs-int-zero",
+            ),
+            pytest.param([True], 1, False, id="contains-bool-true-vs-int-one"),
+            pytest.param([1], 1, True, id="contains-int-one-vs-int-one"),
+        ],
+    )
+    def test_split_contains_matcher_type_matrix(
+        self, spec_value: object, holdout_value: object, expected: bool
+    ) -> None:
+        task = Task.model_validate(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"value": spec_value},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "contains type matrix",
+            }
+        )
+        holdout = AxisHoldout(
+            axis_path="value",
+            holdout_type=HoldoutType.CONTAINS,
+            holdout_value=holdout_value,
+        )
+
+        assert cli_matches_holdout(task, holdout) is expected
+
+    def test_split_exact_matcher_nested_type_sensitive(self) -> None:
+        task = Task.model_validate(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"value": [0]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "nested exact",
+            }
+        )
+        holdout = AxisHoldout(
+            axis_path="value",
+            holdout_type=HoldoutType.EXACT,
+            holdout_value=[False],
+        )
+
+        assert cli_matches_holdout(task, holdout) is False
+
+    def test_split_contains_matcher_nested_type_sensitive(self) -> None:
+        task = Task.model_validate(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"value": [[0]]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "nested contains",
+            }
+        )
+        holdout = AxisHoldout(
+            axis_path="value",
+            holdout_type=HoldoutType.CONTAINS,
+            holdout_value=[False],
+        )
+
+        assert cli_matches_holdout(task, holdout) is False
 
     def test_split_exact_matcher_none_does_not_match_missing_path(
         self,

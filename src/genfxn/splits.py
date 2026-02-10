@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from genfxn.core.codegen import get_spec_value, has_spec_value
-from genfxn.core.models import Task
+from genfxn.core.models import Task, _freeze_query_value
 
 
 class HoldoutType(str, Enum):
@@ -40,17 +40,28 @@ def _is_finite_non_bool_number(value: Any) -> bool:
 def _contains_non_finite_number(value: Any) -> bool:
     if isinstance(value, float):
         return not math.isfinite(value)
-    if isinstance(value, list | tuple):
+    if isinstance(value, list | tuple | set | frozenset):
         return any(_contains_non_finite_number(item) for item in value)
     if isinstance(value, dict):
         return any(
-            _contains_non_finite_number(item) for item in value.values()
+            _contains_non_finite_number(key)
+            or _contains_non_finite_number(item)
+            for key, item in value.items()
         )
     return False
 
 
 def _matches_exact_type_sensitive(value: Any, holdout_value: Any) -> bool:
-    return type(value) is type(holdout_value) and value == holdout_value
+    return _freeze_query_value(value) == _freeze_query_value(holdout_value)
+
+
+def _contains_type_sensitive(value: Any, holdout_value: Any) -> bool:
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return False
+    holdout_key = _freeze_query_value(holdout_value)
+    return any(
+        _freeze_query_value(item) == holdout_key for item in value
+    )
 
 
 def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
@@ -85,9 +96,7 @@ def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
         case HoldoutType.CONTAINS:
             if _contains_non_finite_number(holdout.holdout_value):
                 return False
-            if not isinstance(value, (list, tuple, set, frozenset)):
-                return False
-            return holdout.holdout_value in value
+            return _contains_type_sensitive(value, holdout.holdout_value)
         case _:
             raise ValueError(f"Unknown holdout type: {holdout.holdout_type}")
 

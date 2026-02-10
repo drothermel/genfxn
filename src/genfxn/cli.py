@@ -179,25 +179,37 @@ def _parse_numeric_range(
 def _contains_non_finite_number(value: Any) -> bool:
     if isinstance(value, float):
         return not math.isfinite(value)
-    if isinstance(value, list | tuple):
+    if isinstance(value, list | tuple | set | frozenset):
         return any(_contains_non_finite_number(item) for item in value)
     if isinstance(value, dict):
         return any(
-            _contains_non_finite_number(item) for item in value.values()
+            _contains_non_finite_number(key)
+            or _contains_non_finite_number(item)
+            for key, item in value.items()
         )
     return False
+
+
+def _looks_like_json_literal(value: str) -> bool:
+    stripped = value.lstrip()
+    return stripped.startswith(("[", "{", '"'))
 
 
 def _parse_non_range_holdout_value(value: str) -> Any:
     try:
         parsed_value = json.loads(value)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as err:
         if value.strip().lower() in _NON_FINITE_TOKENS:
             raise typer.BadParameter(
                 f"Invalid holdout value '{value}': non-finite numbers "
                 "(nan/inf/-inf) are not allowed for exact/contains "
                 "holdouts"
             )
+        if _looks_like_json_literal(value):
+            raise typer.BadParameter(
+                f"Invalid holdout value '{value}': malformed JSON literal "
+                "for exact/contains holdouts"
+            ) from err
         return value
 
     if _contains_non_finite_number(parsed_value):

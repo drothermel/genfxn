@@ -1362,3 +1362,119 @@ Progress update (2026-02-10, follow-up review fixes complete):
   - `uv run ty check` on touched files -> passed.
   - `uv run pytest tests/ -q --verification-level=standard`
     -> 1872 passed, 101 skipped.
+
+### 22) Holdout Contains + Remaining Bool-Range Hardening (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Make `contains` holdout matching type-sensitive so bool does not match
+      numeric int/float equivalents.
+- [x] Add bool range-bound rejection in `graph_queries` and `temporal_logic`
+      axes models for int-range fields.
+- [x] Extend non-finite holdout detection to set/frozenset containers in
+      split matcher (and CLI parser helper parity where relevant).
+- [x] Add focused regressions in `tests/test_splits.py`, `tests/test_cli.py`,
+      `tests/test_graph_queries.py`, and `tests/test_temporal_logic.py`.
+- [x] Run targeted pytest slices plus `ruff`/`ty`; finish with standard-suite
+      spot-check.
+
+Exit criterion:
+- Contains holdouts respect strict type semantics, remaining family bool-bound
+  coercions are closed, and non-finite holdout guards fail-closed through
+  nested set/frozenset containers with regression coverage.
+
+Progress update (2026-02-10, holdout contains + bool-range hardening complete):
+- Updated `src/genfxn/splits.py`:
+  - `contains` matching now uses strict type-sensitive element comparison
+    (`_contains_type_sensitive(...)`) rather than raw `in`.
+  - non-finite detection now traverses set/frozenset and dict keys+values.
+- Updated `src/genfxn/cli.py` non-finite helper to keep parser-side behavior
+  aligned for nested container traversal (including set/frozenset and dict
+  keys).
+- Added bool int-range bound rejection in:
+  - `src/genfxn/graph_queries/models.py`
+  - `src/genfxn/temporal_logic/models.py`
+  using `mode="before"` validators with consistent error text.
+- Added focused regressions:
+  - `tests/test_splits.py`
+    - `test_contains_holdout_type_matrix`
+    - `test_exact_holdout_rejects_non_finite_values_in_set_like_containers`
+    - `test_contains_holdout_rejects_non_finite_values_in_set_like_containers`
+  - `tests/test_cli.py`
+    - `test_split_contains_matcher_type_matrix`
+  - `tests/test_graph_queries.py`
+    - `test_axes_reject_bool_in_int_range_bounds`
+  - `tests/test_temporal_logic.py`
+    - `test_axes_reject_bool_in_int_range_bounds`
+- Validation evidence:
+  - `uv run pytest tests/test_splits.py tests/test_cli.py -v
+    --verification-level=standard -k
+    "contains_holdout_type_matrix or contains_matcher_type_matrix or
+    non_finite_values_in_set_like_containers"` -> 14 passed.
+  - `uv run pytest tests/test_graph_queries.py tests/test_temporal_logic.py -v
+    --verification-level=standard -k "reject_bool_in_int_range_bounds"`
+    -> 7 passed.
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1893 passed, 101 skipped.
+
+### 23) Nested Holdout Typing + CLI JSON-ish Parse + graph_queries bool hardening (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Make holdout `EXACT` matching deeply type-sensitive (nested lists/tuples/
+      dicts/set/frozenset) so bool/int/float conflation is eliminated at all
+      levels.
+- [x] Make holdout `CONTAINS` matching deeply type-sensitive for container
+      elements (including nested list payloads).
+- [x] Tighten CLI exact/contains holdout parsing to reject malformed JSON-like
+      tokens (for example broken `[ ...`, `{ ...`, or quoted literals) instead
+      of silently treating them as raw strings.
+- [x] Harden `graph_queries` direct-use contracts: reject bool on int-like
+      model fields (`GraphEdge` and `GraphQueriesSpec.n_nodes`) and evaluator
+      inputs (`src`/`dst`).
+- [x] Add focused regressions in `tests/test_splits.py`, `tests/test_cli.py`,
+      and `tests/test_graph_queries.py`.
+- [x] Run targeted pytest slices plus `ruff`/`ty`, then standard-suite
+      spot-check.
+
+Exit criterion:
+- Nested holdout comparisons are strictly type-safe, malformed JSON-ish CLI
+  holdout tokens fail with explicit errors, and graph_queries direct-use bool
+  coercions are closed with deterministic regression coverage.
+
+Progress update (2026-02-10, nested holdout + CLI parse + graph_queries bool hardening complete):
+- Updated `src/genfxn/splits.py`:
+  - `EXACT` and `CONTAINS` matching now use deep type-sensitive structural
+    comparison via canonical freeze keys, eliminating nested bool/int/float
+    conflation (`False != 0`, `1 != 1.0` at any depth).
+- Updated `src/genfxn/cli.py`:
+  - exact/contains parser now rejects malformed JSON-like holdout tokens
+    (prefixes `[`, `{`, or `"` that fail JSON parse) with explicit
+    `BadParameter` instead of silent raw-string fallback.
+- Hardened graph_queries direct-use contracts:
+  - `src/genfxn/graph_queries/models.py` now rejects bool on
+    `GraphEdge.{u,v,w}` and `GraphQueriesSpec.n_nodes`.
+  - `src/genfxn/graph_queries/eval.py` now rejects non-int `src`/`dst`
+    (including bool) before range checks.
+- Added focused regressions:
+  - `tests/test_splits.py`:
+    - `test_exact_holdout_nested_type_sensitive_match`
+    - `test_contains_holdout_nested_type_sensitive_match`
+  - `tests/test_cli.py`:
+    - `test_split_exact_contains_reject_malformed_json_like_holdout_values`
+    - `test_split_exact_matcher_nested_type_sensitive`
+    - `test_split_contains_matcher_nested_type_sensitive`
+  - `tests/test_graph_queries.py`:
+    - `test_graph_edge_rejects_bool_int_fields`
+    - `test_graph_spec_rejects_bool_n_nodes`
+    - `test_eval_rejects_bool_src_dst_inputs`
+- Validation evidence:
+  - `uv run pytest tests/test_splits.py tests/test_cli.py
+    tests/test_graph_queries.py -v --verification-level=standard -k
+    "nested_type_sensitive or malformed_json_like_holdout_values or
+    graph_edge_rejects_bool_int_fields or graph_spec_rejects_bool_n_nodes or
+    eval_rejects_bool_src_dst_inputs or contains_holdout_type_matrix or
+    contains_matcher_type_matrix"` -> 23 passed.
+  - direct repro spot-check script confirms previous drifts now closed.
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1906 passed, 101 skipped.

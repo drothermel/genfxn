@@ -49,6 +49,27 @@ _BINARY_OPERATORS = frozenset(
         TemporalOperator.SINCE,
     }
 )
+_INT_RANGE_FIELDS = (
+    "formula_depth_range",
+    "sequence_length_range",
+    "value_range",
+    "predicate_constant_range",
+)
+
+
+def _validate_no_bool_int_range_bounds(data: Any) -> None:
+    if not isinstance(data, dict):
+        return
+
+    for field_name in _INT_RANGE_FIELDS:
+        value = data.get(field_name)
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            continue
+        low, high = value
+        if isinstance(low, bool) or isinstance(high, bool):
+            raise ValueError(
+                f"{field_name}: bool is not allowed for int range bounds"
+            )
 
 
 def _validate_formula_node(node: Any) -> int:
@@ -121,6 +142,12 @@ class TemporalLogicAxes(BaseModel):
     sequence_length_range: tuple[int, int] = Field(default=(0, 10))
     value_range: tuple[int, int] = Field(default=(-10, 10))
     predicate_constant_range: tuple[int, int] = Field(default=(-8, 8))
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_axes(cls, data: Any) -> Any:
+        _validate_no_bool_int_range_bounds(data)
+        return data
 
     @model_validator(mode="after")
     def validate_axes(self) -> TemporalLogicAxes:

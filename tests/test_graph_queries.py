@@ -5,6 +5,7 @@ from itertools import product
 from typing import cast
 
 import pytest
+from pydantic import ValidationError
 
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
@@ -95,6 +96,62 @@ def test_axes_reject_shortest_path_cost_without_weighted_true() -> None:
             query_types=[GraphQueryType.SHORTEST_PATH_COST],
             weighted_choices=[False],
         )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "range_value"),
+    [
+        ("n_nodes_range", (False, 5)),
+        ("edge_count_range", (1, True)),
+        ("weight_range", (False, 9)),
+    ],
+)
+def test_axes_reject_bool_in_int_range_bounds(
+    field_name: str, range_value: tuple[int | bool, int | bool]
+) -> None:
+    with pytest.raises(
+        ValidationError,
+        match=rf"{field_name}: bool is not allowed for int range bounds",
+    ):
+        GraphQueriesAxes.model_validate({field_name: range_value})
+
+
+def test_graph_edge_rejects_bool_int_fields() -> None:
+    with pytest.raises(
+        ValidationError,
+        match=r"u: bool is not allowed for int fields",
+    ):
+        GraphEdge.model_validate({"u": True, "v": 1, "w": 1})
+
+
+def test_graph_spec_rejects_bool_n_nodes() -> None:
+    with pytest.raises(
+        ValidationError,
+        match=r"n_nodes: bool is not allowed for int fields",
+    ):
+        GraphQueriesSpec.model_validate(
+            {
+                "query_type": GraphQueryType.REACHABLE.value,
+                "directed": True,
+                "weighted": False,
+                "n_nodes": False,
+                "edges": [],
+            }
+        )
+
+
+def test_eval_rejects_bool_src_dst_inputs() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.REACHABLE,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    with pytest.raises(ValueError, match=r"src must be int"):
+        eval_graph_queries(spec, False, 1)
+    with pytest.raises(ValueError, match=r"dst must be int"):
+        eval_graph_queries(spec, 0, True)
 
 
 def test_normalize_graph_keeps_min_weight_for_duplicate_edges() -> None:

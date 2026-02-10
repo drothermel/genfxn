@@ -294,6 +294,91 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   piecewise/intervals reject bool bounds, but several other family axes still
   accept/coerce `False/True` in numeric ranges.
 
+## Latest Intake Extension (2026-02-10, Holdout contains + remaining bool-range drift)
+- `HoldoutType.CONTAINS` matching currently uses raw membership (`in`) so
+  `False` can match numeric `0` in list/tuple/set/frozenset containers.
+- Remaining family axes still lacking explicit bool bound rejection for int
+  ranges:
+  - `graph_queries` (`weight_range`, plus integer range fields)
+  - `temporal_logic` (`formula_depth_range`, `sequence_length_range`,
+    `value_range`, `predicate_constant_range`)
+- Non-finite holdout guard currently skips set/frozenset containers in
+  `_contains_non_finite_number(...)`, so non-finite values nested there are
+  not fail-closed for `exact`/`contains`.
+
+## Latest Intake Extension (2026-02-10, Nested Holdout Typing + JSON-ish Parse + graph_queries bools)
+- Reproduced nested type-conflation drift in holdout matcher:
+  - `EXACT`: spec `{"vals": [0]}` incorrectly matches holdout `[False]`.
+  - `CONTAINS`: spec `{"vals": [[0]]}` incorrectly matches holdout `[False]`.
+  Root cause is top-level-only type-sensitive check; nested containers still
+  compare with Python equality semantics (`False == 0`, `1 == 1.0`).
+- Reproduced CLI parse drift for malformed JSON-like exact/contains holdouts:
+  - malformed token `"[1,2"` falls back to raw string silently and split exits
+    successfully with 0 matches instead of surfacing malformed user input.
+- Reproduced graph_queries direct-use bool coercion:
+  - `GraphEdge(u=True, ...)` is accepted and coerced to `1`.
+  - `eval_graph_queries(spec, False, 1)` runs instead of rejecting type-mismatch.
+- Re-verified current workspace status:
+  - prior bool-bound rejection fix in `GraphQueriesAxes` and
+    `TemporalLogicAxes` is already effective (no remaining repro there).
+
+## Completed This Chunk (2026-02-10, Nested Holdout Typing + JSON-ish Parse + graph_queries bools)
+- Hardened nested holdout matching semantics in `src/genfxn/splits.py`:
+  - `EXACT` and `CONTAINS` now compare using deep type-sensitive structural
+    freeze keys, closing nested `False == 0` / `1 == 1.0` drift.
+- Hardened CLI exact/contains holdout parsing in `src/genfxn/cli.py`:
+  - malformed JSON-like tokens (starting with `[`, `{`, `"`) now fail with
+    explicit `BadParameter` instead of silent raw-string fallback.
+- Hardened graph_queries direct-use bool coercion:
+  - `src/genfxn/graph_queries/models.py` rejects bool for
+    `GraphEdge.{u,v,w}` and `GraphQueriesSpec.n_nodes`.
+  - `src/genfxn/graph_queries/eval.py` rejects bool/non-int `src`/`dst`.
+- Added focused regressions in:
+  - `tests/test_splits.py`
+  - `tests/test_cli.py`
+  - `tests/test_graph_queries.py`
+- Validation evidence:
+  - targeted pytest slice (nested matching + malformed parse + graph bools):
+    23 passed.
+  - targeted `ruff` and `ty` on touched files: passed.
+  - standard suite spot-check:
+    `uv run pytest tests/ -q --verification-level=standard`
+    -> 1906 passed, 101 skipped.
+
+## Completed This Chunk (2026-02-10, Holdout contains + remaining bool-range drift)
+- Updated holdout matcher behavior in `src/genfxn/splits.py`:
+  - `contains` now uses strict type-sensitive element matching, closing
+    `False`-vs-`0` conflation.
+  - `_contains_non_finite_number(...)` now traverses set/frozenset and dict
+    keys+values for fail-closed non-finite detection.
+- Updated parser-side non-finite helper in `src/genfxn/cli.py` to traverse
+  set/frozenset and dict keys+values for consistency.
+- Added bool int-range bound pre-validation in:
+  - `src/genfxn/graph_queries/models.py`
+  - `src/genfxn/temporal_logic/models.py`
+- Added regressions:
+  - `tests/test_splits.py`
+    - contains type matrix for bool/int/float separation
+    - non-finite set/frozenset holdout rejection for exact/contains
+  - `tests/test_cli.py`
+    - contains matcher type matrix regression
+  - `tests/test_graph_queries.py`
+    - bool bound rejection for int-range axes
+  - `tests/test_temporal_logic.py`
+    - bool bound rejection for int-range axes
+- Validation evidence:
+  - `uv run pytest tests/test_splits.py tests/test_cli.py -v
+    --verification-level=standard -k
+    "contains_holdout_type_matrix or contains_matcher_type_matrix or
+    non_finite_values_in_set_like_containers"` -> 14 passed.
+  - `uv run pytest tests/test_graph_queries.py tests/test_temporal_logic.py -v
+    --verification-level=standard -k "reject_bool_in_int_range_bounds"`
+    -> 7 passed.
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1893 passed, 101 skipped.
+
 ## Completed This Chunk (2026-02-10, Follow-up Review Issues)
 - Fixed NaN assertion semantics in `src/genfxn/core/codegen.py`:
   - `render_tests(...)` now emits NaN-safe assertions for NaN-bearing outputs

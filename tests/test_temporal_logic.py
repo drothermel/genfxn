@@ -224,6 +224,24 @@ class TestTemporalLogicSemantics:
         ):
             TemporalLogicAxes(formula_depth_range=(1, 13))
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("formula_depth_range", (False, 3)),
+            ("sequence_length_range", (0, True)),
+            ("value_range", (False, 5)),
+            ("predicate_constant_range", (0, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            TemporalLogicAxes.model_validate({field_name: range_value})
+
     def test_sampler_is_deterministic_for_fixed_seed(self) -> None:
         axes = TemporalLogicAxes(
             formula_depth_range=(2, 2),
