@@ -170,6 +170,18 @@ def _majority_vote(categories: list[str], tie_order: list[str]) -> str:
     return tie_order[0]
 
 
+def _enum_or_str(value: Any, default: str) -> str:
+    if value is None:
+        return default
+    if hasattr(value, "value"):
+        enum_value = value.value
+        if isinstance(enum_value, str):
+            return enum_value
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
 # ── Public feature extractors ────────────────────────────────────────────
 
 
@@ -553,17 +565,6 @@ def stack_bytecode_features(spec: dict[str, Any]) -> dict[str, str]:
 
 
 def fsm_features(spec: dict[str, Any]) -> dict[str, str]:
-    def _enum_or_str(value: Any, default: str) -> str:
-        if value is None:
-            return default
-        if hasattr(value, "value"):
-            enum_value = value.value
-            if isinstance(enum_value, str):
-                return enum_value
-        if isinstance(value, str):
-            return value
-        return str(value)
-
     states = spec.get("states", [])
     n_states = len(states) if isinstance(states, list) else 0
 
@@ -629,17 +630,6 @@ def fsm_features(spec: dict[str, Any]) -> dict[str, str]:
 
 
 def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
-    def _enum_or_str(value: Any, default: str) -> str:
-        if value is None:
-            return default
-        if hasattr(value, "value"):
-            enum_value = value.value
-            if isinstance(enum_value, str):
-                return enum_value
-        if isinstance(value, str):
-            return value
-        return str(value)
-
     def _safe_int(value: Any, default: int) -> int:
         if isinstance(value, int) and not isinstance(value, bool):
             return value
@@ -714,17 +704,6 @@ def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
 
 
 def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
-    def _enum_or_str(value: Any, default: str) -> str:
-        if value is None:
-            return default
-        if hasattr(value, "value"):
-            enum_value = value.value
-            if isinstance(enum_value, str):
-                return enum_value
-        if isinstance(value, str):
-            return value
-        return str(value)
-
     operation = _enum_or_str(spec.get("operation"), "total_coverage")
     boundary_mode = _enum_or_str(spec.get("boundary_mode"), "closed_closed")
     merge_touching = str(bool(spec.get("merge_touching", False))).lower()

@@ -126,7 +126,10 @@ def _run_suite_checks(
                 pool_size=pool_size,
             )
             rows = quota_report(tasks, FAMILY, difficulty)
-        except Exception as exc:  # pragma: no cover - runtime script fallback
+        except (
+            ValueError,
+            RuntimeError,
+        ) as exc:  # pragma: no cover - runtime script fallback
             checks[difficulty] = {
                 "difficulty": difficulty,
                 "seed": suite_seed,

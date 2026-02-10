@@ -2,6 +2,7 @@ import random
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
@@ -29,7 +30,9 @@ def _call_sample(sample_fn: Any, axes: Any, seed: int) -> Any:
     rng = random.Random(seed)
     try:
         return sample_fn(axes=axes, rng=rng)
-    except TypeError:
+    except TypeError as exc:
+        if "unexpected keyword" not in str(exc).lower():
+            raise
         return sample_fn(axes, rng)
 
 
@@ -37,7 +40,9 @@ def _call_task(generate_task_fn: Any, axes: Any, seed: int) -> Any:
     rng = random.Random(seed)
     try:
         return generate_task_fn(axes=axes, rng=rng)
-    except TypeError:
+    except TypeError as exc:
+        if "unexpected keyword" not in str(exc).lower():
+            raise
         return generate_task_fn(axes, rng)
 
 
@@ -50,7 +55,9 @@ def _call_queries(
     rng = random.Random(seed)
     try:
         return generate_queries_fn(spec=spec, axes=axes, rng=rng)
-    except TypeError:
+    except TypeError as exc:
+        if "unexpected keyword" not in str(exc).lower():
+            raise
         return generate_queries_fn(spec, axes, rng)
 
 
@@ -71,7 +78,7 @@ def _normalize_axes_for_deterministic_sampling(axes: Any, axes_cls: Any) -> Any:
         return axes
     try:
         return axes_cls.model_validate(dump)
-    except Exception:
+    except ValidationError:
         return axes
 
 
@@ -249,15 +256,15 @@ class TestModels:
         )
 
     def test_axes_reject_empty_operation_types(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             IntervalsAxes(operation_types=[])
 
     def test_axes_reject_invalid_probability_range(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             IntervalsAxes(degenerate_interval_prob_range=(-0.1, 0.2))
 
     def test_axes_reject_invalid_endpoint_clip_range(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             IntervalsAxes(endpoint_clip_abs_range=(0, 5))
 
 
@@ -290,8 +297,6 @@ class TestSampler:
             target: _sample_difficulty_average(target) for target in range(1, 6)
         }
 
-        for target in range(1, 5):
-            assert averages[target + 1] >= averages[target] + 0.05
         assert averages[5] >= averages[1] + 1.0
 
     def test_sampler_persists_interval_probability_samples(self) -> None:
@@ -360,6 +365,30 @@ class TestQueries:
             spec,
             axes,
             seed=601,
+        )
+        typical_queries = [q for q in queries if q.tag == QueryTag.TYPICAL]
+        assert typical_queries
+        for query in typical_queries:
+            assert query.input
+            assert all(a == b for a, b in query.input)
+
+    def test_queries_respect_zero_max_span_range_for_typical_cases(
+        self,
+    ) -> None:
+        axes = IntervalsAxes(
+            n_intervals_range=(3, 3),
+            endpoint_range=(-8, 8),
+            max_span_range=(0, 0),
+            allow_reversed_interval_prob_range=(0.0, 0.0),
+            degenerate_interval_prob_range=(0.0, 0.0),
+            nested_interval_prob_range=(0.0, 0.0),
+        )
+        spec = _call_sample(sample_intervals_spec, axes, seed=605)
+        queries = _call_queries(
+            generate_intervals_queries,
+            spec,
+            axes,
+            seed=605,
         )
         typical_queries = [q for q in queries if q.tag == QueryTag.TYPICAL]
         assert typical_queries

@@ -38,6 +38,7 @@ StackBytecodeRenderFn = Callable[[list[int]], tuple[int, int]]
 FsmRenderFn = Callable[[list[int]], int]
 BitopsRenderFn = Callable[[int], int]
 SequenceDpRenderFn = Callable[[list[int], list[int]], int]
+IntervalsRenderFn = Callable[[list[tuple[int, int]]], int]
 
 
 def _stack_suite_available() -> bool:
@@ -1663,11 +1664,15 @@ class TestDeterminism:
         exec(code, namespace)  # noqa: S102
         f_obj = namespace["f"]
         assert callable(f_obj)
+        f = cast(IntervalsRenderFn, f_obj)
 
         for q in task.queries:
             assert isinstance(q.output, int)
-            expected = eval_intervals(spec, list(q.input))
+            intervals_input = cast(list[tuple[int, int]], list(q.input))
+            expected = eval_intervals(spec, intervals_input)
+            result = f(intervals_input)
             assert q.output == expected
+            assert result == expected
 
 
 class TestSuiteGenerationValidation:

@@ -239,15 +239,29 @@ def _validate_code_compile(
     if code is None:
         return [], None
 
+    if not isinstance(code, str):
+        return [
+            Issue(
+                code=CODE_CODE_PARSE_ERROR,
+                severity=Severity.ERROR,
+                message=(
+                    "Code payload must be a string, got "
+                    f"{type(code).__name__}"
+                ),
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
+
     if parsed_tree is None:
         try:
             parsed_tree = ast.parse(code)
-        except SyntaxError as e:
+        except (SyntaxError, TypeError) as e:
             return [
                 Issue(
                     code=CODE_CODE_PARSE_ERROR,
                     severity=Severity.ERROR,
-                    message=f"Syntax error in code: {e}",
+                    message=f"Failed to parse code: {e}",
                     location="code",
                     task_id=task.task_id,
                 )
@@ -264,9 +278,19 @@ def _validate_code_compile(
             trust_untrusted_code=True,
         )
     except SafeExecMissingFunctionError as e:
+        if "Function 'f' not found in code namespace" in str(e):
+            return [
+                Issue(
+                    code=CODE_CODE_MISSING_FUNC,
+                    severity=Severity.ERROR,
+                    message="Function 'f' not found in code namespace",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
         return [
             Issue(
-                code=CODE_CODE_MISSING_FUNC,
+                code=CODE_CODE_EXEC_ERROR,
                 severity=Severity.ERROR,
                 message=f"Failed to execute code: {e}",
                 location="code",

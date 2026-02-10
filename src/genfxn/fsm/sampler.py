@@ -1,4 +1,5 @@
 import random
+from typing import TypeVar
 
 from genfxn.core.predicates import (
     PredicateEven,
@@ -93,6 +94,8 @@ _TARGET_POLICY_PREFS: dict[int, list[UndefinedTransitionPolicy]] = {
     5: [UndefinedTransitionPolicy.ERROR],
 }
 
+T = TypeVar("T")
+
 
 def _intersect_ranges(
     a: tuple[int, int],
@@ -105,7 +108,7 @@ def _intersect_ranges(
     return (lo, hi)
 
 
-def _pick_from_preferred[T](
+def _pick_from_preferred(
     available: list[T],
     preferred: list[T],
     rng: random.Random,

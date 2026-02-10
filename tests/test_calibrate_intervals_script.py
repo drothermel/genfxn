@@ -227,7 +227,7 @@ def test_main_strict_fails_when_means_are_not_monotonic(
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "_compute_reachability",
-        lambda *, samples, seed: reachability,
+        lambda **_kwargs: reachability,
     )
     monkeypatch.setattr(
         _SCRIPT_MODULE,
@@ -237,7 +237,7 @@ def test_main_strict_fails_when_means_are_not_monotonic(
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "_run_suite_checks",
-        lambda *, seed, pool_size: suite_checks,
+        lambda **_kwargs: suite_checks,
     )
 
     output = tmp_path / "intervals_calibration.json"

@@ -48,9 +48,11 @@ def _sample_non_degenerate_interval(
 
     max_possible_span = hi - lo
     requested_lo = max(1, max_span_range[0])
-    requested_hi = max(requested_lo, max_span_range[1])
+    requested_hi = max_span_range[1]
+    if requested_hi < requested_lo:
+        return None
     span_hi = min(requested_hi, max_possible_span)
-    if span_hi < 1:
+    if span_hi < requested_lo:
         return None
 
     span_lo = min(requested_lo, span_hi)

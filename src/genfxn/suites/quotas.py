@@ -410,6 +410,7 @@ _INTERVALS_D2 = QuotaSpec(
         Bucket("operation", "max_overlap_count", 10),
         Bucket("boundary_bucket", "closed", 10),
         Bucket("boundary_bucket", "open", 16),
+        Bucket("boundary_bucket", "mixed", 24),
         Bucket("clip_bucket", "medium", 10),
         Bucket("clip_bucket", "wide", 40),
     ],

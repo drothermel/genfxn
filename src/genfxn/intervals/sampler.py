@@ -1,4 +1,5 @@
 import random
+from typing import TypeVar
 
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.intervals.models import (
@@ -61,6 +62,8 @@ _TARGET_ENDPOINT_CLIP_ABS_RANGES: dict[int, tuple[int, int]] = {
     5: (3, 6),
 }
 
+T = TypeVar("T")
+
 
 def _sample_int_in_range(
     value_range: tuple[int, int],
@@ -88,7 +91,7 @@ def _sample_probability(
     return rng.uniform(prob_range[0], prob_range[1])
 
 
-def _pick_from_preferred[T](
+def _pick_from_preferred(
     available: list[T], preferred: list[T], rng: random.Random
 ) -> T:
     preferred_available = [value for value in preferred if value in available]

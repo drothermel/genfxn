@@ -1,4 +1,5 @@
 import random
+from typing import TypeVar
 
 from genfxn.bitops.models import BitInstruction, BitOp, BitopsAxes, BitopsSpec
 from genfxn.core.trace import TraceStep, trace_step
@@ -33,6 +34,8 @@ _TARGET_OP_PREFS: dict[int, list[BitOp]] = {
     ],
 }
 
+T = TypeVar("T")
+
 
 def _intersect_ranges(
     a: tuple[int, int],
@@ -45,7 +48,7 @@ def _intersect_ranges(
     return (lo, hi)
 
 
-def _pick_from_preferred[T](
+def _pick_from_preferred(
     available: list[T],
     preferred: list[T],
     rng: random.Random,

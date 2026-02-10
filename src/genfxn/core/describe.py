@@ -837,11 +837,11 @@ def _describe_intervals(spec: dict[str, Any]) -> str:
     endpoint_clip_abs = spec.get("endpoint_clip_abs", 20)
     endpoint_quantize_step = spec.get("endpoint_quantize_step", 1)
     try:
-        clip_value = int(endpoint_clip_abs)
+        clip_value = max(1, abs(int(endpoint_clip_abs)))
     except (TypeError, ValueError):
         clip_value = 20
     try:
-        quantize_step = int(endpoint_quantize_step)
+        quantize_step = max(1, abs(int(endpoint_quantize_step)))
     except (TypeError, ValueError):
         quantize_step = 1
     if merge_touching:

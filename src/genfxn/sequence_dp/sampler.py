@@ -1,4 +1,5 @@
 import random
+from typing import TypeVar
 
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.sequence_dp.models import (
@@ -109,6 +110,8 @@ _TARGET_DIVISOR: dict[int, tuple[int, int]] = {
     5: (4, 12),
 }
 
+T = TypeVar("T")
+
 
 def _intersect_ranges(
     a: tuple[int, int], b: tuple[int, int]
@@ -120,7 +123,7 @@ def _intersect_ranges(
     return (lo, hi)
 
 
-def _pick_from_preferred[T](
+def _pick_from_preferred(
     available: list[T], preferred: list[T], rng: random.Random
 ) -> T:
     preferred_available = [value for value in preferred if value in available]

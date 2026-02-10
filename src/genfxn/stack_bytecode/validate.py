@@ -249,9 +249,19 @@ def _validate_code_compile(
             trust_untrusted_code=True,
         )
     except SafeExecMissingFunctionError as e:
+        if "Function 'f' not found in code namespace" in str(e):
+            return [
+                Issue(
+                    code=CODE_CODE_MISSING_FUNC,
+                    severity=Severity.ERROR,
+                    message="Function 'f' not found in code namespace",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
         return [
             Issue(
-                code=CODE_CODE_MISSING_FUNC,
+                code=CODE_CODE_EXEC_ERROR,
                 severity=Severity.ERROR,
                 message=f"Failed to execute code: {e}",
                 location="code",
