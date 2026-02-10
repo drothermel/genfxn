@@ -1301,6 +1301,93 @@ class TestSplit:
         )
         assert not same_output.exists()
 
+    def test_split_rejects_random_and_holdout_options_together(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+        srsly.write_jsonl(input_file, [])
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0.8",
+                "--holdout-axis",
+                "template",
+                "--holdout-value",
+                "sum",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert (
+            "Cannot use both --random-ratio and holdout options"
+            in result.output
+        )
+
+    def test_split_requires_random_or_holdout_mode(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+        srsly.write_jsonl(input_file, [])
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Must provide --random-ratio or holdout options" in result.output
+
+    @pytest.mark.parametrize(
+        "holdout_args",
+        [
+            ("--holdout-axis", "template"),
+            ("--holdout-value", "sum"),
+        ],
+    )
+    def test_split_requires_both_holdout_axis_and_value(
+        self, tmp_path, holdout_args: tuple[str, str]
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+        srsly.write_jsonl(input_file, [])
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                *holdout_args,
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert (
+            "Both --holdout-axis and --holdout-value are required"
+            in result.output
+        )
+
     def test_split_exact(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"
@@ -1481,6 +1568,35 @@ class TestSplit:
         )
         assert result.exit_code != 0
         assert "low must be <= high" in result.output
+
+    @pytest.mark.parametrize("bad_range", ["1", "1,2,3", "a,b"])
+    def test_split_range_rejects_malformed_range_values(
+        self, tmp_path, bad_range: str
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+        srsly.write_jsonl(input_file, [])
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "score",
+                "--holdout-value",
+                bad_range,
+                "--holdout-type",
+                "range",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Invalid range" in result.output
 
     @pytest.mark.parametrize(
         "bad_range",

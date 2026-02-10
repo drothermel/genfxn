@@ -1872,3 +1872,56 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   - targeted Unicode full parity slice: 3 passed.
   - full standard suite: 2032 passed, 110 skipped.
   - touched-file `ruff` + `ty`: passed.
+
+## Latest Intake Extension (2026-02-10, review follow-up correctness + rigor gaps)
+- `render_tests(...)` still uses direct equality for non-NaN outputs, allowing
+  type-coercing false passes (`False == 0`, `1 == 1.0`) versus canonical
+  type-sensitive output-equality contract.
+- `_run_isolated(...)` can deadlock/timeout when `max_result_bytes=None` if the
+  worker blocks on large `queue.put(...)` payloads while parent waits on join.
+- Verification-level tests do not lock default behavior (implicit
+  `--verification-level=standard`) or explicit standard-level treatment of
+  `@pytest.mark.slow`.
+- CLI split option-contract validation (`random` vs `holdout` exclusivity,
+  required holdout pair) is implemented but lacks direct regression tests.
+- CLI split range parser has no direct malformed-format holdout test matrix
+  (`"1"`, `"1,2,3"`, `"a,b"`) despite generate-side coverage.
+- Two `tests/test_splits.py` assertions remain probabilistic and can flake
+  (`different seeds` set inequality, `train != first N` heuristic).
+- `dedupe_queries_per_tag_input` lacks explicit NaN-output parity coverage.
+
+## Completed This Chunk (2026-02-10, review follow-up correctness + rigor gaps)
+- Fixed rendered-test equality contract drift:
+  - `src/genfxn/core/codegen.py` `render_tests(...)` now always emits
+    canonical `__genfxn_query_outputs_equal(...)` assertions (not NaN-only
+    special-casing), preventing type-coercing false passes.
+- Hardened safe-exec one-shot handoff:
+  - `src/genfxn/core/safe_exec.py` `_run_isolated(...)` now drains result queue
+    during execution timeout window before enforcing timeout, then performs a
+    short post-exit grace drain; this removes join-before-drain deadlock risk
+    when `max_result_bytes=None`.
+- Added missing verification-level regression locks:
+  - `tests/test_verification_levels.py`
+    - implicit default-level behavior (`-q` => standard)
+    - standard-level slow-marker behavior.
+- Added missing CLI split contract regressions:
+  - `tests/test_cli.py`
+    - random/holdout mutual exclusion
+    - missing mode rejection
+    - missing holdout-axis/value pairing
+    - malformed range holdout values (`"1"`, `"1,2,3"`, `"a,b"`).
+- Replaced probabilistic split tests with deterministic seed-locked checks:
+  - `tests/test_splits.py`
+    - deterministic expected-order assertions for seed-specific train/test
+      partitions.
+- Added per-tag dedupe NaN output equality coverage:
+  - `tests/test_core_models.py`
+    - NaN and nested-NaN outputs dedupe without false conflict in
+      `dedupe_queries_per_tag_input(...)`.
+- Validation evidence:
+  - `uv run pytest tests/test_core_dsl.py tests/test_safe_exec.py
+    tests/test_verification_levels.py tests/test_cli.py tests/test_splits.py
+    tests/test_core_models.py -q --verification-level=standard`
+    -> 357 passed.
+  - `uv run ruff check` on touched source/test files -> passed.
+  - `uv run ty check` on touched source/test files -> passed.

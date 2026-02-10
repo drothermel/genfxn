@@ -110,6 +110,15 @@ def test_standard_skips_full_marked_tests(pytester) -> None:
     result.assert_outcomes(passed=2, skipped=1)
 
 
+def test_default_verification_level_is_standard(pytester) -> None:
+    _install_repo_verification_hooks(pytester)
+    _make_probe_tests(pytester)
+
+    result = pytester.runpytest("-q")
+
+    result.assert_outcomes(passed=2, skipped=1)
+
+
 def test_full_runs_full_marked_tests(pytester) -> None:
     _install_repo_verification_hooks(pytester)
     _make_probe_tests(pytester)
@@ -126,6 +135,15 @@ def test_fast_skips_slow_and_full_marked_tests(pytester) -> None:
     result = pytester.runpytest("--verification-level=fast", "-q")
 
     result.assert_outcomes(passed=1, skipped=2)
+
+
+def test_standard_runs_slow_marked_tests(pytester) -> None:
+    _install_repo_verification_hooks(pytester)
+    _make_probe_tests(pytester)
+
+    result = pytester.runpytest("--verification-level=standard", "-q")
+
+    result.assert_outcomes(passed=2, skipped=1)
 
 
 def test_full_family_marker_selects_only_matching_family_full_tests(

@@ -482,14 +482,19 @@ class TestRenderTests:
             Query(input=-3, output=3, tag=QueryTag.BOUNDARY),
         ]
         result = render_tests("my_func", queries)
-        assert "assert my_func(5) == 10" in result
-        assert "assert my_func(-3) == 3" in result
+        assert "__genfxn_query_outputs_equal" in result
+        assert "assert __genfxn_query_outputs_equal(my_func(5), 10)" in result
+        assert (
+            "assert __genfxn_query_outputs_equal(my_func(-3), 3)"
+            in result
+        )
         assert "query 0 (typical)" in result
         assert "query 1 (boundary)" in result
 
     def test_render_tests_empty(self) -> None:
         result = render_tests("f", [])
-        assert result == ""
+        assert "__genfxn_query_outputs_equal" in result
+        assert "assert __genfxn_query_outputs_equal(" not in result
 
     def test_render_tests_emits_valid_non_finite_literals(self) -> None:
         queries = [
@@ -563,8 +568,12 @@ class TestRenderTests:
         rendered_asserts = render_tests("f", queries)
         assert (
             rendered_asserts
-            == "assert f(1) == {'alpha', 'beta', 'gamma'}, "
-            "'query 0 (typical)'"
+            == "from genfxn.core.models import (\n"
+            "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
+            ")\n"
+            "\n"
+            "assert __genfxn_query_outputs_equal("
+            "f(1), {'alpha', 'beta', 'gamma'}), 'query 0 (typical)'"
         )
 
     def test_render_tests_renders_frozenset_literals_in_stable_order(
@@ -580,8 +589,13 @@ class TestRenderTests:
         rendered_asserts = render_tests("f", queries)
         assert (
             rendered_asserts
-            == "assert f(frozenset({'alpha', 'beta', 'gamma'})) == "
-            "frozenset({'alpha', 'beta', 'gamma'}), 'query 0 (typical)'"
+            == "from genfxn.core.models import (\n"
+            "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
+            ")\n"
+            "\n"
+            "assert __genfxn_query_outputs_equal("
+            "f(frozenset({'alpha', 'beta', 'gamma'})), "
+            "frozenset({'alpha', 'beta', 'gamma'})), 'query 0 (typical)'"
         )
 
     def test_render_tests_renders_dict_literals_in_stable_key_order(
@@ -601,8 +615,12 @@ class TestRenderTests:
         rendered_asserts = render_tests("f", queries)
         assert (
             rendered_asserts
-            == "assert f(1) == {'alpha': 1, 'beta': 2, 'gamma': 3}, "
-            "'query 0 (typical)'"
+            == "from genfxn.core.models import (\n"
+            "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
+            ")\n"
+            "\n"
+            "assert __genfxn_query_outputs_equal("
+            "f(1), {'alpha': 1, 'beta': 2, 'gamma': 3}), 'query 0 (typical)'"
         )
 
     def test_render_tests_dict_order_is_independent_of_insertion(
@@ -623,6 +641,22 @@ class TestRenderTests:
             [Query(input=1, output=output_b, tag=QueryTag.TYPICAL)],
         )
         assert rendered_a == rendered_b
+
+    def test_render_tests_enforces_type_sensitive_equality(self) -> None:
+        queries = [Query(input=1, output=0, tag=QueryTag.TYPICAL)]
+        rendered_asserts = render_tests("f", queries)
+        namespace: dict[str, object] = {}
+        with pytest.raises(AssertionError):
+            exec(  # noqa: S102
+                "\n".join(
+                    [
+                        "def f(x):",
+                        "    return False",
+                        rendered_asserts,
+                    ]
+                ),
+                namespace,
+            )
 
 
 class TestCorpusIdUniqueness:

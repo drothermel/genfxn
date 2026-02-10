@@ -1,3 +1,5 @@
+import random
+
 import pytest
 
 from genfxn.core.codegen import get_spec_value
@@ -713,10 +715,17 @@ class TestRandomSplit:
         result1 = random_split(tasks, train_ratio=0.8, seed=1)
         result2 = random_split(tasks, train_ratio=0.8, seed=2)
 
-        # Very unlikely to be the same with different seeds
-        train_ids_1 = {t.task_id for t in result1.train}
-        train_ids_2 = {t.task_id for t in result2.train}
-        assert train_ids_1 != train_ids_2
+        expected_seed_1 = [f"t{i}" for i in range(50)]
+        expected_seed_2 = [f"t{i}" for i in range(50)]
+        random.Random(1).shuffle(expected_seed_1)
+        random.Random(2).shuffle(expected_seed_2)
+
+        expected_train_seed_1 = expected_seed_1[:40]
+        expected_train_seed_2 = expected_seed_2[:40]
+
+        assert [t.task_id for t in result1.train] == expected_train_seed_1
+        assert [t.task_id for t in result2.train] == expected_train_seed_2
+        assert expected_train_seed_1 != expected_train_seed_2
 
     def test_no_seed_works(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(20)]
@@ -784,14 +793,17 @@ class TestRandomSplit:
 
         assert [t.task_id for t in tasks] == original_order
 
-    def test_shuffles_tasks(self) -> None:
+    def test_shuffles_tasks_deterministically_for_seed(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(50)]
         result = random_split(tasks, train_ratio=0.8, seed=42)
 
-        # Check that train set isn't just the first N tasks
-        original_first_40_ids = {f"t{i}" for i in range(40)}
-        train_ids = {t.task_id for t in result.train}
-        assert train_ids != original_first_40_ids
+        expected_order = [f"t{i}" for i in range(50)]
+        random.Random(42).shuffle(expected_order)
+        expected_train = expected_order[:40]
+        expected_test = expected_order[40:]
+
+        assert [t.task_id for t in result.train] == expected_train
+        assert [t.task_id for t in result.test] == expected_test
 
     def test_in_place_shuffle_updates_input_order(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(20)]

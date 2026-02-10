@@ -381,15 +381,8 @@ def _run_isolated(
         if _is_spawn_bootstrap_error(exc):
             raise _bootstrap_error(method, exc) from exc
         raise
-    process.join(timeout_sec)
 
-    if process.is_alive():
-        _terminate_process_tree(process)
-        raise SafeExecTimeoutError(
-            f"Code execution timed out after {timeout_sec} seconds"
-        )
-
-    deadline = time.monotonic() + _RESULT_QUEUE_GRACE_SEC
+    deadline = time.monotonic() + timeout_sec
     result: _WorkerResult | None = None
     while result is None:
         remaining = deadline - time.monotonic()
@@ -399,13 +392,36 @@ def _run_isolated(
         try:
             result = queue.get(timeout=timeout)
         except Empty:
-            continue
+            if not process.is_alive():
+                break
+
+    if result is None and process.is_alive():
+        _terminate_process_tree(process)
+        raise SafeExecTimeoutError(
+            f"Code execution timed out after {timeout_sec} seconds"
+        )
+
+    if result is None:
+        deadline = time.monotonic() + _RESULT_QUEUE_GRACE_SEC
+        while result is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            timeout = min(_RESULT_QUEUE_POLL_SEC, remaining)
+            try:
+                result = queue.get(timeout=timeout)
+            except Empty:
+                continue
+
     if result is None:
         if process.exitcode not in (None, 0):
             raise RuntimeError(
                 f"Execution worker crashed with exit code {process.exitcode}"
             )
         raise RuntimeError("Execution worker exited without a result")
+
+    process.join(timeout=0)
+
     if not result.ok:
         error_type = result.error_type or "RuntimeError"
         error_message = result.error_message or "Unknown execution error"

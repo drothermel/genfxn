@@ -2020,3 +2020,60 @@ Progress update (2026-02-10, CodeRabbit committed-scope follow-up complete):
     -> 4 passed.
   - `uv run ruff check` on touched Python files -> passed.
   - `uv run ty check` on touched Python files -> passed.
+
+### 34) Review Follow-up Fixes (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Align `render_tests(...)` assertions with canonical type-sensitive output
+      equality semantics (not NaN-only special-casing).
+- [x] Harden `safe_exec` isolated execution result handoff to avoid
+      join-before-drain deadlock risk when `max_result_bytes=None`.
+- [x] Add verification-level regressions for implicit default (`standard`) and
+      standard-level `@pytest.mark.slow` behavior.
+- [x] Add CLI split contract regressions for:
+      - random/holdout mutual exclusion
+      - missing mode rejection
+      - required holdout-axis/value pairing
+      - malformed range holdout format rejection.
+- [x] Replace probabilistic split tests with deterministic seed-locked
+      assertions.
+- [x] Add per-tag dedupe NaN output equality regressions.
+- [x] Run targeted `uv run pytest` + `uv run ruff check` + `uv run ty check`
+      on touched files and record validation evidence.
+
+Exit criterion:
+- All seven review findings are fixed with deterministic regression coverage and
+  targeted validation passes.
+
+Progress update (2026-02-10, review follow-up fixes complete):
+- `src/genfxn/core/codegen.py`:
+  - `render_tests(...)` now consistently emits
+    `__genfxn_query_outputs_equal(...)` assertions for all outputs, aligning
+    rendered test semantics with canonical type-sensitive output equality.
+- `src/genfxn/core/safe_exec.py`:
+  - `_run_isolated(...)` now polls result queue during execution timeout
+    window instead of waiting for process exit first, then applies a short
+    post-exit queue grace window; this closes join-before-drain deadlock risk.
+- Added/updated regressions:
+  - `tests/test_core_dsl.py`
+    - updated render string expectations
+    - added type-sensitive rendered assertion execution regression.
+  - `tests/test_safe_exec.py`
+    - added queue-before-exit handoff regression for `_run_isolated(...)`.
+  - `tests/test_verification_levels.py`
+    - added default-level (`-q`) behavior lock
+    - added explicit standard-runs-slow lock.
+  - `tests/test_cli.py`
+    - added split contract tests for mode exclusivity, missing mode, missing
+      holdout pair, malformed range holdout values.
+  - `tests/test_splits.py`
+    - replaced probabilistic random-split assertions with deterministic
+      seed-locked expected-order checks.
+  - `tests/test_core_models.py`
+    - added per-tag NaN and nested-NaN output dedupe equality regressions.
+- Validation evidence:
+  - `uv run pytest tests/test_core_dsl.py tests/test_safe_exec.py
+    tests/test_verification_levels.py tests/test_cli.py tests/test_splits.py
+    tests/test_core_models.py -q --verification-level=standard`
+    -> 357 passed.
+  - `uv run ruff check` on touched source/test files -> passed.
+  - `uv run ty check` on touched source/test files -> passed.

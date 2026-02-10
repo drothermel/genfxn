@@ -447,3 +447,41 @@ def test_dedupe_queries_per_tag_input_rejects_conflicting_outputs() -> None:
         assert "conflicting outputs" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("Expected ValueError for conflicting outputs")
+
+
+def test_dedupe_queries_per_tag_input_nan_outputs_do_not_conflict() -> None:
+    queries = [
+        Query(input=[(0, 0)], output=float("nan"), tag=QueryTag.TYPICAL),
+        Query(input=[(0, 0)], output=float("nan"), tag=QueryTag.TYPICAL),
+    ]
+
+    deduped = dedupe_queries_per_tag_input(queries)
+
+    assert len(deduped) == 1
+    assert deduped[0].tag == QueryTag.TYPICAL
+    assert isinstance(deduped[0].output, float)
+    assert deduped[0].output != deduped[0].output
+
+
+def test_dedupe_queries_per_tag_input_nested_nan_outputs_do_not_conflict(
+) -> None:
+    queries = [
+        Query(
+            input=[(0, 0)],
+            output=[float("nan"), {"k": float("nan")}],
+            tag=QueryTag.TYPICAL,
+        ),
+        Query(
+            input=[(0, 0)],
+            output=[float("nan"), {"k": float("nan")}],
+            tag=QueryTag.TYPICAL,
+        ),
+    ]
+
+    deduped = dedupe_queries_per_tag_input(queries)
+
+    assert len(deduped) == 1
+    output = deduped[0].output
+    assert isinstance(output, list)
+    assert output[0] != output[0]
+    assert output[1]["k"] != output[1]["k"]
