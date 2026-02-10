@@ -100,6 +100,26 @@ class TestSplitTasks:
         assert len(result.test) == 1
         assert result.test[0].task_id == "t2"
 
+    def test_exact_holdout_distinguishes_bool_false_from_int_zero(
+        self,
+    ) -> None:
+        tasks = [
+            _make_task("t1", {"flag": False}),
+            _make_task("t2", {"flag": 0}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="flag",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=0,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+
+        assert [t.task_id for t in result.test] == ["t2"]
+        assert [t.task_id for t in result.train] == ["t1"]
+
     def test_range_holdout(self) -> None:
         tasks = [
             _make_task("t1", {"threshold": 5}),
@@ -136,6 +156,40 @@ class TestSplitTasks:
 
         assert len(result.train) == 0
         assert len(result.test) == 2
+
+    def test_range_holdout_rejects_bool_spec_values(self) -> None:
+        tasks = [
+            _make_task("t1", {"flag": False}),
+            _make_task("t2", {"flag": True}),
+            _make_task("t3", {"flag": 0}),
+            _make_task("t4", {"flag": 0.0}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="flag",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(0, 0),
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert {t.task_id for t in result.test} == {"t3", "t4"}
+        assert {t.task_id for t in result.train} == {"t1", "t2"}
+
+    def test_range_holdout_rejects_bool_bounds(self) -> None:
+        tasks = [
+            _make_task("t1", {"score": 0}),
+            _make_task("t2", {"score": 1}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(False, 1),
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1", "t2"}
 
     def test_contains_holdout(self) -> None:
         tasks = [

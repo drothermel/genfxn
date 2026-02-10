@@ -24,17 +24,30 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
     """Deduplicate queries by input, preserving highest-value tag evidence."""
 
     def _freeze(value: Any) -> Any:
+        def _freeze_scalar(scalar: Any) -> tuple[str, str, Any]:
+            scalar_type = type(scalar)
+            type_name = (
+                f"{scalar_type.__module__}.{scalar_type.__qualname__}"
+            )
+            return ("__scalar__", type_name, scalar)
+
         # Fast paths for common primitive/query container types.
         if type(value) in {int, str, bool, float, type(None)}:
-            return ("__scalar__", value)
+            return _freeze_scalar(value)
         if isinstance(value, list) and all(
             type(item) in {int, str, bool, float, type(None)} for item in value
         ):
-            return ("__flat_list__", tuple(value))
+            return (
+                "__flat_list__",
+                tuple(_freeze_scalar(item) for item in value),
+            )
         if isinstance(value, tuple) and all(
             type(item) in {int, str, bool, float, type(None)} for item in value
         ):
-            return ("__flat_tuple__", value)
+            return (
+                "__flat_tuple__",
+                tuple(_freeze_scalar(item) for item in value),
+            )
 
         def _safe_repr(v: Any) -> str:
             try:
@@ -78,16 +91,17 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
         if hasattr(value, "model_dump") and callable(value.model_dump):
             model_type = f"{type(value).__module__}.{type(value).__qualname__}"
             return ("__model__", model_type, _freeze(value.model_dump()))
+        value_type = f"{type(value).__module__}.{type(value).__qualname__}"
         try:
             hash(value)
-            return ("__hashable__", value)
+            return ("__hashable__", value_type, value)
         except TypeError:
             if hasattr(value, "__dict__"):
-                obj_type = (
-                    f"{type(value).__module__}.{type(value).__qualname__}"
-                )
-                return ("__object__", obj_type, _freeze(vars(value)))
-            return ("__repr__", repr(value))
+                try:
+                    return ("__object__", value_type, _freeze(vars(value)))
+                except TypeError:
+                    pass
+            return ("__repr__", value_type, _safe_repr(value))
 
     tag_priority = {
         QueryTag.TYPICAL: 0,

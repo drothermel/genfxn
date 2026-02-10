@@ -45,7 +45,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.splits import AxisHoldout, HoldoutType, random_split
+from genfxn.splits import AxisHoldout, HoldoutType
 from genfxn.stack_bytecode.models import (
     StackBytecodeAxes,
     StackBytecodeSpec,
@@ -153,6 +153,14 @@ def _write_task_line(handle, task: Task) -> None:
     handle.write("\n")
 
 
+def _is_non_bool_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _matches_exact_type_sensitive(value: Any, holdout_value: Any) -> bool:
+    return type(value) is type(holdout_value) and value == holdout_value
+
+
 def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
     if not has_spec_value(task.spec, holdout.axis_path):
         return False
@@ -160,7 +168,9 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
 
     match holdout.holdout_type:
         case HoldoutType.EXACT:
-            return value == holdout.holdout_value
+            return _matches_exact_type_sensitive(
+                value, holdout.holdout_value
+            )
         case HoldoutType.RANGE:
             range_value = holdout.holdout_value
             if (
@@ -169,11 +179,9 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
             ):
                 return False
             lo, hi = range_value
-            if not isinstance(lo, int | float) or not isinstance(
-                hi, int | float
-            ):
+            if not _is_non_bool_number(lo) or not _is_non_bool_number(hi):
                 return False
-            if not isinstance(value, int | float):
+            if not _is_non_bool_number(value):
                 return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:
@@ -1083,18 +1091,32 @@ def split(
         if random_ratio < 0 or random_ratio > 1:
             typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
             raise typer.Exit(1)
-        tasks = list(_iter_validated_tasks(input_file))
-        split_result = random_split(tasks, random_ratio, seed=split_seed)
-        train_count = len(split_result.train)
-        test_count = len(split_result.test)
+        total_count = _count_validated_tasks(input_file)
+        train_target = int(total_count * random_ratio)
+        remaining_items = total_count
+        remaining_train = train_target
+        rng = random.Random(split_seed)
+        train_count = 0
+        test_count = 0
         with (
             train.open("w", encoding="utf-8") as train_handle,
             test.open("w", encoding="utf-8") as test_handle,
         ):
-            for task in split_result.train:
-                _write_task_line(train_handle, task)
-            for task in split_result.test:
-                _write_task_line(test_handle, task)
+            for task in _iter_validated_tasks(input_file):
+                assign_to_train = False
+                if remaining_train > 0:
+                    assign_to_train = (
+                        rng.random() * remaining_items < remaining_train
+                    )
+
+                if assign_to_train:
+                    _write_task_line(train_handle, task)
+                    train_count += 1
+                    remaining_train -= 1
+                else:
+                    _write_task_line(test_handle, task)
+                    test_count += 1
+                remaining_items -= 1
     else:
         if holdout_axis is None or holdout_value is None:
             typer.echo(

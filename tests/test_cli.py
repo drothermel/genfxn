@@ -5,6 +5,7 @@ import pytest
 import srsly
 from typer.testing import CliRunner
 
+from genfxn.cli import _matches_holdout as cli_matches_holdout
 from genfxn.cli import app
 from genfxn.core.models import Task
 from genfxn.fsm.models import FsmSpec
@@ -23,7 +24,7 @@ from genfxn.sequence_dp.validate import (
     CODE_UNSAFE_AST as SEQUENCE_DP_CODE_UNSAFE_AST,
 )
 from genfxn.sequence_dp.validate import validate_sequence_dp_task
-from genfxn.splits import random_split
+from genfxn.splits import AxisHoldout, HoldoutType
 from genfxn.stack_bytecode.models import StackBytecodeSpec
 from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.validate import (
@@ -1371,6 +1372,88 @@ class TestSplit:
         assert {task["task_id"] for task in test} == {"task-2", "task-3"}
         assert {task["task_id"] for task in train} == {"task-1", "task-4"}
 
+    def test_split_range_bool_axis_values_do_not_match(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"flag": False},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "bool false",
+            },
+            {
+                "task_id": "task-2",
+                "family": "stateful",
+                "spec": {"flag": True},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "bool true",
+            },
+            {
+                "task_id": "task-3",
+                "family": "stateful",
+                "spec": {"flag": 0},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 3, "output": 3, "tag": "typical"}],
+                "description": "int zero",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "flag",
+                "--holdout-value",
+                "0,0",
+                "--holdout-type",
+                "range",
+            ],
+        )
+        assert result.exit_code == 0
+
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert {task["task_id"] for task in test} == {"task-3"}
+        assert {task["task_id"] for task in train} == {"task-1", "task-2"}
+
+    def test_split_range_rejects_bool_bounds_in_matcher(self) -> None:
+        task = Task.model_validate(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"score": 0},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "score zero",
+            }
+        )
+        bool_bound_holdout = AxisHoldout(
+            axis_path="score",
+            holdout_type=HoldoutType.RANGE,
+            holdout_value=(False, 1),
+        )
+        numeric_holdout = AxisHoldout(
+            axis_path="score",
+            holdout_type=HoldoutType.RANGE,
+            holdout_value=(0, 1),
+        )
+
+        assert cli_matches_holdout(task, bool_bound_holdout) is False
+        assert cli_matches_holdout(task, numeric_holdout) is True
+
     def test_split_exact_parses_numeric_holdout_value(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"
@@ -1468,6 +1551,56 @@ class TestSplit:
         assert test[0]["spec"]["flag"] is True
         assert len(train) == 1
         assert train[0]["spec"]["flag"] is False
+
+    def test_split_exact_distinguishes_bool_false_from_numeric_zero(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"flag": False},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "bool false",
+            },
+            {
+                "task_id": "task-2",
+                "family": "stateful",
+                "spec": {"flag": 0},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "int zero",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "flag",
+                "--holdout-value",
+                "0",
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+
+        assert [task["task_id"] for task in test] == ["task-2"]
+        assert [task["task_id"] for task in train] == ["task-1"]
 
     def test_split_contains_holdout_from_cli(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
@@ -1821,10 +1954,14 @@ class TestSplit:
         assert len(train) == 2
         assert len(test) == 5
 
-    def test_split_random_ratio_matches_library_split(self, tmp_path) -> None:
+    def test_split_random_ratio_is_deterministic_for_fixed_seed(
+        self, tmp_path
+    ) -> None:
         input_file = tmp_path / "tasks.jsonl"
-        train_file = tmp_path / "train.jsonl"
-        test_file = tmp_path / "test.jsonl"
+        train_file_1 = tmp_path / "train1.jsonl"
+        test_file_1 = tmp_path / "test1.jsonl"
+        train_file_2 = tmp_path / "train2.jsonl"
+        test_file_2 = tmp_path / "test2.jsonl"
 
         tasks: list[dict[str, Any]] = []
         for i in range(10):
@@ -1848,30 +1985,114 @@ class TestSplit:
                 "split",
                 str(input_file),
                 "--train",
-                str(train_file),
+                str(train_file_1),
                 "--test",
-                str(test_file),
+                str(test_file_1),
                 "--random-ratio",
                 "0.6",
                 "--seed",
                 "123",
             ],
         )
-        assert result.exit_code == 0
+        result_again = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file_2),
+                "--test",
+                str(test_file_2),
+                "--random-ratio",
+                "0.6",
+                "--seed",
+                "123",
+            ],
+        )
 
+        assert result.exit_code == 0
+        assert result_again.exit_code == 0
+        train_1 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(train_file_1))
+        )
+        test_1 = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file_1)))
+        train_2 = cast(
+            list[dict[str, Any]], list(srsly.read_jsonl(train_file_2))
+        )
+        test_2 = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file_2)))
+
+        assert len(train_1) == 6
+        assert len(test_1) == 4
+        assert [task["task_id"] for task in train_1] == [
+            task["task_id"] for task in train_2
+        ]
+        assert [task["task_id"] for task in test_1] == [
+            task["task_id"] for task in test_2
+        ]
+        assert {task["task_id"] for task in train_1}.isdisjoint(
+            {task["task_id"] for task in test_1}
+        )
+        assert {task["task_id"] for task in train_1}.union(
+            {task["task_id"] for task in test_1}
+        ) == {task["task_id"] for task in tasks}
+
+    def test_split_random_ratio_does_not_call_library_helper(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks: list[dict[str, Any]] = []
+        for i in range(8):
+            tasks.append(
+                {
+                    "task_id": f"task-{i}",
+                    "family": "stateful",
+                    "spec": {"n": i},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [
+                        {"input": i, "output": i, "tag": "typical"}
+                    ],
+                    "description": f"task {i}",
+                }
+            )
+        srsly.write_jsonl(input_file, tasks)
+
+        def _raise_random_split(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("random_split helper should not be used")
+
+        monkeypatch.setattr(
+            "genfxn.splits.random_split",
+            _raise_random_split,
+        )
+        monkeypatch.setattr(
+            "genfxn.cli.random_split",
+            _raise_random_split,
+            raising=False,
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0.5",
+                "--seed",
+                "123",
+            ],
+        )
+
+        assert result.exit_code == 0
         train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
         test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
-        expected = random_split(
-            [Task.model_validate(task) for task in tasks],
-            0.6,
-            seed=123,
-        )
-        assert [task["task_id"] for task in train] == [
-            task.task_id for task in expected.train
-        ]
-        assert [task["task_id"] for task in test] == [
-            task.task_id for task in expected.test
-        ]
+        assert len(train) == 4
+        assert len(test) == 4
 
 
 class TestInfo:

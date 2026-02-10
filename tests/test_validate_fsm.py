@@ -14,6 +14,7 @@ from genfxn.fsm.validate import (
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
+    CODE_SEMANTIC_ISSUES_CAPPED,
     CODE_SEMANTIC_MISMATCH,
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
@@ -212,6 +213,26 @@ class TestQueryAndSemantics:
             max_semantic_issues=8,
         )
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
+
+    def test_semantic_issue_capping(self, baseline_task: Task) -> None:
+        corrupted = baseline_task.model_copy(
+            update={"code": "def f(xs):\n    return 1000000000"}
+        )
+        issues = validate_fsm_task(
+            corrupted,
+            execute_untrusted_code=True,
+            semantic_trials=64,
+            max_semantic_issues=3,
+            random_seed=17,
+        )
+        mismatches = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
+        capped = [
+            i for i in issues if i.code == CODE_SEMANTIC_ISSUES_CAPPED
+        ]
+        assert len(mismatches) == 3
+        assert len(capped) == 1
 
 
 class TestAstSafety:

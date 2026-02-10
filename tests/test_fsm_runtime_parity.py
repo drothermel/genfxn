@@ -119,6 +119,108 @@ def test_fsm_runtime_parity_across_sampled_specs() -> None:
             try:
                 expected = eval_fsm(spec, xs)
             except ValueError:
-                continue
-            assert _run_java_f(javac, java, java_code, xs) == expected
-            assert _run_rust_f(rustc, rust_code, xs) == expected
+                with pytest.raises(subprocess.CalledProcessError):
+                    _run_java_f(javac, java, java_code, xs)
+                with pytest.raises(subprocess.CalledProcessError):
+                    _run_rust_f(rustc, rust_code, xs)
+            else:
+                assert _run_java_f(javac, java, java_code, xs) == expected
+                assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_fsm_runtime_parity_forced_output_modes_and_policies() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    cases: tuple[tuple[FsmSpec, tuple[list[int], ...]], ...] = (
+        (
+            FsmSpec.model_validate(
+                {
+                    "machine_type": "moore",
+                    "output_mode": "final_state_id",
+                    "undefined_transition_policy": "stay",
+                    "start_state_id": 0,
+                    "states": [
+                        {
+                            "id": 0,
+                            "is_accept": False,
+                            "transitions": [
+                                {
+                                    "predicate": {"kind": "even"},
+                                    "target_state_id": 1,
+                                }
+                            ],
+                        },
+                        {
+                            "id": 1,
+                            "is_accept": True,
+                            "transitions": [
+                                {
+                                    "predicate": {"kind": "odd"},
+                                    "target_state_id": 0,
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ),
+            ([2, 4, 5, 8], [4, 6]),
+        ),
+        (
+            FsmSpec.model_validate(
+                {
+                    "machine_type": "moore",
+                    "output_mode": "transition_count",
+                    "undefined_transition_policy": "sink",
+                    "start_state_id": 0,
+                    "states": [
+                        {"id": 0, "is_accept": False, "transitions": []}
+                    ],
+                }
+            ),
+            ([1, 2, 3], []),
+        ),
+        (
+            FsmSpec.model_validate(
+                {
+                    "machine_type": "moore",
+                    "output_mode": "accept_bool",
+                    "undefined_transition_policy": "error",
+                    "start_state_id": 0,
+                    "states": [
+                        {
+                            "id": 0,
+                            "is_accept": False,
+                            "transitions": [
+                                {
+                                    "predicate": {
+                                        "kind": "lt",
+                                        "value": 0,
+                                    },
+                                    "target_state_id": 1,
+                                }
+                            ],
+                        },
+                        {"id": 1, "is_accept": True, "transitions": []},
+                    ],
+                }
+            ),
+            ([-1], [5]),
+        ),
+    )
+
+    for spec, sample_inputs in cases:
+        java_code = render_fsm_java(spec, func_name="f")
+        rust_code = render_fsm_rust(spec, func_name="f")
+        for xs in sample_inputs:
+            try:
+                expected = eval_fsm(spec, xs)
+            except ValueError:
+                with pytest.raises(subprocess.CalledProcessError):
+                    _run_java_f(javac, java, java_code, xs)
+                with pytest.raises(subprocess.CalledProcessError):
+                    _run_rust_f(rustc, rust_code, xs)
+            else:
+                assert _run_java_f(javac, java, java_code, xs) == expected
+                assert _run_rust_f(rustc, rust_code, xs) == expected

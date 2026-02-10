@@ -8,7 +8,12 @@ import pytest
 from helpers import require_java_runtime, require_rust_runtime
 
 from genfxn.intervals.eval import eval_intervals
-from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.models import (
+    BoundaryMode,
+    IntervalsAxes,
+    IntervalsSpec,
+    OperationType,
+)
 from genfxn.intervals.sampler import sample_intervals_spec
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.java.intervals import (
@@ -190,3 +195,63 @@ def test_intervals_runtime_parity_across_sampled_specs() -> None:
             expected = eval_intervals(spec, intervals)
             assert _run_java_f(javac, java, java_code, intervals) == expected
             assert _run_rust_f(rustc, rust_code, intervals) == expected
+
+
+@pytest.mark.full
+def test_intervals_runtime_parity_forced_operation_and_boundary_modes() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    CaseInputs = tuple[list[tuple[int, int]], ...]
+    cases: tuple[tuple[IntervalsSpec, CaseInputs], ...] = (
+        (
+            IntervalsSpec(
+                operation=OperationType.TOTAL_COVERAGE,
+                boundary_mode=BoundaryMode.OPEN_OPEN,
+                merge_touching=False,
+                endpoint_clip_abs=5,
+                endpoint_quantize_step=2,
+            ),
+            ([(-7, 7), (1, 5), (5, 9)], [(0, 0), (0, 2)]),
+        ),
+        (
+            IntervalsSpec(
+                operation=OperationType.MERGED_COUNT,
+                boundary_mode=BoundaryMode.CLOSED_OPEN,
+                merge_touching=True,
+                endpoint_clip_abs=20,
+                endpoint_quantize_step=1,
+            ),
+            ([(0, 2), (2, 4), (4, 6)], [(1, 1), (1, 2), (2, 3)]),
+        ),
+        (
+            IntervalsSpec(
+                operation=OperationType.MAX_OVERLAP_COUNT,
+                boundary_mode=BoundaryMode.CLOSED_CLOSED,
+                merge_touching=False,
+                endpoint_clip_abs=20,
+                endpoint_quantize_step=1,
+            ),
+            ([(-1, 3), (0, 2), (1, 4)], [(-5, -3), (-4, -2)]),
+        ),
+        (
+            IntervalsSpec(
+                operation=OperationType.GAP_COUNT,
+                boundary_mode=BoundaryMode.OPEN_CLOSED,
+                merge_touching=False,
+                endpoint_clip_abs=20,
+                endpoint_quantize_step=1,
+            ),
+            ([(0, 2), (4, 6), (9, 12)], [(3, 1), (7, 8)]),
+        ),
+    )
+
+    for spec, sample_inputs in cases:
+        java_code = render_intervals_java(spec, func_name="f")
+        rust_code = render_intervals_rust(spec, func_name="f")
+        for intervals in sample_inputs:
+            expected = eval_intervals(spec, list(intervals))
+            assert _run_java_f(javac, java, java_code, list(intervals)) == (
+                expected
+            )
+            assert _run_rust_f(rustc, rust_code, list(intervals)) == expected

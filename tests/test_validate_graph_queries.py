@@ -10,10 +10,12 @@ from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
 from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.graph_queries.validate import (
     CODE_CODE_EXEC_ERROR,
+    CODE_CODE_MISSING_FUNC,
     CODE_CODE_PARSE_ERROR,
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
+    CODE_SEMANTIC_ISSUES_CAPPED,
     CODE_SEMANTIC_MISMATCH,
     CODE_UNSAFE_AST,
 )
@@ -118,6 +120,29 @@ def test_semantic_mismatch_detected(baseline_task: Task) -> None:
     assert any(issue.code == CODE_SEMANTIC_MISMATCH for issue in issues)
 
 
+def test_semantic_issue_capping(baseline_task: Task) -> None:
+    corrupted = baseline_task.model_copy(
+        update={"code": "def f(src, dst):\n    return 1000000000"}
+    )
+    issues = validate_graph_queries_task(
+        corrupted,
+        execute_untrusted_code=True,
+        semantic_trials=20,
+        max_semantic_issues=3,
+        random_seed=123,
+    )
+    mismatches = [
+        issue for issue in issues if issue.code == CODE_SEMANTIC_MISMATCH
+    ]
+    capped = [
+        issue
+        for issue in issues
+        if issue.code == CODE_SEMANTIC_ISSUES_CAPPED
+    ]
+    assert len(mismatches) == 3
+    assert len(capped) == 1
+
+
 def test_execute_untrusted_code_false_skips_exec_errors(
     baseline_task: Task,
 ) -> None:
@@ -152,3 +177,58 @@ def test_non_string_python_code_payload_reports_parse_error(
     )
     issues = validate_graph_queries_task(corrupted)
     assert any(issue.code == CODE_CODE_PARSE_ERROR for issue in issues)
+
+
+def test_non_python_code_map_skips_python_validation(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(
+        update={
+            "code": {
+                "java": "public static int f(int src, int dst) { return 0; }"
+            }
+        }
+    )
+    issues = validate_graph_queries_task(corrupted)
+    assert not any(issue.code == CODE_CODE_PARSE_ERROR for issue in issues)
+    assert not any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
+    assert not any(issue.code == CODE_CODE_MISSING_FUNC for issue in issues)
+
+
+def test_exec_function_is_closed_after_validation(
+    baseline_task: Task,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    was_closed = False
+    call_count = 0
+
+    def fake_fn(src: int, dst: int) -> int:
+        del src, dst
+        nonlocal call_count
+        call_count += 1
+        return 0
+
+    def _close() -> None:
+        nonlocal was_closed
+        was_closed = True
+
+    fake_fn.close = _close  # type: ignore[attr-defined]
+
+    def _stub_execute(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        del args, kwargs
+        return {"f": fake_fn}
+
+    monkeypatch.setattr(
+        "genfxn.graph_queries.validate.execute_code_restricted",
+        _stub_execute,
+    )
+
+    validate_graph_queries_task(
+        baseline_task,
+        execute_untrusted_code=True,
+        semantic_trials=1,
+        random_seed=123,
+    )
+
+    assert call_count >= 1
+    assert was_closed is True

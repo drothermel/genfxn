@@ -7,7 +7,7 @@ import pytest
 from helpers import require_java_runtime, require_rust_runtime
 
 from genfxn.bitops.eval import eval_bitops
-from genfxn.bitops.models import BitopsAxes, BitopsSpec
+from genfxn.bitops.models import BitInstruction, BitOp, BitopsAxes, BitopsSpec
 from genfxn.bitops.sampler import sample_bitops_spec
 from genfxn.bitops.task import generate_bitops_task
 from genfxn.langs.java.bitops import render_bitops as render_bitops_java
@@ -114,6 +114,47 @@ def test_bitops_runtime_parity_across_sampled_specs() -> None:
         java_code = render_bitops_java(spec, func_name="f")
         rust_code = render_bitops_rust(spec, func_name="f")
         for x in (0, 1, -1, 7, -13, 255, -512, 1024):
+            expected = eval_bitops(spec, x)
+            assert _run_java_f(javac, java, java_code, x) == expected
+            assert _run_rust_f(rustc, rust_code, x) == expected
+
+
+@pytest.mark.full
+def test_bitops_runtime_parity_forced_width_and_op_boundaries() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    cases: tuple[tuple[BitopsSpec, tuple[int, ...]], ...] = (
+        (
+            BitopsSpec(
+                width_bits=63,
+                operations=[
+                    BitInstruction(op=BitOp.ROTL, arg=126),
+                    BitInstruction(op=BitOp.SHL, arg=64),
+                    BitInstruction(op=BitOp.ROTR, arg=-1),
+                    BitInstruction(op=BitOp.XOR_MASK, arg=(1 << 62) - 1),
+                ],
+            ),
+            (0, 1, -1, (1 << 62) - 1, -(1 << 62)),
+        ),
+        (
+            BitopsSpec(
+                width_bits=1,
+                operations=[
+                    BitInstruction(op=BitOp.NOT),
+                    BitInstruction(op=BitOp.POPCOUNT),
+                    BitInstruction(op=BitOp.PARITY),
+                    BitInstruction(op=BitOp.SHR_LOGICAL, arg=7),
+                ],
+            ),
+            (-3, -1, 0, 1, 2),
+        ),
+    )
+
+    for spec, sample_inputs in cases:
+        java_code = render_bitops_java(spec, func_name="f")
+        rust_code = render_bitops_rust(spec, func_name="f")
+        for x in sample_inputs:
             expected = eval_bitops(spec, x)
             assert _run_java_f(javac, java, java_code, x) == expected
             assert _run_rust_f(rustc, rust_code, x) == expected

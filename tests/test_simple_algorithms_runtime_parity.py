@@ -8,6 +8,8 @@ import pytest
 from helpers import require_java_runtime, require_rust_runtime
 from pydantic import TypeAdapter
 
+from genfxn.core.predicates import PredicateGe, PredicateOdd
+from genfxn.core.transforms import TransformNegate, TransformShift
 from genfxn.langs.java.simple_algorithms import (
     render_simple_algorithms as render_simple_algorithms_java,
 )
@@ -16,8 +18,13 @@ from genfxn.langs.rust.simple_algorithms import (
 )
 from genfxn.simple_algorithms.eval import eval_simple_algorithms
 from genfxn.simple_algorithms.models import (
+    CountingMode,
+    CountPairsSumSpec,
+    MaxWindowSumSpec,
+    MostFrequentSpec,
     SimpleAlgorithmsAxes,
     SimpleAlgorithmsSpec,
+    TieBreakMode,
 )
 from genfxn.simple_algorithms.sampler import sample_simple_algorithms_spec
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
@@ -152,6 +159,59 @@ def test_simple_algorithms_runtime_parity_across_sampled_specs() -> None:
     )
     for _ in range(8):
         spec = sample_simple_algorithms_spec(axes, rng=rng)
+        java_code = render_simple_algorithms_java(spec, func_name="f")
+        rust_code = render_simple_algorithms_rust(spec, func_name="f")
+        for xs in sample_inputs:
+            expected = eval_simple_algorithms(spec, list(xs))
+            assert _run_java_f(javac, java, java_code, list(xs)) == expected
+            assert _run_rust_f(rustc, rust_code, list(xs)) == expected
+
+
+@pytest.mark.full
+def test_simple_algorithms_runtime_parity_forced_templates_and_modes() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    cases: tuple[tuple[SimpleAlgorithmsSpec, tuple[list[int], ...]], ...] = (
+        (
+            MostFrequentSpec(
+                tie_break=TieBreakMode.FIRST_SEEN,
+                empty_default=-1,
+                pre_filter=PredicateGe(value=0),
+                pre_transform=TransformShift(offset=1),
+                tie_default=99,
+            ),
+            ([], [1, 2, 1, 2], [-5, -2]),
+        ),
+        (
+            CountPairsSumSpec(
+                target=5,
+                counting_mode=CountingMode.UNIQUE_VALUES,
+                no_result_default=-7,
+                short_list_default=-1,
+            ),
+            ([], [2, 3, 2, 3, 1, 4], [10, 11, 12]),
+        ),
+        (
+            CountPairsSumSpec(
+                target=4,
+                counting_mode=CountingMode.ALL_INDICES,
+            ),
+            ([1, 3, 1, 3], [2, 2, 2]),
+        ),
+        (
+            MaxWindowSumSpec(
+                k=3,
+                invalid_k_default=-5,
+                empty_default=17,
+                pre_filter=PredicateOdd(),
+                pre_transform=TransformNegate(),
+            ),
+            ([], [2, 4], [1, 3, 5, 7], [1, 2, 3, 4]),
+        ),
+    )
+
+    for spec, sample_inputs in cases:
         java_code = render_simple_algorithms_java(spec, func_name="f")
         rust_code = render_simple_algorithms_rust(spec, func_name="f")
         for xs in sample_inputs:

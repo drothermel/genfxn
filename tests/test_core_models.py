@@ -1,3 +1,6 @@
+from decimal import Decimal
+from fractions import Fraction
+
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 
 
@@ -13,6 +16,14 @@ class _BadReprKey:
         return 1  # type: ignore[return-value]
 
 
+class _BrokenReprNoDict:
+    __slots__ = ()
+    __hash__ = None
+
+    def __repr__(self) -> str:
+        raise RuntimeError("broken repr")
+
+
 def test_dedupe_queries_rejects_conflicting_outputs() -> None:
     queries = [
         Query(input=1, output=10, tag=QueryTag.TYPICAL),
@@ -26,6 +37,54 @@ def test_dedupe_queries_rejects_conflicting_outputs() -> None:
         assert "conflicting outputs" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("Expected ValueError for conflicting outputs")
+
+
+def test_dedupe_queries_bool_and_int_inputs_remain_distinct() -> None:
+    queries = [
+        Query(input=True, output=10, tag=QueryTag.TYPICAL),
+        Query(input=1, output=10, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 2
+    assert [q.input for q in deduped] == [True, 1]
+
+
+def test_dedupe_queries_int_and_float_inputs_remain_distinct() -> None:
+    queries = [
+        Query(input=1, output=10, tag=QueryTag.TYPICAL),
+        Query(input=1.0, output=10, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 2
+    assert [q.input for q in deduped] == [1, 1.0]
+
+
+def test_dedupe_queries_type_distinct_inputs_do_not_conflict() -> None:
+    queries = [
+        Query(input=True, output=10, tag=QueryTag.TYPICAL),
+        Query(input=1, output=99, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 2
+    assert [q.output for q in deduped] == [10, 99]
+
+
+def test_dedupe_queries_decimal_and_fraction_do_not_conflict() -> None:
+    queries = [
+        Query(input=Decimal("1"), output=10, tag=QueryTag.TYPICAL),
+        Query(input=Fraction(1, 1), output=99, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 2
+    assert [q.output for q in deduped] == [10, 99]
 
 
 def test_dedupe_queries_list_input_hashing() -> None:
@@ -135,6 +194,19 @@ def test_dedupe_queries_bad_repr_key_does_not_crash() -> None:
     ]
 
     deduped = dedupe_queries(queries)
+    assert len(deduped) == 1
+    assert deduped[0].output == 1
+    assert deduped[0].tag == QueryTag.BOUNDARY
+
+
+def test_dedupe_queries_broken_repr_no_dict_does_not_crash() -> None:
+    queries = [
+        Query(input=_BrokenReprNoDict(), output=1, tag=QueryTag.TYPICAL),
+        Query(input=_BrokenReprNoDict(), output=1, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries(queries)
+
     assert len(deduped) == 1
     assert deduped[0].output == 1
     assert deduped[0].tag == QueryTag.BOUNDARY

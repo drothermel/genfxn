@@ -1752,8 +1752,44 @@ class TestDeterminism:
                 max_retries=2,
             )
 
-        assert len(draws) == 3
-        assert len(set(draws)) == 3
+        # 3 attempts (max_retries=2) × 3 restarts per attempt.
+        assert len(draws) == 9
+        assert len(set(draws)) == 9
+
+    def test_generate_suite_retries_with_distinct_pool_seed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        pool_seeds: list[int] = []
+
+        def _capture_pool_seed(
+            _family: str,
+            _difficulty: int,
+            pool_seed: int,
+            _pool_size: int,
+        ) -> tuple[list[Candidate], PoolStats]:
+            pool_seeds.append(pool_seed)
+            return [], PoolStats()
+
+        monkeypatch.setattr(suite_generate, "generate_pool", _capture_pool_seed)
+        monkeypatch.setattr(
+            suite_generate,
+            "greedy_select",
+            lambda *_: [],
+        )
+
+        with pytest.raises(RuntimeError, match="Could not fill suite"):
+            suite_generate.generate_suite(
+                "stringrules",
+                3,
+                seed=7,
+                pool_size=20,
+                max_retries=2,
+            )
+
+        assert len(pool_seeds) == 3
+        assert len(set(pool_seeds)) == 3
 
     def test_stack_bytecode_generate_suite_deterministic_when_available(
         self,
@@ -2352,6 +2388,78 @@ class TestIntegration:
             for _, _, target, achieved, _ in report:
                 min_acceptable = max(1, int(target * 0.75))
                 assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_intervals_d2_local_optimum_recovery_when_available(
+        self,
+    ) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+        if 2 not in QUOTAS["intervals"]:
+            pytest.skip("intervals D2 suite generation is not available")
+        import genfxn.suites.generate as suite_generate
+
+        difficulty = 2
+        seed = 231
+        pool_size = 200
+        quota = QUOTAS["intervals"][difficulty]
+
+        # Baseline greedy restart-0 can miss quota targets on this pool.
+        pool_seed = suite_generate._stable_seed(
+            seed, "intervals", difficulty, 800000
+        )
+        candidates, _ = suite_generate.generate_pool(
+            "intervals",
+            difficulty,
+            pool_seed,
+            pool_size,
+        )
+        restart0_rng = random.Random(
+            suite_generate._stable_seed(
+                seed,
+                "intervals",
+                difficulty,
+                900000,
+            )
+        )
+        restart0_selected = suite_generate.greedy_select(
+            candidates,
+            quota,
+            restart0_rng,
+        )
+        restart0_selected = suite_generate._repair_selection_with_swaps(
+            restart0_selected,
+            candidates,
+            quota,
+        )
+        assert len(restart0_selected) == quota.total
+        assert not suite_generate._quota_targets_met(
+            restart0_selected,
+            quota,
+        )
+
+        tasks_a = generate_suite(
+            "intervals",
+            difficulty,
+            seed=seed,
+            pool_size=pool_size,
+            max_retries=0,
+        )
+        tasks_b = generate_suite(
+            "intervals",
+            difficulty,
+            seed=seed,
+            pool_size=pool_size,
+            max_retries=0,
+        )
+        assert len(tasks_a) == quota.total
+        assert [task.task_id for task in tasks_a] == [
+            task.task_id for task in tasks_b
+        ]
+
+        report = quota_report(tasks_a, "intervals", difficulty)
+        for _, _, target, achieved, _ in report:
+            assert achieved >= target
 
     @pytest.mark.slow
     def test_graph_queries_suite_generation_when_available(self) -> None:

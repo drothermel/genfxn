@@ -28,6 +28,14 @@ class SplitResult(BaseModel):
     holdouts: list[AxisHoldout] = Field(description="Holdout conditions used")
 
 
+def _is_non_bool_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _matches_exact_type_sensitive(value: Any, holdout_value: Any) -> bool:
+    return type(value) is type(holdout_value) and value == holdout_value
+
+
 def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
     """Check if task matches a single holdout condition."""
     if not has_spec_value(task.spec, holdout.axis_path):
@@ -36,7 +44,9 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
 
     match holdout.holdout_type:
         case HoldoutType.EXACT:
-            return value == holdout.holdout_value
+            return _matches_exact_type_sensitive(
+                value, holdout.holdout_value
+            )
         case HoldoutType.RANGE:
             range_value = holdout.holdout_value
             if (
@@ -45,11 +55,9 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
             ):
                 return False
             lo, hi = range_value
-            if not isinstance(lo, int | float) or not isinstance(
-                hi, int | float
-            ):
+            if not _is_non_bool_number(lo) or not _is_non_bool_number(hi):
                 return False
-            if not isinstance(value, (int, float)):
+            if not _is_non_bool_number(value):
                 return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:

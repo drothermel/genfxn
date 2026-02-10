@@ -110,6 +110,7 @@ from genfxn.temporal_logic.render import render_temporal_logic
 from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
 
 logger = logging.getLogger(__name__)
+_SELECTION_RESTARTS = 3
 
 # ── Candidate + PoolStats ────────────────────────────────────────────────
 
@@ -1467,6 +1468,15 @@ def _deficit_score(filled: Sequence[int], quota: QuotaSpec) -> tuple[int, int]:
     return total_deficit, unmet_buckets
 
 
+def _selection_rank(
+    selected: Sequence[Candidate], quota: QuotaSpec
+) -> tuple[int, int, int]:
+    """Rank selections by deficit first, then by larger size."""
+    filled = _bucket_fill_counts(selected, quota)
+    total_deficit, unmet_buckets = _deficit_score(filled, quota)
+    return total_deficit, unmet_buckets, -len(selected)
+
+
 def _repair_selection_with_swaps(
     selected: list[Candidate],
     candidates: list[Candidate],
@@ -1568,6 +1578,38 @@ def _repair_selection_with_swaps(
         filled = next_filled
 
     return repaired
+
+
+def _select_best_with_restarts(
+    candidates: list[Candidate],
+    quota: QuotaSpec,
+    family: str,
+    difficulty: int,
+    seed: int,
+    attempt: int,
+    selection_restarts: int = _SELECTION_RESTARTS,
+) -> list[Candidate]:
+    """Run deterministic greedy restarts and keep the best selection."""
+    best_selected: list[Candidate] = []
+    best_rank = _selection_rank(best_selected, quota)
+
+    for restart in range(selection_restarts):
+        select_rng = random.Random(
+            _stable_seed(
+                seed,
+                family,
+                difficulty,
+                900000 + (attempt * selection_restarts) + restart,
+            )
+        )
+        selected = greedy_select(candidates, quota, select_rng)
+        selected = _repair_selection_with_swaps(selected, candidates, quota)
+        rank = _selection_rank(selected, quota)
+        if rank < best_rank:
+            best_selected = selected
+            best_rank = rank
+
+    return best_selected
 
 
 def greedy_select(
@@ -1783,15 +1825,21 @@ def generate_suite(
 
     for attempt in range(max_retries + 1):
         current_pool_size = pool_size * (2**attempt)
+        pool_seed = _stable_seed(
+            seed, family, difficulty, 800000 + attempt
+        )
         candidates, stats = generate_pool(
-            family, difficulty, seed, current_pool_size
+            family, difficulty, pool_seed, current_pool_size
         )
 
-        select_rng = random.Random(
-            _stable_seed(seed, family, difficulty, 999999 + attempt)
+        selected = _select_best_with_restarts(
+            candidates,
+            quota,
+            family,
+            difficulty,
+            seed,
+            attempt,
         )
-        selected = greedy_select(candidates, quota, select_rng)
-        selected = _repair_selection_with_swaps(selected, candidates, quota)
 
         if len(selected) >= quota.total and _quota_targets_met(selected, quota):
             break

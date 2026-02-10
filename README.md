@@ -361,6 +361,9 @@ uv run pytest tests/ -v --verification-level=standard
 uv run pytest tests/ -v --verification-level=full
 ```
 
+Runtime parity suites are marked `@pytest.mark.full`, so they run only with
+`--verification-level=full`.
+
 ### Local Performance Budgets
 
 Use the helper runner to apply tuned xdist worker counts and optional

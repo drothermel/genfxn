@@ -8,10 +8,24 @@ import pytest
 from helpers import require_java_runtime, require_rust_runtime
 from pydantic import TypeAdapter
 
+from genfxn.core.predicates import PredicateEven, PredicateLt, PredicateModEq
+from genfxn.core.transforms import (
+    TransformAbs,
+    TransformNegate,
+    TransformScale,
+    TransformShift,
+)
 from genfxn.langs.java.stateful import render_stateful as render_stateful_java
 from genfxn.langs.rust.stateful import render_stateful as render_stateful_rust
 from genfxn.stateful.eval import eval_stateful
-from genfxn.stateful.models import StatefulAxes, StatefulSpec
+from genfxn.stateful.models import (
+    ConditionalLinearSumSpec,
+    LongestRunSpec,
+    ResettingBestPrefixSumSpec,
+    StatefulAxes,
+    StatefulSpec,
+    ToggleSumSpec,
+)
 from genfxn.stateful.sampler import sample_stateful_spec
 from genfxn.stateful.task import generate_stateful_task
 
@@ -141,6 +155,55 @@ def test_stateful_runtime_parity_across_sampled_specs() -> None:
     )
     for _ in range(8):
         spec = sample_stateful_spec(axes, rng=rng)
+        java_code = render_stateful_java(spec, func_name="f")
+        rust_code = render_stateful_rust(spec, func_name="f")
+        for xs in sample_inputs:
+            expected = eval_stateful(spec, list(xs))
+            assert _run_java_f(javac, java, java_code, list(xs)) == expected
+            assert _run_rust_f(rustc, rust_code, list(xs)) == expected
+
+
+@pytest.mark.full
+def test_stateful_runtime_parity_forced_templates() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    cases: tuple[tuple[StatefulSpec, tuple[list[int], ...]], ...] = (
+        (
+            ConditionalLinearSumSpec(
+                predicate=PredicateEven(),
+                true_transform=TransformShift(offset=2),
+                false_transform=TransformNegate(),
+                init_value=3,
+            ),
+            ([], [2, -1, 4], [1, 1, 2]),
+        ),
+        (
+            ResettingBestPrefixSumSpec(
+                reset_predicate=PredicateLt(value=0),
+                init_value=1,
+                value_transform=TransformScale(factor=2),
+            ),
+            ([1, 2, -1, 3], [-2, 5, 6], [0, 0, 0]),
+        ),
+        (
+            LongestRunSpec(
+                match_predicate=PredicateModEq(divisor=3, remainder=1),
+            ),
+            ([], [1, 4, 7, 2, 10], [2, 5, 8]),
+        ),
+        (
+            ToggleSumSpec(
+                toggle_predicate=PredicateEven(),
+                on_transform=TransformAbs(),
+                off_transform=TransformShift(offset=-1),
+                init_value=0,
+            ),
+            ([2, 3, -4, 5, 6], [1, 3, 5], [2, 2, 2, 2]),
+        ),
+    )
+
+    for spec, sample_inputs in cases:
         java_code = render_stateful_java(spec, func_name="f")
         rust_code = render_stateful_rust(spec, func_name="f")
         for xs in sample_inputs:
