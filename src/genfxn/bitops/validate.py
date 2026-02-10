@@ -480,7 +480,7 @@ def validate_bitops_task(
     task: Task,
     axes: BitopsAxes | None = None,
     strict: bool = True,
-    execute_untrusted_code: bool = True,
+    execute_untrusted_code: bool = False,
     max_semantic_issues: int = 10,
     semantic_trials: int = 16,
     random_seed: int = 0,

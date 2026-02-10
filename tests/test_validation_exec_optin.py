@@ -162,6 +162,88 @@ def test_piecewise_validation_exec_opt_in(monkeypatch) -> None:
         "temporal_logic",
     ],
 )
+def test_validation_skips_exec_by_default_for_all_families(
+    monkeypatch, generator, validator, module
+) -> None:
+    task = generator(rng=random.Random(42))
+    monkeypatch.setattr(module, "execute_code_restricted", _boom)
+    issues = validator(task)
+    assert not any(i.code == module.CODE_CODE_EXEC_ERROR for i in issues)
+
+
+@pytest.mark.parametrize(
+    ("generator", "validator", "module"),
+    [
+        (
+            generate_bitops_task,
+            bitops_validate.validate_bitops_task,
+            bitops_validate,
+        ),
+        (
+            generate_fsm_task,
+            fsm_validate.validate_fsm_task,
+            fsm_validate,
+        ),
+        (
+            generate_graph_queries_task,
+            graph_queries_validate.validate_graph_queries_task,
+            graph_queries_validate,
+        ),
+        (
+            generate_intervals_task,
+            intervals_validate.validate_intervals_task,
+            intervals_validate,
+        ),
+        (
+            generate_piecewise_task,
+            piecewise_validate.validate_piecewise_task,
+            piecewise_validate,
+        ),
+        (
+            generate_sequence_dp_task,
+            sequence_dp_validate.validate_sequence_dp_task,
+            sequence_dp_validate,
+        ),
+        (
+            generate_stateful_task,
+            stateful_validate.validate_stateful_task,
+            stateful_validate,
+        ),
+        (
+            generate_simple_algorithms_task,
+            simple_validate.validate_simple_algorithms_task,
+            simple_validate,
+        ),
+        (
+            generate_stack_bytecode_task,
+            stack_bytecode_validate.validate_stack_bytecode_task,
+            stack_bytecode_validate,
+        ),
+        (
+            generate_stringrules_task,
+            stringrules_validate.validate_stringrules_task,
+            stringrules_validate,
+        ),
+        (
+            generate_temporal_logic_task,
+            temporal_logic_validate.validate_temporal_logic_task,
+            temporal_logic_validate,
+        ),
+    ],
+    ids=[
+        "bitops",
+        "fsm",
+        "graph_queries",
+        "intervals",
+        "piecewise",
+        "sequence_dp",
+        "stateful",
+        "simple_algorithms",
+        "stack_bytecode",
+        "stringrules",
+        "temporal_logic",
+    ],
+)
 def test_validation_closes_exec_func(
     monkeypatch, generator, validator, module
 ) -> None:
