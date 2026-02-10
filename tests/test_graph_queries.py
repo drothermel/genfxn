@@ -405,6 +405,28 @@ def test_rendered_python_rejects_non_int_src_dst_inputs(
         rendered(src, dst)
 
 
+def test_rendered_python_matches_evaluator_for_int_subclass_inputs() -> None:
+    class _DerivedInt(int):
+        pass
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[object, object], int], namespace["f"])
+
+    assert rendered(_DerivedInt(0), _DerivedInt(1)) == eval_graph_queries(
+        spec,
+        _DerivedInt(0),
+        _DerivedInt(1),
+    )
+
+
 def test_rendered_python_rejects_invalid_edge_endpoints() -> None:
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.MIN_HOPS,

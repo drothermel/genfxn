@@ -4,6 +4,7 @@ import pytest
 
 from genfxn.bitops import validate as bitops_validate
 from genfxn.bitops.task import generate_bitops_task
+from genfxn.core import safe_exec
 from genfxn.fsm import validate as fsm_validate
 from genfxn.fsm.task import generate_fsm_task
 from genfxn.graph_queries import validate as graph_queries_validate
@@ -167,6 +168,7 @@ def test_validation_skips_exec_by_default_for_all_families(
 ) -> None:
     task = generator(rng=random.Random(42))
     monkeypatch.setattr(module, "execute_code_restricted", _boom)
+    monkeypatch.setattr(safe_exec, "execute_code_restricted", _boom)
     issues = validator(task)
     assert not any(i.code == module.CODE_CODE_EXEC_ERROR for i in issues)
 

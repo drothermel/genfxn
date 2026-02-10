@@ -1,4 +1,6 @@
 import importlib.util
+import os
+import stat
 from typing import Any, cast
 
 import pytest
@@ -1295,6 +1297,31 @@ class TestGenerate:
             or "low must be <=" in result.output
         )
 
+    def test_atomic_output_file_uses_default_new_file_mode(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        with cli_module._atomic_output_file(output) as handle:
+            handle.write("{}\n")
+
+        mode = stat.S_IMODE(output.stat().st_mode)
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        assert mode == (0o666 & ~current_umask)
+
+    def test_atomic_output_file_preserves_existing_file_mode(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        output.write_text("before\n", encoding="utf-8")
+        os.chmod(output, 0o640)
+
+        with cli_module._atomic_output_file(output) as handle:
+            handle.write("after\n")
+
+        mode = stat.S_IMODE(output.stat().st_mode)
+        assert mode == 0o640
+
 
 class TestSplit:
     @pytest.mark.parametrize(
@@ -1467,6 +1494,8 @@ class TestSplit:
 
         assert train.read_text(encoding="utf-8") == "old-train\n"
         assert test.read_text(encoding="utf-8") == "old-test\n"
+        assert list(tmp_path.glob(".train.jsonl.*.tmp")) == []
+        assert list(tmp_path.glob(".test.jsonl.*.tmp")) == []
 
     def test_split_requires_random_or_holdout_mode(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

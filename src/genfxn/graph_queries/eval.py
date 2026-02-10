@@ -7,7 +7,7 @@ _I64_MAX = (1 << 63) - 1
 
 
 def _validate_node(node: int, n_nodes: int, name: str) -> None:
-    if type(node) is not int:
+    if (not isinstance(node, int)) or node is True or node is False:
         raise ValueError(f"{name} must be int, got {type(node).__name__}")
     if node < 0 or node >= n_nodes:
         raise ValueError(f"{name}={node} must be in [0, {n_nodes - 1}]")

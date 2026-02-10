@@ -117,6 +117,32 @@ def test_require_java_runtime_fails_when_version_check_fails(
         helpers.require_java_runtime()
 
 
+def test_require_java_runtime_fails_when_version_check_times_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    def _fake_run(
+        cmd: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout)
+
+    monkeypatch.setattr(helpers.shutil, "which", _fake_which)
+    monkeypatch.setattr(helpers.subprocess, "run", _fake_run)
+
+    with pytest.raises(
+        pytest.fail.Exception,
+        match="javac found at /usr/bin/javac but failed health check",
+    ):
+        helpers.require_java_runtime()
+
+
 def test_require_rust_runtime_passes_when_tool_is_runnable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -207,6 +233,32 @@ def test_require_rust_runtime_fails_when_version_check_fails(
         timeout: float,
     ) -> subprocess.CompletedProcess[str]:
         raise subprocess.CalledProcessError(1, cmd, stderr="runtime missing")
+
+    monkeypatch.setattr(helpers.shutil, "which", _fake_which)
+    monkeypatch.setattr(helpers.subprocess, "run", _fake_run)
+
+    with pytest.raises(
+        pytest.fail.Exception,
+        match="rustc found at /usr/bin/rustc but failed health check",
+    ):
+        helpers.require_rust_runtime()
+
+
+def test_require_rust_runtime_fails_when_os_error_raised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    def _fake_run(
+        cmd: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        raise OSError("permission denied")
 
     monkeypatch.setattr(helpers.shutil, "which", _fake_which)
     monkeypatch.setattr(helpers.subprocess, "run", _fake_run)

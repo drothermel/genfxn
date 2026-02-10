@@ -3,6 +3,7 @@ import math
 import os
 import random
 import re
+import stat
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -415,6 +416,13 @@ def _atomic_split_outputs(
 
 @contextmanager
 def _atomic_output_file(path: Path) -> Iterator[TextIO]:
+    try:
+        target_mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        target_mode = 0o666 & ~current_umask
+
     fd: int | None = None
     tmp_path: Path | None = None
     try:
@@ -427,6 +435,7 @@ def _atomic_output_file(path: Path) -> Iterator[TextIO]:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             fd = None
             yield handle
+        os.chmod(tmp_path, target_mode)
         os.replace(tmp_path, path)
     except Exception:
         _safe_close_fd(fd)

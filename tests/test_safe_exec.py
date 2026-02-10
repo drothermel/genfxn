@@ -65,8 +65,11 @@ def test_execute_code_restricted_times_out_infinite_loop() -> None:
         timeout_sec=0.2,
         trust_untrusted_code=True,
     )["f"]
-    with pytest.raises(SafeExecTimeoutError):
-        fn(1)
+    try:
+        with pytest.raises(SafeExecTimeoutError):
+            fn(1)
+    finally:
+        fn.close()
 
 
 def test_run_isolated_reports_worker_crash_exit_code(monkeypatch) -> None:
@@ -508,23 +511,26 @@ def test_timeout_terminates_descendant_processes(tmp_path) -> None:
         trust_untrusted_code=True,
     )["f"]
 
-    with pytest.raises(SafeExecTimeoutError):
-        fn(str(pid_file))
-
-    assert pid_file.exists()
-    child_pid = int(pid_file.read_text(encoding="utf-8"))
-
-    deadline = time.time() + 3.0
-    while time.time() < deadline:
-        if not _pid_exists(child_pid):
-            break
-        time.sleep(0.05)
-
     try:
+        with pytest.raises(SafeExecTimeoutError):
+            fn(str(pid_file))
+
+        assert pid_file.exists()
+        child_pid = int(pid_file.read_text(encoding="utf-8"))
+
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not _pid_exists(child_pid):
+                break
+            time.sleep(0.05)
+
         assert not _pid_exists(child_pid)
     finally:
-        if _pid_exists(child_pid):
-            os.kill(child_pid, signal.SIGKILL)
+        try:
+            if "child_pid" in locals() and _pid_exists(child_pid):
+                os.kill(child_pid, signal.SIGKILL)
+        finally:
+            fn.close()
 
 
 @pytest.mark.skipif(
@@ -581,8 +587,11 @@ def test_execute_code_restricted_runtime_error_wrapped() -> None:
         {},
         trust_untrusted_code=True,
     )["f"]
-    with pytest.raises(SafeExecExecutionError, match="ZeroDivisionError"):
-        fn(1)
+    try:
+        with pytest.raises(SafeExecExecutionError, match="ZeroDivisionError"):
+            fn(1)
+    finally:
+        fn.close()
 
 
 def test_execute_code_restricted_allows_helper_functions() -> None:
@@ -643,8 +652,11 @@ def test_execute_code_restricted_result_size_limit() -> None:
         trust_untrusted_code=True,
         max_result_bytes=128,
     )["f"]
-    with pytest.raises(SafeExecExecutionError, match="max_result_bytes"):
-        fn(10_000)
+    try:
+        with pytest.raises(SafeExecExecutionError, match="max_result_bytes"):
+            fn(10_000)
+    finally:
+        fn.close()
 
 
 def test_execute_code_restricted_non_picklable_result_unlimited() -> None:
@@ -654,11 +666,14 @@ def test_execute_code_restricted_non_picklable_result_unlimited() -> None:
         trust_untrusted_code=True,
         max_result_bytes=None,
     )["f"]
-    with pytest.raises(
-        SafeExecExecutionError,
-        match="Failed to serialize worker result",
-    ):
-        fn(1)
+    try:
+        with pytest.raises(
+            SafeExecExecutionError,
+            match="Failed to serialize worker result",
+        ):
+            fn(1)
+    finally:
+        fn.close()
 
 
 def test_execute_code_restricted_rejects_non_primitive_result_types() -> None:
@@ -668,11 +683,14 @@ def test_execute_code_restricted_rejects_non_primitive_result_types() -> None:
         trust_untrusted_code=True,
         max_result_bytes=None,
     )["f"]
-    with pytest.raises(
-        SafeExecExecutionError,
-        match="Unsupported worker result type: bytes",
-    ):
-        fn(1)
+    try:
+        with pytest.raises(
+            SafeExecExecutionError,
+            match="Unsupported worker result type: bytes",
+        ):
+            fn(1)
+    finally:
+        fn.close()
 
 
 def test_get_mp_context_invalid_override_raises(monkeypatch) -> None:
