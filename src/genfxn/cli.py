@@ -1,4 +1,5 @@
 import json
+import math
 import random
 from pathlib import Path
 from typing import Annotated, Any, cast
@@ -11,7 +12,6 @@ from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
 from genfxn.core.codegen import (
     get_spec_value,
-    has_spec_value,
     task_id_from_spec,
 )
 from genfxn.core.describe import describe_task
@@ -45,7 +45,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.splits import AxisHoldout, HoldoutType
+from genfxn.splits import AxisHoldout, HoldoutType, matches_holdout
 from genfxn.stack_bytecode.models import (
     StackBytecodeAxes,
     StackBytecodeSpec,
@@ -122,6 +122,11 @@ def _parse_numeric_range(
             )
         lo_f = float(lo_s)
         hi_f = float(hi_s)
+        if not math.isfinite(lo_f) or not math.isfinite(hi_f):
+            raise typer.BadParameter(
+                f"Invalid range '{value}': bounds must be finite numbers "
+                "(no nan/inf/-inf)"
+            )
         if lo_f > hi_f:
             raise typer.BadParameter(
                 f"Invalid range '{value}': low must be <= high"
@@ -153,42 +158,8 @@ def _write_task_line(handle, task: Task) -> None:
     handle.write("\n")
 
 
-def _is_non_bool_number(value: Any) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool)
-
-
-def _matches_exact_type_sensitive(value: Any, holdout_value: Any) -> bool:
-    return type(value) is type(holdout_value) and value == holdout_value
-
-
 def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
-    if not has_spec_value(task.spec, holdout.axis_path):
-        return False
-    value = get_spec_value(task.spec, holdout.axis_path)
-
-    match holdout.holdout_type:
-        case HoldoutType.EXACT:
-            return _matches_exact_type_sensitive(
-                value, holdout.holdout_value
-            )
-        case HoldoutType.RANGE:
-            range_value = holdout.holdout_value
-            if (
-                not isinstance(range_value, tuple | list)
-                or len(range_value) != 2
-            ):
-                return False
-            lo, hi = range_value
-            if not _is_non_bool_number(lo) or not _is_non_bool_number(hi):
-                return False
-            if not _is_non_bool_number(value):
-                return False
-            return lo <= value <= hi
-        case HoldoutType.CONTAINS:
-            if not isinstance(value, (list, tuple, set, frozenset)):
-                return False
-            return holdout.holdout_value in value
-    return False
+    return matches_holdout(task, holdout)
 
 
 def _count_validated_tasks(input_file: Path) -> int:
@@ -489,8 +460,12 @@ def _build_graph_queries_axes(
         parsed = _parse_range(value_range)
         if parsed is not None:
             lo, hi = parsed
-            if hi >= 0:
-                kwargs["weight_range"] = (max(0, lo), hi)
+            if hi < 0:
+                raise typer.BadParameter(
+                    "Invalid --value-range for graph_queries: "
+                    "range must overlap non-negative edge weights"
+                )
+            kwargs["weight_range"] = (max(0, lo), hi)
     if list_length_range:
         kwargs["n_nodes_range"] = _parse_range(list_length_range)
     return GraphQueriesAxes(**kwargs)

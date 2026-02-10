@@ -86,7 +86,13 @@ def _run_java_f(
         return int(status_s), int(value_s)
 
 
-def _run_rust_f(rustc: str, code: str, xs: list[int]) -> tuple[int, int]:
+def _run_rust_f(
+    rustc: str,
+    code: str,
+    xs: list[int],
+    *,
+    optimize: bool = True,
+) -> tuple[int, int]:
     xs_lit = ", ".join(_i64_literal(x) for x in xs)
     main_src = (
         f"{code}\n"
@@ -101,8 +107,12 @@ def _run_rust_f(rustc: str, code: str, xs: list[int]) -> tuple[int, int]:
         src = tmp / "main.rs"
         out = tmp / "main_bin"
         src.write_text(main_src, encoding="utf-8")
+        compile_cmd = [rustc, str(src)]
+        if optimize:
+            compile_cmd.append("-O")
+        compile_cmd.extend(["-o", str(out)])
         subprocess.run(  # noqa: S603
-            [rustc, str(src), "-O", "-o", str(out)],
+            compile_cmd,
             check=True,
             cwd=tmp,
             capture_output=True,
@@ -298,3 +308,118 @@ def test_stack_bytecode_runtime_parity_forced_modes_and_statuses() -> None:
         expected = eval_stack_bytecode(spec, xs)
         assert _run_java_f(javac, java, java_code, xs) == expected
         assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_stack_bytecode_runtime_parity_overflow_adjacent_cases() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    max_i64 = (1 << 63) - 1
+    min_i64 = -(1 << 63)
+
+    cases: tuple[tuple[StackBytecodeSpec, tuple[int, int]], ...] = (
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                    Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                    Instruction(op=InstructionOp.ADD),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=8,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            (0, min_i64),
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                    Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                    Instruction(op=InstructionOp.SUB),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=8,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            (0, max_i64),
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                    Instruction(op=InstructionOp.PUSH_CONST, value=2),
+                    Instruction(op=InstructionOp.MUL),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=8,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            (0, -2),
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                    Instruction(op=InstructionOp.NEG),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=6,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            (0, min_i64),
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                    Instruction(op=InstructionOp.ABS),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=6,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            (0, min_i64),
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                    Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                    Instruction(op=InstructionOp.DIV),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=8,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            (0, min_i64),
+        ),
+        (
+            StackBytecodeSpec(
+                program=[
+                    Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                    Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                    Instruction(op=InstructionOp.MOD),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=8,
+                jump_target_mode=JumpTargetMode.ERROR,
+                input_mode=InputMode.DIRECT,
+            ),
+            (0, 0),
+        ),
+    )
+
+    for spec, expected in cases:
+        java_code = render_stack_bytecode_java(spec, func_name="f")
+        rust_code = render_stack_bytecode_rust(spec, func_name="f")
+        assert _run_java_f(javac, java, java_code, []) == expected
+        assert _run_rust_f(rustc, rust_code, [], optimize=False) == expected
+        assert _run_rust_f(rustc, rust_code, [], optimize=True) == expected

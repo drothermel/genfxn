@@ -1,3 +1,4 @@
+from genfxn.core.int32 import i32_add, wrap_i32
 from genfxn.core.predicates import eval_predicate
 from genfxn.core.transforms import eval_transform
 from genfxn.stateful.models import (
@@ -12,30 +13,39 @@ from genfxn.stateful.models import (
 def eval_conditional_linear_sum(
     spec: ConditionalLinearSumSpec, xs: list[int]
 ) -> int:
-    acc = spec.init_value
+    acc = wrap_i32(spec.init_value)
     for x in xs:
+        x = wrap_i32(x)
         if eval_predicate(spec.predicate, x):
-            acc += eval_transform(spec.true_transform, x)
+            acc = i32_add(
+                acc,
+                eval_transform(spec.true_transform, x, int32_wrap=True),
+            )
         else:
-            acc += eval_transform(spec.false_transform, x)
+            acc = i32_add(
+                acc,
+                eval_transform(spec.false_transform, x, int32_wrap=True),
+            )
     return acc
 
 
 def eval_resetting_best_prefix_sum(
     spec: ResettingBestPrefixSumSpec, xs: list[int]
 ) -> int:
-    current_sum = spec.init_value
-    best_sum = spec.init_value
+    init = wrap_i32(spec.init_value)
+    current_sum = init
+    best_sum = init
     for x in xs:
+        x = wrap_i32(x)
         if eval_predicate(spec.reset_predicate, x):
-            current_sum = spec.init_value
+            current_sum = init
         else:
             val = (
-                eval_transform(spec.value_transform, x)
+                eval_transform(spec.value_transform, x, int32_wrap=True)
                 if spec.value_transform is not None
                 else x
             )
-            current_sum += val
+            current_sum = i32_add(current_sum, val)
             best_sum = max(best_sum, current_sum)
     return best_sum
 
@@ -44,8 +54,9 @@ def eval_longest_run(spec: LongestRunSpec, xs: list[int]) -> int:
     current_run = 0
     longest_run = 0
     for x in xs:
+        x = wrap_i32(x)
         if eval_predicate(spec.match_predicate, x):
-            current_run += 1
+            current_run = i32_add(current_run, 1)
             longest_run = max(longest_run, current_run)
         else:
             current_run = 0
@@ -54,14 +65,21 @@ def eval_longest_run(spec: LongestRunSpec, xs: list[int]) -> int:
 
 def eval_toggle_sum(spec: ToggleSumSpec, xs: list[int]) -> int:
     on = False
-    acc = spec.init_value
+    acc = wrap_i32(spec.init_value)
     for x in xs:
+        x = wrap_i32(x)
         if eval_predicate(spec.toggle_predicate, x):
             on = not on
         if on:
-            acc += eval_transform(spec.on_transform, x)
+            acc = i32_add(
+                acc,
+                eval_transform(spec.on_transform, x, int32_wrap=True),
+            )
         else:
-            acc += eval_transform(spec.off_transform, x)
+            acc = i32_add(
+                acc,
+                eval_transform(spec.off_transform, x, int32_wrap=True),
+            )
     return acc
 
 

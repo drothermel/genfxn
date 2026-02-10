@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from helpers import require_java_runtime, require_rust_runtime
 
-from genfxn.core.predicates import PredicateGe
+from genfxn.core.predicates import PredicateGe, PredicateLt
 from genfxn.langs.java.piecewise import (
     render_piecewise as render_piecewise_java,
 )
@@ -181,3 +181,104 @@ def test_piecewise_runtime_parity_forced_expression_coverage() -> None:
             expected = eval_piecewise(spec, x)
             assert _run_java_f(javac, java, java_code, x) == expected
             assert _run_rust_f(rustc, rust_code, x) == expected
+
+
+@pytest.mark.full
+def test_piecewise_runtime_parity_overflow_int32_contract() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    always_true = PredicateGe(value=-2_147_483_648)
+    spec = PiecewiseSpec(
+        branches=[
+            Branch(
+                condition=always_true,
+                expr=ExprQuadratic(a=1, b=0, c=0),
+            )
+        ],
+        default_expr=ExprAffine(a=0, b=0),
+    )
+    java_code = render_piecewise_java(spec, func_name="f")
+    rust_code = render_piecewise_rust(spec, func_name="f")
+
+    x = 50_000
+    expected = eval_piecewise(spec, x)
+    assert expected == -1_794_967_296
+    assert _run_java_f(javac, java, java_code, x) == expected
+    assert _run_rust_f(rustc, rust_code, x) == expected
+
+
+@pytest.mark.full
+def test_piecewise_runtime_parity_int32_boundary_cases() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    always_true = PredicateGe(value=-10_000)
+
+    cases: tuple[tuple[PiecewiseSpec, tuple[int, ...]], ...] = (
+        (
+            PiecewiseSpec(
+                branches=[
+                    Branch(condition=always_true, expr=ExprAffine(a=1, b=0))
+                ],
+                default_expr=ExprAffine(a=0, b=0),
+            ),
+            (2_000_000_000, 2_147_483_647),
+        ),
+        (
+            PiecewiseSpec(
+                branches=[
+                    Branch(
+                        condition=always_true,
+                        expr=ExprQuadratic(a=1, b=0, c=0),
+                    )
+                ],
+                default_expr=ExprAffine(a=0, b=0),
+            ),
+            (50_000,),
+        ),
+        (
+            PiecewiseSpec(
+                branches=[
+                    Branch(
+                        condition=always_true,
+                        expr=ExprAffine(a=50_000, b=0),
+                    )
+                ],
+                default_expr=ExprAffine(a=0, b=0),
+            ),
+            (50_000,),
+        ),
+    )
+
+    for spec, inputs in cases:
+        java_code = render_piecewise_java(spec, func_name="f")
+        rust_code = render_piecewise_rust(spec, func_name="f")
+        for x in inputs:
+            expected = eval_piecewise(spec, x)
+            assert _run_java_f(javac, java, java_code, x) == expected
+            assert _run_rust_f(rustc, rust_code, x) == expected
+
+
+@pytest.mark.full
+def test_piecewise_java_compiles_with_oversized_int_literals() -> None:
+    javac, java = require_java_runtime()
+    spec = PiecewiseSpec(
+        branches=[
+            Branch(
+                condition=PredicateLt(value=3_000_000_001),
+                expr=ExprMod(
+                    divisor=3_000_000_003,
+                    a=-3_000_000_005,
+                    b=3_000_000_007,
+                ),
+            )
+        ],
+        default_expr=ExprQuadratic(
+            a=3_000_000_011,
+            b=-3_000_000_013,
+            c=3_000_000_017,
+        ),
+    )
+    java_code = render_piecewise_java(spec, func_name="f")
+
+    result = _run_java_f(javac, java, java_code, 7)
+    assert isinstance(result, int)

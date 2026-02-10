@@ -7,8 +7,55 @@ from genfxn.piecewise.models import (
 )
 
 
-def render_expression_rust(expr: Expression, var: str = "x") -> str:
+def _render_linear_i32(a: int, x_term: str, b: int) -> str:
+    ax = "0" if a == 0 else f"i32_mul({a}, {x_term})"
+    if b == 0:
+        return ax
+    return f"i32_add({ax}, {b})"
+
+
+def _render_quadratic_i32(a: int, b: int, c: int, var: str) -> str:
+    acc = "0"
+
+    if a != 0:
+        acc = f"i32_mul(i32_mul({a}, {var}), {var})"
+
+    if b != 0:
+        bx = f"i32_mul({b}, {var})"
+        if acc == "0":
+            acc = bx
+        else:
+            acc = f"i32_add({acc}, {bx})"
+
+    if c != 0:
+        if acc == "0":
+            acc = f"i32_wrap({c})"
+        else:
+            acc = f"i32_add({acc}, {c})"
+
+    return acc
+
+
+def render_expression_rust(
+    expr: Expression,
+    var: str = "x",
+    *,
+    int32_wrap: bool = False,
+) -> str:
     """Render a piecewise expression as a Rust expression."""
+    if int32_wrap:
+        match expr:
+            case ExprAffine(a=a, b=b):
+                return _render_linear_i32(a, var, b)
+            case ExprQuadratic(a=a, b=b, c=c):
+                return _render_quadratic_i32(a, b, c, var)
+            case ExprAbs(a=a, b=b):
+                return _render_linear_i32(a, f"i32_abs({var})", b)
+            case ExprMod(divisor=d, a=a, b=b):
+                return _render_linear_i32(a, f"i32_mod({var}, {d})", b)
+            case _:
+                raise ValueError(f"Unknown expression: {expr}")
+
     match expr:
         case ExprAffine(a=a, b=b):
             return _render_linear(a, var, b)

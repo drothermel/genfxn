@@ -3,6 +3,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from genfxn.core.int32 import i32_abs, i32_add, i32_mul, i32_neg, wrap_i32
+
 
 class TransformIdentity(BaseModel):
     kind: Literal["identity"] = "identity"
@@ -84,24 +86,40 @@ Transform = Annotated[
 ]
 
 
-def eval_transform(t: Transform, x: int) -> int:
+def eval_transform(t: Transform, x: int, *, int32_wrap: bool = False) -> int:
+    if int32_wrap:
+        x = wrap_i32(x)
+
     match t:
         case TransformIdentity():
             return x
         case TransformAbs():
+            if int32_wrap:
+                return i32_abs(x)
             return abs(x)
         case TransformShift(offset=o):
+            if int32_wrap:
+                return i32_add(x, o)
             return x + o
         case TransformClip(low=lo, high=hi):
-            return max(lo, min(hi, x))
+            clipped = max(lo, min(hi, x))
+            if int32_wrap:
+                return wrap_i32(clipped)
+            return clipped
         case TransformNegate():
+            if int32_wrap:
+                return i32_neg(x)
             return -x
         case TransformScale(factor=f):
+            if int32_wrap:
+                return i32_mul(x, f)
             return x * f
         case TransformPipeline(steps=steps):
             result = x
             for step in steps:
-                result = eval_transform(step, result)
+                result = eval_transform(
+                    step, result, int32_wrap=int32_wrap
+                )
             return result
         case _:
             raise ValueError(f"Unknown transform: {t}")

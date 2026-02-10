@@ -62,6 +62,7 @@ from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.java._helpers import (
     _regex_char_class_escape,
+    java_int_literal,
     java_string_literal,
 )
 from genfxn.langs.java.expressions import render_expression_java
@@ -113,6 +114,17 @@ class TestJavaStringLiteral:
 
     def test_escapes_tab(self) -> None:
         assert java_string_literal("a\tb") == '"a\\tb"'
+
+
+class TestJavaIntLiteral:
+    def test_small_int(self) -> None:
+        assert java_int_literal(123) == "123"
+
+    def test_large_positive_int_uses_long_cast(self) -> None:
+        assert java_int_literal(3_000_000_001) == "((int) 3000000001L)"
+
+    def test_large_negative_int_uses_long_cast(self) -> None:
+        assert java_int_literal(-3_000_000_001) == "((int) -3000000001L)"
 
 
 class TestRegexCharClassEscape:

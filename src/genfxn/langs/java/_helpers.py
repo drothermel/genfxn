@@ -1,3 +1,7 @@
+INT32_MIN = -(2**31)
+INT32_MAX = 2**31 - 1
+
+
 def java_string_literal(s: str) -> str:
     """Escape a string for use as a Java string literal."""
     escaped = (
@@ -8,6 +12,14 @@ def java_string_literal(s: str) -> str:
         .replace("\t", "\\t")
     )
     return f'"{escaped}"'
+
+
+def java_int_literal(value: int) -> str:
+    """Render an int-typed Java literal expression for any Python int."""
+    ivalue = int(value)
+    if INT32_MIN <= ivalue <= INT32_MAX:
+        return str(ivalue)
+    return f"((int) {ivalue}L)"
 
 
 def _regex_char_class_escape(chars: str) -> str:

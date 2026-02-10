@@ -442,7 +442,7 @@ class TestPiecewiseRust:
         code = render_piecewise(spec)
         assert "fn f(x: i64) -> i64" in code
         assert "if x > 0 {" in code
-        assert "2 * x" in code
+        assert "i32_mul(2, x)" in code
         assert "-1" in code
 
     def test_no_branches(self) -> None:
@@ -539,9 +539,9 @@ class TestStatefulRust:
         )
         code = render_stateful(spec)
         assert "fn f(xs: &[i64]) -> i64" in code
-        assert "for &x in xs" in code
+        assert "for &x_raw in xs" in code
         assert "x % 2 == 0" in code
-        assert "-x" in code
+        assert "i32_neg(x)" in code
 
     def test_longest_run(self) -> None:
         from genfxn.langs.rust.stateful import render_stateful
@@ -660,8 +660,8 @@ class TestSimpleAlgorithmsRust:
             counting_mode=CountingMode.ALL_INDICES,
         )
         code = render_simple_algorithms(spec)
-        assert "xs[i] + xs[j] == 10" in code
-        assert "count += 1" in code
+        assert "i32_add(xs[i], xs[j]) == 10" in code
+        assert "count = i32_add(count, 1)" in code
 
     def test_count_pairs_unique(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
@@ -754,8 +754,8 @@ class TestSimpleAlgorithmsRust:
             tie_default=99,
         )
         code = render_simple_algorithms(spec)
-        assert "return -1;" in code
-        assert "return 99;" in code
+        assert "return i32_wrap(-1);" in code
+        assert "return i32_wrap(99);" in code
         assert "candidates.len() > 1" in code
 
 

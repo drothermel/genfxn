@@ -8,25 +8,55 @@ from genfxn.stateful.models import (
     ToggleSumSpec,
 )
 
+_I32_HELPERS = [
+    "    fn i32_wrap(value: i64) -> i64 {",
+    "        (value as i32) as i64",
+    "    }",
+    "    fn i32_add(lhs: i64, rhs: i64) -> i64 {",
+    "        ((lhs as i32).wrapping_add(rhs as i32)) as i64",
+    "    }",
+    "    fn i32_mul(lhs: i64, rhs: i64) -> i64 {",
+    "        ((lhs as i32).wrapping_mul(rhs as i32)) as i64",
+    "    }",
+    "    fn i32_neg(value: i64) -> i64 {",
+    "        (value as i32).wrapping_neg() as i64",
+    "    }",
+    "    fn i32_abs(value: i64) -> i64 {",
+    "        (value as i32).wrapping_abs() as i64",
+    "    }",
+    "    fn i32_clip(value: i64, low: i64, high: i64) -> i64 {",
+    "        let value_i32 = value as i32;",
+    "        let low_i32 = low as i32;",
+    "        let high_i32 = high as i32;",
+    "        value_i32.max(low_i32).min(high_i32) as i64",
+    "    }",
+]
+
 
 def _render_conditional_linear_sum(
     spec: ConditionalLinearSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     cond = render_predicate_rust(spec.predicate, "x")
-    true_expr = render_transform_rust(spec.true_transform, "x")
-    false_expr = render_transform_rust(spec.false_transform, "x")
+    true_expr = render_transform_rust(
+        spec.true_transform, "x", int32_wrap=True
+    )
+    false_expr = render_transform_rust(
+        spec.false_transform, "x", int32_wrap=True
+    )
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
-        f"    let mut acc: i64 = {spec.init_value};",
-        f"    for &x in {var} {{",
+        *_I32_HELPERS,
+        f"    let mut acc: i64 = i32_wrap({spec.init_value});",
+        f"    for &x_raw in {var} {{",
+        "        let x = i32_wrap(x_raw);",
         f"        if {cond} {{",
-        f"            acc += {true_expr};",
+        f"            acc = i32_add(acc, {true_expr});",
         "        } else {",
-        f"            acc += {false_expr};",
+        f"            acc = i32_add(acc, {false_expr});",
         "        }",
         "    }",
-        "    acc",
+        "    i32_wrap(acc)",
         "}",
     ]
     return "\n".join(lines)
@@ -37,24 +67,27 @@ def _render_resetting_best_prefix_sum(
 ) -> str:
     cond = render_predicate_rust(spec.reset_predicate, "x")
     val_expr = (
-        render_transform_rust(spec.value_transform, "x")
+        render_transform_rust(spec.value_transform, "x", int32_wrap=True)
         if spec.value_transform is not None
         else "x"
     )
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
-        f"    let mut current_sum: i64 = {spec.init_value};",
-        f"    let mut best_sum: i64 = {spec.init_value};",
-        f"    for &x in {var} {{",
+        *_I32_HELPERS,
+        f"    let init: i64 = i32_wrap({spec.init_value});",
+        "    let mut current_sum: i64 = init;",
+        "    let mut best_sum: i64 = init;",
+        f"    for &x_raw in {var} {{",
+        "        let x = i32_wrap(x_raw);",
         f"        if {cond} {{",
-        f"            current_sum = {spec.init_value};",
+        "            current_sum = init;",
         "        } else {",
-        f"            current_sum += {val_expr};",
+        f"            current_sum = i32_add(current_sum, {val_expr});",
         "            best_sum = best_sum.max(current_sum);",
         "        }",
         "    }",
-        "    best_sum",
+        "    i32_wrap(best_sum)",
         "}",
     ]
     return "\n".join(lines)
@@ -67,17 +100,19 @@ def _render_longest_run(
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
+        *_I32_HELPERS,
         "    let mut current_run: i64 = 0;",
         "    let mut longest_run: i64 = 0;",
-        f"    for &x in {var} {{",
+        f"    for &x_raw in {var} {{",
+        "        let x = i32_wrap(x_raw);",
         f"        if {cond} {{",
-        "            current_run += 1;",
+        "            current_run = i32_add(current_run, 1);",
         "            longest_run = longest_run.max(current_run);",
         "        } else {",
         "            current_run = 0;",
         "        }",
         "    }",
-        "    longest_run",
+        "    i32_wrap(longest_run)",
         "}",
     ]
     return "\n".join(lines)
@@ -87,24 +122,26 @@ def _render_toggle_sum(
     spec: ToggleSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     cond = render_predicate_rust(spec.toggle_predicate, "x")
-    on_expr = render_transform_rust(spec.on_transform, "x")
-    off_expr = render_transform_rust(spec.off_transform, "x")
+    on_expr = render_transform_rust(spec.on_transform, "x", int32_wrap=True)
+    off_expr = render_transform_rust(spec.off_transform, "x", int32_wrap=True)
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
+        *_I32_HELPERS,
         "    let mut on = false;",
-        f"    let mut acc: i64 = {spec.init_value};",
-        f"    for &x in {var} {{",
+        f"    let mut acc: i64 = i32_wrap({spec.init_value});",
+        f"    for &x_raw in {var} {{",
+        "        let x = i32_wrap(x_raw);",
         f"        if {cond} {{",
         "            on = !on;",
         "        }",
         "        if on {",
-        f"            acc += {on_expr};",
+        f"            acc = i32_add(acc, {on_expr});",
         "        } else {",
-        f"            acc += {off_expr};",
+        f"            acc = i32_add(acc, {off_expr});",
         "        }",
         "    }",
-        "    acc",
+        "    i32_wrap(acc)",
         "}",
     ]
     return "\n".join(lines)

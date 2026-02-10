@@ -12,6 +12,7 @@ from genfxn.core.predicates import (
     PredicateOdd,
     PredicateOr,
 )
+from genfxn.langs.java._helpers import java_int_literal
 
 
 def render_predicate_java(pred: Predicate, var: str = "x") -> str:
@@ -22,19 +23,21 @@ def render_predicate_java(pred: Predicate, var: str = "x") -> str:
         case PredicateOdd():
             return f"{var} % 2 != 0"
         case PredicateLt(value=v):
-            return f"{var} < {v}"
+            return f"{var} < {java_int_literal(v)}"
         case PredicateLe(value=v):
-            return f"{var} <= {v}"
+            return f"{var} <= {java_int_literal(v)}"
         case PredicateGt(value=v):
-            return f"{var} > {v}"
+            return f"{var} > {java_int_literal(v)}"
         case PredicateGe(value=v):
-            return f"{var} >= {v}"
+            return f"{var} >= {java_int_literal(v)}"
         case PredicateModEq(divisor=d, remainder=r):
-            return f"Math.floorMod({var}, {d}) == {r}"
+            divisor = java_int_literal(d)
+            remainder = java_int_literal(r)
+            return f"Math.floorMod({var}, {divisor}) == {remainder}"
         case PredicateInSet(values=vals):
             if not vals:
                 return "false"
-            items = [f"{var} == {v}" for v in sorted(vals)]
+            items = [f"{var} == {java_int_literal(v)}" for v in sorted(vals)]
             return f"({' || '.join(items)})"
         case PredicateNot(operand=op):
             return f"!({render_predicate_java(op, var)})"

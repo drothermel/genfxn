@@ -9,6 +9,33 @@ from genfxn.simple_algorithms.models import (
     TieBreakMode,
 )
 
+_I32_HELPERS = [
+    "    fn i32_wrap(value: i64) -> i64 {",
+    "        (value as i32) as i64",
+    "    }",
+    "    fn i32_add(lhs: i64, rhs: i64) -> i64 {",
+    "        ((lhs as i32).wrapping_add(rhs as i32)) as i64",
+    "    }",
+    "    fn i32_sub(lhs: i64, rhs: i64) -> i64 {",
+    "        ((lhs as i32).wrapping_sub(rhs as i32)) as i64",
+    "    }",
+    "    fn i32_mul(lhs: i64, rhs: i64) -> i64 {",
+    "        ((lhs as i32).wrapping_mul(rhs as i32)) as i64",
+    "    }",
+    "    fn i32_neg(value: i64) -> i64 {",
+    "        (value as i32).wrapping_neg() as i64",
+    "    }",
+    "    fn i32_abs(value: i64) -> i64 {",
+    "        (value as i32).wrapping_abs() as i64",
+    "    }",
+    "    fn i32_clip(value: i64, low: i64, high: i64) -> i64 {",
+    "        let value_i32 = value as i32;",
+    "        let low_i32 = low as i32;",
+    "        let high_i32 = high as i32;",
+    "        value_i32.max(low_i32).min(high_i32) as i64",
+    "    }",
+]
+
 
 def _render_preprocess_rust(
     spec: MostFrequentSpec | CountPairsSumSpec | MaxWindowSumSpec, var: str
@@ -24,7 +51,9 @@ def _render_preprocess_rust(
             ]
         )
     if spec.pre_transform is not None:
-        expr = render_transform_rust(spec.pre_transform, "x")
+        expr = render_transform_rust(
+            spec.pre_transform, "x", int32_wrap=True
+        )
         lines.extend(
             [
                 f"    let _mapped: Vec<i64> = {var}.iter().copied()"
@@ -44,9 +73,13 @@ def _render_most_frequent(
         lines = [
             f"fn {func_name}({var}: &[i64]) -> i64 {{",
             "    use std::collections::HashMap;",
+            *_I32_HELPERS,
+            f"    let _wrapped: Vec<i64> = {var}.iter().copied()"
+            ".map(i32_wrap).collect();",
+            f"    let {var} = _wrapped.as_slice();",
             *preprocess,
             f"    if {var}.is_empty() {{",
-            f"        return {spec.empty_default};",
+            f"        return i32_wrap({spec.empty_default});",
             "    }",
             "    let mut counts: HashMap<i64, i64> = HashMap::new();",
             f"    for &x in {var} {{",
@@ -62,18 +95,22 @@ def _render_most_frequent(
         ]
         if spec.tie_default is not None:
             lines.append("    if candidates.len() > 1 {")
-            lines.append(f"        return {spec.tie_default};")
+            lines.append(f"        return i32_wrap({spec.tie_default});")
             lines.append("    }")
-        lines.append("    *candidates.iter().min().unwrap()")
+        lines.append("    i32_wrap(*candidates.iter().min().unwrap())")
         lines.append("}")
     else:
         lines = [
             f"fn {func_name}({var}: &[i64]) -> i64 {{",
             "    use std::collections::HashMap;",
             "    use std::collections::HashSet;",
+            *_I32_HELPERS,
+            f"    let _wrapped: Vec<i64> = {var}.iter().copied()"
+            ".map(i32_wrap).collect();",
+            f"    let {var} = _wrapped.as_slice();",
             *preprocess,
             f"    if {var}.is_empty() {{",
-            f"        return {spec.empty_default};",
+            f"        return i32_wrap({spec.empty_default});",
             "    }",
             "    let mut counts: HashMap<i64, i64> = HashMap::new();",
             f"    for &x in {var} {{",
@@ -89,16 +126,16 @@ def _render_most_frequent(
         ]
         if spec.tie_default is not None:
             lines.append("    if candidates.len() > 1 {")
-            lines.append(f"        return {spec.tie_default};")
+            lines.append(f"        return i32_wrap({spec.tie_default});")
             lines.append("    }")
         lines.extend(
             [
                 f"    for &x in {var} {{",
                 "        if candidates.contains(&x) {",
-                "            return x;",
+                "            return i32_wrap(x);",
                 "        }",
                 "    }",
-                f"    {spec.empty_default}",
+                f"    i32_wrap({spec.empty_default})",
                 "}",
             ]
         )
@@ -109,23 +146,30 @@ def _render_count_pairs_sum(
     spec: CountPairsSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     preprocess = _render_preprocess_rust(spec, var)
+    target = (spec.target + (1 << 31)) % (1 << 32) - (1 << 31)
 
     if spec.counting_mode == CountingMode.ALL_INDICES:
         lines = [
             f"fn {func_name}({var}: &[i64]) -> i64 {{",
+            *_I32_HELPERS,
+            f"    let _wrapped: Vec<i64> = {var}.iter().copied()"
+            ".map(i32_wrap).collect();",
+            f"    let {var} = _wrapped.as_slice();",
             *preprocess,
         ]
         if spec.short_list_default is not None:
             lines.append(f"    if {var}.len() < 2 {{")
-            lines.append(f"        return {spec.short_list_default};")
+            lines.append(
+                f"        return i32_wrap({spec.short_list_default});"
+            )
             lines.append("    }")
         lines.extend(
             [
                 "    let mut count: i64 = 0;",
                 f"    for i in 0..{var}.len() {{",
                 f"        for j in (i + 1)..{var}.len() {{",
-                f"            if {var}[i] + {var}[j] == {spec.target} {{",
-                "                count += 1;",
+                f"            if i32_add({var}[i], {var}[j]) == {target} {{",
+                "                count = i32_add(count, 1);",
                 "            }",
                 "        }",
                 "    }",
@@ -133,26 +177,32 @@ def _render_count_pairs_sum(
         )
         if spec.no_result_default is not None:
             lines.append("    if count == 0 {")
-            lines.append(f"        return {spec.no_result_default};")
+            lines.append(f"        return i32_wrap({spec.no_result_default});")
             lines.append("    }")
-        lines.append("    count")
+        lines.append("    i32_wrap(count)")
         lines.append("}")
     else:
         lines = [
             f"fn {func_name}({var}: &[i64]) -> i64 {{",
             "    use std::collections::HashSet;",
+            *_I32_HELPERS,
+            f"    let _wrapped: Vec<i64> = {var}.iter().copied()"
+            ".map(i32_wrap).collect();",
+            f"    let {var} = _wrapped.as_slice();",
             *preprocess,
         ]
         if spec.short_list_default is not None:
             lines.append(f"    if {var}.len() < 2 {{")
-            lines.append(f"        return {spec.short_list_default};")
+            lines.append(
+                f"        return i32_wrap({spec.short_list_default});"
+            )
             lines.append("    }")
         lines.extend(
             [
                 "    let mut seen_pairs: HashSet<(i64, i64)> = HashSet::new();",
                 f"    for i in 0..{var}.len() {{",
                 f"        for j in (i + 1)..{var}.len() {{",
-                f"            if {var}[i] + {var}[j] == {spec.target} {{",
+                f"            if i32_add({var}[i], {var}[j]) == {target} {{",
                 "                seen_pairs.insert(("
                 f"{var}[i].min({var}[j]), "
                 f"{var}[i].max({var}[j])));",
@@ -163,9 +213,9 @@ def _render_count_pairs_sum(
         )
         if spec.no_result_default is not None:
             lines.append("    if seen_pairs.is_empty() {")
-            lines.append(f"        return {spec.no_result_default};")
+            lines.append(f"        return i32_wrap({spec.no_result_default});")
             lines.append("    }")
-        lines.append("    seen_pairs.len() as i64")
+        lines.append("    i32_wrap(seen_pairs.len() as i64)")
         lines.append("}")
     return "\n".join(lines)
 
@@ -177,28 +227,32 @@ def _render_max_window_sum(
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
+        *_I32_HELPERS,
+        f"    let _wrapped: Vec<i64> = {var}.iter().copied().map(i32_wrap)"
+        ".collect();",
+        f"    let {var} = _wrapped.as_slice();",
         *preprocess,
     ]
     if spec.empty_default is not None:
         lines.append(f"    if {var}.is_empty() {{")
-        lines.append(f"        return {spec.empty_default};")
+        lines.append(f"        return i32_wrap({spec.empty_default});")
         lines.append("    }")
     lines.extend(
         [
             f"    if {var}.len() < {spec.k} {{",
-            f"        return {spec.invalid_k_default};",
+            f"        return i32_wrap({spec.invalid_k_default});",
             "    }",
-            "    let mut window_sum: i64 = 0;",
+            "    let mut window_sum: i64 = i32_wrap(0);",
             f"    for i in 0..{spec.k} {{",
-            f"        window_sum += {var}[i];",
+            f"        window_sum = i32_add(window_sum, {var}[i]);",
             "    }",
             "    let mut max_sum = window_sum;",
             f"    for i in {spec.k}..{var}.len() {{",
-            "        window_sum = window_sum "
-            f"- {var}[i - {spec.k}] + {var}[i];",
+            "        window_sum = i32_add("
+            f"i32_sub(window_sum, {var}[i - {spec.k}]), {var}[i]);",
             "        max_sum = max_sum.max(window_sum);",
             "    }",
-            "    max_sum",
+            "    i32_wrap(max_sum)",
             "}",
         ]
     )

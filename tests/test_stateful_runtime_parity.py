@@ -8,9 +8,15 @@ import pytest
 from helpers import require_java_runtime, require_rust_runtime
 from pydantic import TypeAdapter
 
-from genfxn.core.predicates import PredicateEven, PredicateLt, PredicateModEq
+from genfxn.core.predicates import (
+    PredicateEven,
+    PredicateGe,
+    PredicateLt,
+    PredicateModEq,
+)
 from genfxn.core.transforms import (
     TransformAbs,
+    TransformIdentity,
     TransformNegate,
     TransformScale,
     TransformShift,
@@ -210,3 +216,86 @@ def test_stateful_runtime_parity_forced_templates() -> None:
             expected = eval_stateful(spec, list(xs))
             assert _run_java_f(javac, java, java_code, list(xs)) == expected
             assert _run_rust_f(rustc, rust_code, list(xs)) == expected
+
+
+@pytest.mark.full
+def test_stateful_runtime_parity_overflow_int32_contract() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    spec = ConditionalLinearSumSpec(
+        predicate=PredicateGe(value=-2_147_483_648),
+        true_transform=TransformIdentity(),
+        false_transform=TransformIdentity(),
+        init_value=0,
+    )
+    xs = [2_000_000_000, 2_000_000_000]
+
+    java_code = render_stateful_java(spec, func_name="f")
+    rust_code = render_stateful_rust(spec, func_name="f")
+    expected = eval_stateful(spec, xs)
+
+    assert expected == -294_967_296
+    assert _run_java_f(javac, java, java_code, xs) == expected
+    assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_stateful_runtime_parity_int32_boundary_cases() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    int32_max = (1 << 31) - 1
+
+    cases: tuple[tuple[StatefulSpec, list[int]], ...] = (
+        (
+            ConditionalLinearSumSpec(
+                predicate=PredicateGe(value=0),
+                true_transform=TransformShift(offset=0),
+                false_transform=TransformNegate(),
+                init_value=0,
+            ),
+            [2_000_000_000, 147_483_647, 0],
+        ),
+        (
+            ConditionalLinearSumSpec(
+                predicate=PredicateGe(value=0),
+                true_transform=TransformScale(factor=50_000),
+                false_transform=TransformShift(offset=0),
+                init_value=0,
+            ),
+            [50_000],
+        ),
+        (
+            ResettingBestPrefixSumSpec(
+                reset_predicate=PredicateLt(value=0),
+                init_value=int32_max,
+                value_transform=TransformShift(offset=1),
+            ),
+            [1, -1, 1],
+        ),
+    )
+
+    for spec, xs in cases:
+        java_code = render_stateful_java(spec, func_name="f")
+        rust_code = render_stateful_rust(spec, func_name="f")
+        expected = eval_stateful(spec, xs)
+        assert _run_java_f(javac, java, java_code, xs) == expected
+        assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_stateful_java_compiles_with_oversized_int_literals() -> None:
+    javac, java = require_java_runtime()
+    spec = ConditionalLinearSumSpec(
+        predicate=PredicateModEq(
+            divisor=3_000_000_001,
+            remainder=3_000_000_000,
+        ),
+        true_transform=TransformShift(offset=3_000_000_005),
+        false_transform=TransformScale(factor=-3_000_000_007),
+        init_value=3_000_000_009,
+    )
+    java_code = render_stateful_java(spec, func_name="f")
+
+    result = _run_java_f(javac, java, java_code, [1, 2, 3])
+    assert isinstance(result, int)

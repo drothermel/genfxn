@@ -120,6 +120,44 @@ class TestSplitTasks:
         assert [t.task_id for t in result.test] == ["t2"]
         assert [t.task_id for t in result.train] == ["t1"]
 
+    @pytest.mark.parametrize(
+        ("holdout_value", "expected_test_ids"),
+        [
+            pytest.param(False, {"t-false"}, id="bool-false"),
+            pytest.param(0, {"t-int-zero"}, id="int-zero"),
+            pytest.param(True, {"t-true"}, id="bool-true"),
+            pytest.param(1, {"t-int-one"}, id="int-one"),
+            pytest.param(1.0, {"t-float-one"}, id="float-one"),
+            pytest.param("1", {"t-string-one"}, id="string-one"),
+            pytest.param(None, {"t-none"}, id="none"),
+        ],
+    )
+    def test_exact_holdout_type_matrix(
+        self, holdout_value: object, expected_test_ids: set[str]
+    ) -> None:
+        tasks = [
+            _make_task("t-false", {"value": False}),
+            _make_task("t-int-zero", {"value": 0}),
+            _make_task("t-true", {"value": True}),
+            _make_task("t-int-one", {"value": 1}),
+            _make_task("t-float-one", {"value": 1.0}),
+            _make_task("t-string-one", {"value": "1"}),
+            _make_task("t-none", {"value": None}),
+            _make_task("t-missing", {}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="value",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=holdout_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+
+        assert {t.task_id for t in result.test} == expected_test_ids
+        assert "t-missing" in {t.task_id for t in result.train}
+
     def test_range_holdout(self) -> None:
         tasks = [
             _make_task("t1", {"threshold": 5}),

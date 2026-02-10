@@ -218,3 +218,76 @@ def test_simple_algorithms_runtime_parity_forced_templates_and_modes() -> None:
             expected = eval_simple_algorithms(spec, list(xs))
             assert _run_java_f(javac, java, java_code, list(xs)) == expected
             assert _run_rust_f(rustc, rust_code, list(xs)) == expected
+
+
+@pytest.mark.full
+def test_simple_algorithms_runtime_parity_overflow_int32_contract() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    spec = MaxWindowSumSpec(k=2, invalid_k_default=-1)
+    xs = [2_000_000_000, 2_000_000_000]
+
+    java_code = render_simple_algorithms_java(spec, func_name="f")
+    rust_code = render_simple_algorithms_rust(spec, func_name="f")
+    expected = eval_simple_algorithms(spec, xs)
+
+    assert expected == -294_967_296
+    assert _run_java_f(javac, java, java_code, xs) == expected
+    assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_simple_algorithms_runtime_parity_int32_boundary_cases() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    int32_max = (1 << 31) - 1
+    int32_min = -(1 << 31)
+    wrapped_50k_square = -1_794_967_296
+
+    cases: tuple[tuple[SimpleAlgorithmsSpec, list[int]], ...] = (
+        (
+            MaxWindowSumSpec(
+                k=2,
+                invalid_k_default=-1,
+            ),
+            [2_000_000_000, 147_483_647, -2_000_000_000, 147_483_647],
+        ),
+        (
+            CountPairsSumSpec(
+                target=int32_min,
+                counting_mode=CountingMode.ALL_INDICES,
+            ),
+            [int32_max, 1, 0],
+        ),
+        (
+            CountPairsSumSpec(
+                target=wrapped_50k_square,
+                counting_mode=CountingMode.ALL_INDICES,
+            ),
+            [2_000_000_000, 500_000_000],
+        ),
+    )
+
+    for spec, xs in cases:
+        java_code = render_simple_algorithms_java(spec, func_name="f")
+        rust_code = render_simple_algorithms_rust(spec, func_name="f")
+        expected = eval_simple_algorithms(spec, xs)
+        assert _run_java_f(javac, java, java_code, xs) == expected
+        assert _run_rust_f(rustc, rust_code, xs) == expected
+
+
+@pytest.mark.full
+def test_simple_algorithms_java_compiles_with_oversized_int_literals() -> None:
+    javac, java = require_java_runtime()
+    spec = MostFrequentSpec(
+        tie_break=TieBreakMode.SMALLEST,
+        empty_default=3_000_000_001,
+        tie_default=-3_000_000_003,
+        pre_filter=PredicateGe(value=3_000_000_005),
+        pre_transform=TransformShift(offset=3_000_000_007),
+    )
+    java_code = render_simple_algorithms_java(spec, func_name="f")
+
+    result = _run_java_f(javac, java, java_code, [1, 1, 2])
+    assert isinstance(result, int)

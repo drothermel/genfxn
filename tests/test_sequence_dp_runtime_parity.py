@@ -95,6 +95,8 @@ def _run_rust_f(
     code: str,
     a_vals: list[int],
     b_vals: list[int],
+    *,
+    optimize: bool = True,
 ) -> int:
     a_lit = ", ".join(_i64_literal(value) for value in a_vals)
     b_lit = ", ".join(_i64_literal(value) for value in b_vals)
@@ -111,8 +113,12 @@ def _run_rust_f(
         src = tmp / "main.rs"
         out = tmp / "main_bin"
         src.write_text(main_src, encoding="utf-8")
+        compile_cmd = [rustc, str(src)]
+        if optimize:
+            compile_cmd.append("-O")
+        compile_cmd.extend(["-o", str(out)])
         subprocess.run(  # noqa: S603
-            [rustc, str(src), "-O", "-o", str(out)],
+            compile_cmd,
             check=True,
             cwd=tmp,
             capture_output=True,
@@ -263,3 +269,66 @@ def test_sequence_dp_abs_diff_extreme_values_parity() -> None:
     rust_code = render_sequence_dp_rust(spec, func_name="f")
     assert _run_java_f(javac, java, java_code, a_vals, b_vals) == expected
     assert _run_rust_f(rustc, rust_code, a_vals, b_vals) == expected
+
+
+@pytest.mark.full
+def test_sequence_dp_runtime_parity_overflow_adjacent_cases() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    max_i64 = (1 << 63) - 1
+    min_i64 = -(1 << 63)
+
+    score_overflow_spec = SequenceDpSpec(
+        template=TemplateType.GLOBAL,
+        output_mode=OutputMode.SCORE,
+        match_predicate=PredicateEq(),
+        match_score=max_i64,
+        mismatch_score=-1,
+        gap_score=-1,
+        step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+    )
+    score_overflow_inputs = ([1, 1], [1, 1])
+
+    predicate_overflow_spec = SequenceDpSpec(
+        template=TemplateType.GLOBAL,
+        output_mode=OutputMode.SCORE,
+        match_predicate=PredicateModEq(divisor=3, remainder=1),
+        match_score=9,
+        mismatch_score=-4,
+        gap_score=-2,
+        step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+    )
+    predicate_overflow_inputs = ([min_i64], [1])
+
+    cases: tuple[
+        tuple[SequenceDpSpec, tuple[list[int], list[int]], int], ...
+    ] = (
+        (score_overflow_spec, score_overflow_inputs, max_i64 - 2),
+        (predicate_overflow_spec, predicate_overflow_inputs, 9),
+    )
+
+    for spec, (a_vals, b_vals), expected in cases:
+        java_code = render_sequence_dp_java(spec, func_name="f")
+        rust_code = render_sequence_dp_rust(spec, func_name="f")
+        assert _run_java_f(javac, java, java_code, a_vals, b_vals) == expected
+        assert (
+            _run_rust_f(
+                rustc,
+                rust_code,
+                a_vals,
+                b_vals,
+                optimize=False,
+            )
+            == expected
+        )
+        assert (
+            _run_rust_f(
+                rustc,
+                rust_code,
+                a_vals,
+                b_vals,
+                optimize=True,
+            )
+            == expected
+        )

@@ -1,5 +1,6 @@
 import random
 
+from genfxn.core.int32 import i32_add, wrap_i32
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import eval_predicate
 from genfxn.core.transforms import eval_transform
@@ -38,18 +39,22 @@ def _distinct_in_range(lo: int, hi: int, n: int) -> list[int]:
 def _preprocess_count_pairs_input(
     spec: CountPairsSumSpec, xs: list[int]
 ) -> list[int]:
-    ys = list(xs)
+    ys = [wrap_i32(x) for x in xs]
     if spec.pre_filter is not None:
         ys = [x for x in ys if eval_predicate(spec.pre_filter, x)]
     if spec.pre_transform is not None:
-        ys = [eval_transform(spec.pre_transform, x) for x in ys]
+        ys = [
+            eval_transform(spec.pre_transform, x, int32_wrap=True)
+            for x in ys
+        ]
     return ys
 
 
 def _has_pair_sum(xs: list[int], target: int) -> bool:
+    target = wrap_i32(target)
     for i in range(len(xs)):
         for j in range(i + 1, len(xs)):
-            if xs[i] + xs[j] == target:
+            if i32_add(xs[i], xs[j]) == target:
                 return True
     return False
 

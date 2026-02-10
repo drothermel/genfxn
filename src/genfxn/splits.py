@@ -36,7 +36,7 @@ def _matches_exact_type_sensitive(value: Any, holdout_value: Any) -> bool:
     return type(value) is type(holdout_value) and value == holdout_value
 
 
-def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
+def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
     """Check if task matches a single holdout condition."""
     if not has_spec_value(task.spec, holdout.axis_path):
         return False
@@ -68,12 +68,17 @@ def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
             raise ValueError(f"Unknown holdout type: {holdout.holdout_type}")
 
 
+def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
+    """Backward-compatible alias used by older tests/callers."""
+    return matches_holdout(task, holdout)
+
+
 def split_tasks(tasks: list[Task], holdouts: list[AxisHoldout]) -> SplitResult:
     """Split tasks: test = any holdout matches, train = no holdouts match."""
     train: list[Task] = []
     test: list[Task] = []
     for task in tasks:
-        if any(_matches_holdout(task, h) for h in holdouts):
+        if any(matches_holdout(task, h) for h in holdouts):
             test.append(task)
         else:
             train.append(task)

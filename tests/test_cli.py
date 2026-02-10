@@ -194,6 +194,82 @@ class TestGenerate:
                 i.code == GRAPH_QUERIES_CODE_UNSAFE_AST for i in issues
             )
 
+    def test_generate_graph_queries_honors_value_range(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "graph_queries",
+                "-n",
+                "3",
+                "--value-range",
+                "2,4",
+                "-s",
+                "11",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert tasks
+        for task in tasks:
+            assert task["family"] == "graph_queries"
+            assert task["axes"]["weight_range"] == [2, 4]
+
+    def test_generate_graph_queries_clamps_negative_low_value_range(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "graph_queries",
+                "-n",
+                "3",
+                "--value-range",
+                "-5,3",
+                "-s",
+                "11",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert tasks
+        for task in tasks:
+            assert task["family"] == "graph_queries"
+            assert task["axes"]["weight_range"] == [0, 3]
+
+    def test_generate_graph_queries_rejects_negative_only_value_range(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "graph_queries",
+                "-n",
+                "1",
+                "--value-range",
+                "-9,-1",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Invalid --value-range for graph_queries" in result.output
+
     def test_generate_temporal_logic(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
@@ -1307,6 +1383,52 @@ class TestSplit:
         assert result.exit_code != 0
         assert "low must be <= high" in result.output
 
+    @pytest.mark.parametrize(
+        "bad_range",
+        ["nan,1", "1,nan", "inf,1", "1,inf", "-inf,1", "1,-inf"],
+    )
+    def test_split_range_rejects_non_finite_bounds(
+        self, tmp_path, bad_range: str
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(input_file),
+                "-f",
+                "piecewise",
+                "-n",
+                "5",
+                "-s",
+                "42",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "branches.0.condition.value",
+                "--holdout-value",
+                bad_range,
+                "--holdout-type",
+                "range",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "bounds must be finite numbers" in result.output
+
     def test_split_range_parses_float_bounds(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"
@@ -1453,6 +1575,63 @@ class TestSplit:
 
         assert cli_matches_holdout(task, bool_bound_holdout) is False
         assert cli_matches_holdout(task, numeric_holdout) is True
+
+    @pytest.mark.parametrize(
+        ("spec_value", "holdout_value", "expected"),
+        [
+            pytest.param(False, 0, False, id="bool-false-vs-int-zero"),
+            pytest.param(0, 0, True, id="int-zero-vs-int-zero"),
+            pytest.param(True, 1, False, id="bool-true-vs-int-one"),
+            pytest.param(1, 1, True, id="int-one-vs-int-one"),
+            pytest.param(1, 1.0, False, id="int-one-vs-float-one"),
+            pytest.param(1.0, 1.0, True, id="float-one-vs-float-one"),
+            pytest.param("1", 1, False, id="string-one-vs-int-one"),
+            pytest.param(1, "1", False, id="int-one-vs-string-one"),
+            pytest.param("1", "1", True, id="string-one-vs-string-one"),
+            pytest.param(None, None, True, id="none-vs-none"),
+        ],
+    )
+    def test_split_exact_matcher_type_matrix(
+        self, spec_value: object, holdout_value: object, expected: bool
+    ) -> None:
+        task = Task.model_validate(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"value": spec_value},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "type matrix",
+            }
+        )
+        holdout = AxisHoldout(
+            axis_path="value",
+            holdout_type=HoldoutType.EXACT,
+            holdout_value=holdout_value,
+        )
+
+        assert cli_matches_holdout(task, holdout) is expected
+
+    def test_split_exact_matcher_none_does_not_match_missing_path(
+        self,
+    ) -> None:
+        task = Task.model_validate(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "missing path",
+            }
+        )
+        holdout = AxisHoldout(
+            axis_path="value",
+            holdout_type=HoldoutType.EXACT,
+            holdout_value=None,
+        )
+
+        assert cli_matches_holdout(task, holdout) is False
 
     def test_split_exact_parses_numeric_holdout_value(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
@@ -1601,6 +1780,109 @@ class TestSplit:
 
         assert [task["task_id"] for task in test] == ["task-2"]
         assert [task["task_id"] for task in train] == ["task-1"]
+
+    @pytest.mark.parametrize(
+        ("holdout_value", "expected_test_id"),
+        [
+            pytest.param("false", "task-bool-false", id="holdout-bool-false"),
+            pytest.param("0", "task-int-zero", id="holdout-int-zero"),
+            pytest.param("true", "task-bool-true", id="holdout-bool-true"),
+            pytest.param("1", "task-int-one", id="holdout-int-one"),
+            pytest.param("1.0", "task-float-one", id="holdout-float-one"),
+            pytest.param('"1"', "task-string-one", id="holdout-string-one"),
+            pytest.param("null", "task-none", id="holdout-none"),
+        ],
+    )
+    def test_split_exact_type_matrix_end_to_end(
+        self, tmp_path, holdout_value: str, expected_test_id: str
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-bool-false",
+                "family": "stateful",
+                "spec": {"value": False},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "bool false",
+            },
+            {
+                "task_id": "task-int-zero",
+                "family": "stateful",
+                "spec": {"value": 0},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "int zero",
+            },
+            {
+                "task_id": "task-bool-true",
+                "family": "stateful",
+                "spec": {"value": True},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 3, "output": 3, "tag": "typical"}],
+                "description": "bool true",
+            },
+            {
+                "task_id": "task-int-one",
+                "family": "stateful",
+                "spec": {"value": 1},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 4, "output": 4, "tag": "typical"}],
+                "description": "int one",
+            },
+            {
+                "task_id": "task-float-one",
+                "family": "stateful",
+                "spec": {"value": 1.0},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 5, "output": 5, "tag": "typical"}],
+                "description": "float one",
+            },
+            {
+                "task_id": "task-string-one",
+                "family": "stateful",
+                "spec": {"value": "1"},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 6, "output": 6, "tag": "typical"}],
+                "description": "string one",
+            },
+            {
+                "task_id": "task-none",
+                "family": "stateful",
+                "spec": {"value": None},
+                "code": "def solve(x):\n    return x\n",
+                "queries": [{"input": 7, "output": 7, "tag": "typical"}],
+                "description": "none",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "value",
+                "--holdout-value",
+                holdout_value,
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+
+        assert [task["task_id"] for task in test] == [expected_test_id]
+        assert len(train) == len(tasks) - 1
+        assert expected_test_id not in {task["task_id"] for task in train}
 
     def test_split_contains_holdout_from_cli(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"

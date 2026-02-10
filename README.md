@@ -326,6 +326,12 @@ Axis paths use dot notation for nested fields: `predicate.kind`, `rules.0.transf
 
 See [AXES.md](AXES.md) for all spec field paths.
 
+For `--random-ratio`, the CLI uses a streaming split algorithm to avoid
+materializing all tasks in memory. For the same input/seed/ratio, CLI and
+library splits are each deterministic and preserve split invariants (exact
+floor train count, disjoint train/test, union equals input), but exact
+membership may differ from library `random_split` shuffle+slice behavior.
+
 ### Python API
 
 ```python
@@ -363,6 +369,18 @@ uv run pytest tests/ -v --verification-level=full
 
 Runtime parity suites are marked `@pytest.mark.full`, so they run only with
 `--verification-level=full`.
+
+### CI Gate
+
+GitHub Actions now enforces a full verification gate on push and pull request
+via `.github/workflows/ci.yml`:
+
+```bash
+uv sync
+uv run ruff check .
+uv run ty check
+uv run pytest tests/ -v --verification-level=full
+```
 
 ### Local Performance Budgets
 

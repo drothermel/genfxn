@@ -13,6 +13,18 @@ from genfxn.fsm.task import generate_fsm_task
 from genfxn.langs.java.fsm import render_fsm as render_fsm_java
 from genfxn.langs.rust.fsm import render_fsm as render_fsm_rust
 
+_UNDEFINED_TRANSITION_ERROR = (
+    "undefined transition encountered under error policy"
+)
+
+
+def _assert_semantic_runtime_error(
+    exc: subprocess.CalledProcessError, expected_message: str
+) -> None:
+    combined_output = f"{exc.stdout}\n{exc.stderr}"
+    assert exc.returncode != 0
+    assert expected_message in combined_output
+
 
 def _run_java_f(
     javac: str, java: str, code: str, xs: list[int]
@@ -118,11 +130,14 @@ def test_fsm_runtime_parity_across_sampled_specs() -> None:
         for xs in ([], [0], [1, 2], [-3, 4, 5], [7, 7, 7, 7]):
             try:
                 expected = eval_fsm(spec, xs)
-            except ValueError:
-                with pytest.raises(subprocess.CalledProcessError):
+            except ValueError as err:
+                assert str(err) == _UNDEFINED_TRANSITION_ERROR
+                with pytest.raises(subprocess.CalledProcessError) as java_err:
                     _run_java_f(javac, java, java_code, xs)
-                with pytest.raises(subprocess.CalledProcessError):
+                _assert_semantic_runtime_error(java_err.value, str(err))
+                with pytest.raises(subprocess.CalledProcessError) as rust_err:
                     _run_rust_f(rustc, rust_code, xs)
+                _assert_semantic_runtime_error(rust_err.value, str(err))
             else:
                 assert _run_java_f(javac, java, java_code, xs) == expected
                 assert _run_rust_f(rustc, rust_code, xs) == expected
@@ -216,11 +231,14 @@ def test_fsm_runtime_parity_forced_output_modes_and_policies() -> None:
         for xs in sample_inputs:
             try:
                 expected = eval_fsm(spec, xs)
-            except ValueError:
-                with pytest.raises(subprocess.CalledProcessError):
+            except ValueError as err:
+                assert str(err) == _UNDEFINED_TRANSITION_ERROR
+                with pytest.raises(subprocess.CalledProcessError) as java_err:
                     _run_java_f(javac, java, java_code, xs)
-                with pytest.raises(subprocess.CalledProcessError):
+                _assert_semantic_runtime_error(java_err.value, str(err))
+                with pytest.raises(subprocess.CalledProcessError) as rust_err:
                     _run_rust_f(rustc, rust_code, xs)
+                _assert_semantic_runtime_error(rust_err.value, str(err))
             else:
                 assert _run_java_f(javac, java, java_code, xs) == expected
                 assert _run_rust_f(rustc, rust_code, xs) == expected

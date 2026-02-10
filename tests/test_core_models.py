@@ -63,6 +63,35 @@ def test_dedupe_queries_int_and_float_inputs_remain_distinct() -> None:
     assert [q.input for q in deduped] == [1, 1.0]
 
 
+def test_dedupe_queries_float_nan_inputs_dedupe_deterministically() -> None:
+    queries = [
+        Query(input=float("nan"), output=10, tag=QueryTag.TYPICAL),
+        Query(input=float("nan"), output=10, tag=QueryTag.BOUNDARY),
+    ]
+
+    deduped = dedupe_queries(queries)
+
+    assert len(deduped) == 1
+    assert deduped[0].output == 10
+    assert deduped[0].tag == QueryTag.BOUNDARY
+    assert isinstance(deduped[0].input, float)
+    assert deduped[0].input != deduped[0].input
+
+
+def test_dedupe_queries_float_nan_conflicting_outputs_raise() -> None:
+    queries = [
+        Query(input=float("nan"), output=10, tag=QueryTag.TYPICAL),
+        Query(input=float("nan"), output=99, tag=QueryTag.BOUNDARY),
+    ]
+
+    try:
+        dedupe_queries(queries)
+    except ValueError as exc:
+        assert "conflicting outputs" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("Expected ValueError for conflicting outputs")
+
+
 def test_dedupe_queries_type_distinct_inputs_do_not_conflict() -> None:
     queries = [
         Query(input=True, output=10, tag=QueryTag.TYPICAL),

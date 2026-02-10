@@ -1,4 +1,5 @@
 import dataclasses
+import math
 from enum import Enum
 from typing import Any
 
@@ -29,6 +30,8 @@ def dedupe_queries(queries: list[Query]) -> list[Query]:
             type_name = (
                 f"{scalar_type.__module__}.{scalar_type.__qualname__}"
             )
+            if isinstance(scalar, float) and math.isnan(scalar):
+                return ("__scalar__", type_name, "__nan__")
             return ("__scalar__", type_name, scalar)
 
         # Fast paths for common primitive/query container types.
