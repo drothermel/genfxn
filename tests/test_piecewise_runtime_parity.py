@@ -259,14 +259,15 @@ def test_piecewise_runtime_parity_int32_boundary_cases() -> None:
 
 
 @pytest.mark.full
-def test_piecewise_java_compiles_with_oversized_int_literals() -> None:
+def test_piecewise_runtime_parity_with_oversized_int_literals() -> None:
     javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
     spec = PiecewiseSpec(
         branches=[
             Branch(
-                condition=PredicateLt(value=3_000_000_001),
+                condition=PredicateLt(value=0),
                 expr=ExprMod(
-                    divisor=3_000_000_003,
+                    divisor=11,
                     a=-3_000_000_005,
                     b=3_000_000_007,
                 ),
@@ -279,6 +280,9 @@ def test_piecewise_java_compiles_with_oversized_int_literals() -> None:
         ),
     )
     java_code = render_piecewise_java(spec, func_name="f")
+    rust_code = render_piecewise_rust(spec, func_name="f")
 
-    result = _run_java_f(javac, java, java_code, 7)
-    assert isinstance(result, int)
+    for x in (-11, -1, 0, 7):
+        expected = eval_piecewise(spec, x)
+        assert _run_java_f(javac, java, java_code, x) == expected
+        assert _run_rust_f(rustc, rust_code, x) == expected

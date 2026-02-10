@@ -256,6 +256,24 @@ Current execution batch (2026-02-10, review item #5 oversized-literal parity):
       `uv run ruff check ...`,
       `uv run ty check ...`.
 
+Current execution batch (2026-02-10, core semantics blocking fixes #1/#2/#3):
+- [ ] Add int32 predicate evaluation mode in `src/genfxn/core/predicates.py`
+      and wire int32-family eval/query call sites (`piecewise`, `stateful`,
+      `simple_algorithms`) to use it.
+- [ ] Align int32 `TransformClip` evaluation semantics in
+      `src/genfxn/core/transforms.py` with Java/Rust wrapped-bound behavior.
+- [ ] Harden modulo divisor safety at model layer:
+      `src/genfxn/core/predicates.py` (`PredicateModEq`) and
+      `src/genfxn/piecewise/models.py` (`ExprMod`) with int32-safe divisor
+      bounds to prevent zero/negative-after-wrap divergence.
+- [ ] Update Rust predicate rendering and affected family renderers as needed to
+      preserve int32 parity with new core predicate semantics.
+- [ ] Add/adjust regression and parity tests for int32 predicate semantics,
+      clip alignment, and modulo-divisor safety.
+- [ ] Run targeted validation for touched files:
+      `uv run pytest ... --verification-level=full`,
+      `uv run ruff check ...`, and `uv run ty check ...`.
+
 Exit criterion:
 - Each family parity file contains both sampled and forced-variant sections.
 
