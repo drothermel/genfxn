@@ -841,6 +841,16 @@ def generate(
             help="Single language to render: python, java, or rust.",
         ),
     ] = "python",
+    no_i32_wrap: Annotated[
+        bool,
+        typer.Option(
+            "--no-i32-wrap",
+            help=(
+                "Disable int32 wrapping helpers in generated Python for "
+                "piecewise/stateful/simple_algorithms."
+            ),
+        ),
+    ] = False,
     # Difficulty presets
     difficulty: Annotated[
         int | None,
@@ -1140,14 +1150,27 @@ def generate(
             }
 
             for _ in range(family_counts["piecewise"]):
-                emit(generate_piecewise_task(axes=piecewise_axes, rng=rng))
+                emit(
+                    generate_piecewise_task(
+                        axes=piecewise_axes,
+                        rng=rng,
+                        no_i32_wrap=no_i32_wrap,
+                    )
+                )
             for _ in range(family_counts["stateful"]):
-                emit(generate_stateful_task(axes=stateful_axes, rng=rng))
+                emit(
+                    generate_stateful_task(
+                        axes=stateful_axes,
+                        rng=rng,
+                        no_i32_wrap=no_i32_wrap,
+                    )
+                )
             for _ in range(family_counts["simple_algorithms"]):
                 emit(
                     generate_simple_algorithms_task(
                         axes=simple_algo_axes,
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
             for _ in range(family_counts["stringrules"]):
@@ -1241,6 +1264,7 @@ def generate(
                     generate_piecewise_task(
                         axes=cast(PiecewiseAxes, axes),
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
         elif family == "stateful":
@@ -1253,6 +1277,7 @@ def generate(
                     generate_stateful_task(
                         axes=cast(StatefulAxes, axes),
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
         elif family == "simple_algorithms":
@@ -1265,6 +1290,7 @@ def generate(
                     generate_simple_algorithms_task(
                         axes=cast(SimpleAlgorithmsAxes, axes),
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
         elif family == "stringrules":

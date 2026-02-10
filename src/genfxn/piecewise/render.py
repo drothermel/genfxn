@@ -152,18 +152,37 @@ def _render_quadratic_i32(a: int, b: int, c: int, var: str) -> str:
 
 
 def render_piecewise(
-    spec: PiecewiseSpec, func_name: str = "f", var: str = "x"
+    spec: PiecewiseSpec,
+    func_name: str = "f",
+    var: str = "x",
+    *,
+    int32_wrap: bool = True,
 ) -> str:
-    lines = [*_render_i32_helpers(), f"def {func_name}({var}: int) -> int:"]
+    lines: list[str] = []
+    if int32_wrap:
+        lines.extend(_render_i32_helpers())
+    lines.append(f"def {func_name}({var}: int) -> int:")
 
     for i, branch in enumerate(spec.branches):
         keyword = "if" if i == 0 else "elif"
-        cond = render_predicate(branch.condition, var, int32_wrap=True)
-        expr = render_expression(branch.expr, var, int32_wrap=True)
+        cond = render_predicate(
+            branch.condition,
+            var,
+            int32_wrap=int32_wrap,
+        )
+        expr = render_expression(
+            branch.expr,
+            var,
+            int32_wrap=int32_wrap,
+        )
         lines.append(f"    {keyword} {cond}:")
         lines.append(f"        return {expr}")
 
-    default_expr = render_expression(spec.default_expr, var, int32_wrap=True)
+    default_expr = render_expression(
+        spec.default_expr,
+        var,
+        int32_wrap=int32_wrap,
+    )
     if spec.branches:
         lines.append("    else:")
         lines.append(f"        return {default_expr}")

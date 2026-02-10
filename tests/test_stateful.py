@@ -303,6 +303,17 @@ class TestRender:
         assert "longest_run" in code
         assert "__i32_wrap(x) > __i32_wrap(0)" in code
 
+    def test_render_without_i32_wrap(self) -> None:
+        spec = ConditionalLinearSumSpec(
+            predicate=PredicateEven(),
+            true_transform=TransformShift(offset=1),
+            false_transform=TransformScale(factor=2),
+            init_value=5,
+        )
+        code = render_stateful(spec, int32_wrap=False)
+        assert "__i32_" not in code
+        assert "acc = acc + (" in code
+
     def test_render_roundtrip_conditional_linear_sum(self) -> None:
         spec = ConditionalLinearSumSpec(
             predicate=PredicateEven(),
@@ -360,6 +371,21 @@ class TestRender:
         f = namespace["f"]
         xs = [2_000_000_000, 2_000_000_000]
         assert f(xs) == eval_stateful(spec, xs)
+
+    def test_render_roundtrip_without_i32_wrap(self) -> None:
+        spec = ConditionalLinearSumSpec(
+            predicate=PredicateLt(value=0),
+            true_transform=TransformIdentity(),
+            false_transform=TransformIdentity(),
+            init_value=0,
+        )
+        code = render_stateful(spec, int32_wrap=False)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        test_inputs = [[], [1], [2], [1, -2, 3], [2_000_000_000, 2_000_000_000]]
+        for xs in test_inputs:
+            assert f(xs) == eval_stateful(spec, xs, int32_wrap=False)
 
 
 class TestSampler:

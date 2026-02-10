@@ -41,7 +41,11 @@ def _get_predicate_info(spec: StatefulSpec) -> Predicate:
 
 
 def _make_matching_value(
-    pred, value_range: tuple[int, int], rng: random.Random
+    pred,
+    value_range: tuple[int, int],
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> int | None:
     lo, hi = value_range
 
@@ -54,6 +58,13 @@ def _make_matching_value(
     def _random_mod_eq(divisor: int, remainder: int) -> int | None:
         if divisor <= 0:
             return None
+        if not int32_wrap:
+            target = remainder % divisor
+            first = lo + ((target - (lo % divisor)) % divisor)
+            if first > hi:
+                return None
+            slots = ((hi - first) // divisor) + 1
+            return first + divisor * rng.randrange(slots)
 
         int32_cycle = 1 << 32
 
@@ -97,38 +108,42 @@ def _make_matching_value(
             first = lo if lo % 2 == 1 else lo + 1
             return _random_parity(first, 2)
         case PredicateLt(value=v):
-            v_i32 = wrap_i32(v)
-            if lo <= v_i32 - 1:
-                return rng.randint(lo, min(v_i32 - 1, hi))
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if lo <= v_cmp - 1:
+                return rng.randint(lo, min(v_cmp - 1, hi))
             return None
         case PredicateLe(value=v):
-            v_i32 = wrap_i32(v)
-            if lo <= v_i32:
-                return rng.randint(lo, min(v_i32, hi))
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if lo <= v_cmp:
+                return rng.randint(lo, min(v_cmp, hi))
             return None
         case PredicateGt(value=v):
-            v_i32 = wrap_i32(v)
-            if v_i32 + 1 <= hi:
-                return rng.randint(max(v_i32 + 1, lo), hi)
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if v_cmp + 1 <= hi:
+                return rng.randint(max(v_cmp + 1, lo), hi)
             return None
         case PredicateGe(value=v):
-            v_i32 = wrap_i32(v)
-            if v_i32 <= hi:
-                return rng.randint(max(v_i32, lo), hi)
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if v_cmp <= hi:
+                return rng.randint(max(v_cmp, lo), hi)
             return None
         case PredicateModEq(divisor=d, remainder=r):
             return _random_mod_eq(d, r)
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(
                 lambda: rng.randint(lo, hi),
-                lambda v: eval_predicate(pred, v, int32_wrap=True),
+                lambda v: eval_predicate(pred, v, int32_wrap=int32_wrap),
             )
         case _:
             return rng.randint(lo, hi)
 
 
 def _make_non_matching_value(
-    pred, value_range: tuple[int, int], rng: random.Random
+    pred,
+    value_range: tuple[int, int],
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> int | None:
     lo, hi = value_range
 
@@ -146,28 +161,32 @@ def _make_non_matching_value(
             slots = ((hi - first) // 2) + 1
             return first + 2 * rng.randrange(slots)
         case PredicateLt(value=v):
-            v_i32 = wrap_i32(v)
-            if v_i32 <= hi:
-                return rng.randint(max(v_i32, lo), hi)
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if v_cmp <= hi:
+                return rng.randint(max(v_cmp, lo), hi)
             return None
         case PredicateLe(value=v):
-            v_i32 = wrap_i32(v)
-            if v_i32 + 1 <= hi:
-                return rng.randint(max(v_i32 + 1, lo), hi)
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if v_cmp + 1 <= hi:
+                return rng.randint(max(v_cmp + 1, lo), hi)
             return None
         case PredicateGt(value=v):
-            v_i32 = wrap_i32(v)
-            if lo <= v_i32:
-                return rng.randint(lo, min(v_i32, hi))
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if lo <= v_cmp:
+                return rng.randint(lo, min(v_cmp, hi))
             return None
         case PredicateGe(value=v):
-            v_i32 = wrap_i32(v)
-            if lo <= v_i32 - 1:
-                return rng.randint(lo, min(v_i32 - 1, hi))
+            v_cmp = wrap_i32(v) if int32_wrap else v
+            if lo <= v_cmp - 1:
+                return rng.randint(lo, min(v_cmp - 1, hi))
             return None
         case PredicateModEq():
             def _matches(value: int) -> bool:
-                return eval_predicate(pred, value, int32_wrap=True)
+                return eval_predicate(
+                    pred,
+                    value,
+                    int32_wrap=int32_wrap,
+                )
 
             candidate = rng.randint(lo, hi)
             if not _matches(candidate):
@@ -185,7 +204,11 @@ def _make_non_matching_value(
         case PredicateNot() | PredicateAnd() | PredicateOr():
             return find_satisfying(
                 lambda: rng.randint(lo, hi),
-                lambda v: not eval_predicate(pred, v, int32_wrap=True),
+                lambda v: not eval_predicate(
+                    pred,
+                    v,
+                    int32_wrap=int32_wrap,
+                ),
             )
         case _:
             return rng.randint(lo, hi)
@@ -215,7 +238,11 @@ def _fit_to_length_bounds(
 
 
 def _generate_coverage_queries(
-    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
+    spec: StatefulSpec,
+    axes: StatefulAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[Query]:
     """Empty list, single element, typical list."""
     lo, hi = axes.value_range
@@ -224,13 +251,17 @@ def _generate_coverage_queries(
 
     queries: list[Query] = []
     queries.append(
-        Query(input=[], output=eval_stateful(spec, []), tag=QueryTag.COVERAGE)
+        Query(
+            input=[],
+            output=eval_stateful(spec, [], int32_wrap=int32_wrap),
+            tag=QueryTag.COVERAGE,
+        )
     )
     single = [rng.randint(lo, hi)]
     queries.append(
         Query(
             input=single,
-            output=eval_stateful(spec, single),
+            output=eval_stateful(spec, single, int32_wrap=int32_wrap),
             tag=QueryTag.COVERAGE,
         )
     )
@@ -238,7 +269,7 @@ def _generate_coverage_queries(
     queries.append(
         Query(
             input=typical_list,
-            output=eval_stateful(spec, typical_list),
+            output=eval_stateful(spec, typical_list, int32_wrap=int32_wrap),
             tag=QueryTag.COVERAGE,
         )
     )
@@ -246,14 +277,28 @@ def _generate_coverage_queries(
 
 
 def _generate_boundary_queries(
-    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
+    spec: StatefulSpec,
+    axes: StatefulAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[Query]:
     """Predicate transitions: True->False, False->True, alternating."""
     lo, hi = axes.value_range
     pred = _get_predicate_info(spec)
 
-    match_val = _make_matching_value(pred, (lo, hi), rng)
-    non_match_val = _make_non_matching_value(pred, (lo, hi), rng)
+    match_val = _make_matching_value(
+        pred,
+        (lo, hi),
+        rng,
+        int32_wrap=int32_wrap,
+    )
+    non_match_val = _make_non_matching_value(
+        pred,
+        (lo, hi),
+        rng,
+        int32_wrap=int32_wrap,
+    )
 
     queries: list[Query] = []
     # Skip boundary queries if we couldn't find valid match/non-match values
@@ -272,7 +317,7 @@ def _generate_boundary_queries(
         queries.append(
             Query(
                 input=fitted,
-                output=eval_stateful(spec, fitted),
+                output=eval_stateful(spec, fitted, int32_wrap=int32_wrap),
                 tag=QueryTag.BOUNDARY,
             )
         )
@@ -280,7 +325,11 @@ def _generate_boundary_queries(
 
 
 def _generate_typical_queries(
-    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
+    spec: StatefulSpec,
+    axes: StatefulAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[Query]:
     """Random lists of varying lengths."""
     lo, hi = axes.value_range
@@ -292,14 +341,20 @@ def _generate_typical_queries(
         xs = _generate_random_list(length, (lo, hi), rng)
         queries.append(
             Query(
-                input=xs, output=eval_stateful(spec, xs), tag=QueryTag.TYPICAL
+                input=xs,
+                output=eval_stateful(spec, xs, int32_wrap=int32_wrap),
+                tag=QueryTag.TYPICAL,
             )
         )
     return queries
 
 
 def _generate_adversarial_queries(
-    spec: StatefulSpec, axes: StatefulAxes, rng: random.Random
+    spec: StatefulSpec,
+    axes: StatefulAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[Query]:
     """All-matching, all-non-matching, and extreme values."""
     lo, hi = axes.value_range
@@ -310,7 +365,13 @@ def _generate_adversarial_queries(
     queries: list[Query] = []
     # All matching (skip individual None values)
     match_vals = [
-        _make_matching_value(pred, (lo, hi), rng) for _ in range(typical_len)
+        _make_matching_value(
+            pred,
+            (lo, hi),
+            rng,
+            int32_wrap=int32_wrap,
+        )
+        for _ in range(typical_len)
     ]
     all_match = [v for v in match_vals if v is not None]
     fitted_all_match = (
@@ -319,18 +380,28 @@ def _generate_adversarial_queries(
         else None
     )
     if fitted_all_match is not None and all(
-        eval_predicate(pred, x, int32_wrap=True) for x in fitted_all_match
+        eval_predicate(pred, x, int32_wrap=int32_wrap)
+        for x in fitted_all_match
     ):
         queries.append(
             Query(
                 input=fitted_all_match,
-                output=eval_stateful(spec, fitted_all_match),
+                output=eval_stateful(
+                    spec,
+                    fitted_all_match,
+                    int32_wrap=int32_wrap,
+                ),
                 tag=QueryTag.ADVERSARIAL,
             )
         )
     # All non-matching (skip individual None values)
     non_match_vals = [
-        _make_non_matching_value(pred, (lo, hi), rng)
+        _make_non_matching_value(
+            pred,
+            (lo, hi),
+            rng,
+            int32_wrap=int32_wrap,
+        )
         for _ in range(typical_len)
     ]
     all_non_match = [v for v in non_match_vals if v is not None]
@@ -340,13 +411,17 @@ def _generate_adversarial_queries(
         else None
     )
     if fitted_all_non_match is not None and all(
-        not eval_predicate(pred, x, int32_wrap=True)
+        not eval_predicate(pred, x, int32_wrap=int32_wrap)
         for x in fitted_all_non_match
     ):
         queries.append(
             Query(
                 input=fitted_all_non_match,
-                output=eval_stateful(spec, fitted_all_non_match),
+                output=eval_stateful(
+                    spec,
+                    fitted_all_non_match,
+                    int32_wrap=int32_wrap,
+                ),
                 tag=QueryTag.ADVERSARIAL,
             )
         )
@@ -358,7 +433,11 @@ def _generate_adversarial_queries(
         queries.append(
             Query(
                 input=fitted_extremes,
-                output=eval_stateful(spec, fitted_extremes),
+                output=eval_stateful(
+                    spec,
+                    fitted_extremes,
+                    int32_wrap=int32_wrap,
+                ),
                 tag=QueryTag.ADVERSARIAL,
             )
         )
@@ -369,14 +448,36 @@ def generate_stateful_queries(
     spec: StatefulSpec,
     axes: StatefulAxes,
     rng: random.Random | None = None,
+    *,
+    int32_wrap: bool = True,
 ) -> list[Query]:
     if rng is None:
         rng = random.Random()
 
     queries = [
-        *_generate_coverage_queries(spec, axes, rng),
-        *_generate_boundary_queries(spec, axes, rng),
-        *_generate_typical_queries(spec, axes, rng),
-        *_generate_adversarial_queries(spec, axes, rng),
+        *_generate_coverage_queries(
+            spec,
+            axes,
+            rng,
+            int32_wrap=int32_wrap,
+        ),
+        *_generate_boundary_queries(
+            spec,
+            axes,
+            rng,
+            int32_wrap=int32_wrap,
+        ),
+        *_generate_typical_queries(
+            spec,
+            axes,
+            rng,
+            int32_wrap=int32_wrap,
+        ),
+        *_generate_adversarial_queries(
+            spec,
+            axes,
+            rng,
+            int32_wrap=int32_wrap,
+        ),
     ]
     return dedupe_queries(queries)

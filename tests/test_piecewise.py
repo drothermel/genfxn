@@ -242,6 +242,28 @@ class TestRender:
         for x in (0, 50_000, 2_000_000_000):
             assert f(x) == eval_piecewise(spec, x), f"Mismatch at x={x}"
 
+    def test_render_roundtrip_without_i32_wrap(self) -> None:
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateLt(value=0),
+                    expr=ExprAffine(a=2, b=1),
+                ),
+                Branch(
+                    condition=PredicateLt(value=10),
+                    expr=ExprQuadratic(a=1, b=0, c=0),
+                ),
+            ],
+            default_expr=ExprAffine(a=0, b=50),
+        )
+        code = render_piecewise(spec, func_name="f", int32_wrap=False)
+        assert "__i32_" not in code
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        for x in range(-20, 30):
+            assert f(x) == eval_piecewise(spec, x, int32_wrap=False)
+
 
 class TestSampler:
     def test_reproducible(self) -> None:

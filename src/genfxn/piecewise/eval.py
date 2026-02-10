@@ -20,31 +20,66 @@ def _eval_linear_i32(a: int, x_term: int, b: int) -> int:
     return i32_add(i32_mul(a, x_term), b)
 
 
-def eval_expression(expr: Expression, x: int) -> int:
+def _eval_linear(a: int, x_term: int, b: int) -> int:
+    return a * x_term + b
+
+
+def eval_expression(
+    expr: Expression,
+    x: int,
+    *,
+    int32_wrap: bool = True,
+) -> int:
     x = _require_int_not_bool(x, "x")
-    x = wrap_i32(x)
+    if int32_wrap:
+        x = wrap_i32(x)
 
     match expr:
         case ExprAffine(a=a, b=b):
-            return _eval_linear_i32(a, x, b)
+            if int32_wrap:
+                return _eval_linear_i32(a, x, b)
+            return _eval_linear(a, x, b)
         case ExprQuadratic(a=a, b=b, c=c):
-            ax = i32_mul(a, x)
-            axx = i32_mul(ax, x)
-            bx = i32_mul(b, x)
-            return i32_add(i32_add(axx, bx), c)
+            if int32_wrap:
+                ax = i32_mul(a, x)
+                axx = i32_mul(ax, x)
+                bx = i32_mul(b, x)
+                return i32_add(i32_add(axx, bx), c)
+            return a * x * x + b * x + c
         case ExprAbs(a=a, b=b):
-            return _eval_linear_i32(a, i32_abs(x), b)
+            abs_x = i32_abs(x) if int32_wrap else abs(x)
+            if int32_wrap:
+                return _eval_linear_i32(a, abs_x, b)
+            return _eval_linear(a, abs_x, b)
         case ExprMod(divisor=d, a=a, b=b):
-            return _eval_linear_i32(a, i32_mod(x, d), b)
+            if int32_wrap:
+                return _eval_linear_i32(a, i32_mod(x, d), b)
+            if d <= 0:
+                raise ValueError("divisor must be >= 1")
+            return _eval_linear(a, x % d, b)
         case _:
             raise ValueError(f"Unknown expression: {expr}")
 
 
-def eval_piecewise(spec: PiecewiseSpec, x: int) -> int:
+def eval_piecewise(
+    spec: PiecewiseSpec,
+    x: int,
+    *,
+    int32_wrap: bool = True,
+) -> int:
     x = _require_int_not_bool(x, "x")
-    x = wrap_i32(x)
+    if int32_wrap:
+        x = wrap_i32(x)
 
     for branch in spec.branches:
-        if eval_predicate(branch.condition, x, int32_wrap=True):
-            return eval_expression(branch.expr, x)
-    return eval_expression(spec.default_expr, x)
+        if eval_predicate(branch.condition, x, int32_wrap=int32_wrap):
+            return eval_expression(
+                branch.expr,
+                x,
+                int32_wrap=int32_wrap,
+            )
+    return eval_expression(
+        spec.default_expr,
+        x,
+        int32_wrap=int32_wrap,
+    )

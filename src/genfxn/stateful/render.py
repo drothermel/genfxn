@@ -47,116 +47,210 @@ def _render_i32_helpers() -> list[str]:
     ]
 
 
+def _wrap_literal(value: int, *, int32_wrap: bool) -> str:
+    if int32_wrap:
+        return f"__i32_wrap({value})"
+    return str(value)
+
+
 def render_conditional_linear_sum(
-    spec: ConditionalLinearSumSpec, func_name: str = "f", var: str = "xs"
+    spec: ConditionalLinearSumSpec,
+    func_name: str = "f",
+    var: str = "xs",
+    *,
+    int32_wrap: bool = True,
 ) -> str:
-    cond = render_predicate(spec.predicate, "x", int32_wrap=True)
-    true_expr = render_transform(spec.true_transform, "x", int32_wrap=True)
+    cond = render_predicate(spec.predicate, "x", int32_wrap=int32_wrap)
+    true_expr = render_transform(
+        spec.true_transform, "x", int32_wrap=int32_wrap
+    )
     false_expr = render_transform(
-        spec.false_transform, "x", int32_wrap=True
+        spec.false_transform,
+        "x",
+        int32_wrap=int32_wrap,
     )
 
+    prelude = _render_i32_helpers() if int32_wrap else []
     lines = [
-        *_render_i32_helpers(),
+        *prelude,
         f"def {func_name}({var}: list[int]) -> int:",
-        f"    acc = __i32_wrap({spec.init_value})",
+        f"    acc = {_wrap_literal(spec.init_value, int32_wrap=int32_wrap)}",
         f"    for x in {var}:",
-        "        x = __i32_wrap(x)",
-        f"        if {cond}:",
-        f"            acc = __i32_add(acc, {true_expr})",
-        "        else:",
-        f"            acc = __i32_add(acc, {false_expr})",
-        "    return acc",
     ]
+    if int32_wrap:
+        lines.append("        x = __i32_wrap(x)")
+    lines.append(f"        if {cond}:")
+    if int32_wrap:
+        lines.append(f"            acc = __i32_add(acc, {true_expr})")
+    else:
+        lines.append(f"            acc = acc + ({true_expr})")
+    lines.append("        else:")
+    if int32_wrap:
+        lines.append(f"            acc = __i32_add(acc, {false_expr})")
+    else:
+        lines.append(f"            acc = acc + ({false_expr})")
+    lines.append("    return acc")
     return "\n".join(lines)
 
 
 def render_resetting_best_prefix_sum(
-    spec: ResettingBestPrefixSumSpec, func_name: str = "f", var: str = "xs"
+    spec: ResettingBestPrefixSumSpec,
+    func_name: str = "f",
+    var: str = "xs",
+    *,
+    int32_wrap: bool = True,
 ) -> str:
-    cond = render_predicate(spec.reset_predicate, "x", int32_wrap=True)
+    cond = render_predicate(spec.reset_predicate, "x", int32_wrap=int32_wrap)
     val_expr = (
-        render_transform(spec.value_transform, "x", int32_wrap=True)
+        render_transform(spec.value_transform, "x", int32_wrap=int32_wrap)
         if spec.value_transform is not None
         else "x"
     )
 
+    prelude = _render_i32_helpers() if int32_wrap else []
+    init_value = _wrap_literal(spec.init_value, int32_wrap=int32_wrap)
     lines = [
-        *_render_i32_helpers(),
+        *prelude,
         f"def {func_name}({var}: list[int]) -> int:",
-        f"    init = __i32_wrap({spec.init_value})",
+        f"    init = {init_value}",
         "    current_sum = init",
         "    best_sum = init",
         f"    for x in {var}:",
-        "        x = __i32_wrap(x)",
-        f"        if {cond}:",
-        "            current_sum = init",
-        "        else:",
-        f"            current_sum = __i32_add(current_sum, {val_expr})",
-        "            best_sum = max(best_sum, current_sum)",
-        "    return best_sum",
     ]
+    if int32_wrap:
+        lines.append("        x = __i32_wrap(x)")
+    lines.extend(
+        [
+            f"        if {cond}:",
+            "            current_sum = init",
+            "        else:",
+        ]
+    )
+    if int32_wrap:
+        lines.append(
+            f"            current_sum = __i32_add(current_sum, {val_expr})"
+        )
+    else:
+        lines.append(f"            current_sum = current_sum + ({val_expr})")
+    lines.extend(
+        [
+            "            best_sum = max(best_sum, current_sum)",
+            "    return best_sum",
+        ]
+    )
     return "\n".join(lines)
 
 
 def render_longest_run(
-    spec: LongestRunSpec, func_name: str = "f", var: str = "xs"
+    spec: LongestRunSpec,
+    func_name: str = "f",
+    var: str = "xs",
+    *,
+    int32_wrap: bool = True,
 ) -> str:
-    cond = render_predicate(spec.match_predicate, "x", int32_wrap=True)
+    cond = render_predicate(spec.match_predicate, "x", int32_wrap=int32_wrap)
+    prelude = _render_i32_helpers() if int32_wrap else []
 
     lines = [
-        *_render_i32_helpers(),
+        *prelude,
         f"def {func_name}({var}: list[int]) -> int:",
         "    current_run = 0",
         "    longest_run = 0",
         f"    for x in {var}:",
-        "        x = __i32_wrap(x)",
-        f"        if {cond}:",
-        "            current_run = __i32_add(current_run, 1)",
-        "            longest_run = max(longest_run, current_run)",
-        "        else:",
-        "            current_run = 0",
-        "    return longest_run",
     ]
+    if int32_wrap:
+        lines.append("        x = __i32_wrap(x)")
+    lines.extend(
+        [
+            f"        if {cond}:",
+            "            current_run = __i32_add(current_run, 1)"
+            if int32_wrap
+            else "            current_run += 1",
+            "            longest_run = max(longest_run, current_run)",
+            "        else:",
+            "            current_run = 0",
+            "    return longest_run",
+        ]
+    )
     return "\n".join(lines)
 
 
 def render_toggle_sum(
-    spec: ToggleSumSpec, func_name: str = "f", var: str = "xs"
+    spec: ToggleSumSpec,
+    func_name: str = "f",
+    var: str = "xs",
+    *,
+    int32_wrap: bool = True,
 ) -> str:
-    cond = render_predicate(spec.toggle_predicate, "x", int32_wrap=True)
-    on_expr = render_transform(spec.on_transform, "x", int32_wrap=True)
-    off_expr = render_transform(spec.off_transform, "x", int32_wrap=True)
+    cond = render_predicate(spec.toggle_predicate, "x", int32_wrap=int32_wrap)
+    on_expr = render_transform(spec.on_transform, "x", int32_wrap=int32_wrap)
+    off_expr = render_transform(spec.off_transform, "x", int32_wrap=int32_wrap)
+    prelude = _render_i32_helpers() if int32_wrap else []
 
     lines = [
-        *_render_i32_helpers(),
+        *prelude,
         f"def {func_name}({var}: list[int]) -> int:",
         "    on = False",
-        f"    acc = __i32_wrap({spec.init_value})",
+        f"    acc = {_wrap_literal(spec.init_value, int32_wrap=int32_wrap)}",
         f"    for x in {var}:",
-        "        x = __i32_wrap(x)",
-        f"        if {cond}:",
-        "            on = not on",
-        "        if on:",
-        f"            acc = __i32_add(acc, {on_expr})",
-        "        else:",
-        f"            acc = __i32_add(acc, {off_expr})",
-        "    return acc",
     ]
+    if int32_wrap:
+        lines.append("        x = __i32_wrap(x)")
+    lines.extend(
+        [
+            f"        if {cond}:",
+            "            on = not on",
+            "        if on:",
+        ]
+    )
+    if int32_wrap:
+        lines.append(f"            acc = __i32_add(acc, {on_expr})")
+    else:
+        lines.append(f"            acc = acc + ({on_expr})")
+    lines.append("        else:")
+    if int32_wrap:
+        lines.append(f"            acc = __i32_add(acc, {off_expr})")
+    else:
+        lines.append(f"            acc = acc + ({off_expr})")
+    lines.append("    return acc")
     return "\n".join(lines)
 
 
 def render_stateful(
-    spec: StatefulSpec, func_name: str = "f", var: str = "xs"
+    spec: StatefulSpec,
+    func_name: str = "f",
+    var: str = "xs",
+    *,
+    int32_wrap: bool = True,
 ) -> str:
     match spec:
         case ConditionalLinearSumSpec():
-            return render_conditional_linear_sum(spec, func_name, var)
+            return render_conditional_linear_sum(
+                spec,
+                func_name,
+                var,
+                int32_wrap=int32_wrap,
+            )
         case ResettingBestPrefixSumSpec():
-            return render_resetting_best_prefix_sum(spec, func_name, var)
+            return render_resetting_best_prefix_sum(
+                spec,
+                func_name,
+                var,
+                int32_wrap=int32_wrap,
+            )
         case LongestRunSpec():
-            return render_longest_run(spec, func_name, var)
+            return render_longest_run(
+                spec,
+                func_name,
+                var,
+                int32_wrap=int32_wrap,
+            )
         case ToggleSumSpec():
-            return render_toggle_sum(spec, func_name, var)
+            return render_toggle_sum(
+                spec,
+                func_name,
+                var,
+                int32_wrap=int32_wrap,
+            )
         case _:
             raise ValueError(f"Unknown stateful spec: {spec}")

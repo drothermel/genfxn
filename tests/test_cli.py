@@ -585,6 +585,38 @@ class TestGenerate:
         assert tasks[0]["code"].startswith("fn f(")
         assert "def f(" not in tasks[0]["code"]
 
+    def test_generate_simple_algorithms_no_i32_wrap(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "simple_algorithms",
+                "-d",
+                "4",
+                "-n",
+                "5",
+                "-s",
+                "42",
+                "--no-i32-wrap",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 5
+        assert all(task["family"] == "simple_algorithms" for task in tasks)
+        assert all("__i32_" not in cast(str, task["code"]) for task in tasks)
+        for task in tasks:
+            namespace: dict[str, Any] = {}
+            exec(cast(str, task["code"]), namespace)  # noqa: S102
+            fn = namespace["f"]
+            for query in cast(list[dict[str, Any]], task["queries"]):
+                assert fn(query["input"]) == query["output"]
+
     def test_generate_all_rust_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         n_families = len(_expected_all_families())
