@@ -2038,7 +2038,7 @@ def generate_suite(
             family, difficulty, pool_seed, current_pool_size
         )
         pool_variants_used = 1
-        if candidates and _bucket_supply_shortfall(candidates, quota):
+        if _bucket_supply_shortfall(candidates, quota):
             for variant in range(1, _MAX_POOL_VARIANTS_PER_ATTEMPT):
                 variant_seed = _stable_seed(
                     seed,

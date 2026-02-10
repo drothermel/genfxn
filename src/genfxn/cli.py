@@ -413,6 +413,28 @@ def _atomic_split_outputs(
         raise
 
 
+@contextmanager
+def _atomic_output_file(path: Path) -> Iterator[TextIO]:
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+        )
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = None
+            yield handle
+        os.replace(tmp_path, path)
+    except Exception:
+        _safe_close_fd(fd)
+        if tmp_path is not None:
+            _safe_unlink(tmp_path)
+        raise
+
+
 def _write_task_line(handle, task: Task) -> None:
     handle.write(srsly.json_dumps(task.model_dump()))
     handle.write("\n")
@@ -1074,7 +1096,7 @@ def generate(
             list_length_range=list_length_range,
         )
 
-    with output.open("w", encoding="utf-8") as output_handle:
+    with _atomic_output_file(output) as output_handle:
 
         def emit(task: Task) -> None:
             nonlocal generated_count

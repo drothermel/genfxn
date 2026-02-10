@@ -349,17 +349,15 @@ class TestStringPredicateRust:
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsUpper())
-        assert result == (
-            "!s.is_empty() && s.chars().any(|c| c.is_uppercase() || "
-            "c.is_lowercase()) && s.chars().all(|c| !c.is_lowercase())"
-        )
+        assert "!s.is_empty()" in result
+        assert "lower != upper" in result
+        assert "lower == upper || c.is_uppercase()" in result
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsLower())
-        assert result == (
-            "!s.is_empty() && s.chars().any(|c| c.is_uppercase() || "
-            "c.is_lowercase()) && s.chars().all(|c| !c.is_uppercase())"
-        )
+        assert "!s.is_empty()" in result
+        assert "lower != upper" in result
+        assert "lower == upper || c.is_lowercase()" in result
 
     @pytest.mark.parametrize(
         ("op", "expected_op"),

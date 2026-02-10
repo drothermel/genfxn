@@ -1716,6 +1716,59 @@ class TestDeterminism:
                 "stringrules", 3, seed=7, pool_size=20, max_retries=1
             )
 
+    def test_generate_suite_tries_pool_variants_when_first_pool_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        quota = QUOTAS["stringrules"][3]
+        calls = 0
+        fake_selected = [
+            Candidate(spec=None, spec_dict={}, task_id=f"id_{i}", features={})
+            for i in range(quota.total)
+        ]
+
+        def fake_generate_pool(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return [], PoolStats()
+            return (
+                fake_selected,
+                PoolStats(candidates=len(fake_selected)),
+            )
+
+        monkeypatch.setattr(
+            suite_generate, "generate_pool", fake_generate_pool
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_bucket_supply_shortfall",
+            lambda candidates, _quota: len(candidates) == 0,
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_select_best_with_restarts",
+            lambda candidates, *_args, **_kwargs: candidates[: quota.total],
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_selection_satisfies_quota",
+            lambda selected, _quota: len(selected) >= quota.total,
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_generate_task_from_candidate",
+            lambda *_args, **_kwargs: object(),
+        )
+
+        tasks = suite_generate.generate_suite(
+            "stringrules", 3, seed=7, pool_size=20, max_retries=0
+        )
+
+        assert len(tasks) == quota.total
+        assert calls == 2
+
     def test_generate_suite_raises_when_targets_not_met(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1797,6 +1850,11 @@ class TestDeterminism:
             return [], PoolStats()
 
         monkeypatch.setattr(suite_generate, "generate_pool", _capture_pool_seed)
+        monkeypatch.setattr(
+            suite_generate,
+            "_bucket_supply_shortfall",
+            lambda *_args, **_kwargs: False,
+        )
         monkeypatch.setattr(
             suite_generate,
             "greedy_select",

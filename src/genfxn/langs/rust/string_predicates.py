@@ -142,14 +142,24 @@ def render_string_predicate_rust(pred: StringPredicate, var: str = "s") -> str:
         case StringPredicateIsUpper():
             return (
                 f"!{var}.is_empty() && "
-                f"{var}.chars().any(|c| c.is_uppercase() || c.is_lowercase()) "
-                f"&& {var}.chars().all(|c| !c.is_lowercase())"
+                f"{var}.chars().any(|c| {{ let lower = "
+                "c.to_lowercase().collect::<String>(); let upper = "
+                "c.to_uppercase().collect::<String>(); lower != upper }) "
+                f"&& {var}.chars().all(|c| {{ let lower = "
+                "c.to_lowercase().collect::<String>(); let upper = "
+                "c.to_uppercase().collect::<String>(); "
+                "lower == upper || c.is_uppercase() })"
             )
         case StringPredicateIsLower():
             return (
                 f"!{var}.is_empty() && "
-                f"{var}.chars().any(|c| c.is_uppercase() || c.is_lowercase()) "
-                f"&& {var}.chars().all(|c| !c.is_uppercase())"
+                f"{var}.chars().any(|c| {{ let lower = "
+                "c.to_lowercase().collect::<String>(); let upper = "
+                "c.to_uppercase().collect::<String>(); lower != upper }) "
+                f"&& {var}.chars().all(|c| {{ let lower = "
+                "c.to_lowercase().collect::<String>(); let upper = "
+                "c.to_uppercase().collect::<String>(); "
+                "lower == upper || c.is_lowercase() })"
             )
         case StringPredicateLengthCmp(op=op, value=v):
             op_map = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "=="}

@@ -597,6 +597,35 @@ class TestGenerate:
         assert families == _expected_all_families()
         assert all("def f(" not in cast(str, t["code"]) for t in tasks)
 
+    def test_generate_removes_partial_output_on_failure(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        render_calls = 0
+        original_render = cli_module._render_task_for_language
+
+        def fail_after_first_render(*args, **kwargs):
+            nonlocal render_calls
+            render_calls += 1
+            if render_calls > 1:
+                raise RuntimeError("forced render failure")
+            return original_render(*args, **kwargs)
+
+        monkeypatch.setattr(
+            cli_module,
+            "_render_task_for_language",
+            fail_after_first_render,
+        )
+
+        result = runner.invoke(
+            app,
+            ["generate", "-o", str(output), "-f", "all", "-n", "3"],
+        )
+
+        assert result.exit_code == 1
+        assert not output.exists()
+        assert not list(tmp_path.glob(f".{output.name}.*.tmp"))
+
     def test_generate_stack_bytecode_when_available(self, tmp_path) -> None:
         if not _supports_stack_bytecode_family():
             pytest.skip("stack_bytecode family is not available in this build")
