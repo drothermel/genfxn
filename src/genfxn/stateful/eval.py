@@ -10,9 +10,18 @@ from genfxn.stateful.models import (
 )
 
 
+def _require_int_values_not_bool(xs: list[int], name: str) -> None:
+    for index, value in enumerate(xs):
+        if type(value) is not int:
+            raise ValueError(
+                f"{name}[{index}] must be int, got {type(value).__name__}"
+            )
+
+
 def eval_conditional_linear_sum(
     spec: ConditionalLinearSumSpec, xs: list[int]
 ) -> int:
+    _require_int_values_not_bool(xs, "xs")
     acc = wrap_i32(spec.init_value)
     for x in xs:
         x = wrap_i32(x)
@@ -32,6 +41,7 @@ def eval_conditional_linear_sum(
 def eval_resetting_best_prefix_sum(
     spec: ResettingBestPrefixSumSpec, xs: list[int]
 ) -> int:
+    _require_int_values_not_bool(xs, "xs")
     init = wrap_i32(spec.init_value)
     current_sum = init
     best_sum = init
@@ -51,6 +61,7 @@ def eval_resetting_best_prefix_sum(
 
 
 def eval_longest_run(spec: LongestRunSpec, xs: list[int]) -> int:
+    _require_int_values_not_bool(xs, "xs")
     current_run = 0
     longest_run = 0
     for x in xs:
@@ -64,6 +75,7 @@ def eval_longest_run(spec: LongestRunSpec, xs: list[int]) -> int:
 
 
 def eval_toggle_sum(spec: ToggleSumSpec, xs: list[int]) -> int:
+    _require_int_values_not_bool(xs, "xs")
     on = False
     acc = wrap_i32(spec.init_value)
     for x in xs:

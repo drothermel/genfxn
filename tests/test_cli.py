@@ -1738,7 +1738,7 @@ class TestSplit:
     @pytest.mark.parametrize("holdout_type", ["exact", "contains"])
     @pytest.mark.parametrize(
         "bad_value",
-        ["tru", "nul", "01", "+1"],
+        ["t", "f", "n", "tru", "nul", "01", "+1"],
     )
     def test_split_exact_contains_reject_malformed_json_scalar_holdout_values(
         self, tmp_path, holdout_type: str, bad_value: str

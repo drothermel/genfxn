@@ -10,11 +10,18 @@ from genfxn.piecewise.models import (
 )
 
 
+def _require_int_not_bool(value: int, name: str) -> int:
+    if type(value) is not int:
+        raise ValueError(f"{name} must be int, got {type(value).__name__}")
+    return value
+
+
 def _eval_linear_i32(a: int, x_term: int, b: int) -> int:
     return i32_add(i32_mul(a, x_term), b)
 
 
 def eval_expression(expr: Expression, x: int) -> int:
+    x = _require_int_not_bool(x, "x")
     x = wrap_i32(x)
 
     match expr:
@@ -34,6 +41,7 @@ def eval_expression(expr: Expression, x: int) -> int:
 
 
 def eval_piecewise(spec: PiecewiseSpec, x: int) -> int:
+    x = _require_int_not_bool(x, "x")
     x = wrap_i32(x)
 
     for branch in spec.branches:

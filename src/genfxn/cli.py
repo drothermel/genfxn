@@ -201,7 +201,7 @@ def _looks_like_json_literal(value: str) -> bool:
 
 def _looks_like_malformed_json_scalar(value: str) -> bool:
     stripped = value.strip()
-    if len(stripped) < 2:
+    if not stripped:
         return False
 
     lowered = stripped.lower()

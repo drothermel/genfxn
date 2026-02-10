@@ -133,6 +133,53 @@ class TestLongestRunEval:
         assert eval_longest_run(spec, [1, 2, 3, 4, 5]) == 1
 
 
+class TestEvaluatorInputValidation:
+    def test_eval_stateful_rejects_bool_values(self) -> None:
+        spec = LongestRunSpec(match_predicate=PredicateGt(value=0))
+        with pytest.raises(ValueError, match=r"xs\[0\] must be int, got bool"):
+            eval_stateful(spec, [True, 1])
+
+    @pytest.mark.parametrize(
+        ("evaluator", "spec"),
+        [
+            (
+                eval_conditional_linear_sum,
+                ConditionalLinearSumSpec(
+                    predicate=PredicateEven(),
+                    true_transform=TransformIdentity(),
+                    false_transform=TransformIdentity(),
+                    init_value=0,
+                ),
+            ),
+            (
+                eval_resetting_best_prefix_sum,
+                ResettingBestPrefixSumSpec(
+                    reset_predicate=PredicateLt(value=0),
+                    init_value=0,
+                ),
+            ),
+            (
+                eval_longest_run,
+                LongestRunSpec(match_predicate=PredicateGt(value=0)),
+            ),
+            (
+                eval_toggle_sum,
+                ToggleSumSpec(
+                    toggle_predicate=PredicateEven(),
+                    on_transform=TransformIdentity(),
+                    off_transform=TransformIdentity(),
+                    init_value=0,
+                ),
+            ),
+        ],
+    )
+    def test_direct_evaluators_reject_bool_values(
+        self, evaluator, spec
+    ) -> None:
+        with pytest.raises(ValueError, match=r"xs\[1\] must be int, got bool"):
+            evaluator(spec, [1, False])
+
+
 class TestEmptyListHandling:
     def test_conditional_linear_sum_empty(self) -> None:
         spec = ConditionalLinearSumSpec(

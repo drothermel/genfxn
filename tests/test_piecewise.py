@@ -60,6 +60,11 @@ class TestExpressionEval:
         with pytest.raises(ValueError, match="9223372036854775807"):
             ExprAffine(a=INT64_MAX + 1, b=0)
 
+    def test_rejects_bool_input(self) -> None:
+        expr = ExprAffine(a=1, b=0)
+        with pytest.raises(ValueError, match="x must be int, got bool"):
+            eval_expression(expr, True)
+
 
 class TestBranchSelection:
     def test_single_branch_lt(self) -> None:
@@ -104,6 +109,18 @@ class TestBranchSelection:
         assert eval_piecewise(spec, 0) == 0
         assert eval_piecewise(spec, 5) == 5
         assert eval_piecewise(spec, 10) == 100
+
+    def test_rejects_bool_input(self) -> None:
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0)
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=10),
+        )
+        with pytest.raises(ValueError, match="x must be int, got bool"):
+            eval_piecewise(spec, False)
 
 
 class TestQueryGeneration:

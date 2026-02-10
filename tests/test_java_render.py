@@ -1163,6 +1163,24 @@ class TestLangsInfra:
         assert Language.PYTHON in available
         assert Language.JAVA not in available
 
+    def test_available_languages_ignores_attribute_error(
+        self, monkeypatch
+    ) -> None:
+        from genfxn.langs import render as render_module
+
+        original_get_render_fn = render_module.get_render_fn
+
+        def _fake_get_render_fn(language: Language, family: str):
+            if language == Language.JAVA and family == "piecewise":
+                raise AttributeError("missing render function")
+            return original_get_render_fn(language, family)
+
+        monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
+
+        available = render_module._available_languages()
+        assert Language.PYTHON in available
+        assert Language.JAVA not in available
+
     def test_render_all_languages_default(self) -> None:
         from genfxn.langs.render import render_all_languages
         from genfxn.piecewise.models import Branch, PiecewiseSpec
@@ -1181,6 +1199,33 @@ class TestLangsInfra:
         assert "java" in result
         assert "def f(" in result["python"]
         assert "public static" in result["java"]
+
+    def test_render_all_languages_default_uses_requested_family(
+        self, monkeypatch
+    ) -> None:
+        from genfxn.core.predicates import PredicateEven
+        from genfxn.core.transforms import TransformIdentity
+        from genfxn.langs import render as render_module
+        from genfxn.stateful.models import ConditionalLinearSumSpec
+
+        original_get_render_fn = render_module.get_render_fn
+
+        def _fake_get_render_fn(language: Language, family: str):
+            if language == Language.JAVA and family == "stateful":
+                raise ValueError("unsupported")
+            return original_get_render_fn(language, family)
+
+        monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
+
+        spec = ConditionalLinearSumSpec(
+            predicate=PredicateEven(),
+            true_transform=TransformIdentity(),
+            false_transform=TransformIdentity(),
+            init_value=0,
+        )
+        result = render_module.render_all_languages("stateful", spec)
+        assert "python" in result
+        assert "java" not in result
 
     def test_render_all_languages_custom_selection_and_func_name(self) -> None:
         from genfxn.langs.render import render_all_languages
