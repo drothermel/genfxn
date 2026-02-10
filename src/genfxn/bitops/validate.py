@@ -499,20 +499,25 @@ def validate_bitops_task(
         )
         issues.extend(compile_issues)
 
-    issues.extend(_validate_query_outputs(task, spec, strict=strict))
+    try:
+        issues.extend(_validate_query_outputs(task, spec, strict=strict))
 
-    rng = random.Random(random_seed)
-    issues.extend(
-        _validate_semantics(
-            task,
-            spec,
-            fn,
-            axes,
-            strict=strict,
-            semantic_trials=semantic_trials,
-            max_semantic_issues=max_semantic_issues,
-            rng=rng,
+        rng = random.Random(random_seed)
+        issues.extend(
+            _validate_semantics(
+                task,
+                spec,
+                fn,
+                axes,
+                strict=strict,
+                semantic_trials=semantic_trials,
+                max_semantic_issues=max_semantic_issues,
+                rng=rng,
+            )
         )
-    )
+    finally:
+        close = getattr(fn, "close", None)
+        if callable(close):
+            close()
 
     return issues
