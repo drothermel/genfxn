@@ -12,7 +12,6 @@ from genfxn.core.predicates import (
     PredicateEven,
     PredicateGe,
     PredicateLt,
-    PredicateModEq,
 )
 from genfxn.core.transforms import (
     TransformAbs,
@@ -284,18 +283,19 @@ def test_stateful_runtime_parity_int32_boundary_cases() -> None:
 
 
 @pytest.mark.full
-def test_stateful_java_compiles_with_oversized_int_literals() -> None:
+def test_stateful_runtime_parity_with_oversized_int_literals() -> None:
     javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
     spec = ConditionalLinearSumSpec(
-        predicate=PredicateModEq(
-            divisor=3_000_000_001,
-            remainder=3_000_000_000,
-        ),
+        predicate=PredicateEven(),
         true_transform=TransformShift(offset=3_000_000_005),
         false_transform=TransformScale(factor=-3_000_000_007),
         init_value=3_000_000_009,
     )
     java_code = render_stateful_java(spec, func_name="f")
+    rust_code = render_stateful_rust(spec, func_name="f")
 
-    result = _run_java_f(javac, java, java_code, [1, 2, 3])
-    assert isinstance(result, int)
+    for xs in ([], [1, 2, 3], [-4, -1, 0, 2]):
+        expected = eval_stateful(spec, list(xs))
+        assert _run_java_f(javac, java, java_code, list(xs)) == expected
+        assert _run_rust_f(rustc, rust_code, list(xs)) == expected
