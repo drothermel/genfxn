@@ -81,3 +81,8 @@ def get_render_fn(language: Language, family: str) -> Any:
         raise ValueError(f"Unknown family: {family}")
     module: ModuleType = importlib.import_module(module_path)
     return getattr(module, fn_name)
+
+
+def is_known_family(family: str) -> bool:
+    """Return True if family is known to the render registry."""
+    return family in _RENDER_FUNCTIONS

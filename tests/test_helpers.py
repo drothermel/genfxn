@@ -4,6 +4,12 @@ import helpers
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clear_runtime_caches() -> None:
+    helpers.require_java_runtime.cache_clear()
+    helpers.require_rust_runtime.cache_clear()
+
+
 def test_require_java_runtime_passes_when_tools_are_runnable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -30,6 +36,40 @@ def test_require_java_runtime_passes_when_tools_are_runnable(
     monkeypatch.setattr(helpers.shutil, "which", _fake_which)
     monkeypatch.setattr(helpers.subprocess, "run", _fake_run)
 
+    assert helpers.require_java_runtime() == ("/usr/bin/javac", "/usr/bin/java")
+    assert calls == [
+        ["/usr/bin/javac", "-version"],
+        ["/usr/bin/java", "-version"],
+    ]
+
+
+def test_require_java_runtime_caches_health_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    calls: list[list[str]] = []
+
+    def _fake_run(
+        cmd: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is True
+        assert capture_output is True
+        assert text is True
+        assert timeout == 5.0
+        calls.append(cmd)
+        return subprocess.CompletedProcess(args=cmd, returncode=0)
+
+    monkeypatch.setattr(helpers.shutil, "which", _fake_which)
+    monkeypatch.setattr(helpers.subprocess, "run", _fake_run)
+
+    assert helpers.require_java_runtime() == ("/usr/bin/javac", "/usr/bin/java")
     assert helpers.require_java_runtime() == ("/usr/bin/javac", "/usr/bin/java")
     assert calls == [
         ["/usr/bin/javac", "-version"],
@@ -103,6 +143,37 @@ def test_require_rust_runtime_passes_when_tool_is_runnable(
     monkeypatch.setattr(helpers.shutil, "which", _fake_which)
     monkeypatch.setattr(helpers.subprocess, "run", _fake_run)
 
+    assert helpers.require_rust_runtime() == "/usr/bin/rustc"
+    assert calls == [["/usr/bin/rustc", "--version"]]
+
+
+def test_require_rust_runtime_caches_health_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    calls: list[list[str]] = []
+
+    def _fake_run(
+        cmd: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is True
+        assert capture_output is True
+        assert text is True
+        assert timeout == 5.0
+        calls.append(cmd)
+        return subprocess.CompletedProcess(args=cmd, returncode=0)
+
+    monkeypatch.setattr(helpers.shutil, "which", _fake_which)
+    monkeypatch.setattr(helpers.subprocess, "run", _fake_run)
+
+    assert helpers.require_rust_runtime() == "/usr/bin/rustc"
     assert helpers.require_rust_runtime() == "/usr/bin/rustc"
     assert calls == [["/usr/bin/rustc", "--version"]]
 

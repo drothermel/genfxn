@@ -1226,6 +1226,12 @@ class TestLangsInfra:
         assert "python" in result
         assert "java" not in result
 
+    def test_render_all_languages_unknown_family_raises(self) -> None:
+        from genfxn.langs.render import render_all_languages
+
+        with pytest.raises(ValueError, match="Unknown family: nope"):
+            render_all_languages("nope", object())
+
     def test_render_all_languages_custom_selection_and_func_name(self) -> None:
         from genfxn.langs.render import render_all_languages
         from genfxn.piecewise.models import Branch, PiecewiseSpec

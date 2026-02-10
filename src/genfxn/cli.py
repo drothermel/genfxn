@@ -278,7 +278,7 @@ def _render_task_row_error(input_file: Path, error: _TaskRowError) -> str:
 
 
 def _render_os_error(error: OSError) -> str:
-    path = error.filename or error.filename2
+    path = error.filename2 or error.filename
     if path is not None:
         detail = error.strerror or str(error)
         return f"Error: file operation failed for '{path}': {detail}"

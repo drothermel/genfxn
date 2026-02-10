@@ -1386,7 +1386,17 @@ class TestSplit:
 
         assert result.exit_code != 0
         assert "file operation failed" in result.output
+        assert str(missing_dir) in result.output
         assert "Traceback" not in result.output
+
+    def test_render_os_error_prefers_destination_path(self) -> None:
+        err = OSError("No such file or directory")
+        err.filename = "/tmp/.train.jsonl.tmp"
+        err.filename2 = "/tmp/train.jsonl"
+        err.strerror = "No such file or directory"
+        rendered = cli_module._render_os_error(err)
+        assert "/tmp/train.jsonl" in rendered
+        assert "/tmp/.train.jsonl.tmp" not in rendered
 
     def test_atomic_split_outputs_cleans_up_when_second_tmp_create_fails(
         self, tmp_path

@@ -2,6 +2,7 @@ import importlib.util
 import shutil
 import subprocess
 from collections.abc import Sequence
+from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
 
@@ -54,6 +55,7 @@ def _require_runnable_tool(
     return tool_path
 
 
+@lru_cache(maxsize=1)
 def require_java_runtime() -> tuple[str, str]:
     javac = _require_runnable_tool(
         tool_name="javac",
@@ -68,6 +70,7 @@ def require_java_runtime() -> tuple[str, str]:
     return javac, java
 
 
+@lru_cache(maxsize=1)
 def require_rust_runtime() -> str:
     return _require_runnable_tool(
         tool_name="rustc",
