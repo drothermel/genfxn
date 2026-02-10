@@ -2,7 +2,7 @@
 
 Date: 2026-02-10
 Owner: Codex + Danielle
-Status: In progress (M0 complete; M1-M5 pending)
+Status: In progress (M0-M1 complete; M2-M5 pending)
 
 ## Goal
 
@@ -357,7 +357,7 @@ This family is not complete until all are true:
 ## Execution Checklist
 
 - [x] M0 complete
-- [ ] M1 complete
+- [x] M1 complete
 - [ ] M2 complete
 - [ ] M3 complete
 - [ ] M4 complete
@@ -372,3 +372,8 @@ This family is not complete until all are true:
 - 2026-02-10: M0 completed with a `src/genfxn/temporal_logic/` package
   scaffold (models/eval/sampler/queries/render/task/validate/ast_safety) and
   deterministic smoke tests in `tests/test_temporal_logic.py`.
+- 2026-02-10: M1 completed with hardened formula validation in
+  `src/genfxn/temporal_logic/models.py`, canonical evaluator/render/task
+  wiring updates (including `describe_task("temporal_logic", ...)` in
+  `src/genfxn/temporal_logic/task.py` and `src/genfxn/core/describe.py`), and
+  expanded semantics/parity tests in `tests/test_temporal_logic.py`.

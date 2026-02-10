@@ -1,6 +1,7 @@
 import random
 
 from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.describe import describe_task
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.types import Language
@@ -8,14 +9,6 @@ from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
 from genfxn.temporal_logic.queries import generate_temporal_logic_queries
 from genfxn.temporal_logic.render import render_temporal_logic
 from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
-
-
-def _describe_temporal_logic_task(spec: TemporalLogicSpec) -> str:
-    mode = spec.output_mode.value
-    return (
-        "Implement f(xs: list[int]) -> int. Evaluate the provided temporal "
-        f"formula on the finite integer sequence and return output_mode={mode}."
-    )
 
 
 def _render_temporal_logic_for_languages(
@@ -60,5 +53,5 @@ def generate_temporal_logic_task(
         trace=GenerationTrace(family="temporal_logic", steps=trace_steps),
         axes=axes.model_dump(),
         difficulty=None,
-        description=_describe_temporal_logic_task(spec),
+        description=describe_task("temporal_logic", spec_dict),
     )

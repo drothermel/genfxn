@@ -24,6 +24,8 @@ def describe_task(family: str, spec: dict[str, Any]) -> str:
         return _describe_intervals(spec)
     elif family == "graph_queries":
         return _describe_graph_queries(spec)
+    elif family == "temporal_logic":
+        return _describe_temporal_logic(spec)
     return ""
 
 
@@ -890,6 +892,23 @@ def _describe_graph_queries(spec: dict[str, Any]) -> str:
         "Answer graph query "
         f"{query_type!r} on a {direction_text}, {weight_text} "
         f"graph with {n_nodes} nodes."
+    )
+
+
+def _describe_temporal_logic(spec: dict[str, Any]) -> str:
+    output_mode = _enum_text(spec.get("output_mode", "sat_at_start"))
+    formula = spec.get("formula", {})
+    formula_text = repr(formula)
+    return _join_description_parts(
+        "Implement f(xs: list[int]) -> int over a finite integer sequence.",
+        (
+            "Evaluate the temporal formula exactly as specified by the "
+            f"formula AST: {formula_text}."
+        ),
+        (
+            f"Return output_mode '{output_mode}' "
+            "(sat_at_start | sat_count | first_sat_index)."
+        ),
     )
 
 
