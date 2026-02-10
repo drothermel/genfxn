@@ -205,6 +205,9 @@ def _looks_like_malformed_json_scalar(value: str) -> bool:
         return False
 
     lowered = stripped.lower()
+    if lowered in {"true", "false", "null"} and stripped != lowered:
+        return True
+
     for keyword in ("true", "false", "null"):
         if keyword.startswith(lowered) and lowered != keyword:
             return True

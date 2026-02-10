@@ -1477,3 +1477,14 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
     -> passed.
   - `uv run ty check`
     -> passed.
+
+## Latest Intake Extension (2026-02-10, case-mismatched holdout scalars + docs/e2e coverage)
+- CLI exact/contains holdout parsing rejects malformed scalar typos (`tru`,
+  `nul`, `01`, `+1`) but still allowed case-mismatched JSON scalar tokens
+  (`True`, `False`, `Null`) to silently fall back to raw strings.
+- Split README docs do not yet describe exact/contains JSON parsing and
+  malformed-literal rejection rules, making quoted-string requirements for
+  JSON-looking strings easy to miss.
+- Nested type-sensitive holdout behavior is covered at matcher level in
+  `tests/test_cli.py`, but dedicated file-based CLI split end-to-end tests were
+  still thin for nested exact/contains payloads.

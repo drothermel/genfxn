@@ -1508,3 +1508,41 @@ Progress update (2026-02-10, malformed JSON-scalar holdout rejection complete):
   - `uv run ty check src/genfxn/cli.py tests/test_cli.py` -> passed.
   - `uv run pytest tests/ -q --verification-level=standard`
     -> 1914 passed, 101 skipped.
+
+### 25) Case-Mismatched Scalar Holdouts + Docs/E2E Coverage (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Reject case-mismatched JSON scalar tokens (`True`, `False`, `Null`) for
+      exact/contains holdouts instead of raw-string fallback.
+- [x] Add focused CLI regressions for case-mismatched scalar rejection.
+- [x] Add CLI file-based end-to-end nested exact/contains holdout regressions
+      to guard matcher wiring drift.
+- [x] Update README split docs to describe exact/contains JSON parsing and
+      malformed-literal/scalar rejection behavior.
+- [x] Run targeted `pytest` + `ruff` + `ty`.
+
+Exit criterion:
+- Exact/contains holdout parsing fails fast for case-mismatched JSON scalars,
+  docs reflect parsing/quoting behavior, and nested type-sensitive semantics are
+  covered by end-to-end CLI split tests.
+
+Progress update (2026-02-10, case-mismatched scalars + docs/e2e coverage complete):
+- Updated `src/genfxn/cli.py`:
+  - `_looks_like_malformed_json_scalar(...)` now rejects case-mismatched JSON
+    scalar tokens (`True`, `False`, `Null`) instead of raw-string fallback.
+- Added regressions in `tests/test_cli.py`:
+  - `test_split_exact_contains_reject_case_mismatched_json_scalars`
+  - `test_split_exact_nested_type_sensitive_end_to_end`
+  - `test_split_contains_nested_type_sensitive_end_to_end`
+- Updated `README.md` split docs to clarify:
+  - exact/contains holdout values are JSON-parsed
+  - malformed JSON-like literals/scalars fail fast
+  - JSON-looking string scalars must be passed as JSON string literals.
+- Validation evidence:
+  - `uv run pytest tests/test_cli.py -v --verification-level=standard -k
+    "case_mismatched_json_scalars or exact_nested_type_sensitive_end_to_end or
+    contains_nested_type_sensitive_end_to_end or
+    malformed_json_scalar_holdout_values"` -> 16 passed.
+  - `uv run ruff check src/genfxn/cli.py tests/test_cli.py` -> passed.
+  - `uv run ty check src/genfxn/cli.py tests/test_cli.py` -> passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1922 passed, 101 skipped.

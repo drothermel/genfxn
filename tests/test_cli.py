@@ -1664,6 +1664,51 @@ class TestSplit:
         assert result.exit_code != 0
         assert "malformed JSON scalar" in result.output
 
+    @pytest.mark.parametrize("holdout_type", ["exact", "contains"])
+    @pytest.mark.parametrize(
+        "bad_value",
+        ["True", "False", "Null"],
+    )
+    def test_split_exact_contains_reject_case_mismatched_json_scalars(
+        self, tmp_path, holdout_type: str, bad_value: str
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+        axis_path = "value" if holdout_type == "exact" else "values"
+
+        tasks = [
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"value": True, "values": [True, False]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "boolean values",
+            }
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                axis_path,
+                "--holdout-value",
+                bad_value,
+                "--holdout-type",
+                holdout_type,
+            ],
+        )
+        assert result.exit_code != 0
+        assert "malformed JSON scalar" in result.output
+
     def test_split_exact_allows_json_string_nan_literal(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"
@@ -2355,6 +2400,108 @@ class TestSplit:
         assert test[0]["task_id"] == "task-1"
         assert len(train) == 1
         assert train[0]["task_id"] == "task-2"
+
+    def test_split_exact_nested_type_sensitive_end_to_end(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-bool",
+                "family": "stateful",
+                "spec": {"value": [False]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "nested bool list",
+            },
+            {
+                "task_id": "task-int",
+                "family": "stateful",
+                "spec": {"value": [0]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "nested int list",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "value",
+                "--holdout-value",
+                "[false]",
+                "--holdout-type",
+                "exact",
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert [task["task_id"] for task in test] == ["task-bool"]
+        assert [task["task_id"] for task in train] == ["task-int"]
+
+    def test_split_contains_nested_type_sensitive_end_to_end(
+        self, tmp_path
+    ) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        train_file = tmp_path / "train.jsonl"
+        test_file = tmp_path / "test.jsonl"
+
+        tasks = [
+            {
+                "task_id": "task-bool",
+                "family": "stateful",
+                "spec": {"value": [[False], [1]]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "contains nested bool list",
+            },
+            {
+                "task_id": "task-int",
+                "family": "stateful",
+                "spec": {"value": [[0], [1]]},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 2, "output": 2, "tag": "typical"}],
+                "description": "contains nested int list",
+            },
+        ]
+        srsly.write_jsonl(input_file, tasks)
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--holdout-axis",
+                "value",
+                "--holdout-value",
+                "[false]",
+                "--holdout-type",
+                "contains",
+            ],
+        )
+
+        assert result.exit_code == 0
+        train = cast(list[dict[str, Any]], list(srsly.read_jsonl(train_file)))
+        test = cast(list[dict[str, Any]], list(srsly.read_jsonl(test_file)))
+        assert [task["task_id"] for task in test] == ["task-bool"]
+        assert [task["task_id"] for task in train] == ["task-int"]
 
     def test_split_emits_warning_when_holdout_matches_none(
         self, tmp_path

@@ -340,6 +340,13 @@ genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
 
 **Holdout types**: `exact` (default), `range`, `contains`
 
+For `--holdout-type exact` and `--holdout-type contains`, `--holdout-value` is
+parsed as JSON:
+- Use JSON scalars/literals directly (for example: `true`, `42`, `[1, 2]`).
+- JSON parsing errors for JSON-like input are fail-fast (no silent fallback).
+- If you need a string that looks like a JSON scalar/number, pass a JSON
+  string literal (for example: `\"01\"`, `\"True\"`, `\"nan\"`).
+
 Axis paths use dot notation for nested fields: `predicate.kind`, `rules.0.transform.kind`
 
 See [AXES.md](AXES.md) for all spec field paths.
