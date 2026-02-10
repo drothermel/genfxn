@@ -12,6 +12,9 @@ from genfxn.core.int32 import (
     wrap_i32,
 )
 
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
+
 
 class TransformIdentity(BaseModel):
     kind: Literal["identity"] = "identity"
@@ -23,13 +26,13 @@ class TransformAbs(BaseModel):
 
 class TransformShift(BaseModel):
     kind: Literal["shift"] = "shift"
-    offset: int
+    offset: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class TransformClip(BaseModel):
     kind: Literal["clip"] = "clip"
-    low: int
-    high: int
+    low: int = Field(ge=INT64_MIN, le=INT64_MAX)
+    high: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
     @model_validator(mode="after")
     def validate_bounds(self) -> "TransformClip":
@@ -44,7 +47,7 @@ class TransformNegate(BaseModel):
 
 class TransformScale(BaseModel):
     kind: Literal["scale"] = "scale"
-    factor: int
+    factor: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 _AtomicTransformUnion = (

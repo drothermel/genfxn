@@ -7,28 +7,21 @@ from pydantic import ValidationError
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.langs.types import Language
-
-temporal_models = pytest.importorskip("genfxn.temporal_logic.models")
-temporal_eval = pytest.importorskip("genfxn.temporal_logic.eval")
-temporal_queries = pytest.importorskip("genfxn.temporal_logic.queries")
-temporal_render = pytest.importorskip("genfxn.temporal_logic.render")
-temporal_sampler = pytest.importorskip("genfxn.temporal_logic.sampler")
-temporal_task = pytest.importorskip("genfxn.temporal_logic.task")
-
-PredicateKind = temporal_models.PredicateKind
-TemporalLogicAxes = temporal_models.TemporalLogicAxes
-TemporalLogicSpec = temporal_models.TemporalLogicSpec
-TemporalOperator = temporal_models.TemporalOperator
-TemporalOutputMode = temporal_models.TemporalOutputMode
-
-eval_temporal_logic = temporal_eval.eval_temporal_logic
-generate_temporal_logic_queries = (
-    temporal_queries.generate_temporal_logic_queries
+from genfxn.temporal_logic.eval import eval_temporal_logic
+from genfxn.temporal_logic.models import (
+    PredicateKind,
+    TemporalLogicAxes,
+    TemporalLogicSpec,
+    TemporalOperator,
+    TemporalOutputMode,
 )
-fit_sequence_length = temporal_queries._fit_sequence_length
-render_temporal_logic = temporal_render.render_temporal_logic
-sample_temporal_logic_spec = temporal_sampler.sample_temporal_logic_spec
-generate_temporal_logic_task = temporal_task.generate_temporal_logic_task
+from genfxn.temporal_logic.queries import (
+    _fit_sequence_length as fit_sequence_length,
+)
+from genfxn.temporal_logic.queries import generate_temporal_logic_queries
+from genfxn.temporal_logic.render import render_temporal_logic
+from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 
 def _call_sample(sample_fn: Any, axes: Any, seed: int) -> Any:
@@ -209,6 +202,18 @@ class TestTemporalLogicSemantics:
         ):
             _spec({"op": "atom", "predicate": "eq", "constant": True})
 
+    def test_spec_validation_rejects_out_of_i64_constant(self) -> None:
+        with pytest.raises(
+            ValidationError, match="atom node constant must be in"
+        ):
+            _spec(
+                {
+                    "op": "atom",
+                    "predicate": "eq",
+                    "constant": 1 << 63,
+                }
+            )
+
     def test_spec_validation_rejects_excessive_depth(self) -> None:
         deep: dict[str, Any] = _atom(PredicateKind.EQ, 0)
         for _ in range(13):
@@ -223,6 +228,21 @@ class TestTemporalLogicSemantics:
             ValidationError, match="formula_depth_range: high must be <= 12"
         ):
             TemporalLogicAxes(formula_depth_range=(1, 13))
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (-(1 << 63) - 1, 0)),
+            ("value_range", (0, 1 << 63)),
+            ("predicate_constant_range", (-(1 << 63) - 1, 0)),
+            ("predicate_constant_range", (0, 1 << 63)),
+        ],
+    )
+    def test_axes_reject_i64_out_of_range_bounds(
+        self, field_name: str, range_value: tuple[int, int]
+    ) -> None:
+        with pytest.raises(ValidationError, match=field_name):
+            TemporalLogicAxes.model_validate({field_name: range_value})
 
     @pytest.mark.parametrize(
         ("field_name", "range_value"),

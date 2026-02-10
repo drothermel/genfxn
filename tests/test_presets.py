@@ -48,11 +48,17 @@ from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 def _supports_stack_bytecode_presets() -> bool:
     if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
-        return False
+        pytest.fail("genfxn.stack_bytecode.task is not importable")
     try:
-        return get_valid_difficulties("stack_bytecode") == [1, 2, 3, 4, 5]
-    except ValueError:
-        return False
+        valid = get_valid_difficulties("stack_bytecode")
+    except ValueError as exc:
+        pytest.fail(f"stack_bytecode presets unavailable: {exc}")
+    if valid != [1, 2, 3, 4, 5]:
+        pytest.fail(
+            "stack_bytecode valid difficulties mismatch: "
+            f"expected [1, 2, 3, 4, 5], got {valid}"
+        )
+    return True
 
 
 class TestGetValidDifficulties:

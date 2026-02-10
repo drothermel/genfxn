@@ -5,6 +5,9 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from genfxn.core.int32 import INT32_MAX, i32_mod, wrap_i32
 
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
+
 
 class PredicateEven(BaseModel):
     kind: Literal["even"] = "even"
@@ -16,22 +19,22 @@ class PredicateOdd(BaseModel):
 
 class PredicateLt(BaseModel):
     kind: Literal["lt"] = "lt"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateLe(BaseModel):
     kind: Literal["le"] = "le"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateGt(BaseModel):
     kind: Literal["gt"] = "gt"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateGe(BaseModel):
     kind: Literal["ge"] = "ge"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateModEq(BaseModel):
@@ -61,6 +64,17 @@ class PredicateInSet(BaseModel):
     model_config = {"frozen": True}
     kind: Literal["in_set"] = "in_set"
     values: frozenset[int]
+
+    @field_validator("values")
+    @classmethod
+    def validate_values_i64(cls, values: frozenset[int]) -> frozenset[int]:
+        for value in values:
+            if value < INT64_MIN or value > INT64_MAX:
+                raise ValueError(
+                    "in_set values must be within signed 64-bit range "
+                    f"[{INT64_MIN}, {INT64_MAX}]"
+                )
+        return values
 
 
 _AtomicPredUnion = (

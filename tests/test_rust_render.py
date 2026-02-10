@@ -60,7 +60,7 @@ from genfxn.core.transforms import (
 from genfxn.fsm.task import generate_fsm_task
 from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.task import generate_intervals_task
-from genfxn.langs.rust._helpers import rust_string_literal
+from genfxn.langs.rust._helpers import rust_i64_literal, rust_string_literal
 from genfxn.langs.rust.expressions import render_expression_rust
 from genfxn.langs.rust.predicates import render_predicate_rust
 from genfxn.langs.rust.string_predicates import render_string_predicate_rust
@@ -114,6 +114,23 @@ class TestRustStringLiteral:
 
     def test_escapes_tab(self) -> None:
         assert rust_string_literal("a\tb") == '"a\\tb"'
+
+
+class TestRustI64Literal:
+    def test_small_i64(self) -> None:
+        assert rust_i64_literal(123) == "123i64"
+
+    def test_i64_min_uses_constant(self) -> None:
+        assert rust_i64_literal(-(1 << 63)) == "i64::MIN"
+
+    def test_i64_max_value(self) -> None:
+        assert rust_i64_literal((1 << 63) - 1) == "9223372036854775807i64"
+
+    def test_rejects_values_outside_i64_range(self) -> None:
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            rust_i64_literal(1 << 63)
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            rust_i64_literal(-(1 << 63) - 1)
 
 
 # ── Predicates ─────────────────────────────────────────────────────────

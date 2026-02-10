@@ -1,16 +1,16 @@
 from typing import Any
 
+from genfxn.langs.rust._helpers import rust_i64_literal
 from genfxn.temporal_logic.models import TemporalLogicSpec
 
 
 def _i64_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "i64::MIN"
-    return f"{value}i64"
+    """Backward-compatible alias for legacy tests/callers."""
+    return rust_i64_literal(value)
 
 
 def _rust_atom_expression(kind: str, constant: int) -> str:
-    const = _i64_literal(constant)
+    const = rust_i64_literal(constant)
     if kind == "eq":
         return f"xs[i] == {const}"
     if kind == "ne":

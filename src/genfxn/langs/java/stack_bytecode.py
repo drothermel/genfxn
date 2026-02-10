@@ -1,10 +1,5 @@
+from genfxn.langs.java._helpers import java_long_literal
 from genfxn.stack_bytecode.models import StackBytecodeSpec
-
-
-def _long_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "Long.MIN_VALUE"
-    return f"{value}L"
 
 
 def render_stack_bytecode(
@@ -12,15 +7,15 @@ def render_stack_bytecode(
 ) -> str:
     ops = ", ".join(f'"{instr.op.value}"' for instr in spec.program)
     values = ", ".join(
-        _long_literal(instr.value if instr.value is not None else 0)
+        java_long_literal(instr.value if instr.value is not None else 0)
         for instr in spec.program
     )
     indices = ", ".join(
-        _long_literal(instr.index if instr.index is not None else 0)
+        java_long_literal(instr.index if instr.index is not None else 0)
         for instr in spec.program
     )
     targets = ", ".join(
-        _long_literal(instr.target if instr.target is not None else 0)
+        java_long_literal(instr.target if instr.target is not None else 0)
         for instr in spec.program
     )
 
@@ -30,13 +25,13 @@ def render_stack_bytecode(
         "    long[] values = new long[] {" + values + "};",
         "    long[] indices = new long[] {" + indices + "};",
         "    long[] targets = new long[] {" + targets + "};",
-        f"    int maxStepCount = {spec.max_step_count};",
+        f"    long maxStepCount = {java_long_literal(spec.max_step_count)};",
         f'    String jumpTargetMode = "{spec.jump_target_mode.value}";',
         f'    String inputMode = "{spec.input_mode.value}";',
         "",
         "    java.util.ArrayList<Long> stack = new java.util.ArrayList<>();",
         "    int pc = 0;",
-        "    int steps = 0;",
+        "    long steps = 0L;",
         "",
         "    while (steps < maxStepCount) {",
         "        if (pc < 0 || pc >= ops.length) {",
@@ -44,7 +39,7 @@ def render_stack_bytecode(
         "        }",
         "",
         "        String op = ops[pc];",
-        "        steps += 1;",
+        "        steps += 1L;",
         "",
         '        if (op.equals("push_const")) {',
         "            stack.add(values[pc]);",

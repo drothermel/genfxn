@@ -30,6 +30,9 @@ from genfxn.simple_algorithms.render import render_simple_algorithms
 from genfxn.simple_algorithms.sampler import sample_simple_algorithms_spec
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 
+INT32_MAX = (1 << 31) - 1
+INT64_MAX = (1 << 63) - 1
+
 
 class TestMostFrequentEval:
     def test_empty_list(self) -> None:
@@ -422,6 +425,23 @@ class TestAxesValidation:
                 list_length_range=(1, 3), window_size_range=(1, 5)
             )
 
+    def test_window_size_range_high_must_fit_int32(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"window_size_range: high .* must be <= {INT32_MAX}",
+        ):
+            SimpleAlgorithmsAxes(
+                list_length_range=(1, INT32_MAX + 1),
+                window_size_range=(1, INT32_MAX + 1),
+            )
+
+    def test_value_range_rejects_values_above_signed_i64(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"value_range: high .* must be <= {INT64_MAX}",
+        ):
+            SimpleAlgorithmsAxes(value_range=(0, INT64_MAX + 1))
+
     def test_empty_templates(self) -> None:
         with pytest.raises(ValueError, match="templates must not be empty"):
             SimpleAlgorithmsAxes(templates=[])
@@ -480,6 +500,10 @@ class TestAxesValidation:
             match=rf"{field_name}: bool is not allowed for int range bounds",
         ):
             SimpleAlgorithmsAxes.model_validate({field_name: range_value})
+
+    def test_max_window_sum_rejects_k_above_int32(self) -> None:
+        with pytest.raises(ValueError, match="2147483647"):
+            MaxWindowSumSpec(k=INT32_MAX + 1)
 
 
 class TestTaskGeneration:

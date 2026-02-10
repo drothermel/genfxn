@@ -124,6 +124,13 @@ def test_graph_edge_rejects_bool_int_fields() -> None:
         GraphEdge.model_validate({"u": True, "v": 1, "w": 1})
 
 
+def test_graph_edge_rejects_weight_above_i64_max() -> None:
+    with pytest.raises(ValidationError, match=r"w"):
+        GraphEdge.model_validate(
+            {"u": 0, "v": 1, "w": (1 << 63)}
+        )
+
+
 def test_graph_spec_rejects_bool_n_nodes() -> None:
     with pytest.raises(
         ValidationError,
@@ -138,6 +145,26 @@ def test_graph_spec_rejects_bool_n_nodes() -> None:
                 "edges": [],
             }
         )
+
+
+def test_graph_spec_rejects_n_nodes_above_int32_max() -> None:
+    with pytest.raises(ValidationError, match=r"n_nodes"):
+        GraphQueriesSpec.model_validate(
+            {
+                "query_type": GraphQueryType.REACHABLE.value,
+                "directed": True,
+                "weighted": False,
+                "n_nodes": 1 << 31,
+                "edges": [],
+            }
+        )
+
+
+def test_axes_rejects_ranges_above_supported_numeric_bounds() -> None:
+    with pytest.raises(ValueError, match=r"n_nodes_range: high"):
+        GraphQueriesAxes(n_nodes_range=(2, 1 << 31))
+    with pytest.raises(ValueError, match=r"weight_range: high"):
+        GraphQueriesAxes(weight_range=(1, 1 << 63))
 
 
 def test_eval_rejects_bool_src_dst_inputs() -> None:
@@ -173,6 +200,20 @@ def test_normalize_graph_keeps_min_weight_for_duplicate_edges() -> None:
         2: [],
     }
     assert eval_graph_queries(spec, 0, 2) == 7
+
+
+def test_shortest_path_cost_uses_signed_i64_wrap_semantics() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 63) - 1),
+            GraphEdge(u=1, v=2, w=1),
+        ],
+    )
+    assert eval_graph_queries(spec, 0, 2) == -(1 << 63)
 
 
 @pytest.mark.parametrize(

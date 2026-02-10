@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field, model_validator
 from genfxn.core.int32 import INT32_MAX
 from genfxn.core.predicates import Predicate
 
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
+
 
 class ExprType(str, Enum):
     AFFINE = "affine"
@@ -42,21 +45,49 @@ def _validate_no_bool_int_range_bounds(data: Any) -> None:
 
 class ExprAffine(BaseModel):
     kind: Literal["affine"] = "affine"
-    a: int = Field(description="Coefficient for x")
-    b: int = Field(description="Constant term")
+    a: int = Field(
+        description="Coefficient for x",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
+    b: int = Field(
+        description="Constant term",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
 
 
 class ExprQuadratic(BaseModel):
     kind: Literal["quadratic"] = "quadratic"
-    a: int = Field(description="Coefficient for x^2")
-    b: int = Field(description="Coefficient for x")
-    c: int = Field(description="Constant term")
+    a: int = Field(
+        description="Coefficient for x^2",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
+    b: int = Field(
+        description="Coefficient for x",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
+    c: int = Field(
+        description="Constant term",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
 
 
 class ExprAbs(BaseModel):
     kind: Literal["abs"] = "abs"
-    a: int = Field(description="Coefficient for abs(x)")
-    b: int = Field(description="Constant term")
+    a: int = Field(
+        description="Coefficient for abs(x)",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
+    b: int = Field(
+        description="Constant term",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
 
 
 class ExprMod(BaseModel):
@@ -66,8 +97,16 @@ class ExprMod(BaseModel):
         ge=1,
         le=INT32_MAX,
     )
-    a: int = Field(description="Coefficient for (x % divisor)")
-    b: int = Field(description="Constant term")
+    a: int = Field(
+        description="Coefficient for (x % divisor)",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
+    b: int = Field(
+        description="Constant term",
+        ge=INT64_MIN,
+        le=INT64_MAX,
+    )
 
 
 Expression = Annotated[
@@ -122,6 +161,10 @@ class PiecewiseAxes(BaseModel):
             lo, hi = getattr(self, name)
             if lo > hi:
                 raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+            if lo < INT64_MIN:
+                raise ValueError(f"{name}: low ({lo}) must be >= {INT64_MIN}")
+            if hi > INT64_MAX:
+                raise ValueError(f"{name}: high ({hi}) must be <= {INT64_MAX}")
 
         div_lo, div_hi = self.divisor_range
         if div_lo < 1:

@@ -14,6 +14,9 @@ _INT_RANGE_FIELDS = (
     "shift_range",
     "scale_range",
 )
+INT32_MAX = (1 << 31) - 1
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -46,13 +49,13 @@ class ConditionalLinearSumSpec(BaseModel):
     predicate: Predicate
     true_transform: Transform
     false_transform: Transform
-    init_value: int = 0
+    init_value: int = Field(default=0, ge=INT64_MIN, le=INT64_MAX)
 
 
 class ResettingBestPrefixSumSpec(BaseModel):
     template: Literal["resetting_best_prefix_sum"] = "resetting_best_prefix_sum"
     reset_predicate: Predicate
-    init_value: int = 0
+    init_value: int = Field(default=0, ge=INT64_MIN, le=INT64_MAX)
     value_transform: Transform | None = None
 
 
@@ -66,7 +69,7 @@ class ToggleSumSpec(BaseModel):
     toggle_predicate: Predicate
     on_transform: Transform
     off_transform: Transform
-    init_value: int = 0
+    init_value: int = Field(default=0, ge=INT64_MIN, le=INT64_MAX)
 
 
 StatefulSpec = Annotated[
@@ -143,6 +146,10 @@ class StatefulAxes(BaseModel):
             lo, hi = getattr(self, name)
             if lo > hi:
                 raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+            if lo < INT64_MIN:
+                raise ValueError(f"{name}: low ({lo}) must be >= {INT64_MIN}")
+            if hi > INT64_MAX:
+                raise ValueError(f"{name}: high ({hi}) must be <= {INT64_MAX}")
 
         lo, hi = self.list_length_range
         if lo < 0:
@@ -151,6 +158,10 @@ class StatefulAxes(BaseModel):
         lo, hi = self.divisor_range
         if lo < 1:
             raise ValueError(f"divisor_range: low ({lo}) must be >= 1")
+        if hi > INT32_MAX:
+            raise ValueError(
+                f"divisor_range: high ({hi}) must be <= {INT32_MAX}"
+            )
 
         has_boolean_composition = (
             PredicateType.AND in self.predicate_types

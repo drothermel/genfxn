@@ -57,6 +57,16 @@ class TestModels:
         with pytest.raises(ValueError, match="halt"):
             _spec([Instruction(op=InstructionOp.PUSH_CONST, value=1)])
 
+    def test_spec_rejects_max_step_count_above_i64_max(self) -> None:
+        with pytest.raises(ValueError, match="max_step_count"):
+            _spec(
+                [
+                    Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=(1 << 63),
+            )
+
     def test_axes_validate_ranges(self) -> None:
         with pytest.raises(ValueError, match="value_range"):
             StackBytecodeAxes(value_range=(2, -2))
@@ -78,6 +88,10 @@ class TestModels:
             match=rf"{field_name}: bool is not allowed for int range bounds",
         ):
             StackBytecodeAxes.model_validate({field_name: range_value})
+
+    def test_axes_reject_max_step_count_range_above_i64_max(self) -> None:
+        with pytest.raises(ValueError, match="max_step_count_range: high"):
+            StackBytecodeAxes(max_step_count_range=(20, 1 << 63))
 
 
 class TestEvaluatorArithmeticAndComparison:

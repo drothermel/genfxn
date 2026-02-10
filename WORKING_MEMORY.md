@@ -218,6 +218,16 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
   semantics.
 - `_PersistentWorker` currently reuses function execution `timeout_sec` for
   bootstrap initialization, which is too aggressive for process startup jitter.
+
+## Latest Intake Extension (2026-02-10, repo-wide review follow-up)
+- Java renderer compile-safety still has two uncovered large-literal paths:
+  - `graph_queries` edge weight literals above Java `int` range.
+  - `stack_bytecode` `max_step_count` above Java `int` range.
+- `core.codegen.render_tests(...)` currently renders `set`/`frozenset`
+  literals in insertion/hash iteration order, causing cross-process
+  nondeterministic output text.
+- A small set of first-party family tests still use `pytest.importorskip(...)`,
+  which can convert genuine import regressions into skips.
 - This batch should add a startup-specific timeout floor (or equivalent init
   timeout separation) while preserving function execution timeout behavior.
 
@@ -1488,3 +1498,139 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
 - Nested type-sensitive holdout behavior is covered at matcher level in
   `tests/test_cli.py`, but dedicated file-based CLI split end-to-end tests were
   still thin for nested exact/contains payloads.
+
+## Latest Intake Extension (2026-02-10, renderer literal boundary sweep)
+- Remaining renderer compile-safety drift is broader than the initial
+  `graph_queries`/`stack_bytecode` fixes:
+  - Java renderers in `bitops`, `sequence_dp`, `temporal_logic`, `intervals`,
+    and `fsm` still had direct literal emission paths that can fail compilation
+    for valid model payloads near/beyond backend primitive limits.
+  - Rust renderers in `sequence_dp` (and related helper clones in other
+    families) still accepted values that can emit out-of-range `i64` literals.
+- `render_tests(...)` deterministic rendering still had a dict-ordering gap:
+  dict literals were emitted with insertion-order traversal rather than stable
+  canonical ordering, allowing cross-process drift when insertion order is
+  hash-derived.
+- First-party `pytest.importorskip(...)` masking appears already reduced in the
+  current workspace; strict-import cleanup may be partially complete from
+  concurrent patching and should be re-checked before editing.
+
+## Completed This Chunk (2026-02-10, renderer literal boundary + deterministic dict rendering)
+- Closed remaining Java literal compile-safety drift by using checked helpers in:
+  - `src/genfxn/langs/java/bitops.py`
+  - `src/genfxn/langs/java/sequence_dp.py`
+  - `src/genfxn/langs/java/temporal_logic.py`
+  - `src/genfxn/langs/java/intervals.py`
+  - `src/genfxn/langs/java/fsm.py`
+- Hardened helper contracts:
+  - `src/genfxn/langs/java/_helpers.py`
+    - `java_int_literal(...)` now fail-closes outside signed-64-bit range.
+  - `src/genfxn/langs/rust/_helpers.py`
+    - added `rust_i64_literal(...)` with signed-64-bit range checks.
+- Aligned Rust literal rendering with checked helper usage in:
+  - `src/genfxn/langs/rust/sequence_dp.py`
+  - `src/genfxn/langs/rust/bitops.py`
+  - `src/genfxn/langs/rust/temporal_logic.py`
+  - `src/genfxn/langs/rust/intervals.py`
+- Added fail-closed representable-range model validation in:
+  - `src/genfxn/bitops/models.py`
+  - `src/genfxn/sequence_dp/models.py`
+  - `src/genfxn/temporal_logic/models.py`
+  - `src/genfxn/intervals/models.py`
+  - `src/genfxn/fsm/models.py`
+  including FSM state-id upper bound protection against sink-state overflow.
+- Fixed `render_tests(...)` dict-order nondeterminism in:
+  - `src/genfxn/core/codegen.py`
+  dict literals now render with stable key ordering.
+- Added focused regressions in:
+  - `tests/test_java_render.py`
+  - `tests/test_rust_render.py`
+  - `tests/test_bitops.py`
+  - `tests/test_sequence_dp.py`
+  - `tests/test_temporal_logic.py`
+  - `tests/test_intervals.py`
+  - `tests/test_fsm.py`
+  - `tests/test_core_dsl.py`
+- Validation evidence:
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - targeted standard pytest slice (8 files) -> 553 passed.
+
+## Completed This Chunk (2026-02-10, parity closure + compatibility wrappers)
+- Restored backward-compatible literal helper aliases used by parity tests:
+  - `src/genfxn/langs/java/temporal_logic.py`:
+    `_long_literal(...) -> java_long_literal(...)`
+  - `src/genfxn/langs/rust/temporal_logic.py`:
+    `_i64_literal(...) -> rust_i64_literal(...)`
+- Re-ran broad standard+full verification slices to validate the entire
+  hardening batch end-to-end after compatibility restoration.
+- Validation evidence:
+  - `uv run pytest` standard slice across core/CLI/splits/render/model files
+    -> 917 passed.
+  - `uv run pytest` full runtime parity slice across
+    `graph_queries`, `stack_bytecode`, `sequence_dp`, `temporal_logic`,
+    `intervals`, `bitops`, and `fsm`
+    -> 35 passed.
+
+## Latest Intake Extension (2026-02-10, graph_queries + intervals i64 overflow parity)
+- Two additional overflow-adjacent parity drifts are reproducible and separate
+  from compile-safety/parser work:
+  - `graph_queries` shortest-path accumulation:
+    Python evaluator uses unbounded integer addition while Java/Rust use
+    signed `long`/`i64` wrapping behavior.
+  - `intervals` aggregate/event arithmetic:
+    Python evaluator uses unbounded arithmetic while Java/Rust wrap for
+    operations involving `+1`, `total += ...`, and event sweep accumulation.
+- Reproduced examples:
+  - graph_queries path weight `(2^63-1) + 1`:
+    Python `9223372036854775808` vs Java/Rust `-9223372036854775808`.
+  - intervals:
+    - total_coverage over `[-(2^63-1), 2^63-1]`:
+      Python `18446744073709551615` vs Java/Rust `-1`.
+    - max_overlap_count at endpoint `2^63-1`:
+      Python `1` vs Java/Rust `0` due `end + 1` wrap.
+
+## Latest Intake Extension (2026-02-10, int32-family literal fail-closed + hash canonicalization)
+- Related-issue sweep found remaining compile-safety drift in int32 families
+  (`piecewise`, `stateful`, `simple_algorithms`) for constants above signed
+  64-bit range:
+  - Java paths fail during rendering via checked long/int helper limits.
+  - Rust paths still inline several raw constants and can fail `rustc` with
+    literal out-of-range errors.
+- This drift appears through public generation APIs as well (for example
+  `generate_*_task(..., languages=[Language.RUST])`) when axes/specs allow
+  out-of-range constants.
+- Core int predicate/transform models intentionally allow constants above
+  signed int32 (for int32-wrap semantics tests), so this pass should preserve
+  that behavior while fail-closing values outside signed 64-bit range.
+- `task_id_from_spec(...)` canonicalization still conflates mixed key types by
+  coercing dict keys with `str(k)`, which can produce collisions and
+  insertion-order-sensitive IDs for mixed-type key sets.
+- Skip-based availability gating remains in first-party tests (`test_suites`,
+  `test_presets`) and can mask missing-module regressions as skipped tests
+  rather than failures.
+
+## Completed This Chunk (2026-02-10, int32-family literal/hash/skip hardening)
+- Added fail-closed signed-64-bit bounds for int32-family numeric specs/axes
+  and shared predicate/transform constants, preserving existing >int32 wrap
+  semantics for runtime parity paths.
+- Enforced compile-safe `MaxWindowSumSpec.k` upper bound (`<= INT32_MAX`).
+- Hardened Rust int32-family numeric emitters to validate i64 representability
+  while preserving expected renderer text style for existing render tests.
+- Fixed `task_id_from_spec(...)` mixed-type dict-key canonicalization so
+  non-string-key dict hashing is deterministic and type-sensitive.
+- Converted targeted first-party availability gating in
+  `tests/test_suites.py` and `tests/test_presets.py` to fail-closed behavior
+  (no skip-on-missing-module masking).
+- Added focused regressions in:
+  - `tests/test_core_dsl.py`
+  - `tests/test_stateful.py`
+  - `tests/test_simple_algorithms.py`
+  - `tests/test_piecewise.py`
+- Validation evidence:
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/test_core_dsl.py tests/test_stateful.py
+    tests/test_simple_algorithms.py tests/test_piecewise.py
+    tests/test_suites.py tests/test_presets.py tests/test_rust_render.py -v
+    --verification-level=standard` -> 631 passed, 19 skipped.

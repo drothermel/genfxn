@@ -3,6 +3,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from genfxn.core.int32 import INT32_MAX
 from genfxn.core.predicates import Predicate, PredicateType
 from genfxn.core.transforms import Transform, TransformType
 
@@ -27,6 +28,8 @@ _INT_RANGE_FIELDS = (
     "short_list_default_range",
     "empty_default_for_empty_range",
 )
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -63,34 +66,40 @@ class CountingMode(str, Enum):
 class MostFrequentSpec(BaseModel):
     template: Literal["most_frequent"] = "most_frequent"
     tie_break: TieBreakMode
-    empty_default: int = 0
+    empty_default: int = Field(default=0, ge=INT64_MIN, le=INT64_MAX)
     pre_filter: Predicate | None = None
     pre_transform: Transform | None = None
-    tie_default: int | None = None
+    tie_default: int | None = Field(
+        default=None, ge=INT64_MIN, le=INT64_MAX
+    )
 
 
 class CountPairsSumSpec(BaseModel):
     template: Literal["count_pairs_sum"] = "count_pairs_sum"
-    target: int
+    target: int = Field(ge=INT64_MIN, le=INT64_MAX)
     counting_mode: CountingMode
     pre_filter: Predicate | None = None
     pre_transform: Transform | None = None
-    no_result_default: int | None = None
-    short_list_default: int | None = None
+    no_result_default: int | None = Field(
+        default=None, ge=INT64_MIN, le=INT64_MAX
+    )
+    short_list_default: int | None = Field(
+        default=None, ge=INT64_MIN, le=INT64_MAX
+    )
 
 
 class MaxWindowSumSpec(BaseModel):
     template: Literal["max_window_sum"] = "max_window_sum"
-    k: int
-    invalid_k_default: int = 0
+    k: int = Field(ge=1, le=INT32_MAX)
+    invalid_k_default: int = Field(default=0, ge=INT64_MIN, le=INT64_MAX)
     pre_filter: Predicate | None = None
     pre_transform: Transform | None = None
-    empty_default: int | None = None
+    empty_default: int | None = Field(
+        default=None, ge=INT64_MIN, le=INT64_MAX
+    )
 
     @model_validator(mode="after")
     def validate_k(self) -> "MaxWindowSumSpec":
-        if self.k < 1:
-            raise ValueError(f"k must be >= 1, got {self.k}")
         return self
 
 
@@ -147,6 +156,10 @@ class SimpleAlgorithmsAxes(BaseModel):
             lo, hi = getattr(self, name)
             if lo > hi:
                 raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+            if lo < INT64_MIN:
+                raise ValueError(f"{name}: low ({lo}) must be >= {INT64_MIN}")
+            if hi > INT64_MAX:
+                raise ValueError(f"{name}: high ({hi}) must be <= {INT64_MAX}")
 
         lo, hi = self.list_length_range
         if lo < 0:
@@ -155,12 +168,33 @@ class SimpleAlgorithmsAxes(BaseModel):
         lo, hi = self.window_size_range
         if lo < 1:
             raise ValueError(f"window_size_range: low ({lo}) must be >= 1")
+        if hi > INT32_MAX:
+            raise ValueError(
+                f"window_size_range: high ({hi}) must be <= {INT32_MAX}"
+            )
         list_hi = self.list_length_range[1]
         if hi > list_hi:
             raise ValueError(
                 "window_size_range: high "
                 f"({hi}) must be <= list_length_range high ({list_hi})"
             )
+
+        for name in (
+            "tie_default_range",
+            "no_result_default_range",
+            "short_list_default_range",
+            "empty_default_for_empty_range",
+        ):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            lo, hi = value
+            if lo > hi:
+                raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
+            if lo < INT64_MIN:
+                raise ValueError(f"{name}: low ({lo}) must be >= {INT64_MIN}")
+            if hi > INT64_MAX:
+                raise ValueError(f"{name}: high ({hi}) must be <= {INT64_MAX}")
 
         if self.pre_filter_types is not None and not self.pre_filter_types:
             raise ValueError("pre_filter_types must not be empty when provided")

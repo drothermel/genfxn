@@ -246,3 +246,47 @@ def test_intervals_runtime_parity_forced_operation_and_boundary_modes() -> None:
                 expected
             )
             assert _run_rust_f(rustc, rust_code, list(intervals)) == expected
+
+
+@pytest.mark.full
+def test_intervals_runtime_parity_total_coverage_i64_overflow() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    i64_max = (1 << 63) - 1
+    spec = IntervalsSpec(
+        operation=OperationType.TOTAL_COVERAGE,
+        boundary_mode=BoundaryMode.CLOSED_CLOSED,
+        merge_touching=True,
+        endpoint_clip_abs=i64_max,
+        endpoint_quantize_step=1,
+    )
+    intervals = [(-i64_max, i64_max)]
+    java_code = render_intervals_java(spec, func_name="f")
+    rust_code = render_intervals_rust(spec, func_name="f")
+
+    expected = eval_intervals(spec, intervals)
+    assert expected == -1
+    assert _run_java_f(javac, java, java_code, intervals) == expected
+    assert _run_rust_f(rustc, rust_code, intervals) == expected
+
+
+@pytest.mark.full
+def test_intervals_runtime_parity_max_overlap_end_plus_one_wrap() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    i64_max = (1 << 63) - 1
+    spec = IntervalsSpec(
+        operation=OperationType.MAX_OVERLAP_COUNT,
+        boundary_mode=BoundaryMode.CLOSED_CLOSED,
+        merge_touching=False,
+        endpoint_clip_abs=i64_max,
+        endpoint_quantize_step=1,
+    )
+    intervals = [(i64_max, i64_max)]
+    java_code = render_intervals_java(spec, func_name="f")
+    rust_code = render_intervals_rust(spec, func_name="f")
+
+    expected = eval_intervals(spec, intervals)
+    assert expected == 0
+    assert _run_java_f(javac, java, java_code, intervals) == expected
+    assert _run_rust_f(rustc, rust_code, intervals) == expected

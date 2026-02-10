@@ -1,4 +1,5 @@
 from genfxn.graph_queries.models import GraphQueriesSpec
+from genfxn.langs.java._helpers import java_long_literal
 
 
 def render_graph_queries(
@@ -13,13 +14,17 @@ def render_graph_queries(
         f"    boolean directed = {str(spec.directed).lower()};",
         f"    boolean weighted = {str(spec.weighted).lower()};",
         f'    String queryType = "{spec.query_type.value}";',
-        "    int[][] edges = new int[][] {",
+        "    long[][] edges = new long[][] {",
     ]
 
     for edge in spec.edges:
         lines.append(
-            "        new int[] "
-            + f"{{{edge.u}, {edge.v}, {edge.w}}},"
+            "        new long[] "
+            + "{"
+            + f"{java_long_literal(edge.u)}, "
+            + f"{java_long_literal(edge.v)}, "
+            + f"{java_long_literal(edge.w)}"
+            + "},"
         )
 
     lines.extend(
@@ -44,48 +49,57 @@ def render_graph_queries(
             "        return 0;",
             "    }",
             "",
-            "    java.util.HashMap<Long, Integer> best = "
+            "    java.util.HashMap<Long, Long> best = "
             "new java.util.HashMap<>();",
-            "    for (int[] edge : edges) {",
-            "        int rawU = edge[0];",
-            "        int rawV = edge[1];",
-            "        int rawW = edge[2];",
-            "        int weight = weighted ? rawW : 1;",
+            "    for (long[] edge : edges) {",
+            "        long rawULong = edge[0];",
+            "        long rawVLong = edge[1];",
+            "        long rawW = edge[2];",
+            "        if (rawULong < 0 || rawULong >= nNodes || "
+            "rawVLong < 0 || rawVLong >= nNodes) {",
+            "            throw new IllegalArgumentException(",
+            '                "edge endpoint out of range for n_nodes=" + '
+            "nNodes",
+            "            );",
+            "        }",
+            "        int rawU = (int) rawULong;",
+            "        int rawV = (int) rawVLong;",
+            "        long weight = weighted ? rawW : 1L;",
             "        long key = (((long) rawU) << 32) ^ "
             "(rawV & 0xFFFF_FFFFL);",
-            "        Integer prev = best.get(key);",
+            "        Long prev = best.get(key);",
             "        if (prev == null || weight < prev) {",
             "            best.put(key, weight);",
             "        }",
             "        if (!directed) {",
             "            long revKey = (((long) rawV) << 32) ^ "
             "(rawU & 0xFFFF_FFFFL);",
-            "            Integer revPrev = best.get(revKey);",
+            "            Long revPrev = best.get(revKey);",
             "            if (revPrev == null || weight < revPrev) {",
-            "                best.put(revKey, weight);",
+                "                best.put(revKey, weight);",
             "            }",
             "        }",
             "    }",
             "",
-            "    java.util.ArrayList<int[]>[] adjacency = "
+            "    java.util.ArrayList<long[]>[] adjacency = "
             "new java.util.ArrayList[nNodes];",
             "    for (int node = 0; node < nNodes; node++) {",
             "        adjacency[node] = new java.util.ArrayList<>();",
             "    }",
-            "    for (java.util.Map.Entry<Long, Integer> entry : "
+            "    for (java.util.Map.Entry<Long, Long> entry : "
             "best.entrySet()) {",
             "        long key = entry.getKey();",
             "        int u = (int) (key >> 32);",
             "        int v = (int) key;",
-            "        adjacency[u].add(new int[] {v, entry.getValue()});",
+            "        adjacency[u].add(new long[] {v, entry.getValue()});",
             "    }",
-            "    for (java.util.ArrayList<int[]> neighbors : adjacency) {",
+            "    for (java.util.ArrayList<long[]> neighbors : adjacency) {",
             "        neighbors.sort((left, right) -> {",
-            "            int nodeCmp = Integer.compare(left[0], right[0]);",
+            "            int nodeCmp = Long.compare(left[0], right[0]);",
             "            if (nodeCmp != 0) {",
             "                return nodeCmp;",
             "            }",
-            "            return Integer.compare(left[1], right[1]);",
+            "            return Long.compare(left[1], right[1]);",
             "        });",
             "    }",
             "",
@@ -101,11 +115,11 @@ def render_graph_queries(
             f"            if (node == {dst_var}) {{",
             "                return 1;",
             "            }",
-            "            for (int[] pair : adjacency[node]) {",
-            "                int neighbor = pair[0];",
+            "            for (long[] pair : adjacency[node]) {",
+            "                int neighbor = (int) pair[0];",
             "                if (visited.contains(neighbor)) {",
-            "                    continue;",
-            "                }",
+                "                    continue;",
+                "                }",
             "                visited.add(neighbor);",
             "                queue.addLast(neighbor);",
             "            }",
@@ -127,11 +141,11 @@ def render_graph_queries(
             f"            if (node == {dst_var}) {{",
             "                return hops;",
             "            }",
-            "            for (int[] pair : adjacency[node]) {",
-            "                int neighbor = pair[0];",
+            "            for (long[] pair : adjacency[node]) {",
+            "                int neighbor = (int) pair[0];",
             "                if (visited.contains(neighbor)) {",
-            "                    continue;",
-            "                }",
+                "                    continue;",
+                "                }",
             "                visited.add(neighbor);",
             "                queue.addLast(new int[] {neighbor, hops + 1});",
             "            }",
@@ -168,13 +182,13 @@ def render_graph_queries(
             f"        if (node == {dst_var}) {{",
             "            return cost;",
             "        }",
-            "        for (int[] pair : adjacency[node]) {",
-            "            int neighbor = pair[0];",
-            "            int weight = pair[1];",
-            "            long nextCost = cost + (long) weight;",
+            "        for (long[] pair : adjacency[node]) {",
+            "            int neighbor = (int) pair[0];",
+            "            long weight = pair[1];",
+            "            long nextCost = cost + weight;",
             "            Long prev = bestCost.get(neighbor);",
             "            if (prev != null && nextCost >= prev) {",
-            "                continue;",
+                "                continue;",
             "            }",
             "            bestCost.put(neighbor, nextCost);",
             "            if (prev == null) {",

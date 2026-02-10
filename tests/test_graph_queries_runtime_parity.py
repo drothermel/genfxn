@@ -240,3 +240,55 @@ def test_graph_queries_runtime_parity_large_weight_cost_accumulation() -> None:
     assert expected == 4_000_000_000
     assert _run_java_f(javac, java, java_code, 0, 2) == expected
     assert _run_rust_f(rustc, rust_code, 0, 2) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_int32_plus_one_weight() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 31)),
+            GraphEdge(u=1, v=2, w=(1 << 31)),
+        ],
+    )
+    java_code = render_graph_queries_java(spec, func_name="f")
+    rust_code = render_graph_queries_rust(spec, func_name="f")
+
+    expected = eval_graph_queries(spec, 0, 2)
+    assert expected == 4_294_967_296
+    assert _run_java_f(javac, java, java_code, 0, 2) == expected
+    assert _run_rust_f(rustc, rust_code, 0, 2) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_i64_overflow_accumulation() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 63) - 1),
+            GraphEdge(u=1, v=2, w=1),
+        ],
+    )
+    java_code = render_graph_queries_java(spec, func_name="f")
+    rust_code = render_graph_queries_rust(spec, func_name="f")
+
+    expected = eval_graph_queries(spec, 0, 2)
+    assert expected == -(1 << 63)
+    assert _run_java_f(javac, java, java_code, 0, 2) == expected
+    assert _run_rust_f(rustc, rust_code, 0, 2) == expected

@@ -1,4 +1,5 @@
 from genfxn.intervals.models import IntervalsSpec
+from genfxn.langs.java._helpers import java_long_literal
 
 
 def render_intervals(
@@ -11,8 +12,14 @@ def render_intervals(
         f'    String operation = "{spec.operation.value}";',
         f'    String boundaryMode = "{spec.boundary_mode.value}";',
         f"    boolean mergeTouching = {str(spec.merge_touching).lower()};",
-        f"    long endpointClipAbs = {spec.endpoint_clip_abs}L;",
-        f"    long endpointQuantizeStep = {spec.endpoint_quantize_step}L;",
+        (
+            "    long endpointClipAbs = "
+            f"{java_long_literal(spec.endpoint_clip_abs)};"
+        ),
+        (
+            "    long endpointQuantizeStep = "
+            f"{java_long_literal(spec.endpoint_quantize_step)};"
+        ),
         "",
         "    java.util.ArrayList<long[]> adjusted = "
         "new java.util.ArrayList<>();",

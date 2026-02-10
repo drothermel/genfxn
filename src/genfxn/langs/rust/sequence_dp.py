@@ -1,3 +1,4 @@
+from genfxn.langs.rust._helpers import rust_i64_literal
 from genfxn.sequence_dp.models import SequenceDpSpec, TieBreakOrder
 
 _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
@@ -8,13 +9,6 @@ _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
     TieBreakOrder.LEFT_DIAG_UP: ("left", "diag", "up"),
     TieBreakOrder.LEFT_UP_DIAG: ("left", "up", "diag"),
 }
-
-
-def _i64_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "i64::MIN"
-    return f"{value}i64"
-
 
 def render_sequence_dp(
     spec: SequenceDpSpec,
@@ -36,12 +30,15 @@ def render_sequence_dp(
         f'    let template = "{spec.template.value}";',
         f'    let output_mode = "{spec.output_mode.value}";',
         f'    let predicate_kind = "{kind}";',
-        f"    let max_diff: i64 = {_i64_literal(max_diff)};",
-        f"    let divisor: i64 = {_i64_literal(divisor)};",
-        f"    let remainder: i64 = {_i64_literal(remainder)};",
-        f"    let match_score: i64 = {_i64_literal(spec.match_score)};",
-        f"    let mismatch_score: i64 = {_i64_literal(spec.mismatch_score)};",
-        f"    let gap_score: i64 = {_i64_literal(spec.gap_score)};",
+        f"    let max_diff: i64 = {rust_i64_literal(max_diff)};",
+        f"    let divisor: i64 = {rust_i64_literal(divisor)};",
+        f"    let remainder: i64 = {rust_i64_literal(remainder)};",
+        f"    let match_score: i64 = {rust_i64_literal(spec.match_score)};",
+        (
+            "    let mismatch_score: i64 = "
+            f"{rust_i64_literal(spec.mismatch_score)};"
+        ),
+        f"    let gap_score: i64 = {rust_i64_literal(spec.gap_score)};",
         "    let tie_order: [&str; 3] = [" + tie_values + "];",
         "",
         f"    let n = {a_var}.len();",

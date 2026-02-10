@@ -8,6 +8,8 @@ _INT_RANGE_FIELDS = (
     "edge_count_range",
     "weight_range",
 )
+INT32_MAX = (1 << 31) - 1
+INT64_MAX = (1 << 63) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -32,9 +34,9 @@ class GraphQueryType(str, Enum):
 
 
 class GraphEdge(BaseModel):
-    u: int = Field(ge=0)
-    v: int = Field(ge=0)
-    w: int = Field(default=1, ge=0)
+    u: int = Field(ge=0, le=INT32_MAX)
+    v: int = Field(ge=0, le=INT32_MAX)
+    w: int = Field(default=1, ge=0, le=INT64_MAX)
 
     @model_validator(mode="before")
     @classmethod
@@ -53,7 +55,7 @@ class GraphQueriesSpec(BaseModel):
     query_type: GraphQueryType
     directed: bool
     weighted: bool
-    n_nodes: int = Field(ge=1)
+    n_nodes: int = Field(ge=1, le=INT32_MAX)
     edges: list[GraphEdge] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -133,10 +135,16 @@ class GraphQueriesAxes(BaseModel):
 
         if self.n_nodes_range[0] < 1:
             raise ValueError("n_nodes_range: low must be >= 1")
+        if self.n_nodes_range[1] > INT32_MAX:
+            raise ValueError(
+                f"n_nodes_range: high must be <= {INT32_MAX}"
+            )
         if self.edge_count_range[0] < 0:
             raise ValueError("edge_count_range: low must be >= 0")
         if self.weight_range[0] < 0:
             raise ValueError("weight_range: low must be >= 0")
+        if self.weight_range[1] > INT64_MAX:
+            raise ValueError(f"weight_range: high must be <= {INT64_MAX}")
 
         for name in (
             "disconnected_prob_range",

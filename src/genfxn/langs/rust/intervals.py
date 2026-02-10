@@ -1,4 +1,5 @@
 from genfxn.intervals.models import IntervalsSpec
+from genfxn.langs.rust._helpers import rust_i64_literal
 
 
 def render_intervals(
@@ -11,10 +12,13 @@ def render_intervals(
         f'    let operation = "{spec.operation.value}";',
         f'    let boundary_mode = "{spec.boundary_mode.value}";',
         f"    let merge_touching = {str(spec.merge_touching).lower()};",
-        f"    let endpoint_clip_abs: i64 = {spec.endpoint_clip_abs};",
+        (
+            "    let endpoint_clip_abs: i64 = "
+            f"{rust_i64_literal(spec.endpoint_clip_abs)};"
+        ),
         (
             "    let endpoint_quantize_step: i64 = "
-            f"{spec.endpoint_quantize_step};"
+            f"{rust_i64_literal(spec.endpoint_quantize_step)};"
         ),
         "",
         "    let mut adjusted: Vec<(i64, i64)> = Vec::new();",

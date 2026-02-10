@@ -1,10 +1,5 @@
 from genfxn.bitops.models import BitopsSpec
-
-
-def _long_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "Long.MIN_VALUE"
-    return f"{value}L"
+from genfxn.langs.java._helpers import java_long_literal
 
 
 def render_bitops(
@@ -16,7 +11,7 @@ def render_bitops(
         f'"{instruction.op.value}"' for instruction in spec.operations
     )
     args = ", ".join(
-        _long_literal(instruction.arg if instruction.arg is not None else 0)
+        java_long_literal(instruction.arg if instruction.arg is not None else 0)
         for instruction in spec.operations
     )
 

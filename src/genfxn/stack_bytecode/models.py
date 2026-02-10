@@ -9,6 +9,8 @@ _INT_RANGE_FIELDS = (
     "const_range",
     "max_step_count_range",
 )
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -72,9 +74,9 @@ class RuntimeStatus(IntEnum):
 
 class Instruction(BaseModel):
     op: InstructionOp
-    value: int | None = None
-    index: int | None = None
-    target: int | None = None
+    value: int | None = Field(default=None, ge=INT64_MIN, le=INT64_MAX)
+    index: int | None = Field(default=None, ge=INT64_MIN, le=INT64_MAX)
+    target: int | None = Field(default=None, ge=INT64_MIN, le=INT64_MAX)
 
     @model_validator(mode="after")
     def validate_fields(self) -> "Instruction":
@@ -97,7 +99,7 @@ class Instruction(BaseModel):
 
 class StackBytecodeSpec(BaseModel):
     program: list[Instruction] = Field(min_length=1)
-    max_step_count: int = Field(ge=1, default=64)
+    max_step_count: int = Field(ge=1, le=INT64_MAX, default=64)
     jump_target_mode: JumpTargetMode = JumpTargetMode.ERROR
     input_mode: InputMode = InputMode.DIRECT
 
@@ -143,6 +145,12 @@ class StackBytecodeAxes(BaseModel):
 
         if self.list_length_range[0] < 0:
             raise ValueError("list_length_range: low must be >= 0")
+        if self.max_step_count_range[0] < 1:
+            raise ValueError("max_step_count_range: low must be >= 1")
+        if self.max_step_count_range[1] > INT64_MAX:
+            raise ValueError(
+                f"max_step_count_range: high must be <= {INT64_MAX}"
+            )
 
         if not self.jump_target_modes:
             raise ValueError("jump_target_modes must not be empty")

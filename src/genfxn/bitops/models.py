@@ -9,6 +9,8 @@ _INT_RANGE_FIELDS = (
     "mask_range",
     "shift_range",
 )
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -41,7 +43,7 @@ class BitOp(str, Enum):
 
 class BitInstruction(BaseModel):
     op: BitOp
-    arg: int | None = None
+    arg: int | None = Field(default=None, ge=INT64_MIN, le=INT64_MAX)
 
     @model_validator(mode="after")
     def validate_fields(self) -> "BitInstruction":
@@ -102,5 +104,16 @@ class BitopsAxes(BaseModel):
 
         if self.n_ops_range[0] < 1:
             raise ValueError("n_ops_range: low must be >= 1")
+
+        for name in ("value_range", "mask_range", "shift_range"):
+            lo, hi = getattr(self, name)
+            if lo < INT64_MIN:
+                raise ValueError(
+                    f"{name}: low must be >= {INT64_MIN}"
+                )
+            if hi > INT64_MAX:
+                raise ValueError(
+                    f"{name}: high must be <= {INT64_MAX}"
+                )
 
         return self

@@ -25,6 +25,8 @@ _INT_RANGE_FIELDS = (
     "endpoint_clip_abs_range",
     "endpoint_quantize_step_range",
 )
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -46,8 +48,8 @@ class IntervalsSpec(BaseModel):
     operation: OperationType
     boundary_mode: BoundaryMode
     merge_touching: bool
-    endpoint_clip_abs: int = Field(default=20, ge=1)
-    endpoint_quantize_step: int = Field(default=1, ge=1)
+    endpoint_clip_abs: int = Field(default=20, ge=1, le=INT64_MAX)
+    endpoint_quantize_step: int = Field(default=1, ge=1, le=INT64_MAX)
     allow_reversed_interval_prob: float = Field(default=0.0, ge=0.0, le=1.0)
     degenerate_interval_prob: float = Field(default=0.0, ge=0.0, le=1.0)
     nested_interval_prob: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -114,6 +116,21 @@ class IntervalsAxes(BaseModel):
         if self.endpoint_quantize_step_range[0] < 1:
             raise ValueError(
                 "endpoint_quantize_step_range: low must be >= 1"
+            )
+        if self.endpoint_range[0] < INT64_MIN:
+            raise ValueError(f"endpoint_range: low must be >= {INT64_MIN}")
+        if self.endpoint_range[1] > INT64_MAX:
+            raise ValueError(f"endpoint_range: high must be <= {INT64_MAX}")
+        if self.max_span_range[1] > INT64_MAX:
+            raise ValueError(f"max_span_range: high must be <= {INT64_MAX}")
+        if self.endpoint_clip_abs_range[1] > INT64_MAX:
+            raise ValueError(
+                f"endpoint_clip_abs_range: high must be <= {INT64_MAX}"
+            )
+        if self.endpoint_quantize_step_range[1] > INT64_MAX:
+            raise ValueError(
+                "endpoint_quantize_step_range: high must be <= "
+                f"{INT64_MAX}"
             )
 
         for name in (

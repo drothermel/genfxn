@@ -20,6 +20,9 @@ _INT_RANGE_FIELDS = (
     "threshold_range",
     "divisor_range",
 )
+INT32_MIN = -(1 << 31)
+INT32_MAX = (1 << 31) - 1
+FSM_STATE_ID_MAX = INT32_MAX - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -80,11 +83,11 @@ FsmPredicate = Annotated[
 
 class Transition(BaseModel):
     predicate: FsmPredicate
-    target_state_id: int
+    target_state_id: int = Field(ge=INT32_MIN, le=FSM_STATE_ID_MAX)
 
 
 class State(BaseModel):
-    id: int
+    id: int = Field(ge=INT32_MIN, le=FSM_STATE_ID_MAX)
     transitions: list[Transition] = Field(default_factory=list)
     is_accept: bool = False
 
@@ -99,7 +102,7 @@ class FsmSpec(BaseModel):
     )
     output_mode: OutputMode
     undefined_transition_policy: UndefinedTransitionPolicy
-    start_state_id: int
+    start_state_id: int = Field(ge=INT32_MIN, le=FSM_STATE_ID_MAX)
     states: list[State] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -187,5 +190,7 @@ class FsmAxes(BaseModel):
         lo, _ = self.divisor_range
         if lo < 1:
             raise ValueError("divisor_range: low must be >= 1")
+        if self.n_states_range[1] > INT32_MAX:
+            raise ValueError(f"n_states_range: high must be <= {INT32_MAX}")
 
         return self

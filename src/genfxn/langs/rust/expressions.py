@@ -1,3 +1,4 @@
+from genfxn.langs.rust._helpers import rust_i64_literal
 from genfxn.piecewise.models import (
     ExprAbs,
     ExprAffine,
@@ -7,21 +8,29 @@ from genfxn.piecewise.models import (
 )
 
 
+def _i64_expr(value: int) -> str:
+    literal = rust_i64_literal(value)
+    if literal.endswith("i64"):
+        return literal[:-3]
+    return literal
+
+
 def _render_linear_i32(a: int, x_term: str, b: int) -> str:
-    ax = "0" if a == 0 else f"i32_mul({a}, {x_term})"
+    ax = "0" if a == 0 else f"i32_mul({_i64_expr(a)}, {x_term})"
     if b == 0:
         return ax
-    return f"i32_add({ax}, {b})"
+    return f"i32_add({ax}, {_i64_expr(b)})"
 
 
 def _render_quadratic_i32(a: int, b: int, c: int, var: str) -> str:
     acc = "0"
 
     if a != 0:
-        acc = f"i32_mul(i32_mul({a}, {var}), {var})"
+        ra = _i64_expr(a)
+        acc = f"i32_mul(i32_mul({ra}, {var}), {var})"
 
     if b != 0:
-        bx = f"i32_mul({b}, {var})"
+        bx = f"i32_mul({_i64_expr(b)}, {var})"
         if acc == "0":
             acc = bx
         else:
@@ -29,9 +38,9 @@ def _render_quadratic_i32(a: int, b: int, c: int, var: str) -> str:
 
     if c != 0:
         if acc == "0":
-            acc = f"i32_wrap({c})"
+            acc = f"i32_wrap({_i64_expr(c)})"
         else:
-            acc = f"i32_add({acc}, {c})"
+            acc = f"i32_add({acc}, {_i64_expr(c)})"
 
     return acc
 
@@ -71,19 +80,19 @@ def render_expression_rust(
 
 def _render_linear(a: int, x_term: str, b: int) -> str:
     if a == 0:
-        return str(b)
+        return _i64_expr(b)
     if a == 1:
         ax = x_term
     elif a == -1:
         ax = f"-{x_term}"
     else:
-        ax = f"{a} * {x_term}"
+        ax = f"{_i64_expr(a)} * {x_term}"
 
     if b == 0:
         return ax
     if b > 0:
-        return f"{ax} + {b}"
-    return f"{ax} - {-b}"
+        return f"{ax} + {_i64_expr(b)}"
+    return f"{ax} - {_i64_expr(-b)}"
 
 
 def _render_quadratic(a: int, b: int, c: int, var: str) -> str:
@@ -95,10 +104,14 @@ def _render_quadratic(a: int, b: int, c: int, var: str) -> str:
         elif a == -1:
             parts.append(f"-{var} * {var}")
         else:
-            parts.append(f"{a} * {var} * {var}")
+            parts.append(f"{_i64_expr(a)} * {var} * {var}")
 
     if b != 0:
-        abs_term = var if abs(b) == 1 else f"{abs(b)} * {var}"
+        abs_term = (
+            var
+            if abs(b) == 1
+            else f"{_i64_expr(abs(b))} * {var}"
+        )
 
         if not parts:
             parts.append(f"-{abs_term}" if b < 0 else abs_term)
@@ -109,11 +122,11 @@ def _render_quadratic(a: int, b: int, c: int, var: str) -> str:
 
     if c != 0:
         if parts and c > 0:
-            parts.append(f" + {c}")
+            parts.append(f" + {_i64_expr(c)}")
         elif parts and c < 0:
-            parts.append(f" - {-c}")
+            parts.append(f" - {_i64_expr(-c)}")
         else:
-            parts.append(str(c))
+            parts.append(_i64_expr(c))
 
     if not parts:
         return "0"

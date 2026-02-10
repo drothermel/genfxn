@@ -1,16 +1,16 @@
 from typing import Any
 
+from genfxn.langs.java._helpers import java_long_literal
 from genfxn.temporal_logic.models import TemporalLogicSpec
 
 
 def _long_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "Long.MIN_VALUE"
-    return f"{value}L"
+    """Backward-compatible alias for legacy tests/callers."""
+    return java_long_literal(value)
 
 
 def _java_atom_expression(kind: str, constant: int) -> str:
-    const = _long_literal(constant)
+    const = java_long_literal(constant)
     if kind == "eq":
         return f"xs[i] == {const}"
     if kind == "ne":

@@ -1,10 +1,5 @@
 from genfxn.bitops.models import BitopsSpec
-
-
-def _i64_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "i64::MIN"
-    return f"{value}i64"
+from genfxn.langs.rust._helpers import rust_i64_literal
 
 
 def render_bitops(
@@ -16,7 +11,7 @@ def render_bitops(
         f'"{instruction.op.value}"' for instruction in spec.operations
     )
     args = ", ".join(
-        _i64_literal(instruction.arg if instruction.arg is not None else 0)
+        rust_i64_literal(instruction.arg if instruction.arg is not None else 0)
         for instruction in spec.operations
     )
     n_ops = len(spec.operations)

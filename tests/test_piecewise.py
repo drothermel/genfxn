@@ -22,6 +22,8 @@ from genfxn.piecewise.render import render_expression, render_piecewise
 from genfxn.piecewise.sampler import sample_piecewise_spec
 from genfxn.piecewise.task import generate_piecewise_task
 
+INT64_MAX = (1 << 63) - 1
+
 
 class TestExpressionEval:
     def test_affine(self) -> None:
@@ -53,6 +55,10 @@ class TestExpressionEval:
     def test_mod_rejects_divisor_above_int32_max(self) -> None:
         with pytest.raises(ValueError):
             ExprMod(divisor=INT32_MAX + 1, a=1, b=0)
+
+    def test_affine_rejects_coefficients_above_signed_i64(self) -> None:
+        with pytest.raises(ValueError, match="9223372036854775807"):
+            ExprAffine(a=INT64_MAX + 1, b=0)
 
 
 class TestBranchSelection:
@@ -242,6 +248,13 @@ class TestAxesValidation:
     def test_invalid_coeff_range(self) -> None:
         with pytest.raises(ValueError, match="coeff_range"):
             PiecewiseAxes(coeff_range=(5, -5))
+
+    def test_coeff_range_rejects_values_above_signed_i64(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"coeff_range: high .* must be <= {INT64_MAX}",
+        ):
+            PiecewiseAxes(coeff_range=(0, INT64_MAX + 1))
 
     def test_invalid_threshold_range(self) -> None:
         with pytest.raises(ValueError, match="threshold_range"):

@@ -1,3 +1,4 @@
+from genfxn.langs.rust._helpers import rust_i64_literal
 from genfxn.langs.rust.predicates import render_predicate_rust
 from genfxn.langs.rust.transforms import render_transform_rust
 from genfxn.stateful.models import (
@@ -7,6 +8,14 @@ from genfxn.stateful.models import (
     StatefulSpec,
     ToggleSumSpec,
 )
+
+
+def _i64_expr(value: int) -> str:
+    literal = rust_i64_literal(value)
+    if literal.endswith("i64"):
+        return literal[:-3]
+    return literal
+
 
 _I32_HELPERS = [
     "    fn i32_wrap(value: i64) -> i64 {",
@@ -43,11 +52,12 @@ def _render_conditional_linear_sum(
     false_expr = render_transform_rust(
         spec.false_transform, "x", int32_wrap=True
     )
+    init_value = _i64_expr(spec.init_value)
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
         *_I32_HELPERS,
-        f"    let mut acc: i64 = i32_wrap({spec.init_value});",
+        f"    let mut acc: i64 = i32_wrap({init_value});",
         f"    for &x_raw in {var} {{",
         "        let x = i32_wrap(x_raw);",
         f"        if {cond} {{",
@@ -73,11 +83,12 @@ def _render_resetting_best_prefix_sum(
         if spec.value_transform is not None
         else "x"
     )
+    init_value = _i64_expr(spec.init_value)
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
         *_I32_HELPERS,
-        f"    let init: i64 = i32_wrap({spec.init_value});",
+        f"    let init: i64 = i32_wrap({init_value});",
         "    let mut current_sum: i64 = init;",
         "    let mut best_sum: i64 = init;",
         f"    for &x_raw in {var} {{",
@@ -130,12 +141,13 @@ def _render_toggle_sum(
     )
     on_expr = render_transform_rust(spec.on_transform, "x", int32_wrap=True)
     off_expr = render_transform_rust(spec.off_transform, "x", int32_wrap=True)
+    init_value = _i64_expr(spec.init_value)
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
         *_I32_HELPERS,
         "    let mut on = false;",
-        f"    let mut acc: i64 = i32_wrap({spec.init_value});",
+        f"    let mut acc: i64 = i32_wrap({init_value});",
         f"    for &x_raw in {var} {{",
         "        let x = i32_wrap(x_raw);",
         f"        if {cond} {{",

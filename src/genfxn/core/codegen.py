@@ -43,7 +43,7 @@ def has_spec_value(spec: dict[str, Any], path: str) -> bool:
     return found
 
 
-def task_id_from_spec(family: str, spec: dict[str, Any]) -> str:
+def task_id_from_spec(family: str, spec: dict[Any, Any]) -> str:
     canonical = srsly.json_dumps(_canonicalize_for_hash(spec), sort_keys=True)
     hash_bytes = hashlib.sha256(canonical.encode()).digest()[:8]
     return f"{family}_{hash_bytes.hex()}"
@@ -52,19 +52,38 @@ def task_id_from_spec(family: str, spec: dict[str, Any]) -> str:
 def _canonicalize_for_hash(value: Any) -> Any:
     """Convert values into a deterministic JSON-serializable form."""
     if isinstance(value, dict):
+        canonical_items = [
+            (_canonicalize_for_hash(k), _canonicalize_for_hash(v))
+            for k, v in value.items()
+        ]
+        canonical_items.sort(
+            key=lambda item: srsly.json_dumps(item[0], sort_keys=True)
+        )
+        if all(isinstance(key, str) for key, _ in canonical_items):
+            return {key: item for key, item in canonical_items}
         return {
-            str(k): _canonicalize_for_hash(v)
-            for k, v in sorted(value.items(), key=lambda item: str(item[0]))
+            "__dict_items__": [
+                [key, item] for key, item in canonical_items
+            ]
         }
     if isinstance(value, list | tuple):
         return [_canonicalize_for_hash(v) for v in value]
     if isinstance(value, set | frozenset):
         items = [_canonicalize_for_hash(v) for v in value]
-        return sorted(items, key=lambda item: srsly.json_dumps(item))
+        return sorted(
+            items, key=lambda item: srsly.json_dumps(item, sort_keys=True)
+        )
     return value
 
 
 def render_tests(func_name: str, queries: list[Query]) -> str:
+    def _stable_value_sort_key(value: Any) -> tuple[str, str]:
+        try:
+            canonical = _canonicalize_for_hash(value)
+            return ("json", srsly.json_dumps(canonical, sort_keys=True))
+        except Exception:
+            return ("repr", f"{type(value).__name__}:{value!r}")
+
     def _render_python_literal(value: Any) -> str:
         if isinstance(value, float):
             if math.isnan(value):
@@ -86,25 +105,32 @@ def render_tests(func_name: str, queries: list[Query]) -> str:
                 inner += ","
             return f"({inner})"
         if isinstance(value, dict):
+            ordered_items = sorted(
+                value.items(), key=lambda item: _stable_value_sort_key(item[0])
+            )
             parts = [
                 f"{_render_python_literal(key)}: "
                 f"{_render_python_literal(item)}"
-                for key, item in value.items()
+                for key, item in ordered_items
             ]
             return "{" + ", ".join(parts) + "}"
         if isinstance(value, set):
             if not value:
                 return "set()"
+            ordered_items = sorted(value, key=_stable_value_sort_key)
             return (
                 "{"
-                + ", ".join(_render_python_literal(item) for item in value)
+                + ", ".join(
+                    _render_python_literal(item) for item in ordered_items
+                )
                 + "}"
             )
         if isinstance(value, frozenset):
             if not value:
                 return "frozenset()"
+            ordered_items = sorted(value, key=_stable_value_sort_key)
             rendered_items = ", ".join(
-                _render_python_literal(item) for item in value
+                _render_python_literal(item) for item in ordered_items
             )
             return f"frozenset({{{rendered_items}}})"
         return repr(value)

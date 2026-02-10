@@ -63,6 +63,7 @@ from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.java._helpers import (
     _regex_char_class_escape,
     java_int_literal,
+    java_long_literal,
     java_string_literal,
 )
 from genfxn.langs.java.expressions import render_expression_java
@@ -141,6 +142,33 @@ class TestJavaIntLiteral:
         assert java_int_literal(min_long_plus_one) == (
             f"((int) {min_long_plus_one}L)"
         )
+
+    def test_rejects_values_outside_i64_range(self) -> None:
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_int_literal(1 << 63)
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_int_literal(-(1 << 63) - 1)
+
+
+class TestJavaLongLiteral:
+    def test_small_long(self) -> None:
+        assert java_long_literal(123) == "123L"
+
+    def test_int32_boundary_values_are_long_literals(self) -> None:
+        assert java_long_literal((1 << 31) - 1) == "2147483647L"
+        assert java_long_literal(1 << 31) == "2147483648L"
+
+    def test_long_min_value_uses_constant(self) -> None:
+        assert java_long_literal(-(1 << 63)) == "Long.MIN_VALUE"
+
+    def test_long_max_value(self) -> None:
+        assert java_long_literal((1 << 63) - 1) == "9223372036854775807L"
+
+    def test_rejects_values_outside_i64_range(self) -> None:
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_long_literal(1 << 63)
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_long_literal(-(1 << 63) - 1)
 
 
 class TestRegexCharClassEscape:

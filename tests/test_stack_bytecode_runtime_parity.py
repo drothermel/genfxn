@@ -302,6 +302,29 @@ def test_stack_bytecode_runtime_parity_forced_modes_and_statuses() -> None:
 
 
 @pytest.mark.full
+def test_stack_bytecode_runtime_parity_large_max_step_count_literal() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+
+    spec = StackBytecodeSpec(
+        program=[
+            Instruction(op=InstructionOp.PUSH_CONST, value=7),
+            Instruction(op=InstructionOp.HALT),
+        ],
+        max_step_count=(1 << 31),
+        jump_target_mode=JumpTargetMode.ERROR,
+        input_mode=InputMode.DIRECT,
+    )
+    java_code = render_stack_bytecode_java(spec, func_name="f")
+    rust_code = render_stack_bytecode_rust(spec, func_name="f")
+
+    expected = eval_stack_bytecode(spec, [])
+    assert expected == (0, 7)
+    assert _run_java_f(javac, java, java_code, []) == expected
+    assert _run_rust_f(rustc, rust_code, []) == expected
+
+
+@pytest.mark.full
 def test_stack_bytecode_runtime_parity_overflow_adjacent_cases() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()

@@ -5,29 +5,24 @@ import pytest
 
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import Issue, Severity
-
-intervals_eval = pytest.importorskip("genfxn.intervals.eval")
-intervals_models = pytest.importorskip("genfxn.intervals.models")
-intervals_task = pytest.importorskip("genfxn.intervals.task")
-intervals_validate = pytest.importorskip("genfxn.intervals.validate")
-
-eval_intervals = intervals_eval.eval_intervals
-IntervalsAxes = intervals_models.IntervalsAxes
-IntervalsSpec = intervals_models.IntervalsSpec
-generate_intervals_task = intervals_task.generate_intervals_task
-
-CODE_CODE_EXEC_ERROR = intervals_validate.CODE_CODE_EXEC_ERROR
-CODE_CODE_MISSING_FUNC = intervals_validate.CODE_CODE_MISSING_FUNC
-CODE_CODE_PARSE_ERROR = intervals_validate.CODE_CODE_PARSE_ERROR
-CODE_QUERY_INPUT_DUPLICATE = intervals_validate.CODE_QUERY_INPUT_DUPLICATE
-CODE_QUERY_INPUT_TYPE = intervals_validate.CODE_QUERY_INPUT_TYPE
-CODE_QUERY_OUTPUT_MISMATCH = intervals_validate.CODE_QUERY_OUTPUT_MISMATCH
-CODE_QUERY_OUTPUT_TYPE = intervals_validate.CODE_QUERY_OUTPUT_TYPE
-CODE_SEMANTIC_MISMATCH = intervals_validate.CODE_SEMANTIC_MISMATCH
-CODE_SEMANTIC_ISSUES_CAPPED = intervals_validate.CODE_SEMANTIC_ISSUES_CAPPED
-CODE_UNSAFE_AST = intervals_validate.CODE_UNSAFE_AST
-
-_validate_intervals_task = intervals_validate.validate_intervals_task
+from genfxn.intervals.eval import eval_intervals
+from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.task import generate_intervals_task
+from genfxn.intervals.validate import (
+    CODE_CODE_EXEC_ERROR,
+    CODE_CODE_MISSING_FUNC,
+    CODE_CODE_PARSE_ERROR,
+    CODE_QUERY_INPUT_DUPLICATE,
+    CODE_QUERY_INPUT_TYPE,
+    CODE_QUERY_OUTPUT_MISMATCH,
+    CODE_QUERY_OUTPUT_TYPE,
+    CODE_SEMANTIC_ISSUES_CAPPED,
+    CODE_SEMANTIC_MISMATCH,
+    CODE_UNSAFE_AST,
+)
+from genfxn.intervals.validate import (
+    validate_intervals_task as _validate_intervals_task,
+)
 
 
 def validate_intervals_task(

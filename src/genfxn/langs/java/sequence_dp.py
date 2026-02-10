@@ -1,3 +1,4 @@
+from genfxn.langs.java._helpers import java_long_literal
 from genfxn.sequence_dp.models import SequenceDpSpec, TieBreakOrder
 
 _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
@@ -8,13 +9,6 @@ _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
     TieBreakOrder.LEFT_DIAG_UP: ("left", "diag", "up"),
     TieBreakOrder.LEFT_UP_DIAG: ("left", "up", "diag"),
 }
-
-
-def _long_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "Long.MIN_VALUE"
-    return f"{value}L"
-
 
 def render_sequence_dp(
     spec: SequenceDpSpec,
@@ -39,12 +33,12 @@ def render_sequence_dp(
         f'    String template = "{spec.template.value}";',
         f'    String outputMode = "{spec.output_mode.value}";',
         f'    String predicateKind = "{kind}";',
-        f"    long maxDiff = {_long_literal(max_diff)};",
-        f"    long divisor = {_long_literal(divisor)};",
-        f"    long remainder = {_long_literal(remainder)};",
-        f"    long matchScore = {_long_literal(spec.match_score)};",
-        f"    long mismatchScore = {_long_literal(spec.mismatch_score)};",
-        f"    long gapScore = {_long_literal(spec.gap_score)};",
+        f"    long maxDiff = {java_long_literal(max_diff)};",
+        f"    long divisor = {java_long_literal(divisor)};",
+        f"    long remainder = {java_long_literal(remainder)};",
+        f"    long matchScore = {java_long_literal(spec.match_score)};",
+        f"    long mismatchScore = {java_long_literal(spec.mismatch_score)};",
+        f"    long gapScore = {java_long_literal(spec.gap_score)};",
         "    String[] tieOrder = new String[] {" + tie_values + "};",
         "",
         f"    int n = {a_var}.length;",

@@ -1546,3 +1546,200 @@ Progress update (2026-02-10, case-mismatched scalars + docs/e2e coverage complet
   - `uv run ty check src/genfxn/cli.py tests/test_cli.py` -> passed.
   - `uv run pytest tests/ -q --verification-level=standard`
     -> 1922 passed, 101 skipped.
+
+### 27) Repo-Wide Review Follow-up Hardening (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Fix Java compile-safety drift for large numeric literals in:
+      `graph_queries` and `stack_bytecode`.
+- [x] Make `render_tests(...)` deterministic for `set`/`frozenset` literal
+      rendering across interpreter hash seeds.
+- [x] Replace remaining first-party `pytest.importorskip(...)` usage with
+      direct imports so import regressions fail loudly.
+- [x] Add focused regressions for:
+      - graph_queries Java compile/runtime with `w > int32`
+      - stack_bytecode Java compile/runtime with `max_step_count > int32`
+      - deterministic set/frozenset render ordering stability.
+- [x] Run targeted `pytest` + `ruff` + `ty`, then standard-suite spot-check.
+
+Exit criterion:
+- Large-literal Java render paths compile and preserve parity semantics,
+  `render_tests(...)` emits stable deterministic set/frozenset literals, and
+  first-party family tests no longer silently skip on import failures.
+
+Progress update (2026-02-10, repo-wide follow-up hardening complete):
+- Closed Java compile/runtime parity gaps for `graph_queries` and
+  `stack_bytecode` with long-typed arithmetic/literal rendering and matching
+  regression coverage.
+- Removed remaining `pytest.importorskip(...)` masking in first-party suite
+  modules so import-time regressions fail loudly.
+- Hardened `render_tests(...)` deterministic output rendering for hash-order
+  sensitive containers, then added regression tests to lock behavior.
+- Validation evidence:
+  - `uv run pytest tests/test_core_dsl.py tests/test_core_models.py
+    tests/test_cli.py tests/test_splits.py tests/test_bitops.py
+    tests/test_intervals.py tests/test_graph_queries.py tests/test_fsm.py
+    tests/test_sequence_dp.py tests/test_temporal_logic.py
+    tests/test_stack_bytecode.py tests/test_java_render.py
+    tests/test_rust_render.py tests/test_validate_intervals.py -v
+    --verification-level=standard` -> 917 passed.
+  - `uv run pytest tests/test_graph_queries_runtime_parity.py
+    tests/test_stack_bytecode_runtime_parity.py
+    tests/test_sequence_dp_runtime_parity.py
+    tests/test_temporal_logic_runtime_parity.py
+    tests/test_intervals_runtime_parity.py tests/test_bitops_runtime_parity.py
+    tests/test_fsm_runtime_parity.py -v --verification-level=full`
+    -> 35 passed.
+
+### 28) Renderer Literal Boundary + Deterministic Rendering Sweep (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Close remaining Java literal compile-safety paths in
+      `bitops`, `sequence_dp`, `temporal_logic`, `intervals`, and `fsm` using
+      strict checked-literal rendering.
+- [x] Enforce fail-closed representable-range validation in affected models so
+      out-of-range constants are rejected before renderer/codegen.
+- [x] Close Rust `sequence_dp` out-of-range i64 literal emission with strict
+      range checks (and align related renderer helper usage where touched).
+- [x] Make `render_tests(...)` dict literal rendering deterministic with stable
+      key ordering.
+- [x] Add focused regressions for model rejection + compile-safety/determinism
+      gaps and run targeted `pytest` + `ruff` + `ty`.
+
+Exit criterion:
+- Out-of-range numeric literals fail closed at validation/render time (no
+  backend compile failures for accepted specs), and rendered test assertions are
+  deterministic for dict/set/frozenset structures.
+
+Progress update (2026-02-10, renderer literal boundary + deterministic rendering complete):
+- Replaced family-local unchecked literal helpers with shared checked helpers:
+  - Java: `bitops`, `sequence_dp`, `temporal_logic`, `intervals`, `fsm`
+  - Rust: `sequence_dp`, `bitops`, `temporal_logic`, `intervals`
+- Hardened helper contracts:
+  - `java_int_literal(...)` now rejects values outside signed 64-bit range.
+  - added `rust_i64_literal(...)` with signed-64-bit fail-closed validation.
+- Added/expanded representable-range validation in models:
+  - `bitops`, `sequence_dp`, `temporal_logic`, `intervals`, `fsm`.
+  - Includes FSM state-id guard to prevent Java sink-id overflow paths.
+- Fixed deterministic rendering gap in `render_tests(...)`:
+  - dict keys now render in stable canonical order.
+- Added focused regressions across:
+  - `tests/test_java_render.py`
+  - `tests/test_rust_render.py`
+  - `tests/test_bitops.py`
+  - `tests/test_sequence_dp.py`
+  - `tests/test_temporal_logic.py`
+  - `tests/test_intervals.py`
+  - `tests/test_fsm.py`
+  - `tests/test_core_dsl.py`
+- Validation evidence:
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/test_java_render.py tests/test_rust_render.py
+    tests/test_bitops.py tests/test_sequence_dp.py tests/test_temporal_logic.py
+    tests/test_intervals.py tests/test_fsm.py tests/test_core_dsl.py -v
+    --verification-level=standard` -> 553 passed.
+
+### 29) Int32-Family Literal Fail-Closed + Hash/Skip Hardening (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Fail-close int32-family spec/axes constants at signed 64-bit bounds while
+      preserving existing >int32 wrap-semantic behavior.
+- [x] Harden Rust int32-family renderer literal emission paths to use checked
+      `i64` literal rendering where numeric constants are injected.
+- [x] Enforce `MaxWindowSumSpec.k` compile-safe upper bound and add regressions.
+- [x] Fix `task_id_from_spec(...)` mixed-type dict-key canonicalization so key
+      typing is preserved and hash output is deterministic.
+- [x] Convert targeted first-party availability gating from skip-based behavior
+      to fail-closed behavior in `tests/test_suites.py` and
+      `tests/test_presets.py`.
+- [x] Add focused regression coverage and run targeted `pytest` + `ruff` +
+      `ty` validation on touched files.
+
+Exit criterion:
+- Accepted specs no longer produce renderer-time literal overflow failures for
+  Java/Rust in these families, mixed-type key hashing is deterministic and
+  type-sensitive, and missing first-party modules fail tests instead of
+  skipping.
+
+Progress update (2026-02-10, int32-family literal/hash/skip hardening complete):
+- Added signed-64-bit fail-closed bounds for int32-family numeric specs/axes:
+  - `src/genfxn/stateful/models.py`
+  - `src/genfxn/simple_algorithms/models.py`
+  - `src/genfxn/piecewise/models.py`
+  while preserving >int32 runtime-wrap coverage behavior.
+- Added signed-64-bit fail-closed bounds in shared numeric primitives:
+  - `src/genfxn/core/predicates.py`
+  - `src/genfxn/core/transforms.py`
+- Hardened Rust int32-family literal rendering to validate i64 representability
+  in shared emitters and family renderers without changing canonical render text
+  format:
+  - `src/genfxn/langs/rust/predicates.py`
+  - `src/genfxn/langs/rust/transforms.py`
+  - `src/genfxn/langs/rust/expressions.py`
+  - `src/genfxn/langs/rust/stateful.py`
+  - `src/genfxn/langs/rust/simple_algorithms.py`
+- Enforced compile-safe `k` bound for max-window specs (`<= INT32_MAX`) in:
+  - `src/genfxn/simple_algorithms/models.py`
+- Fixed mixed-key canonicalization drift in:
+  - `src/genfxn/core/codegen.py`
+  (`task_id_from_spec(...)` now preserves key typing for non-string-key dicts).
+- Converted targeted first-party availability gating to fail-closed behavior:
+  - `tests/test_suites.py`
+  - `tests/test_presets.py`
+- Added regressions for i64-bound enforcement + key-type hashing + k bound:
+  - `tests/test_core_dsl.py`
+  - `tests/test_stateful.py`
+  - `tests/test_simple_algorithms.py`
+  - `tests/test_piecewise.py`
+- Validation evidence:
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/test_core_dsl.py tests/test_stateful.py
+    tests/test_simple_algorithms.py tests/test_piecewise.py
+    tests/test_suites.py tests/test_presets.py tests/test_rust_render.py -v
+    --verification-level=standard` -> 631 passed, 19 skipped.
+
+### 30) graph_queries + intervals i64 Overflow Parity Alignment (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Align `graph_queries` Python evaluator shortest-path accumulation with
+      signed i64 wrapping semantics used by Java/Rust renderers.
+- [x] Align `intervals` Python evaluator aggregate/event arithmetic with signed
+      i64 wrapping semantics used by Java/Rust renderers.
+- [x] Add focused full-mode runtime parity regressions for overflow-adjacent
+      graph_queries and intervals cases.
+- [x] Run targeted `pytest` + `ruff` + `ty`, then standard-suite spot-check.
+
+Exit criterion:
+- Python evaluators and Java/Rust runtime outputs agree on overflow-adjacent
+  boundary cases for these two families, with deterministic regression
+  coverage.
+
+Progress update (2026-02-10, graph_queries + intervals i64 overflow parity complete):
+- Updated Python evaluators to align overflow-adjacent arithmetic with existing
+  Java/Rust signed i64 runtime behavior:
+  - `src/genfxn/graph_queries/eval.py`
+    - shortest-path accumulation now wraps in signed i64 space.
+  - `src/genfxn/intervals/eval.py`
+    - wrapped arithmetic for merge/gap thresholds, coverage accumulation, and
+      max-overlap event/sweep updates.
+- Added focused regression coverage:
+  - standard-mode evaluator tests:
+    - `tests/test_graph_queries.py`
+    - `tests/test_intervals.py`
+  - full-mode runtime parity tests:
+    - `tests/test_graph_queries_runtime_parity.py`
+    - `tests/test_intervals_runtime_parity.py`
+- Validation evidence:
+  - `uv run ruff check src/genfxn/graph_queries/eval.py
+    src/genfxn/intervals/eval.py tests/test_graph_queries.py
+    tests/test_graph_queries_runtime_parity.py tests/test_intervals.py
+    tests/test_intervals_runtime_parity.py` -> passed.
+  - `uv run ty check src/genfxn/graph_queries/eval.py
+    src/genfxn/intervals/eval.py tests/test_graph_queries.py
+    tests/test_graph_queries_runtime_parity.py tests/test_intervals.py
+    tests/test_intervals_runtime_parity.py` -> passed.
+  - `uv run pytest tests/test_graph_queries.py tests/test_intervals.py -v
+    --verification-level=standard` -> 73 passed.
+  - `uv run pytest tests/test_graph_queries_runtime_parity.py
+    tests/test_intervals_runtime_parity.py -v --verification-level=full`
+    -> 13 passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1998 passed, 106 skipped.

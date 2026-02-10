@@ -55,6 +55,8 @@ _INT_RANGE_FIELDS = (
     "value_range",
     "predicate_constant_range",
 )
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -96,6 +98,10 @@ def _validate_formula_node(node: Any) -> int:
         constant = node.get("constant")
         if type(constant) is not int:
             raise ValueError("atom node must include int 'constant'")
+        if constant < INT64_MIN or constant > INT64_MAX:
+            raise ValueError(
+                f"atom node constant must be in [{INT64_MIN}, {INT64_MAX}]"
+            )
         return 1
 
     if op in _UNARY_OPERATORS:
@@ -174,5 +180,11 @@ class TemporalLogicAxes(BaseModel):
             raise ValueError("formula_depth_range: high must be <= 12")
         if self.sequence_length_range[0] < 0:
             raise ValueError("sequence_length_range: low must be >= 0")
+        for name in ("value_range", "predicate_constant_range"):
+            lo, hi = getattr(self, name)
+            if lo < INT64_MIN:
+                raise ValueError(f"{name}: low must be >= {INT64_MIN}")
+            if hi > INT64_MAX:
+                raise ValueError(f"{name}: high must be <= {INT64_MAX}")
 
         return self

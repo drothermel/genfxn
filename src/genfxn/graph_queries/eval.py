@@ -4,6 +4,14 @@ from collections import deque
 from genfxn.graph_queries.models import GraphQueriesSpec, GraphQueryType
 
 Adjacency = dict[int, list[tuple[int, int]]]
+_I64_MASK = (1 << 64) - 1
+
+
+def _wrap_i64(value: int) -> int:
+    wrapped = value & _I64_MASK
+    if wrapped >= (1 << 63):
+        return wrapped - (1 << 64)
+    return wrapped
 
 
 def _validate_node(node: int, n_nodes: int, name: str) -> None:
@@ -98,7 +106,7 @@ def _shortest_path_cost(adjacency: Adjacency, src: int, dst: int) -> int:
         if node == dst:
             return cost
         for neighbor, weight in adjacency[node]:
-            next_cost = cost + weight
+            next_cost = _wrap_i64(cost + weight)
             prior = best_cost.get(neighbor)
             if prior is not None and next_cost >= prior:
                 continue

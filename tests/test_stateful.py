@@ -41,6 +41,9 @@ from genfxn.stateful.render import render_stateful
 from genfxn.stateful.sampler import sample_predicate, sample_stateful_spec
 from genfxn.stateful.task import generate_stateful_task
 
+INT32_MAX = (1 << 31) - 1
+INT64_MAX = (1 << 63) - 1
+
 
 class TestConditionalLinearSumEval:
     def test_basic_even_odd(self) -> None:
@@ -363,6 +366,20 @@ class TestAxesValidation:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(-1, 5))
 
+    def test_divisor_range_high_must_fit_int32(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"divisor_range: high .* must be <= {INT32_MAX}",
+        ):
+            StatefulAxes(divisor_range=(2, INT32_MAX + 1))
+
+    def test_threshold_range_rejects_values_above_signed_i64(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"threshold_range: high .* must be <= {INT64_MAX}",
+        ):
+            StatefulAxes(threshold_range=(0, INT64_MAX + 1))
+
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
@@ -382,6 +399,17 @@ class TestAxesValidation:
             match=rf"{field_name}: bool is not allowed for int range bounds",
         ):
             StatefulAxes.model_validate({field_name: range_value})
+
+    def test_conditional_linear_sum_rejects_init_value_above_signed_i64(
+        self,
+    ) -> None:
+        with pytest.raises(ValueError, match="9223372036854775807"):
+            ConditionalLinearSumSpec(
+                predicate=PredicateEven(),
+                true_transform=TransformIdentity(),
+                false_transform=TransformIdentity(),
+                init_value=INT64_MAX + 1,
+            )
 
     def test_min_composed_operands_rejected_for_and_or(self) -> None:
         with pytest.raises(ValueError, match=r"min_composed_operands.*<= 3"):

@@ -1,3 +1,4 @@
+from genfxn.langs.rust._helpers import rust_i64_literal
 from genfxn.langs.rust.predicates import render_predicate_rust
 from genfxn.langs.rust.transforms import render_transform_rust
 from genfxn.simple_algorithms.models import (
@@ -8,6 +9,14 @@ from genfxn.simple_algorithms.models import (
     SimpleAlgorithmsSpec,
     TieBreakMode,
 )
+
+
+def _i64_expr(value: int) -> str:
+    literal = rust_i64_literal(value)
+    if literal.endswith("i64"):
+        return literal[:-3]
+    return literal
+
 
 _I32_HELPERS = [
     "    fn i32_wrap(value: i64) -> i64 {",
@@ -70,6 +79,12 @@ def _render_most_frequent(
     spec: MostFrequentSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     preprocess = _render_preprocess_rust(spec, var)
+    empty_default = _i64_expr(spec.empty_default)
+    tie_default = (
+        _i64_expr(spec.tie_default)
+        if spec.tie_default is not None
+        else None
+    )
 
     if spec.tie_break == TieBreakMode.SMALLEST:
         lines = [
@@ -81,7 +96,7 @@ def _render_most_frequent(
             f"    let {var} = _wrapped.as_slice();",
             *preprocess,
             f"    if {var}.is_empty() {{",
-            f"        return i32_wrap({spec.empty_default});",
+            f"        return i32_wrap({empty_default});",
             "    }",
             "    let mut counts: HashMap<i64, i64> = HashMap::new();",
             f"    for &x in {var} {{",
@@ -97,7 +112,8 @@ def _render_most_frequent(
         ]
         if spec.tie_default is not None:
             lines.append("    if candidates.len() > 1 {")
-            lines.append(f"        return i32_wrap({spec.tie_default});")
+            assert tie_default is not None
+            lines.append(f"        return i32_wrap({tie_default});")
             lines.append("    }")
         lines.append("    i32_wrap(*candidates.iter().min().unwrap())")
         lines.append("}")
@@ -112,7 +128,7 @@ def _render_most_frequent(
             f"    let {var} = _wrapped.as_slice();",
             *preprocess,
             f"    if {var}.is_empty() {{",
-            f"        return i32_wrap({spec.empty_default});",
+            f"        return i32_wrap({empty_default});",
             "    }",
             "    let mut counts: HashMap<i64, i64> = HashMap::new();",
             f"    for &x in {var} {{",
@@ -128,7 +144,8 @@ def _render_most_frequent(
         ]
         if spec.tie_default is not None:
             lines.append("    if candidates.len() > 1 {")
-            lines.append(f"        return i32_wrap({spec.tie_default});")
+            assert tie_default is not None
+            lines.append(f"        return i32_wrap({tie_default});")
             lines.append("    }")
         lines.extend(
             [
@@ -137,7 +154,7 @@ def _render_most_frequent(
                 "            return i32_wrap(x);",
                 "        }",
                 "    }",
-                f"    i32_wrap({spec.empty_default})",
+                f"    i32_wrap({empty_default})",
                 "}",
             ]
         )
@@ -149,6 +166,17 @@ def _render_count_pairs_sum(
 ) -> str:
     preprocess = _render_preprocess_rust(spec, var)
     target = (spec.target + (1 << 31)) % (1 << 32) - (1 << 31)
+    target_lit = _i64_expr(target)
+    no_result_default = (
+        _i64_expr(spec.no_result_default)
+        if spec.no_result_default is not None
+        else None
+    )
+    short_list_default = (
+        _i64_expr(spec.short_list_default)
+        if spec.short_list_default is not None
+        else None
+    )
 
     if spec.counting_mode == CountingMode.ALL_INDICES:
         lines = [
@@ -161,16 +189,16 @@ def _render_count_pairs_sum(
         ]
         if spec.short_list_default is not None:
             lines.append(f"    if {var}.len() < 2 {{")
-            lines.append(
-                f"        return i32_wrap({spec.short_list_default});"
-            )
+            assert short_list_default is not None
+            lines.append(f"        return i32_wrap({short_list_default});")
             lines.append("    }")
         lines.extend(
             [
                 "    let mut count: i64 = 0;",
                 f"    for i in 0..{var}.len() {{",
                 f"        for j in (i + 1)..{var}.len() {{",
-                f"            if i32_add({var}[i], {var}[j]) == {target} {{",
+                "            if i32_add("
+                f"{var}[i], {var}[j]) == {target_lit} {{",
                 "                count = i32_add(count, 1);",
                 "            }",
                 "        }",
@@ -179,7 +207,8 @@ def _render_count_pairs_sum(
         )
         if spec.no_result_default is not None:
             lines.append("    if count == 0 {")
-            lines.append(f"        return i32_wrap({spec.no_result_default});")
+            assert no_result_default is not None
+            lines.append(f"        return i32_wrap({no_result_default});")
             lines.append("    }")
         lines.append("    i32_wrap(count)")
         lines.append("}")
@@ -195,16 +224,16 @@ def _render_count_pairs_sum(
         ]
         if spec.short_list_default is not None:
             lines.append(f"    if {var}.len() < 2 {{")
-            lines.append(
-                f"        return i32_wrap({spec.short_list_default});"
-            )
+            assert short_list_default is not None
+            lines.append(f"        return i32_wrap({short_list_default});")
             lines.append("    }")
         lines.extend(
             [
                 "    let mut seen_pairs: HashSet<(i64, i64)> = HashSet::new();",
                 f"    for i in 0..{var}.len() {{",
                 f"        for j in (i + 1)..{var}.len() {{",
-                f"            if i32_add({var}[i], {var}[j]) == {target} {{",
+                "            if i32_add("
+                f"{var}[i], {var}[j]) == {target_lit} {{",
                 "                seen_pairs.insert(("
                 f"{var}[i].min({var}[j]), "
                 f"{var}[i].max({var}[j])));",
@@ -215,7 +244,8 @@ def _render_count_pairs_sum(
         )
         if spec.no_result_default is not None:
             lines.append("    if seen_pairs.is_empty() {")
-            lines.append(f"        return i32_wrap({spec.no_result_default});")
+            assert no_result_default is not None
+            lines.append(f"        return i32_wrap({no_result_default});")
             lines.append("    }")
         lines.append("    i32_wrap(seen_pairs.len() as i64)")
         lines.append("}")
@@ -226,6 +256,12 @@ def _render_max_window_sum(
     spec: MaxWindowSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     preprocess = _render_preprocess_rust(spec, var)
+    invalid_k_default = _i64_expr(spec.invalid_k_default)
+    empty_default = (
+        _i64_expr(spec.empty_default)
+        if spec.empty_default is not None
+        else None
+    )
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
@@ -237,12 +273,13 @@ def _render_max_window_sum(
     ]
     if spec.empty_default is not None:
         lines.append(f"    if {var}.is_empty() {{")
-        lines.append(f"        return i32_wrap({spec.empty_default});")
+        assert empty_default is not None
+        lines.append(f"        return i32_wrap({empty_default});")
         lines.append("    }")
     lines.extend(
         [
             f"    if {var}.len() < {spec.k} {{",
-            f"        return i32_wrap({spec.invalid_k_default});",
+            f"        return i32_wrap({invalid_k_default});",
             "    }",
             "    let mut window_sum: i64 = i32_wrap(0);",
             f"    for i in 0..{spec.k} {{",

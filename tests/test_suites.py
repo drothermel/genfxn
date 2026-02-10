@@ -45,53 +45,46 @@ GraphQueriesRenderFn = Callable[[int, int], int]
 TemporalLogicRenderFn = Callable[[list[int]], int]
 
 
+def _require_family_suite_module(family: str, module: str) -> None:
+    if family not in QUOTAS:
+        pytest.fail(f"{family} is missing from suite quotas")
+    if importlib.util.find_spec(module) is None:
+        pytest.fail(f"{module} is not importable")
+
+
 def _stack_suite_available() -> bool:
-    return (
-        "stack_bytecode" in QUOTAS
-        and importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
-    )
+    _require_family_suite_module("stack_bytecode", "genfxn.stack_bytecode.task")
+    return True
 
 
 def _fsm_suite_available() -> bool:
-    return (
-        "fsm" in QUOTAS
-        and importlib.util.find_spec("genfxn.fsm.task") is not None
-    )
+    _require_family_suite_module("fsm", "genfxn.fsm.task")
+    return True
 
 
 def _bitops_suite_available() -> bool:
-    return (
-        "bitops" in QUOTAS
-        and importlib.util.find_spec("genfxn.bitops.task") is not None
-    )
+    _require_family_suite_module("bitops", "genfxn.bitops.task")
+    return True
 
 
 def _sequence_dp_suite_available() -> bool:
-    return (
-        "sequence_dp" in QUOTAS
-        and importlib.util.find_spec("genfxn.sequence_dp.task") is not None
-    )
+    _require_family_suite_module("sequence_dp", "genfxn.sequence_dp.task")
+    return True
 
 
 def _intervals_suite_available() -> bool:
-    return (
-        "intervals" in QUOTAS
-        and importlib.util.find_spec("genfxn.intervals.task") is not None
-    )
+    _require_family_suite_module("intervals", "genfxn.intervals.task")
+    return True
 
 
 def _graph_queries_suite_available() -> bool:
-    return (
-        "graph_queries" in QUOTAS
-        and importlib.util.find_spec("genfxn.graph_queries.task") is not None
-    )
+    _require_family_suite_module("graph_queries", "genfxn.graph_queries.task")
+    return True
 
 
 def _temporal_logic_suite_available() -> bool:
-    return (
-        "temporal_logic" in QUOTAS
-        and importlib.util.find_spec("genfxn.temporal_logic.task") is not None
-    )
+    _require_family_suite_module("temporal_logic", "genfxn.temporal_logic.task")
+    return True
 
 # ── Feature extraction tests ─────────────────────────────────────────────
 
