@@ -2,7 +2,8 @@ import random
 
 import pytest
 
-from genfxn.core.models import QueryTag
+import genfxn.stringrules.task as stringrules_task_module
+from genfxn.core.models import Query, QueryTag
 from genfxn.core.string_predicates import (
     StringPredicateAnd,
     StringPredicateContains,
@@ -40,7 +41,10 @@ from genfxn.stringrules.models import (
     StringRulesAxes,
     StringRulesSpec,
 )
-from genfxn.stringrules.queries import generate_stringrules_queries
+from genfxn.stringrules.queries import (
+    StringRulesQueryGenerationError,
+    generate_stringrules_queries,
+)
 from genfxn.stringrules.render import render_stringrules
 from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.stringrules.task import generate_stringrules_task
@@ -481,6 +485,99 @@ class TestQueryGeneration:
         for query in non_matching:
             assert query.output == eval_stringrules(spec, query.input)
 
+    def test_replace_coverage_hits_old_for_atomic_replace(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=1,
+            string_length_range=(2, 12),
+            charset="ascii_letters_digits",
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="x"),
+                    transform=StringTransformReplace(old="ab", new="Q"),
+                )
+            ],
+            default_transform=StringTransformLowercase(),
+        )
+        queries = generate_stringrules_queries(spec, axes, random.Random(42))
+        coverage = [q for q in queries if q.tag == QueryTag.COVERAGE]
+        assert any(
+            q.input.startswith("x") and "ab" in q.input
+            for q in coverage
+        )
+
+    def test_replace_coverage_hits_old_for_pipeline_replaces(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=1,
+            string_length_range=(3, 16),
+            charset="ascii_letters_digits",
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="x"),
+                    transform=StringTransformPipeline(
+                        steps=[
+                            StringTransformReplace(old="ab", new="Q"),
+                            StringTransformReplace(old="12", new="Z"),
+                        ]
+                    ),
+                )
+            ],
+            default_transform=StringTransformUppercase(),
+        )
+        queries = generate_stringrules_queries(spec, axes, random.Random(43))
+        coverage_inputs = [
+            q.input for q in queries if q.tag == QueryTag.COVERAGE
+        ]
+        assert any("ab" in value for value in coverage_inputs)
+        assert any("12" in value for value in coverage_inputs)
+
+    def test_unreachable_replace_old_is_skipped(self) -> None:
+        axes = StringRulesAxes(
+            n_rules=1,
+            string_length_range=(1, 8),
+            charset="ascii_letters_digits",
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateIsAlpha(),
+                    transform=StringTransformReplace(old="1", new="x"),
+                )
+            ],
+            default_transform=StringTransformUppercase(),
+        )
+        queries = generate_stringrules_queries(spec, axes, random.Random(44))
+        assert queries
+        for query in queries:
+            assert query.output == eval_stringrules(spec, query.input)
+
+    def test_replace_coverage_raises_when_first_match_old_is_blocked(
+        self,
+    ) -> None:
+        axes = StringRulesAxes(
+            n_rules=2,
+            string_length_range=(2, 12),
+            charset="ascii_letters_digits",
+        )
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateContains(substring="ab"),
+                    transform=StringTransformLowercase(),
+                ),
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="x"),
+                    transform=StringTransformReplace(old="ab", new="Q"),
+                ),
+            ],
+            default_transform=StringTransformUppercase(),
+        )
+        with pytest.raises(StringRulesQueryGenerationError):
+            generate_stringrules_queries(spec, axes, random.Random(45))
+
 
 class TestAxesValidation:
     def test_invalid_string_length_range(self) -> None:
@@ -551,6 +648,107 @@ class TestTaskGeneration:
             f = namespace["f"]
             for q in task.queries:
                 assert f(q.input) == q.output, f"Overlap {overlap}: mismatch"
+
+    def test_retries_query_generation_errors_until_success(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="x"),
+                    transform=StringTransformUppercase(),
+                )
+            ],
+            default_transform=StringTransformLowercase(),
+        )
+
+        def _fake_sample(
+            _axes: StringRulesAxes,
+            _rng: random.Random,
+            trace: list | None = None,
+        ) -> StringRulesSpec:
+            return spec
+
+        call_count = {"n": 0}
+
+        def _fake_queries(
+            _spec: StringRulesSpec,
+            _axes: StringRulesAxes,
+            _rng: random.Random | None = None,
+        ):
+            call_count["n"] += 1
+            if call_count["n"] < 3:
+                raise StringRulesQueryGenerationError("retry")
+            return [
+                Query(input="x1", output="X1", tag=QueryTag.COVERAGE)
+            ]
+
+        monkeypatch.setattr(
+            stringrules_task_module, "sample_stringrules_spec", _fake_sample
+        )
+        monkeypatch.setattr(
+            stringrules_task_module,
+            "generate_stringrules_queries",
+            _fake_queries,
+        )
+        monkeypatch.setattr(
+            stringrules_task_module, "_MAX_QUERY_GEN_RETRIES", 4
+        )
+
+        task = generate_stringrules_task(
+            axes=StringRulesAxes(n_rules=1),
+            rng=random.Random(46),
+        )
+        assert call_count["n"] == 3
+        assert len(task.queries) == 1
+
+    def test_raises_after_retry_exhaustion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = StringRulesSpec(
+            rules=[
+                StringRule(
+                    predicate=StringPredicateStartsWith(prefix="x"),
+                    transform=StringTransformUppercase(),
+                )
+            ],
+            default_transform=StringTransformLowercase(),
+        )
+
+        def _fake_sample(
+            _axes: StringRulesAxes,
+            _rng: random.Random,
+            trace: list | None = None,
+        ) -> StringRulesSpec:
+            return spec
+
+        def _always_fail(
+            _spec: StringRulesSpec,
+            _axes: StringRulesAxes,
+            _rng: random.Random | None = None,
+        ):
+            raise StringRulesQueryGenerationError("persistent")
+
+        monkeypatch.setattr(
+            stringrules_task_module, "sample_stringrules_spec", _fake_sample
+        )
+        monkeypatch.setattr(
+            stringrules_task_module,
+            "generate_stringrules_queries",
+            _always_fail,
+        )
+        monkeypatch.setattr(
+            stringrules_task_module, "_MAX_QUERY_GEN_RETRIES", 3
+        )
+
+        with pytest.raises(
+            RuntimeError,
+            match="failed to generate replace-aware stringrules queries",
+        ):
+            generate_stringrules_task(
+                axes=StringRulesAxes(n_rules=1),
+                rng=random.Random(47),
+            )
 
 
 class TestRandomStringUtils:
