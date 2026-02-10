@@ -58,6 +58,7 @@ from genfxn.core.transforms import (
     TransformShift,
 )
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.rust._helpers import rust_string_literal
 from genfxn.langs.rust.expressions import render_expression_rust
@@ -851,6 +852,17 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(intervals: &[(i64, i64)]) -> i64" in code["rust"]
 
+    def test_graph_queries_generates_rust(self) -> None:
+        task = generate_graph_queries_task(
+            rng=seeded_rng(42),
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(" in code["rust"]
+
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
             pytest.skip("stack_bytecode Rust rendering is not available")
@@ -933,6 +945,7 @@ class TestRustRegistry:
 
         families = [
             "bitops",
+            "graph_queries",
             "intervals",
             "sequence_dp",
             "piecewise",
@@ -946,6 +959,13 @@ class TestRustRegistry:
         for family in families:
             fn = get_render_fn(Language.RUST, family)
             assert callable(fn)
+
+    def test_registry_graph_queries(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "graph_queries"))
+        assert callable(get_render_fn(Language.JAVA, "graph_queries"))
+        assert callable(get_render_fn(Language.RUST, "graph_queries"))
 
     def test_available_languages_includes_rust(self) -> None:
         from genfxn.langs.render import _available_languages

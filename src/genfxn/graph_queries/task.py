@@ -9,6 +9,7 @@ from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
 from genfxn.graph_queries.queries import generate_graph_queries_queries
 from genfxn.graph_queries.render import render_graph_queries
 from genfxn.graph_queries.sampler import sample_graph_queries_spec
+from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
 
 
@@ -23,12 +24,8 @@ def _render_graph_queries_for_languages(
 
     rendered: dict[str, str] = {}
     for language in dict.fromkeys(languages):
-        if language != Language.PYTHON:
-            raise ValueError(
-                "graph_queries M0 supports only Python rendering; "
-                f"got {language.value}"
-            )
-        rendered[language.value] = render_graph_queries(spec, func_name="f")
+        render_fn = get_render_fn(language, "graph_queries")
+        rendered[language.value] = render_fn(spec, func_name="f")
     return rendered
 
 

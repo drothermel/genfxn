@@ -2,7 +2,7 @@
 
 Date: 2026-02-10
 Owner: Codex + Danielle
-Status: In progress (M0-M3 complete, M4-M5 pending)
+Status: In progress (M0-M4 complete, M5 pending)
 
 ## Goal
 
@@ -318,7 +318,7 @@ Acceptance:
 - [x] M1 complete
 - [x] M2 complete
 - [x] M3 complete
-- [ ] M4 complete
+- [x] M4 complete
 - [ ] M5 complete
 - [ ] Full `ruff` and full `pytest` pass
 - [ ] PR notes/test evidence finalized
@@ -339,3 +339,6 @@ Acceptance:
 - 2026-02-10: M3 completed with renderer-safe code generation for restricted
   exec, new AST whitelist policy, `validate_graph_queries_task`, and dedicated
   validation tests (`tests/test_validate_graph_queries.py`).
+- 2026-02-10: M4 completed with Java/Rust graph query renderers, language
+  registry/task wiring, and executable runtime parity tests in
+  `tests/test_graph_queries_runtime_parity.py`.
