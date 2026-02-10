@@ -3,14 +3,7 @@ from collections import deque
 from genfxn.graph_queries.models import GraphQueriesSpec, GraphQueryType
 
 Adjacency = dict[int, list[tuple[int, int]]]
-_I64_MASK = (1 << 64) - 1
-
-
-def _wrap_i64(value: int) -> int:
-    wrapped = value & _I64_MASK
-    if wrapped >= (1 << 63):
-        return wrapped - (1 << 64)
-    return wrapped
+_I64_MAX = (1 << 63) - 1
 
 
 def _validate_node(node: int, n_nodes: int, name: str) -> None:
@@ -97,6 +90,8 @@ def _min_hops(adjacency: Adjacency, src: int, dst: int) -> int:
 def _shortest_path_cost(adjacency: Adjacency, src: int, dst: int) -> int:
     best_cost_prev: dict[int, int] = {src: 0}
     # shortest_path_cost is evaluated over simple paths (<= n_nodes - 1 edges).
+    # Cost accumulation is saturating i64 so -1 remains a unique unreachable
+    # sentinel.
     for _ in range(len(adjacency) - 1):
         changed = False
         best_cost_curr = best_cost_prev.copy()
@@ -105,7 +100,10 @@ def _shortest_path_cost(adjacency: Adjacency, src: int, dst: int) -> int:
             if cost is None:
                 continue
             for neighbor, weight in neighbors:
-                next_cost = _wrap_i64(cost + weight)
+                if cost > _I64_MAX - weight:
+                    next_cost = _I64_MAX
+                else:
+                    next_cost = cost + weight
                 prior = best_cost_curr.get(neighbor)
                 if prior is not None and next_cost >= prior:
                     continue

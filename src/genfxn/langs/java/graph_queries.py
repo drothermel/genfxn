@@ -168,7 +168,9 @@ def render_graph_queries(
             "            for (long[] pair : adjacency[node]) {",
             "                int neighbor = (int) pair[0];",
             "                long weight = pair[1];",
-            "                long nextCost = cost + weight;",
+            "                long nextCost = "
+            "(cost > Long.MAX_VALUE - weight) "
+            "? Long.MAX_VALUE : cost + weight;",
             "                Long prev = bestCostCurr.get(neighbor);",
             "                if (prev != null && nextCost >= prev) {",
             "                    continue;",

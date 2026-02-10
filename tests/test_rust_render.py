@@ -228,7 +228,7 @@ class TestIntervalsRust:
 
 
 class TestGraphQueriesRust:
-    def test_shortest_path_cost_uses_wrapping_add(self) -> None:
+    def test_shortest_path_cost_uses_saturating_i64_add(self) -> None:
         spec = GraphQueriesSpec(
             query_type=GraphQueryType.SHORTEST_PATH_COST,
             directed=True,
@@ -240,7 +240,8 @@ class TestGraphQueriesRust:
             ],
         )
         code = render_graph_queries(spec)
-        assert "let next_cost = cost.wrapping_add(weight);" in code
+        assert "if cost > i64::MAX - weight" in code
+        assert "i64::MAX" in code
 
 
 # ── Transforms ─────────────────────────────────────────────────────────

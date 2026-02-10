@@ -471,7 +471,7 @@ Deterministic graph-query tasks over a fixed spec graph:
 |-------|-------------|
 | `reachable` | Return `1` if any path exists, else `0` |
 | `min_hops` | Return BFS hop count, else `-1` |
-| `shortest_path_cost` | Return non-negative shortest-path cost, else `-1` |
+| `shortest_path_cost` | Return non-negative shortest-path cost (saturating at `2^63 - 1`), else `-1` |
 
 ### Spec Field Paths (for splits)
 

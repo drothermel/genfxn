@@ -202,7 +202,7 @@ def test_normalize_graph_keeps_min_weight_for_duplicate_edges() -> None:
     assert eval_graph_queries(spec, 0, 2) == 7
 
 
-def test_shortest_path_cost_uses_signed_i64_wrap_semantics() -> None:
+def test_shortest_path_cost_saturates_at_i64_max() -> None:
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.SHORTEST_PATH_COST,
         directed=True,
@@ -213,10 +213,10 @@ def test_shortest_path_cost_uses_signed_i64_wrap_semantics() -> None:
             GraphEdge(u=1, v=2, w=1),
         ],
     )
-    assert eval_graph_queries(spec, 0, 2) == -(1 << 63)
+    assert eval_graph_queries(spec, 0, 2) == (1 << 63) - 1
 
 
-def test_shortest_path_cost_picks_best_wrapped_simple_path() -> None:
+def test_shortest_path_cost_prefers_lower_non_saturated_path() -> None:
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.SHORTEST_PATH_COST,
         directed=True,
@@ -228,7 +228,7 @@ def test_shortest_path_cost_picks_best_wrapped_simple_path() -> None:
             GraphEdge(u=2, v=1, w=(1 << 63) - 1),
         ],
     )
-    assert eval_graph_queries(spec, 0, 1) == -2
+    assert eval_graph_queries(spec, 0, 1) == 5
 
 
 def test_shortest_path_cost_overflow_cycle_unreachable_returns_minus_one(
@@ -338,7 +338,7 @@ def test_rendered_python_matches_evaluator_across_v1_matrix(
         assert rendered(src, dst) == eval_graph_queries(spec, src, dst)
 
 
-def test_rendered_python_matches_evaluator_late_better_wrapped_path() -> None:
+def test_rendered_python_matches_evaluator_late_better_path() -> None:
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.SHORTEST_PATH_COST,
         directed=True,
@@ -354,6 +354,24 @@ def test_rendered_python_matches_evaluator_late_better_wrapped_path() -> None:
     exec(render_graph_queries(spec), namespace)  # noqa: S102
     rendered = cast(Callable[[int, int], int], namespace["f"])
     assert rendered(0, 1) == eval_graph_queries(spec, 0, 1)
+
+
+def test_rendered_python_rejects_bool_src_dst_inputs() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[int, int], int], namespace["f"])
+
+    with pytest.raises(ValueError, match=r"src must be int"):
+        rendered(True, 0)
+    with pytest.raises(ValueError, match=r"dst must be int"):
+        rendered(0, False)
 
 
 def test_sampler_is_deterministic_for_seed() -> None:

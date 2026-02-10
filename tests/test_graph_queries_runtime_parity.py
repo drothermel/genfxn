@@ -289,13 +289,13 @@ def test_graph_queries_runtime_parity_i64_overflow_accumulation() -> None:
     rust_code = render_graph_queries_rust(spec, func_name="f")
 
     expected = eval_graph_queries(spec, 0, 2)
-    assert expected == -(1 << 63)
+    assert expected == (1 << 63) - 1
     assert _run_java_f(javac, java, java_code, 0, 2) == expected
     assert _run_rust_f(rustc, rust_code, 0, 2) == expected
 
 
 @pytest.mark.full
-def test_graph_queries_runtime_parity_late_better_wrapped_path(
+def test_graph_queries_runtime_parity_late_better_path(
 ) -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
@@ -317,6 +317,6 @@ def test_graph_queries_runtime_parity_late_better_wrapped_path(
     rust_code = render_graph_queries_rust(spec, func_name="f")
 
     expected = eval_graph_queries(spec, 0, 1)
-    assert expected == -2
+    assert expected == 5
     assert _run_java_f(javac, java, java_code, 0, 1) == expected
     assert _run_rust_f(rustc, rust_code, 0, 1) == expected

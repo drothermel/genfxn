@@ -134,9 +134,10 @@ Graph query tasks over a fixed spec graph where each query asks for
 deterministic normalization and path semantics.
 
 `shortest_path_cost` semantics:
-- costs are accumulated in signed i64 space (wrapping on overflow).
-- the result is the minimum wrapped cost over simple paths from `src` to `dst`
-  (paths with at most `n_nodes - 1` edges).
+- costs are accumulated as non-negative signed i64 values with saturation at
+  `2^63 - 1`.
+- the result is the minimum saturated cost over simple paths from `src` to
+  `dst` (paths with at most `n_nodes - 1` edges), or `-1` when unreachable.
 
 ### Temporal Logic
 
