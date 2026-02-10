@@ -45,10 +45,10 @@ _spec_adapter = TypeAdapter(GraphQueriesSpec)
 _ALLOWED_BUILTINS = {
     "ValueError": ValueError,
     "dict": dict,
+    "isinstance": isinstance,
     "int": int,
     "len": len,
     "range": range,
-    "type": type,
 }
 
 

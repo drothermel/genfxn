@@ -554,6 +554,20 @@ def test_execute_code_restricted_non_picklable_result_unlimited() -> None:
         fn(1)
 
 
+def test_execute_code_restricted_rejects_non_primitive_result_types() -> None:
+    fn = execute_code_restricted(
+        "def f(x):\n    return b'unsafe-bytes'",
+        {},
+        trust_untrusted_code=True,
+        max_result_bytes=None,
+    )["f"]
+    with pytest.raises(
+        SafeExecExecutionError,
+        match="Unsupported worker result type: bytes",
+    ):
+        fn(1)
+
+
 def test_get_mp_context_invalid_override_raises(monkeypatch) -> None:
     monkeypatch.setenv("GENFXN_SAFE_EXEC_START_METHOD", "bogus")
     with pytest.raises(ValueError, match="Valid values"):

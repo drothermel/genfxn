@@ -35,12 +35,14 @@ CODE_QUERY_OUTPUT_TYPE = "CODE_QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "CODE_QUERY_OUTPUT_MISMATCH"
 CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
+CODE_AXES_INVALID = "AXES_INVALID"
 CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "CODE_UNSAFE_AST"
 CURRENT_FAMILY = "stack_bytecode"
 PYTHON_CODE_KEY = "python"
 
 _spec_adapter = TypeAdapter(StackBytecodeSpec)
+_axes_adapter = TypeAdapter(StackBytecodeAxes)
 _ALLOWED_BUILTINS = {
     "abs": abs,
     "len": len,
@@ -52,6 +54,23 @@ _ALLOWED_BUILTINS = {
 
 def _is_int_not_bool(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _ast_defines_function_f(parsed_tree: ast.Module) -> bool:
+    return any(
+        isinstance(stmt, ast.FunctionDef) and stmt.name == "f"
+        for stmt in parsed_tree.body
+    )
+
+
+def _validation_error_loc_part(error: ValidationError) -> str:
+    err = error.errors()[0] if error.errors() else {}
+    loc = err.get("loc", ())
+    if isinstance(loc, tuple):
+        return ".".join(str(part) for part in loc) or "value"
+    if isinstance(loc, list):
+        return ".".join(str(part) for part in loc) or "value"
+    return str(loc) if loc else "value"
 
 
 def _validate_ast_whitelist(
@@ -261,7 +280,7 @@ def _validate_code_compile(
     task: Task,
     code: str | None = None,
     parsed_tree: ast.Module | None = None,
-    execute_untrusted_code: bool = True,
+    execute_untrusted_code: bool = False,
 ) -> tuple[list[Issue], Callable[[list[int]], tuple[int, int]] | None]:
     if code is None:
         if isinstance(task.code, str):
@@ -301,6 +320,16 @@ def _validate_code_compile(
             ], None
 
     if not execute_untrusted_code:
+        if not _ast_defines_function_f(parsed_tree):
+            return [
+                Issue(
+                    code=CODE_CODE_MISSING_FUNC,
+                    severity=Severity.ERROR,
+                    message="Function 'f' not found in code namespace",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
         return [], None
 
     namespace: dict[str, object]
@@ -535,6 +564,20 @@ def validate_stack_bytecode_task(
 
     if axes is None:
         axes = StackBytecodeAxes()
+    else:
+        try:
+            axes = _axes_adapter.validate_python(axes, strict=True)
+        except ValidationError as e:
+            loc_part = _validation_error_loc_part(e)
+            return [
+                Issue(
+                    code=CODE_AXES_INVALID,
+                    severity=Severity.ERROR,
+                    message=f"Invalid axes: {e}",
+                    location=f"axes.{loc_part}",
+                    task_id=task.task_id,
+                )
+            ]
 
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))

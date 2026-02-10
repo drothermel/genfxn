@@ -17,9 +17,15 @@ def render_graph_queries(
         f"    query_type = {spec.query_type.value!r}",
         f"    edges = {edges!r}",
         "",
-        f"    if type({src_var}) is not int:",
+        (
+            f"    if (not isinstance({src_var}, int)) or {src_var} is True "
+            f"or {src_var} is False:"
+        ),
         f"        raise ValueError(('src must be int', {src_var}))",
-        f"    if type({dst_var}) is not int:",
+        (
+            f"    if (not isinstance({dst_var}, int)) or {dst_var} is True "
+            f"or {dst_var} is False:"
+        ),
         f"        raise ValueError(('dst must be int', {dst_var}))",
         f"    if {src_var} < 0 or {src_var} >= n_nodes:",
         f"        raise ValueError(('src out of range', {src_var}))",
@@ -28,11 +34,17 @@ def render_graph_queries(
         "",
         "    for i in range(len(edges)):",
         "        raw_u, raw_v, raw_w = edges[i]",
-        "        if type(raw_u) is not int:",
+        (
+            "        if (not isinstance(raw_u, int)) or raw_u is True or "
+            "raw_u is False:"
+        ),
         "            raise ValueError(('edge.u must be int', raw_u))",
         "        if raw_u < 0 or raw_u >= n_nodes:",
         "            raise ValueError(('edge.u out of range', raw_u))",
-        "        if type(raw_v) is not int:",
+        (
+            "        if (not isinstance(raw_v, int)) or raw_v is True or "
+            "raw_v is False:"
+        ),
         "            raise ValueError(('edge.v must be int', raw_v))",
         "        if raw_v < 0 or raw_v >= n_nodes:",
         "            raise ValueError(('edge.v out of range', raw_v))",

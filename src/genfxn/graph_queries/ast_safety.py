@@ -59,9 +59,9 @@ ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
     {
         "ValueError",
         "dict",
+        "isinstance",
         "len",
         "range",
-        "type",
     }
 )
 
@@ -125,9 +125,9 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
 CALL_ARITIES: dict[str, set[int]] = {
     "ValueError": {1},
     "dict": {1},
+    "isinstance": {2},
     "len": {1},
     "range": {1, 2, 3},
-    "type": {1},
 }
 
 METHOD_ARITIES: dict[str, set[int]] = {

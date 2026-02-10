@@ -133,6 +133,14 @@ class TestCodeCompilation:
         issues = validate_stringrules_task(corrupted)
         assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
 
+    def test_non_string_python_code_payload_reports_parse_error(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(update={"code": {"python": 123}})
+        issues = validate_stringrules_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
     def test_exec_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(update={"code": "raise ValueError('boom')"})

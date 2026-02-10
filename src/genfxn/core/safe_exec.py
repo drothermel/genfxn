@@ -221,6 +221,7 @@ _DEFAULT_MAX_RESULT_BYTES = 1_000_000
 _RESULT_QUEUE_GRACE_SEC = 0.25
 _RESULT_QUEUE_POLL_SEC = 0.05
 _PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC = 1.0
+_MAX_RESULT_NESTING_DEPTH = 32
 
 
 def _persistent_startup_timeout_sec(timeout_sec: float) -> float:
@@ -346,15 +347,83 @@ def _exec_worker(
         )
 
 
+def _sanitize_worker_result_value(value: Any, depth: int = 0) -> Any:
+    if depth > _MAX_RESULT_NESTING_DEPTH:
+        raise TypeError("Worker result exceeded maximum nesting depth")
+
+    if (
+        value is None
+        or isinstance(value, bool)
+        or isinstance(value, int)
+        or isinstance(value, float)
+        or isinstance(value, str)
+    ):
+        return value
+
+    if isinstance(value, list):
+        return [
+            _sanitize_worker_result_value(item, depth + 1)
+            for item in value
+        ]
+
+    if isinstance(value, tuple):
+        return tuple(
+            _sanitize_worker_result_value(item, depth + 1)
+            for item in value
+        )
+
+    if isinstance(value, dict):
+        sanitized: dict[Any, Any] = {}
+        for key, item in value.items():
+            if not (
+                key is None
+                or isinstance(key, bool)
+                or isinstance(key, int)
+                or isinstance(key, float)
+                or isinstance(key, str)
+            ):
+                raise TypeError(
+                    "Unsupported worker result dict key type: "
+                    f"{type(key).__name__}"
+                )
+            sanitized[key] = _sanitize_worker_result_value(item, depth + 1)
+        return sanitized
+
+    raise TypeError(f"Unsupported worker result type: {type(value).__name__}")
+
+
 def _put_worker_result(
     queue: mp.Queue,
     result: _WorkerResult,
     max_result_bytes: int | None,
 ) -> None:
+    sanitized_result = result
+    if result.ok:
+        try:
+            sanitized_result = _WorkerResult(
+                ok=True,
+                value=_sanitize_worker_result_value(result.value),
+            )
+        except Exception as exc:
+            queue.put(
+                _WorkerResult(
+                    ok=False,
+                    error_type="RuntimeError",
+                    error_message=(
+                        "Failed to serialize worker result: "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                )
+            )
+            return
+
     # Always pre-serialize to surface serialization failures synchronously.
     # Otherwise Queue feeder-thread errors can be misreported as timeouts.
     try:
-        payload = pickle.dumps(result, protocol=pickle.HIGHEST_PROTOCOL)
+        payload = pickle.dumps(
+            sanitized_result,
+            protocol=pickle.HIGHEST_PROTOCOL,
+        )
     except Exception as exc:
         queue.put(
             _WorkerResult(
@@ -382,7 +451,7 @@ def _put_worker_result(
                 )
             )
             return
-    queue.put(result)
+    queue.put(sanitized_result)
 
 
 def _run_isolated(
