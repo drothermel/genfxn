@@ -488,6 +488,60 @@ Deterministic graph-query tasks over a fixed spec graph:
 
 ---
 
+## Temporal Logic
+
+Finite-trace temporal-logic tasks over integer sequences:
+`f(xs: list[int]) -> int`
+
+### Sampling Axes
+
+| Axis | Type | Default | CLI Flag | Description |
+|------|------|---------|----------|-------------|
+| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
+| `output_modes` | list | all | — | Output projection (`sat_at_start`, `sat_count`, `first_sat_index`) |
+| `formula_depth_range` | (lo, hi) | (1, 3) | — | Range for sampled formula AST depth |
+| `operator_mix` | list | all | — | Operators allowed during formula sampling |
+| `include_since_choices` | list[bool] | `[False, True]` | — | Whether sampling can include `since` |
+| `sequence_length_range` | (lo, hi) | (0, 10) | `--list-length-range` | Range for sampled query input lengths |
+| `value_range` | (lo, hi) | (-10, 10) | `--value-range` | Range for sampled query values |
+| `predicate_constant_range` | (lo, hi) | (-8, 8) | `--value-range` | Range for sampled atom constants (CLI maps from value-range) |
+
+### Operators
+
+| Value | Description |
+|-------|-------------|
+| `atom` | Atomic predicate on current `xs[i]` |
+| `not` | Boolean negation |
+| `and` | Boolean conjunction |
+| `or` | Boolean disjunction |
+| `next` | True if child holds at `i+1` |
+| `eventually` | True if child holds at any `j >= i` |
+| `always` | True if child holds at all `j >= i` |
+| `until` | Standard finite-trace until |
+| `since` | Standard finite-trace since |
+
+### Output Modes
+
+| Value | Description |
+|-------|-------------|
+| `sat_at_start` | Return `1` if formula holds at index `0`, else `0` |
+| `sat_count` | Return number of indices where formula holds |
+| `first_sat_index` | Return first satisfying index, else `-1` |
+
+### Spec Field Paths (for splits)
+
+| Path | Values | Notes |
+|------|--------|-------|
+| `output_mode` | output mode values | Output interpretation |
+| `formula.op` | operator values | Root operator kind |
+| `formula.predicate` | `eq`, `ne`, `lt`, `le`, `gt`, `ge` | Present on atom nodes |
+| `formula.constant` | integer | Present on atom nodes |
+| `formula.child.op` | operator values | Unary-child operator kind |
+| `formula.left.op` | operator values | Binary-left operator kind |
+| `formula.right.op` | operator values | Binary-right operator kind |
+
+---
+
 ## Using Spec Field Paths
 
 Spec field paths use dot notation to access nested fields. List indices are supported.

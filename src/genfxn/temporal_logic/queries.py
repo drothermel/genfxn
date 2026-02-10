@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.models import Query, QueryTag, dedupe_queries
+from genfxn.core.models import Query, QueryTag
 from genfxn.temporal_logic.eval import eval_temporal_logic
 from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
 
@@ -82,4 +82,16 @@ def generate_temporal_logic_queries(
             continue
         _append_query(queries, spec, [mid], tag)
 
-    return dedupe_queries(queries)
+    deduped: list[Query] = []
+    for tag in QueryTag:
+        seen: set[tuple[int, ...]] = set()
+        for query in queries:
+            if query.tag != tag:
+                continue
+            frozen = tuple(int(v) for v in query.input)
+            if frozen in seen:
+                continue
+            seen.add(frozen)
+            deduped.append(query)
+
+    return deduped

@@ -29,6 +29,12 @@ from genfxn.stack_bytecode.validate import (
     CODE_UNSAFE_AST,
     validate_stack_bytecode_task,
 )
+from genfxn.temporal_logic.models import TemporalLogicSpec
+from genfxn.temporal_logic.render import render_temporal_logic
+from genfxn.temporal_logic.validate import (
+    CODE_UNSAFE_AST as TEMPORAL_LOGIC_CODE_UNSAFE_AST,
+)
+from genfxn.temporal_logic.validate import validate_temporal_logic_task
 
 runner = CliRunner()
 
@@ -53,6 +59,7 @@ def _expected_all_families() -> set[str]:
         "fsm",
         "graph_queries",
         "sequence_dp",
+        "temporal_logic",
     }
     if _supports_bitops_family():
         families.add("bitops")
@@ -183,6 +190,30 @@ class TestGenerate:
             issues = validate_graph_queries_task(task_obj)
             assert not any(
                 i.code == GRAPH_QUERIES_CODE_UNSAFE_AST for i in issues
+            )
+
+    def test_generate_temporal_logic(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            ["generate", "-o", str(output), "-f", "temporal_logic", "-n", "5"],
+        )
+
+        assert result.exit_code == 0
+        assert "Generated 5 tasks" in result.stdout
+
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 5
+        assert all(t["family"] == "temporal_logic" for t in tasks)
+        for task in tasks:
+            spec = TemporalLogicSpec.model_validate(task["spec"])
+            assert task["code"] == render_temporal_logic(spec)
+            task_obj = Task.model_validate(task).model_copy(
+                update={"spec": spec.model_dump()}
+            )
+            issues = validate_temporal_logic_task(task_obj)
+            assert not any(
+                i.code == TEMPORAL_LOGIC_CODE_UNSAFE_AST for i in issues
             )
 
     def test_generate_sequence_dp_honors_shared_ranges(
@@ -807,6 +838,76 @@ class TestGenerate:
         )
         assert result.exit_code == 1
         assert "Invalid difficulty 6 for graph_queries" in result.output
+
+    def test_generate_temporal_logic_with_difficulty(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "temporal_logic",
+                "-n",
+                "4",
+                "--difficulty",
+                "4",
+                "-s",
+                "123",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 4
+        assert all(t["family"] == "temporal_logic" for t in tasks)
+        assert all(t["difficulty"] in {3, 4, 5} for t in tasks)
+
+    def test_generate_temporal_logic_with_variant(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "temporal_logic",
+                "-n",
+                "2",
+                "--difficulty",
+                "3",
+                "--variant",
+                "3A",
+                "-s",
+                "12",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 2
+        assert all(t["family"] == "temporal_logic" for t in tasks)
+
+    def test_generate_temporal_logic_invalid_difficulty(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "temporal_logic",
+                "-n",
+                "1",
+                "--difficulty",
+                "6",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Invalid difficulty 6 for temporal_logic" in result.output
 
     def test_generate_stack_bytecode_invalid_difficulty(self, tmp_path) -> None:
         if not _supports_stack_bytecode_family():
@@ -1685,6 +1786,7 @@ class TestInfo:
         assert "fsm:" in result.stdout
         assert "graph_queries:" in result.stdout
         assert "sequence_dp:" in result.stdout
+        assert "temporal_logic:" in result.stdout
         if _supports_stack_bytecode_family():
             assert "stack_bytecode:" in result.stdout
 

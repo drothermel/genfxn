@@ -915,6 +915,173 @@ class TestComputeDifficulty:
         assert 1 <= easy_score <= 5
         assert 1 <= hard_score <= 5
 
+    def test_temporal_logic_family_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.temporal_logic.task") is None:
+            pytest.skip("temporal_logic family is not available")
+
+        spec = {
+            "output_mode": "sat_count",
+            "formula": {
+                "op": "eventually",
+                "child": {
+                    "op": "atom",
+                    "predicate": "gt",
+                    "constant": 0,
+                },
+            },
+        }
+        difficulty = compute_difficulty("temporal_logic", spec)
+        assert 1 <= difficulty <= 5
+
+    def test_temporal_logic_monotonic_examples_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.temporal_logic.task") is None:
+            pytest.skip("temporal_logic family is not available")
+
+        specs = [
+            {
+                "output_mode": "sat_at_start",
+                "formula": {
+                    "op": "atom",
+                    "predicate": "eq",
+                    "constant": 0,
+                },
+            },
+            {
+                "output_mode": "sat_count",
+                "formula": {
+                    "op": "not",
+                    "child": {
+                        "op": "atom",
+                        "predicate": "ge",
+                        "constant": 0,
+                    },
+                },
+            },
+            {
+                "output_mode": "sat_count",
+                "formula": {
+                    "op": "always",
+                    "child": {
+                        "op": "or",
+                        "left": {
+                            "op": "atom",
+                            "predicate": "lt",
+                            "constant": -1,
+                        },
+                        "right": {
+                            "op": "atom",
+                            "predicate": "gt",
+                            "constant": 1,
+                        },
+                    },
+                },
+            },
+            {
+                "output_mode": "first_sat_index",
+                "formula": {
+                    "op": "until",
+                    "left": {
+                        "op": "atom",
+                        "predicate": "ge",
+                        "constant": 0,
+                    },
+                    "right": {
+                        "op": "atom",
+                        "predicate": "lt",
+                        "constant": 0,
+                    },
+                },
+            },
+            {
+                "output_mode": "first_sat_index",
+                "formula": {
+                    "op": "since",
+                    "left": {
+                        "op": "until",
+                        "left": {
+                            "op": "atom",
+                            "predicate": "ge",
+                            "constant": -2,
+                        },
+                        "right": {
+                            "op": "atom",
+                            "predicate": "lt",
+                            "constant": -3,
+                        },
+                    },
+                    "right": {
+                        "op": "always",
+                        "child": {
+                            "op": "atom",
+                            "predicate": "gt",
+                            "constant": 2,
+                        },
+                    },
+                },
+            },
+        ]
+        scores = [compute_difficulty("temporal_logic", spec) for spec in specs]
+        assert scores == sorted(scores)
+
+    def test_temporal_logic_difficulty_clamped_when_available(self) -> None:
+        if importlib.util.find_spec("genfxn.temporal_logic.task") is None:
+            pytest.skip("temporal_logic family is not available")
+
+        easy = {
+            "output_mode": "sat_at_start",
+            "formula": {
+                "op": "atom",
+                "predicate": "eq",
+                "constant": 0,
+            },
+        }
+        hard = {
+            "output_mode": "first_sat_index",
+            "formula": {
+                "op": "since",
+                "left": {
+                    "op": "until",
+                    "left": {
+                        "op": "always",
+                        "child": {
+                            "op": "atom",
+                            "predicate": "ge",
+                            "constant": 1,
+                        },
+                    },
+                    "right": {
+                        "op": "eventually",
+                        "child": {
+                            "op": "atom",
+                            "predicate": "lt",
+                            "constant": -1,
+                        },
+                    },
+                },
+                "right": {
+                    "op": "and",
+                    "left": {
+                        "op": "next",
+                        "child": {
+                            "op": "atom",
+                            "predicate": "gt",
+                            "constant": 4,
+                        },
+                    },
+                    "right": {
+                        "op": "atom",
+                        "predicate": "le",
+                        "constant": -4,
+                    },
+                },
+            },
+        }
+        easy_score = compute_difficulty("temporal_logic", easy)
+        hard_score = compute_difficulty("temporal_logic", hard)
+        assert 1 <= easy_score <= 5
+        assert 1 <= hard_score <= 5
+        assert hard_score >= easy_score
+
     def test_stack_bytecode_monotonic_examples_when_available(self) -> None:
         if importlib.util.find_spec("genfxn.stack_bytecode.task") is None:
             pytest.skip("stack_bytecode family is not available")

@@ -2,7 +2,7 @@
 
 Date: 2026-02-10
 Owner: Codex + Danielle
-Status: In progress (M0-M1 complete; M2-M5 pending)
+Status: Complete (M0-M5 complete; strict calibration and full checks green)
 
 ## Goal
 
@@ -358,12 +358,12 @@ This family is not complete until all are true:
 
 - [x] M0 complete
 - [x] M1 complete
-- [ ] M2 complete
-- [ ] M3 complete
-- [ ] M4 complete
-- [ ] M5 complete
-- [ ] Full `ruff`, `ty`, and full `pytest` pass
-- [ ] PR notes/test evidence finalized
+- [x] M2 complete
+- [x] M3 complete
+- [x] M4 complete
+- [x] M5 complete
+- [x] Full `ruff`, `ty`, and full `pytest` pass
+- [x] PR notes/test evidence finalized
 
 ## Notes Log
 
@@ -377,3 +377,33 @@ This family is not complete until all are true:
   wiring updates (including `describe_task("temporal_logic", ...)` in
   `src/genfxn/temporal_logic/task.py` and `src/genfxn/core/describe.py`), and
   expanded semantics/parity tests in `tests/test_temporal_logic.py`.
+- 2026-02-10: M2 completed with a new
+  `compute_difficulty("temporal_logic", ...)` branch in
+  `src/genfxn/core/difficulty.py`, task difficulty wiring in
+  `src/genfxn/temporal_logic/task.py`, per-tag query dedupe hardening in
+  `src/genfxn/temporal_logic/queries.py`, and multi-seed monotonic/coverage
+  tests in `tests/test_temporal_logic.py` and `tests/test_difficulty.py`.
+- 2026-02-10: M3 completed with robust validation + AST safety in
+  `src/genfxn/temporal_logic/validate.py` and
+  `src/genfxn/temporal_logic/ast_safety.py` (task_id/spec/code/query/semantic
+  checks), renderer-safe error text in `src/genfxn/temporal_logic/render.py`,
+  and dedicated validation coverage in `tests/test_validate_temporal_logic.py`.
+- 2026-02-10: M4 completed with Java/Rust renderers in
+  `src/genfxn/langs/java/temporal_logic.py` and
+  `src/genfxn/langs/rust/temporal_logic.py`, registry + task language wiring
+  updates (`src/genfxn/langs/registry.py`,
+  `src/genfxn/temporal_logic/task.py`), and executable runtime parity harness
+  coverage in `tests/test_temporal_logic_runtime_parity.py` (runtime-skipped in
+  this environment due missing Java/Rust toolchains).
+- 2026-02-10: M5 completed with preset/CLI/suite integration (`src/genfxn/cli.py`,
+  `src/genfxn/core/presets.py`, `src/genfxn/suites/features.py`,
+  `src/genfxn/suites/quotas.py`, `src/genfxn/suites/generate.py`), calibration
+  tooling (`scripts/calibrate_temporal_logic.py`,
+  `tests/test_calibrate_temporal_logic_script.py`), and docs updates
+  (`README.md`, `AXES.md`).
+- 2026-02-10: Verification evidence:
+  `uv run ruff check .`,
+  `uv run ty check`,
+  `uv run pytest tests/ -q` (`1557 passed, 55 skipped`),
+  `uv run python scripts/calibrate_temporal_logic.py --strict --samples 80 --pool-size 1200 --output /tmp/temporal_logic_calibration.json`
+  (strict checks PASSED).

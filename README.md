@@ -1,7 +1,7 @@
 # genfxn
 
 Synthetic function dataset generator for code reasoning research. Generates
-executable function tasks with structured test cases across ten function
+executable function tasks with structured test cases across eleven function
 families. CLI output is single-language (Python by default, or Java/Rust via
 `--language`).
 
@@ -25,6 +25,7 @@ uv sync
 | **sequence_dp** | `f(a: list[int], b: list[int]) -> int` | Sequence dynamic-programming alignment variants with custom scoring |
 | **intervals** | `f(intervals: list[tuple[int, int]]) -> int` | Interval normalization/merging statistics under configurable boundary modes |
 | **graph_queries** | `f(src: int, dst: int) -> int` | Deterministic graph-query evaluation (`reachable`, `min_hops`, `shortest_path_cost`) |
+| **temporal_logic** | `f(xs: list[int]) -> int` | Finite-trace temporal-logic evaluation with integer predicates and deterministic temporal semantics |
 
 ### Family Roadmap
 
@@ -132,6 +133,12 @@ Graph query tasks over a fixed spec graph where each query asks for
 `reachable`, `min_hops`, or `shortest_path_cost` between two nodes under
 deterministic normalization and path semantics.
 
+### Temporal Logic
+
+Temporal logic tasks evaluate a finite-trace formula over integer sequences and
+return either a boolean-at-start signal (`sat_at_start`), count of satisfying
+indices (`sat_count`), or first satisfying index (`first_sat_index`).
+
 ## Generation
 
 Generate tasks to JSONL files.
@@ -145,7 +152,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-o, --output PATH` | Output JSONL file |
-| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, `sequence_dp`, `intervals`, `graph_queries`, or `all` |
+| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, `sequence_dp`, `intervals`, `graph_queries`, `temporal_logic`, or `all` |
 | `-n, --count INT` | Number of tasks to generate |
 
 ### General Options
@@ -200,10 +207,10 @@ These apply to multiple families:
 
 | Option | Families | Default | Description |
 |--------|----------|---------|-------------|
-| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-20,20` for intervals endpoints, `0,20` effective for graph_queries weights, `-1024,1024` for bitops) |
+| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-20,20` for intervals endpoints, `0,20` effective for graph_queries weights, `-20,20` for temporal_logic sequence values and predicate constants, `-1024,1024` for bitops) |
 | `--threshold-range LO,HI` | piecewise, stateful, fsm | family-specific | Range for predicate thresholds (`-50,50` for piecewise/stateful, `-10,10` for fsm) |
 | `--divisor-range LO,HI` | piecewise, stateful, fsm, sequence_dp | family-specific | Range for mod divisors (`2,10` for piecewise/stateful/fsm, `1,10` for sequence_dp) |
-| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp, intervals, graph_queries | family-specific | Range for test list lengths (`5,20` for stateful/simple_algorithms, `0,8` for stack_bytecode, `2,10` for sequence_dp, `0,10` for intervals query interval-counts, mapped to `n_nodes_range` for graph_queries) |
+| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp, intervals, graph_queries, temporal_logic | family-specific | Range for test list lengths (`5,20` for stateful/simple_algorithms, `0,8` for stack_bytecode, `2,10` for sequence_dp, `0,10` for intervals query interval-counts, mapped to `n_nodes_range` for graph_queries, mapped to `sequence_length_range` for temporal_logic) |
 
 ### Examples
 
@@ -244,6 +251,9 @@ genfxn generate -o tasks.jsonl -f intervals -n 50 --difficulty 4
 
 # Graph query tasks at target difficulty 4
 genfxn generate -o tasks.jsonl -f graph_queries -n 50 --difficulty 4
+
+# Temporal logic tasks at target difficulty 5
+genfxn generate -o tasks.jsonl -f temporal_logic -n 50 --difficulty 5
 ```
 
 See [AXES.md](AXES.md) for complete axis documentation.

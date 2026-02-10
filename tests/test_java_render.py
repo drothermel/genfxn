@@ -76,6 +76,7 @@ from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 
 def _code_map(task: Task) -> dict[str, str]:
@@ -849,6 +850,17 @@ class TestMultiLanguageGeneration:
         assert "def f(" in code["python"]
         assert "public static" in code["java"]
 
+    def test_temporal_logic_generates_java(self) -> None:
+        task = generate_temporal_logic_task(
+            rng=random.Random(42),
+            languages=[Language.PYTHON, Language.JAVA],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static long f(long[] xs)" in code["java"]
+
     def test_stack_bytecode_generates_java_when_available(self) -> None:
         if not _supports_stack_bytecode_java():
             pytest.skip("stack_bytecode Java rendering is not available")
@@ -902,6 +914,10 @@ class TestMultiLanguageGeneration:
     def test_graph_queries_rejects_empty_languages(self) -> None:
         with pytest.raises(ValueError, match="languages list is empty"):
             generate_graph_queries_task(rng=random.Random(42), languages=[])
+
+    def test_temporal_logic_rejects_empty_languages(self) -> None:
+        with pytest.raises(ValueError, match="languages list is empty"):
+            generate_temporal_logic_task(rng=random.Random(42), languages=[])
 
     @pytest.mark.parametrize("seed", range(10))
     def test_piecewise_java_renders_non_empty(self, seed: int) -> None:
@@ -1012,6 +1028,13 @@ class TestLangsInfra:
         assert callable(get_render_fn(Language.PYTHON, "graph_queries"))
         assert callable(get_render_fn(Language.JAVA, "graph_queries"))
         assert callable(get_render_fn(Language.RUST, "graph_queries"))
+
+    def test_registry_temporal_logic(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "temporal_logic"))
+        assert callable(get_render_fn(Language.JAVA, "temporal_logic"))
+        assert callable(get_render_fn(Language.RUST, "temporal_logic"))
 
     def test_available_languages_includes_python_and_java(self) -> None:
         from genfxn.langs.render import _available_languages

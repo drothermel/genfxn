@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.langs.types import Language
 
@@ -17,6 +18,7 @@ temporal_task = pytest.importorskip("genfxn.temporal_logic.task")
 PredicateKind = temporal_models.PredicateKind
 TemporalLogicAxes = temporal_models.TemporalLogicAxes
 TemporalLogicSpec = temporal_models.TemporalLogicSpec
+TemporalOperator = temporal_models.TemporalOperator
 TemporalOutputMode = temporal_models.TemporalOutputMode
 
 eval_temporal_logic = temporal_eval.eval_temporal_logic
@@ -219,6 +221,8 @@ class TestTemporalLogicSemantics:
         assert isinstance(task.code, str)
         assert task.spec["output_mode"] in task.description
         assert task.description
+        assert task.difficulty is not None
+        assert 1 <= task.difficulty <= 5
         assert len(task.queries) > 0
         tags = {query.tag for query in task.queries}
         assert tags == set(QueryTag)
@@ -281,3 +285,56 @@ class TestTemporalLogicSemantics:
                 expected = eval_temporal_logic(spec, query.input)
                 assert query.output == expected
                 assert fn(query.input) == expected
+
+    def test_query_tags_covered_for_degenerate_axes(self) -> None:
+        axes = TemporalLogicAxes(
+            formula_depth_range=(1, 1),
+            operator_mix=[TemporalOperator.ATOM, TemporalOperator.NEXT],
+            include_since_choices=[False],
+            sequence_length_range=(0, 0),
+            value_range=(0, 0),
+            predicate_constant_range=(0, 0),
+            output_modes=[TemporalOutputMode.SAT_AT_START],
+        )
+        spec = sample_temporal_logic_spec(axes, random.Random(500))
+        queries = generate_temporal_logic_queries(
+            spec, axes, rng=random.Random(501)
+        )
+
+        assert {query.tag for query in queries} == set(QueryTag)
+        for query in queries:
+            assert query.output == eval_temporal_logic(spec, query.input)
+
+    def test_target_difficulty_sampling_is_monotonic(self) -> None:
+        means: list[float] = []
+        for target in range(1, 6):
+            axes = TemporalLogicAxes(
+                target_difficulty=target,
+                formula_depth_range=(1, 5),
+                operator_mix=list(TemporalOperator),
+                include_since_choices=[False, True],
+                sequence_length_range=(0, 8),
+                value_range=(-5, 5),
+                predicate_constant_range=(-5, 5),
+                output_modes=list(TemporalOutputMode),
+            )
+            scores: list[int] = []
+            for seed in range(1000 + target * 120, 1000 + target * 120 + 120):
+                spec = sample_temporal_logic_spec(axes, random.Random(seed))
+                score = compute_difficulty("temporal_logic", spec.model_dump())
+                scores.append(score)
+
+            mean = sum(scores) / len(scores)
+            means.append(mean)
+            exact_rate = sum(1 for score in scores if score == target) / len(
+                scores
+            )
+            within_one_rate = sum(
+                1 for score in scores if abs(score - target) <= 1
+            ) / len(scores)
+
+            assert abs(mean - target) <= 1.2
+            assert exact_rate >= 0.2
+            assert within_one_rate >= 0.8
+
+        assert means == sorted(means)

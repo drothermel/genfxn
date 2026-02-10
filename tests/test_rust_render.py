@@ -73,6 +73,7 @@ from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 
 def _code_map(task: Task) -> dict[str, str]:
@@ -863,6 +864,17 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(" in code["rust"]
 
+    def test_temporal_logic_generates_rust(self) -> None:
+        task = generate_temporal_logic_task(
+            rng=seeded_rng(42),
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
             pytest.skip("stack_bytecode Rust rendering is not available")
@@ -948,6 +960,7 @@ class TestRustRegistry:
             "graph_queries",
             "intervals",
             "sequence_dp",
+            "temporal_logic",
             "piecewise",
             "stateful",
             "simple_algorithms",
@@ -966,6 +979,13 @@ class TestRustRegistry:
         assert callable(get_render_fn(Language.PYTHON, "graph_queries"))
         assert callable(get_render_fn(Language.JAVA, "graph_queries"))
         assert callable(get_render_fn(Language.RUST, "graph_queries"))
+
+    def test_registry_temporal_logic(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "temporal_logic"))
+        assert callable(get_render_fn(Language.JAVA, "temporal_logic"))
+        assert callable(get_render_fn(Language.RUST, "temporal_logic"))
 
     def test_available_languages_includes_rust(self) -> None:
         from genfxn.langs.render import _available_languages

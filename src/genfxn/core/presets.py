@@ -58,6 +58,11 @@ from genfxn.stateful.models import (
     TemplateType as StatefulTemplateType,
 )
 from genfxn.stringrules.models import StringRulesAxes
+from genfxn.temporal_logic.models import (
+    TemporalLogicAxes,
+    TemporalOperator,
+    TemporalOutputMode,
+)
 
 
 @dataclass
@@ -1309,6 +1314,128 @@ GRAPH_QUERIES_PRESETS: dict[int, list[DifficultyPreset]] = {
 
 
 # =============================================================================
+# Temporal Logic Presets
+# Difficulty maps from output mode, depth, and temporal operator complexity.
+# =============================================================================
+
+TEMPORAL_LOGIC_PRESETS: dict[int, list[DifficultyPreset]] = {
+    1: [
+        DifficultyPreset(
+            "1A",
+            "atom-only sat-at-start formulas",
+            {
+                "target_difficulty": 1,
+                "output_modes": [TemporalOutputMode.SAT_AT_START],
+                "formula_depth_range": (1, 1),
+                "operator_mix": [TemporalOperator.ATOM],
+                "include_since_choices": [False],
+                "sequence_length_range": (0, 5),
+                "value_range": (-8, 8),
+                "predicate_constant_range": (-6, 6),
+            },
+        )
+    ],
+    2: [
+        DifficultyPreset(
+            "2A",
+            "shallow boolean formulas without temporal past operators",
+            {
+                "target_difficulty": 2,
+                "output_modes": [TemporalOutputMode.SAT_AT_START],
+                "formula_depth_range": (2, 2),
+                "operator_mix": [
+                    TemporalOperator.ATOM,
+                    TemporalOperator.NOT,
+                    TemporalOperator.AND,
+                    TemporalOperator.OR,
+                ],
+                "include_since_choices": [False],
+                "sequence_length_range": (1, 7),
+                "value_range": (-10, 10),
+                "predicate_constant_range": (-8, 8),
+            },
+        )
+    ],
+    3: [
+        DifficultyPreset(
+            "3A",
+            "medium-depth sat-count formulas with mixed temporal/future ops",
+            {
+                "target_difficulty": 3,
+                "output_modes": [TemporalOutputMode.SAT_COUNT],
+                "formula_depth_range": (3, 3),
+                "operator_mix": [
+                    TemporalOperator.ATOM,
+                    TemporalOperator.NOT,
+                    TemporalOperator.AND,
+                    TemporalOperator.OR,
+                    TemporalOperator.NEXT,
+                    TemporalOperator.EVENTUALLY,
+                    TemporalOperator.ALWAYS,
+                    TemporalOperator.UNTIL,
+                ],
+                "include_since_choices": [False],
+                "sequence_length_range": (3, 10),
+                "value_range": (-12, 12),
+                "predicate_constant_range": (-10, 10),
+            },
+        )
+    ],
+    4: [
+        DifficultyPreset(
+            "4A",
+            "deep first-sat-index formulas with past-time coverage",
+            {
+                "target_difficulty": 4,
+                "output_modes": [TemporalOutputMode.FIRST_SAT_INDEX],
+                "formula_depth_range": (4, 4),
+                "operator_mix": [
+                    TemporalOperator.ATOM,
+                    TemporalOperator.AND,
+                    TemporalOperator.OR,
+                    TemporalOperator.NEXT,
+                    TemporalOperator.EVENTUALLY,
+                    TemporalOperator.ALWAYS,
+                    TemporalOperator.UNTIL,
+                    TemporalOperator.SINCE,
+                ],
+                "include_since_choices": [True],
+                "sequence_length_range": (5, 12),
+                "value_range": (-14, 14),
+                "predicate_constant_range": (-12, 12),
+            },
+        )
+    ],
+    5: [
+        DifficultyPreset(
+            "5A",
+            "max-depth first-sat-index formulas with nested hard temporal ops",
+            {
+                "target_difficulty": 5,
+                "output_modes": [TemporalOutputMode.FIRST_SAT_INDEX],
+                "formula_depth_range": (5, 6),
+                "operator_mix": [
+                    TemporalOperator.ATOM,
+                    TemporalOperator.NOT,
+                    TemporalOperator.AND,
+                    TemporalOperator.OR,
+                    TemporalOperator.NEXT,
+                    TemporalOperator.EVENTUALLY,
+                    TemporalOperator.ALWAYS,
+                    TemporalOperator.UNTIL,
+                    TemporalOperator.SINCE,
+                ],
+                "include_since_choices": [True],
+                "sequence_length_range": (8, 16),
+                "value_range": (-16, 16),
+                "predicate_constant_range": (-14, 14),
+            },
+        )
+    ],
+}
+
+
+# =============================================================================
 # Lookup Functions
 # =============================================================================
 
@@ -1323,6 +1450,7 @@ _FAMILY_PRESETS: dict[str, dict[int, list[DifficultyPreset]]] = {
     "sequence_dp": SEQUENCE_DP_PRESETS,
     "intervals": INTERVALS_PRESETS,
     "graph_queries": GRAPH_QUERIES_PRESETS,
+    "temporal_logic": TEMPORAL_LOGIC_PRESETS,
 }
 
 
@@ -1367,6 +1495,7 @@ def get_difficulty_axes(
     | SequenceDpAxes
     | IntervalsAxes
     | GraphQueriesAxes
+    | TemporalLogicAxes
 ):
     """Return axes for target difficulty.
 
@@ -1414,6 +1543,7 @@ def _build_axes(
     | SequenceDpAxes
     | IntervalsAxes
     | GraphQueriesAxes
+    | TemporalLogicAxes
 ):
     """Build axes object from overrides."""
     match family:
@@ -1437,5 +1567,7 @@ def _build_axes(
             return IntervalsAxes(**overrides)
         case "graph_queries":
             return GraphQueriesAxes(**overrides)
+        case "temporal_logic":
+            return TemporalLogicAxes(**overrides)
         case _:
             raise ValueError(f"Unknown family: {family}")

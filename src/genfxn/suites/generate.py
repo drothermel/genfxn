@@ -97,8 +97,17 @@ from genfxn.suites.features import (
     stack_bytecode_features,
     stateful_features,
     stringrules_features,
+    temporal_logic_features,
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
+from genfxn.temporal_logic.models import (
+    TemporalLogicAxes,
+    TemporalOperator,
+    TemporalOutputMode,
+)
+from genfxn.temporal_logic.queries import generate_temporal_logic_queries
+from genfxn.temporal_logic.render import render_temporal_logic
+from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
 
 logger = logging.getLogger(__name__)
 
@@ -1010,6 +1019,104 @@ def _pool_axes_graph_queries_d5(_: random.Random) -> GraphQueriesAxes:
     )
 
 
+def _pool_axes_temporal_logic_d1(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=1,
+        output_modes=[TemporalOutputMode.SAT_AT_START],
+        formula_depth_range=(1, 1),
+        operator_mix=[TemporalOperator.ATOM],
+        include_since_choices=[False],
+        sequence_length_range=(0, 5),
+        value_range=(-8, 8),
+        predicate_constant_range=(-6, 6),
+    )
+
+
+def _pool_axes_temporal_logic_d2(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=2,
+        output_modes=[TemporalOutputMode.SAT_AT_START],
+        formula_depth_range=(2, 2),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.NOT,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+        ],
+        include_since_choices=[False],
+        sequence_length_range=(1, 7),
+        value_range=(-10, 10),
+        predicate_constant_range=(-8, 8),
+    )
+
+
+def _pool_axes_temporal_logic_d3(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=3,
+        output_modes=[TemporalOutputMode.SAT_COUNT],
+        formula_depth_range=(3, 3),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.NOT,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+            TemporalOperator.NEXT,
+            TemporalOperator.EVENTUALLY,
+            TemporalOperator.ALWAYS,
+            TemporalOperator.UNTIL,
+        ],
+        include_since_choices=[False],
+        sequence_length_range=(3, 10),
+        value_range=(-12, 12),
+        predicate_constant_range=(-10, 10),
+    )
+
+
+def _pool_axes_temporal_logic_d4(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=4,
+        output_modes=[TemporalOutputMode.FIRST_SAT_INDEX],
+        formula_depth_range=(4, 4),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+            TemporalOperator.NEXT,
+            TemporalOperator.EVENTUALLY,
+            TemporalOperator.ALWAYS,
+            TemporalOperator.UNTIL,
+            TemporalOperator.SINCE,
+        ],
+        include_since_choices=[True],
+        sequence_length_range=(5, 12),
+        value_range=(-14, 14),
+        predicate_constant_range=(-12, 12),
+    )
+
+
+def _pool_axes_temporal_logic_d5(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=5,
+        output_modes=[TemporalOutputMode.FIRST_SAT_INDEX],
+        formula_depth_range=(5, 6),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.NOT,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+            TemporalOperator.NEXT,
+            TemporalOperator.EVENTUALLY,
+            TemporalOperator.ALWAYS,
+            TemporalOperator.UNTIL,
+            TemporalOperator.SINCE,
+        ],
+        include_since_choices=[True],
+        sequence_length_range=(8, 16),
+        value_range=(-16, 16),
+        predicate_constant_range=(-14, 14),
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -1070,6 +1177,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_graph_queries_d4,
         5: _pool_axes_graph_queries_d5,
     },
+    "temporal_logic": {
+        1: _pool_axes_temporal_logic_d1,
+        2: _pool_axes_temporal_logic_d2,
+        3: _pool_axes_temporal_logic_d3,
+        4: _pool_axes_temporal_logic_d4,
+        5: _pool_axes_temporal_logic_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -1084,6 +1198,7 @@ _FEATURE_FNS = {
     "sequence_dp": sequence_dp_features,
     "intervals": intervals_features,
     "graph_queries": graph_queries_features,
+    "temporal_logic": temporal_logic_features,
 }
 
 
@@ -1145,6 +1260,8 @@ def _sample_spec(
         return sample_intervals_spec(axes, rng, trace=trace)
     elif family == "graph_queries":
         return sample_graph_queries_spec(axes, rng, trace=trace)
+    elif family == "temporal_logic":
+        return sample_temporal_logic_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -1474,6 +1591,11 @@ def _generate_task_from_candidate(
             axes = GraphQueriesAxes()
         py_code = render_graph_queries(spec)
         queries = generate_graph_queries_queries(spec, axes, rng)
+    elif family == "temporal_logic":
+        if axes is None:
+            axes = TemporalLogicAxes()
+        py_code = render_temporal_logic(spec)
+        queries = generate_temporal_logic_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 

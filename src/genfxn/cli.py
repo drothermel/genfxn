@@ -57,6 +57,8 @@ from genfxn.stringrules.models import (
     StringRulesSpec,
 )
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
@@ -66,6 +68,7 @@ _bitops_spec_adapter = TypeAdapter(BitopsSpec)
 _sequence_dp_spec_adapter = TypeAdapter(SequenceDpSpec)
 _intervals_spec_adapter = TypeAdapter(IntervalsSpec)
 _graph_queries_spec_adapter = TypeAdapter(GraphQueriesSpec)
+_temporal_logic_spec_adapter = TypeAdapter(TemporalLogicSpec)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -207,6 +210,11 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
         case "graph_queries":
             spec_obj = _graph_queries_spec_adapter.validate_python(
                 task.spec, strict=True
+            )
+        case "temporal_logic":
+            spec_obj = _temporal_logic_spec_adapter.validate_python(
+                task.spec,
+                strict=True,
             )
         case _:
             raise typer.BadParameter(f"Unknown family: {task.family}")
@@ -432,6 +440,20 @@ def _build_graph_queries_axes(
     return GraphQueriesAxes(**kwargs)
 
 
+def _build_temporal_logic_axes(
+    value_range: str | None,
+    list_length_range: str | None,
+) -> TemporalLogicAxes:
+    kwargs: dict[str, Any] = {}
+    if value_range:
+        parsed = _parse_range(value_range)
+        kwargs["value_range"] = parsed
+        kwargs["predicate_constant_range"] = parsed
+    if list_length_range:
+        kwargs["sequence_length_range"] = _parse_range(list_length_range)
+    return TemporalLogicAxes(**kwargs)
+
+
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
     return render_stack_bytecode(spec)
 
@@ -479,7 +501,7 @@ def generate(
             help=(
                 "piecewise, stateful, simple_algorithms, stringrules, "
                 "bitops, sequence_dp, intervals, graph_queries, "
-                "stack_bytecode, fsm, or all"
+                "temporal_logic, stack_bytecode, fsm, or all"
             ),
         ),
     ] = "all",
@@ -756,6 +778,10 @@ def generate(
             value_range=value_range,
             list_length_range=list_length_range,
         )
+        temporal_logic_axes = _build_temporal_logic_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
 
     with output.open("w", encoding="utf-8") as output_handle:
 
@@ -776,6 +802,7 @@ def generate(
                 "sequence_dp",
                 "intervals",
                 "graph_queries",
+                "temporal_logic",
                 "stack_bytecode",
                 "fsm",
             ]
@@ -809,6 +836,13 @@ def generate(
                 emit(
                     generate_graph_queries_task(
                         axes=graph_queries_axes,
+                        rng=rng,
+                    )
+                )
+            for _ in range(family_counts["temporal_logic"]):
+                emit(
+                    generate_temporal_logic_task(
+                        axes=temporal_logic_axes,
                         rng=rng,
                     )
                 )
@@ -856,6 +890,18 @@ def generate(
                 emit(
                     generate_graph_queries_task(
                         axes=cast(GraphQueriesAxes, axes),
+                        rng=rng,
+                    )
+                )
+        elif family == "temporal_logic":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = temporal_logic_axes
+                emit(
+                    generate_temporal_logic_task(
+                        axes=cast(TemporalLogicAxes, axes),
                         rng=rng,
                     )
                 )

@@ -20,6 +20,7 @@ from genfxn.core.presets import (
     SIMPLE_ALGORITHMS_PRESETS,
     STATEFUL_PRESETS,
     STRINGRULES_PRESETS,
+    TEMPORAL_LOGIC_PRESETS,
     DifficultyPreset,
     get_difficulty_axes,
     get_difficulty_presets,
@@ -41,6 +42,8 @@ from genfxn.stateful.models import StatefulAxes
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.models import StringRulesAxes
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.temporal_logic.models import TemporalLogicAxes
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 
 def _supports_stack_bytecode_presets() -> bool:
@@ -93,6 +96,10 @@ class TestGetValidDifficulties:
 
     def test_graph_queries_range(self) -> None:
         valid = get_valid_difficulties("graph_queries")
+        assert valid == [1, 2, 3, 4, 5]
+
+    def test_temporal_logic_range(self) -> None:
+        valid = get_valid_difficulties("temporal_logic")
         assert valid == [1, 2, 3, 4, 5]
 
     def test_unknown_family_raises(self) -> None:
@@ -159,6 +166,10 @@ class TestGetDifficultyAxes:
         axes = get_difficulty_axes("graph_queries", 3)
         assert isinstance(axes, GraphQueriesAxes)
 
+    def test_temporal_logic_returns_correct_type(self) -> None:
+        axes = get_difficulty_axes("temporal_logic", 3)
+        assert isinstance(axes, TemporalLogicAxes)
+
     @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
     def test_intervals_sets_target_difficulty(self, difficulty: int) -> None:
         axes = cast(
@@ -179,6 +190,20 @@ class TestGetDifficultyAxes:
             GraphQueriesAxes,
             get_difficulty_axes(
                 "graph_queries",
+                difficulty,
+                variant=f"{difficulty}A",
+            ),
+        )
+        assert axes.target_difficulty == difficulty
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_temporal_logic_sets_target_difficulty(
+        self, difficulty: int
+    ) -> None:
+        axes = cast(
+            TemporalLogicAxes,
+            get_difficulty_axes(
+                "temporal_logic",
                 difficulty,
                 variant=f"{difficulty}A",
             ),
@@ -235,6 +260,8 @@ class TestPresetAccuracy:
         ("stateful", 4),  # Composed NOT + pipeline sampling variance
         ("stateful", 5),  # Composed/pipeline sampling variance
         ("simple_algorithms", 5),  # Preprocess + edge sampling variance
+        ("temporal_logic", 4),  # Temporal operator mix often rounds to D5
+        ("temporal_logic", 5),  # Mixed D4/D5 due formula structure variance
     }
     EDGE_EXACT_THRESHOLD = 0.50  # >50% for edge cases
     EDGE_MEAN_TOLERANCE = 0.75  # ±0.75 for edge cases
@@ -281,6 +308,11 @@ class TestPresetAccuracy:
             elif family == "graph_queries":
                 task = generate_graph_queries_task(
                     axes=cast(GraphQueriesAxes, axes),
+                    rng=rng,
+                )
+            elif family == "temporal_logic":
+                task = generate_temporal_logic_task(
+                    axes=cast(TemporalLogicAxes, axes),
                     rng=rng,
                 )
             else:
@@ -339,6 +371,13 @@ class TestPresetAccuracy:
             "graph_queries", difficulty
         )
         self._verify_accuracy(difficulties, difficulty, "graph_queries")
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_temporal_logic_preset_accuracy(self, difficulty: int) -> None:
+        difficulties = self._generate_tasks_for_preset(
+            "temporal_logic", difficulty
+        )
+        self._verify_accuracy(difficulties, difficulty, "temporal_logic")
 
     def _verify_accuracy(
         self, difficulties: list[int], target: int, family: str
@@ -566,6 +605,14 @@ class TestPresetCompleteness:
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
 
+    def test_temporal_logic_presets_structure(self) -> None:
+        for difficulty, presets in TEMPORAL_LOGIC_PRESETS.items():
+            assert isinstance(difficulty, int)
+            assert 1 <= difficulty <= 5
+            assert len(presets) >= 1
+            for preset in presets:
+                assert preset.name.startswith(f"{difficulty}")
+
     def test_all_presets_produce_valid_axes(self) -> None:
         """Verify all preset overrides create valid axes objects."""
         for family, preset_dict in [
@@ -578,6 +625,7 @@ class TestPresetCompleteness:
             ("sequence_dp", SEQUENCE_DP_PRESETS),
             ("intervals", INTERVALS_PRESETS),
             ("graph_queries", GRAPH_QUERIES_PRESETS),
+            ("temporal_logic", TEMPORAL_LOGIC_PRESETS),
         ]:
             for difficulty, presets in preset_dict.items():
                 for preset in presets:

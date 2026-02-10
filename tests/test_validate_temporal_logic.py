@@ -1,0 +1,140 @@
+import random
+from typing import Any
+
+import pytest
+
+from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.validate import Issue, Severity
+from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
+from genfxn.temporal_logic.task import generate_temporal_logic_task
+from genfxn.temporal_logic.validate import (
+    CODE_CODE_EXEC_ERROR,
+    CODE_CODE_PARSE_ERROR,
+    CODE_QUERY_INPUT_TYPE,
+    CODE_QUERY_OUTPUT_MISMATCH,
+    CODE_QUERY_OUTPUT_TYPE,
+    CODE_SEMANTIC_MISMATCH,
+    CODE_UNSAFE_AST,
+)
+from genfxn.temporal_logic.validate import (
+    validate_temporal_logic_task as _validate_temporal_logic_task,
+)
+
+
+def validate_temporal_logic_task(
+    *args: Any, **kwargs: Any
+) -> list[Issue]:
+    kwargs.setdefault("execute_untrusted_code", True)
+    return _validate_temporal_logic_task(*args, **kwargs)
+
+
+@pytest.fixture
+def baseline_task() -> Task:
+    axes = TemporalLogicAxes(
+        target_difficulty=3,
+        formula_depth_range=(2, 4),
+        sequence_length_range=(0, 8),
+        value_range=(-6, 6),
+        predicate_constant_range=(-5, 5),
+    )
+    return generate_temporal_logic_task(axes=axes, rng=random.Random(42))
+
+
+def test_generated_task_has_no_errors(baseline_task: Task) -> None:
+    axes = TemporalLogicAxes.model_validate(baseline_task.axes or {})
+    issues = validate_temporal_logic_task(
+        baseline_task,
+        axes=axes,
+        semantic_trials=12,
+        random_seed=123,
+    )
+    errors = [issue for issue in issues if issue.severity == Severity.ERROR]
+    assert errors == []
+
+
+def test_unsafe_ast_is_rejected(baseline_task: Task) -> None:
+    corrupted = baseline_task.model_copy(
+        update={"code": "def f(xs):\n    import os\n    return 0"}
+    )
+    issues = validate_temporal_logic_task(corrupted)
+    assert any(issue.code == CODE_UNSAFE_AST for issue in issues)
+
+
+def test_query_input_output_type_mismatch_detected(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(
+        update={
+            "queries": [
+                Query(input="bad", output="bad", tag=QueryTag.TYPICAL)
+            ]
+        }
+    )
+    issues = validate_temporal_logic_task(corrupted)
+    assert any(issue.code == CODE_QUERY_INPUT_TYPE for issue in issues)
+    assert any(issue.code == CODE_QUERY_OUTPUT_TYPE for issue in issues)
+
+
+def test_query_output_mismatch_detected(baseline_task: Task) -> None:
+    query = baseline_task.queries[0]
+    bad_query = Query(
+        input=query.input,
+        output=query.output + 1,
+        tag=query.tag,
+    )
+    corrupted = baseline_task.model_copy(update={"queries": [bad_query]})
+    issues = validate_temporal_logic_task(corrupted)
+    assert any(issue.code == CODE_QUERY_OUTPUT_MISMATCH for issue in issues)
+
+
+def test_semantic_mismatch_detected(baseline_task: Task) -> None:
+    spec = TemporalLogicSpec.model_validate(baseline_task.spec, strict=True)
+    expected = _validate_expected(spec, [0, 1, -1])
+    corrupted = baseline_task.model_copy(
+        update={"code": f"def f(xs):\n    return {expected + 1}"}
+    )
+    axes = TemporalLogicAxes.model_validate(baseline_task.axes or {})
+    issues = validate_temporal_logic_task(
+        corrupted,
+        axes=axes,
+        semantic_trials=6,
+        max_semantic_issues=4,
+        random_seed=7,
+    )
+    assert any(issue.code == CODE_SEMANTIC_MISMATCH for issue in issues)
+
+
+def test_execute_untrusted_code_false_skips_exec_errors(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(update={"code": "raise ValueError(1)"})
+    issues = _validate_temporal_logic_task(
+        corrupted,
+        execute_untrusted_code=False,
+    )
+    assert not any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
+
+
+def test_execute_untrusted_code_true_reports_exec_error(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(update={"code": "raise ValueError(1)"})
+    issues = _validate_temporal_logic_task(
+        corrupted,
+        execute_untrusted_code=True,
+    )
+    assert any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
+
+
+def test_non_string_python_code_payload_reports_parse_error(
+    baseline_task: Task,
+) -> None:
+    corrupted = baseline_task.model_copy(update={"code": {"python": 123}})
+    issues = validate_temporal_logic_task(corrupted)
+    assert any(issue.code == CODE_CODE_PARSE_ERROR for issue in issues)
+
+
+def _validate_expected(spec: TemporalLogicSpec, xs: list[int]) -> int:
+    from genfxn.temporal_logic.eval import eval_temporal_logic
+
+    return eval_temporal_logic(spec, xs)

@@ -78,7 +78,7 @@ def render_temporal_logic(
                 if valid:
                     return True
             return False
-        raise ValueError(f"Unsupported operator: {{op}}")
+        raise ValueError("Unsupported operator: " + str(op))
 
     n = len(xs)
     if n == 0:
