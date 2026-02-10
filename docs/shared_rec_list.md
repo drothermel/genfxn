@@ -10,7 +10,8 @@ Date: 2026-02-09
 - Completed: `Bit Manipulation Pipelines` (implemented as `bitops`)
 - Completed: `Sequence DP With Custom Scoring` (implemented as `sequence_dp`)
 - Completed: `Interval Operations` (implemented as `intervals`)
-- In progress: `Graph Query Functions` (implemented as `graph_queries`, M0)
+- Completed: `Graph Query Functions` (implemented as `graph_queries`)
+- In progress: `Temporal Logic Over Streams`
 - Implementation plans:
   `docs/fsm_plan.md`, `docs/bitops_plan.md`, `docs/sequence_dp_plan.md`,
   `docs/intervals_plan.md`, `docs/graph_queries_plan.md`

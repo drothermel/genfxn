@@ -21,6 +21,8 @@ from genfxn.core.trace import GenerationTrace
 from genfxn.core.transforms import TransformType
 from genfxn.fsm.models import FsmAxes, FsmSpec
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
+from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.registry import get_render_fn
@@ -63,6 +65,7 @@ _fsm_spec_adapter = TypeAdapter(FsmSpec)
 _bitops_spec_adapter = TypeAdapter(BitopsSpec)
 _sequence_dp_spec_adapter = TypeAdapter(SequenceDpSpec)
 _intervals_spec_adapter = TypeAdapter(IntervalsSpec)
+_graph_queries_spec_adapter = TypeAdapter(GraphQueriesSpec)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -199,6 +202,10 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
             )
         case "intervals":
             spec_obj = _intervals_spec_adapter.validate_python(
+                task.spec, strict=True
+            )
+        case "graph_queries":
+            spec_obj = _graph_queries_spec_adapter.validate_python(
                 task.spec, strict=True
             )
         case _:
@@ -409,6 +416,22 @@ def _build_intervals_axes(
     return IntervalsAxes(**kwargs)
 
 
+def _build_graph_queries_axes(
+    value_range: str | None,
+    list_length_range: str | None,
+) -> GraphQueriesAxes:
+    kwargs: dict[str, Any] = {}
+    if value_range:
+        parsed = _parse_range(value_range)
+        if parsed is not None:
+            lo, hi = parsed
+            if hi >= 0:
+                kwargs["weight_range"] = (max(0, lo), hi)
+    if list_length_range:
+        kwargs["n_nodes_range"] = _parse_range(list_length_range)
+    return GraphQueriesAxes(**kwargs)
+
+
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
     return render_stack_bytecode(spec)
 
@@ -455,7 +478,8 @@ def generate(
             "-f",
             help=(
                 "piecewise, stateful, simple_algorithms, stringrules, "
-                "bitops, sequence_dp, intervals, stack_bytecode, fsm, or all"
+                "bitops, sequence_dp, intervals, graph_queries, "
+                "stack_bytecode, fsm, or all"
             ),
         ),
     ] = "all",
@@ -728,6 +752,10 @@ def generate(
             value_range=value_range,
             list_length_range=list_length_range,
         )
+        graph_queries_axes = _build_graph_queries_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
 
     with output.open("w", encoding="utf-8") as output_handle:
 
@@ -747,6 +775,7 @@ def generate(
                 "bitops",
                 "sequence_dp",
                 "intervals",
+                "graph_queries",
                 "stack_bytecode",
                 "fsm",
             ]
@@ -776,6 +805,13 @@ def generate(
                 emit(generate_sequence_dp_task(axes=sequence_dp_axes, rng=rng))
             for _ in range(family_counts["intervals"]):
                 emit(generate_intervals_task(axes=intervals_axes, rng=rng))
+            for _ in range(family_counts["graph_queries"]):
+                emit(
+                    generate_graph_queries_task(
+                        axes=graph_queries_axes,
+                        rng=rng,
+                    )
+                )
             for _ in range(family_counts["stack_bytecode"]):
                 emit(_build_stack_bytecode_task(stack_bytecode_axes, rng))
             for _ in range(family_counts["fsm"]):
@@ -808,6 +844,18 @@ def generate(
                 emit(
                     generate_intervals_task(
                         axes=cast(IntervalsAxes, axes),
+                        rng=rng,
+                    )
+                )
+        elif family == "graph_queries":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = graph_queries_axes
+                emit(
+                    generate_graph_queries_task(
+                        axes=cast(GraphQueriesAxes, axes),
                         rng=rng,
                     )
                 )

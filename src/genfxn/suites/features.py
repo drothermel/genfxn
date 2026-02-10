@@ -752,3 +752,91 @@ def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
         "clip_bucket": clip_bucket,
         "quantize_bucket": quantize_bucket,
     }
+
+
+def graph_queries_features(spec: dict[str, Any]) -> dict[str, str]:
+    query_type = _enum_or_str(spec.get("query_type"), "reachable")
+    directed = bool(spec.get("directed", False))
+    weighted = bool(spec.get("weighted", False))
+    n_nodes = max(1, _coerce_int(spec.get("n_nodes"), 1))
+
+    edges_raw = spec.get("edges")
+    edges_list = edges_raw if isinstance(edges_raw, list) else []
+
+    edges: list[tuple[int, int]] = []
+    unique_edges: set[tuple[int, int]] = set()
+    for edge in edges_list:
+        if not isinstance(edge, dict):
+            continue
+        u = _coerce_int(edge.get("u"), -1)
+        v = _coerce_int(edge.get("v"), -1)
+        if u < 0 or v < 0 or u >= n_nodes or v >= n_nodes:
+            continue
+        if u == v:
+            continue
+        edges.append((u, v))
+        if directed:
+            unique_edges.add((u, v))
+        else:
+            unique_edges.add((min(u, v), max(u, v)))
+
+    edge_count = len(edges)
+    unique_count = len(unique_edges)
+    has_duplicates = edge_count > unique_count
+
+    if n_nodes <= 3:
+        nodes_bucket = "2-3"
+    elif n_nodes <= 5:
+        nodes_bucket = "4-5"
+    elif n_nodes <= 7:
+        nodes_bucket = "6-7"
+    elif n_nodes <= 9:
+        nodes_bucket = "8-9"
+    else:
+        nodes_bucket = "10+"
+
+    max_edges = 1
+    if n_nodes > 1:
+        if directed:
+            max_edges = n_nodes * (n_nodes - 1)
+        else:
+            max_edges = n_nodes * (n_nodes - 1) // 2
+        max_edges = max(1, max_edges)
+
+    density = unique_count / max_edges
+    if density <= 0.10:
+        density_bucket = "sparse"
+    elif density <= 0.30:
+        density_bucket = "light"
+    elif density <= 0.50:
+        density_bucket = "medium"
+    elif density <= 0.70:
+        density_bucket = "dense"
+    else:
+        density_bucket = "very_dense"
+
+    degrees = [0] * n_nodes
+    for u, v in unique_edges:
+        degrees[u] += 1
+        degrees[v] += 1
+    has_isolated = any(degree == 0 for degree in degrees)
+
+    if directed and weighted:
+        mode = "directed_weighted"
+    elif directed:
+        mode = "directed_unweighted"
+    elif weighted:
+        mode = "undirected_weighted"
+    else:
+        mode = "undirected_unweighted"
+
+    return {
+        "query_type": query_type,
+        "directed": str(directed).lower(),
+        "weighted": str(weighted).lower(),
+        "mode": mode,
+        "nodes_bucket": nodes_bucket,
+        "density_bucket": density_bucket,
+        "has_duplicates": str(has_duplicates).lower(),
+        "has_isolated": str(has_isolated).lower(),
+    }

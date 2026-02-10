@@ -782,6 +782,14 @@ def _graph_queries_difficulty(spec: dict[str, Any]) -> int:
         + w["mode"] * mode_score
         + w["structure"] * structure_score
     )
+    raw += _graph_interaction_adjustment(
+        query_type=query_type,
+        directed=directed,
+        weighted=weighted,
+        size_score=size_score,
+        density_score=density_score,
+        structure_score=structure_score,
+    )
     return max(1, min(5, round(raw)))
 
 
@@ -912,6 +920,40 @@ def _graph_structure_score(
                 break
 
     return min(5, 1 + flags)
+
+
+def _graph_interaction_adjustment(
+    *,
+    query_type: str,
+    directed: bool,
+    weighted: bool,
+    size_score: int,
+    density_score: int,
+    structure_score: int,
+) -> float:
+    adjustment = 0.0
+
+    # Keep very simple reachable settings in D1 by easing sparse
+    # undirected/unweighted specs that otherwise round up to D2.
+    if (
+        query_type == "reachable"
+        and not directed
+        and not weighted
+        and size_score <= 2
+        and density_score <= 2
+    ):
+        adjustment -= 0.35
+
+    # Promote the most complex shortest-path settings into D5 when graph
+    # structure and mode already indicate high complexity.
+    if query_type == "shortest_path_cost" and directed and weighted:
+        adjustment += 0.35
+        if size_score >= 4:
+            adjustment += 0.15
+        if density_score >= 4 and structure_score >= 3:
+            adjustment += 0.1
+
+    return adjustment
 
 
 def _enum_or_str_value(value: Any) -> str:

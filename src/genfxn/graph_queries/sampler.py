@@ -292,7 +292,7 @@ def sample_graph_queries_spec(
             break
         seen_pairs.append((u, v))
         weight = rng.randint(axes.weight_range[0], axes.weight_range[1])
-        edges.append(GraphEdge(u=u, v=v, w=weight if weighted else 1))
+        edges.append(GraphEdge(u=u, v=v, w=weight))
 
     trace_step(
         trace,

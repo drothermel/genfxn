@@ -16,6 +16,7 @@ from genfxn.simple_algorithms.models import (
 from genfxn.suites.features import (
     bitops_features,
     fsm_features,
+    graph_queries_features,
     intervals_features,
     sequence_dp_features,
     simple_algorithms_features,
@@ -39,6 +40,7 @@ FsmRenderFn = Callable[[list[int]], int]
 BitopsRenderFn = Callable[[int], int]
 SequenceDpRenderFn = Callable[[list[int], list[int]], int]
 IntervalsRenderFn = Callable[[list[tuple[int, int]]], int]
+GraphQueriesRenderFn = Callable[[int, int], int]
 
 
 def _stack_suite_available() -> bool:
@@ -73,6 +75,13 @@ def _intervals_suite_available() -> bool:
     return (
         "intervals" in QUOTAS
         and importlib.util.find_spec("genfxn.intervals.task") is not None
+    )
+
+
+def _graph_queries_suite_available() -> bool:
+    return (
+        "graph_queries" in QUOTAS
+        and importlib.util.find_spec("genfxn.graph_queries.task") is not None
     )
 
 # ── Feature extraction tests ─────────────────────────────────────────────
@@ -703,6 +712,50 @@ class TestIntervalsFeatures:
         assert f["quantize_bucket"] == "step3-4"
 
 
+class TestGraphQueriesFeatures:
+    def test_directed_unweighted_with_duplicates(self) -> None:
+        spec = {
+            "query_type": "min_hops",
+            "directed": True,
+            "weighted": False,
+            "n_nodes": 6,
+            "edges": [
+                {"u": 0, "v": 1, "w": 1},
+                {"u": 1, "v": 2, "w": 1},
+                {"u": 1, "v": 2, "w": 3},
+                {"u": 2, "v": 3, "w": 1},
+            ],
+        }
+        f = graph_queries_features(spec)
+        assert f["query_type"] == "min_hops"
+        assert f["mode"] == "directed_unweighted"
+        assert f["nodes_bucket"] == "6-7"
+        assert f["density_bucket"] == "sparse"
+        assert f["has_duplicates"] == "true"
+        assert f["has_isolated"] == "true"
+
+    def test_undirected_weighted_denseish(self) -> None:
+        spec = {
+            "query_type": "shortest_path_cost",
+            "directed": False,
+            "weighted": True,
+            "n_nodes": 5,
+            "edges": [
+                {"u": 0, "v": 1, "w": 2},
+                {"u": 0, "v": 2, "w": 4},
+                {"u": 1, "v": 2, "w": 1},
+                {"u": 1, "v": 3, "w": 3},
+                {"u": 2, "v": 4, "w": 5},
+            ],
+        }
+        f = graph_queries_features(spec)
+        assert f["query_type"] == "shortest_path_cost"
+        assert f["mode"] == "undirected_weighted"
+        assert f["nodes_bucket"] == "4-5"
+        assert f["density_bucket"] in {"light", "medium"}
+        assert f["has_duplicates"] == "false"
+
+
 class _FixedChoiceRng:
     def __init__(self, choices: list[object]) -> None:
         self._choices = choices
@@ -890,6 +943,27 @@ class TestHardConstraints:
             "template": "local",
             "output_mode": "gap_count",
             "predicate_kind": "mod_eq",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_graph_queries_d4_filters_when_available(self) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+        quota = QUOTAS["graph_queries"][4]
+        features_ok = {
+            "mode": "directed_weighted",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_graph_queries_d5_filters_when_available(self) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+        quota = QUOTAS["graph_queries"][5]
+        features_ok = {
+            "query_type": "shortest_path_cost",
+            "mode": "directed_weighted",
         }
         for key, val in quota.hard_constraints.items():
             assert features_ok.get(key) == val
@@ -1380,6 +1454,54 @@ class TestPoolGeneration:
                     f"{bucket.axis}={bucket.value}"
                 )
 
+    def test_graph_queries_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
+
+        for difficulty in sorted(QUOTAS["graph_queries"].keys()):
+            candidates, stats = generate_pool(
+                "graph_queries",
+                difficulty,
+                seed=42,
+                pool_size=220,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                assert (
+                    compute_difficulty("graph_queries", cand.spec_dict)
+                    == difficulty
+                )
+
+    def test_graph_queries_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["graph_queries"].keys()):
+            candidates, _ = generate_pool(
+                "graph_queries",
+                difficulty,
+                seed=43,
+                pool_size=260,
+            )
+            assert candidates
+            quota = QUOTAS["graph_queries"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for graph_queries "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1674,6 +1796,52 @@ class TestDeterminism:
             assert q.output == expected
             assert result == expected
 
+    def test_graph_queries_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+        difficulty = sorted(QUOTAS["graph_queries"].keys())[0]
+        a = generate_suite("graph_queries", difficulty, seed=19, pool_size=320)
+        b = generate_suite("graph_queries", difficulty, seed=19, pool_size=320)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_graph_queries_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+        from genfxn.graph_queries.eval import eval_graph_queries
+        from genfxn.graph_queries.models import GraphQueriesSpec
+
+        difficulty = sorted(QUOTAS["graph_queries"].keys())[0]
+        tasks = generate_suite(
+            "graph_queries",
+            difficulty,
+            seed=42,
+            pool_size=320,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = GraphQueriesSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(GraphQueriesRenderFn, f_obj)
+
+        for q in task.queries:
+            q_input = cast(dict[str, int], q.input)
+            src = q_input["src"]
+            dst = q_input["dst"]
+            expected = eval_graph_queries(spec, src, dst)
+            result = f(src, dst)
+            assert isinstance(q.output, int)
+            assert q.output == expected
+            assert result == expected
+
 
 class TestSuiteGenerationValidation:
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
@@ -1954,6 +2122,48 @@ class TestIntegration:
             quota = QUOTAS["intervals"][difficulty]
             assert len(tasks) == quota.total
             report = quota_report(tasks, "intervals", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_graph_queries_suite_generation_when_available(self) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["graph_queries"].keys())[0]
+        tasks = generate_suite(
+            "graph_queries",
+            difficulty,
+            seed=92,
+            pool_size=1400,
+        )
+        quota = QUOTAS["graph_queries"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "graph_queries", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.75))
+            assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_graph_queries_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _graph_queries_suite_available():
+            pytest.skip("graph_queries suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["graph_queries"].keys()):
+            tasks = generate_suite(
+                "graph_queries",
+                difficulty,
+                seed=601 + difficulty,
+                pool_size=1400,
+            )
+            quota = QUOTAS["graph_queries"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "graph_queries", difficulty)
             for _, _, target, achieved, _ in report:
                 min_acceptable = max(1, int(target * 0.75))
                 assert achieved >= min_acceptable

@@ -2,7 +2,7 @@
 
 Date: 2026-02-10
 Owner: Codex + Danielle
-Status: In progress (M0-M4 complete, M5 pending)
+Status: Complete (M0-M5 complete with suite + calibration integration)
 
 ## Goal
 
@@ -319,9 +319,9 @@ Acceptance:
 - [x] M2 complete
 - [x] M3 complete
 - [x] M4 complete
-- [ ] M5 complete
-- [ ] Full `ruff` and full `pytest` pass
-- [ ] PR notes/test evidence finalized
+- [x] M5 complete
+- [x] Full `ruff` and full `pytest` pass
+- [x] PR notes/test evidence finalized
 
 ## Notes Log
 
@@ -342,3 +342,7 @@ Acceptance:
 - 2026-02-10: M4 completed with Java/Rust graph query renderers, language
   registry/task wiring, and executable runtime parity tests in
   `tests/test_graph_queries_runtime_parity.py`.
+- 2026-02-10: M5 completed with CLI/preset/suite/quota integration, graph
+  calibration script (`scripts/calibrate_graph_queries.py`), docs updates
+  (`README.md`, `AXES.md`), and end-to-end verification (`uv run ruff check .`,
+  `uv run ty check`, `uv run pytest tests/ -v`, plus strict graph calibration).

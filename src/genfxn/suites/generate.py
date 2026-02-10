@@ -33,6 +33,10 @@ from genfxn.fsm.models import (
 from genfxn.fsm.queries import generate_fsm_queries
 from genfxn.fsm.render import render_fsm
 from genfxn.fsm.sampler import sample_fsm_spec
+from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueryType
+from genfxn.graph_queries.queries import generate_graph_queries_queries
+from genfxn.graph_queries.render import render_graph_queries
+from genfxn.graph_queries.sampler import sample_graph_queries_spec
 from genfxn.intervals.models import (
     BoundaryMode,
     IntervalsAxes,
@@ -86,6 +90,7 @@ from genfxn.stringrules.sampler import sample_stringrules_spec
 from genfxn.suites.features import (
     bitops_features,
     fsm_features,
+    graph_queries_features,
     intervals_features,
     sequence_dp_features,
     simple_algorithms_features,
@@ -924,6 +929,87 @@ def _pool_axes_intervals_d5(_: random.Random) -> IntervalsAxes:
     )
 
 
+def _pool_axes_graph_queries_d1(_: random.Random) -> GraphQueriesAxes:
+    return GraphQueriesAxes(
+        target_difficulty=1,
+        query_types=[GraphQueryType.REACHABLE],
+        directed_choices=[False],
+        weighted_choices=[False],
+        n_nodes_range=(5, 5),
+        edge_count_range=(1, 1),
+        weight_range=(1, 20),
+        disconnected_prob_range=(0.0, 0.0),
+        multi_edge_prob_range=(0.0, 0.0),
+        hub_bias_prob_range=(0.0, 0.0),
+    )
+
+
+def _pool_axes_graph_queries_d2(_: random.Random) -> GraphQueriesAxes:
+    return GraphQueriesAxes(
+        target_difficulty=2,
+        query_types=[
+            GraphQueryType.REACHABLE,
+            GraphQueryType.MIN_HOPS,
+        ],
+        directed_choices=[False, True],
+        weighted_choices=[False],
+        n_nodes_range=(3, 6),
+        edge_count_range=(2, 10),
+        weight_range=(1, 5),
+        disconnected_prob_range=(0.2, 0.5),
+        multi_edge_prob_range=(0.0, 0.18),
+        hub_bias_prob_range=(0.0, 0.25),
+    )
+
+
+def _pool_axes_graph_queries_d3(_: random.Random) -> GraphQueriesAxes:
+    return GraphQueriesAxes(
+        target_difficulty=3,
+        query_types=[GraphQueryType.MIN_HOPS],
+        directed_choices=[False, True],
+        weighted_choices=[False, True],
+        n_nodes_range=(5, 8),
+        edge_count_range=(6, 20),
+        weight_range=(1, 8),
+        disconnected_prob_range=(0.1, 0.35),
+        multi_edge_prob_range=(0.0, 0.22),
+        hub_bias_prob_range=(0.0, 0.3),
+    )
+
+
+def _pool_axes_graph_queries_d4(_: random.Random) -> GraphQueriesAxes:
+    return GraphQueriesAxes(
+        target_difficulty=4,
+        query_types=[
+            GraphQueryType.MIN_HOPS,
+            GraphQueryType.SHORTEST_PATH_COST,
+        ],
+        directed_choices=[True],
+        weighted_choices=[True],
+        n_nodes_range=(7, 10),
+        edge_count_range=(12, 36),
+        weight_range=(1, 9),
+        disconnected_prob_range=(0.05, 0.2),
+        multi_edge_prob_range=(0.06, 0.25),
+        hub_bias_prob_range=(0.0, 0.2),
+    )
+
+
+def _pool_axes_graph_queries_d5(_: random.Random) -> GraphQueriesAxes:
+    return GraphQueriesAxes(
+        target_difficulty=5,
+        query_types=[GraphQueryType.SHORTEST_PATH_COST],
+        directed_choices=[True],
+        weighted_choices=[True],
+        n_nodes_range=(11, 12),
+        edge_count_range=(96, 132),
+        weight_range=(1, 20),
+        disconnected_prob_range=(0.0, 0.05),
+        multi_edge_prob_range=(0.18, 0.4),
+        hub_bias_prob_range=(0.0, 0.15),
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -977,6 +1063,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_intervals_d4,
         5: _pool_axes_intervals_d5,
     },
+    "graph_queries": {
+        1: _pool_axes_graph_queries_d1,
+        2: _pool_axes_graph_queries_d2,
+        3: _pool_axes_graph_queries_d3,
+        4: _pool_axes_graph_queries_d4,
+        5: _pool_axes_graph_queries_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -990,6 +1083,7 @@ _FEATURE_FNS = {
     "bitops": bitops_features,
     "sequence_dp": sequence_dp_features,
     "intervals": intervals_features,
+    "graph_queries": graph_queries_features,
 }
 
 
@@ -1049,6 +1143,8 @@ def _sample_spec(
         return sample_sequence_dp_spec(axes, rng, trace=trace)
     elif family == "intervals":
         return sample_intervals_spec(axes, rng, trace=trace)
+    elif family == "graph_queries":
+        return sample_graph_queries_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -1373,6 +1469,11 @@ def _generate_task_from_candidate(
             axes = IntervalsAxes()
         py_code = render_intervals(spec)
         queries = generate_intervals_queries(spec, axes, rng)
+    elif family == "graph_queries":
+        if axes is None:
+            axes = GraphQueriesAxes()
+        py_code = render_graph_queries(spec)
+        queries = generate_graph_queries_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 

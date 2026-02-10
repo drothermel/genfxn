@@ -11,6 +11,12 @@ from genfxn.fsm.models import FsmSpec
 from genfxn.fsm.render import render_fsm
 from genfxn.fsm.validate import CODE_UNSAFE_AST as FSM_CODE_UNSAFE_AST
 from genfxn.fsm.validate import validate_fsm_task
+from genfxn.graph_queries.models import GraphQueriesSpec
+from genfxn.graph_queries.render import render_graph_queries
+from genfxn.graph_queries.validate import (
+    CODE_UNSAFE_AST as GRAPH_QUERIES_CODE_UNSAFE_AST,
+)
+from genfxn.graph_queries.validate import validate_graph_queries_task
 from genfxn.sequence_dp.models import SequenceDpSpec
 from genfxn.sequence_dp.render import render_sequence_dp
 from genfxn.sequence_dp.validate import (
@@ -45,6 +51,7 @@ def _expected_all_families() -> set[str]:
         "stringrules",
         "intervals",
         "fsm",
+        "graph_queries",
         "sequence_dp",
     }
     if _supports_bitops_family():
@@ -153,6 +160,30 @@ class TestGenerate:
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 5
         assert all(t["family"] == "intervals" for t in tasks)
+
+    def test_generate_graph_queries(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            ["generate", "-o", str(output), "-f", "graph_queries", "-n", "5"],
+        )
+
+        assert result.exit_code == 0
+        assert "Generated 5 tasks" in result.stdout
+
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 5
+        assert all(t["family"] == "graph_queries" for t in tasks)
+        for task in tasks:
+            spec = GraphQueriesSpec.model_validate(task["spec"])
+            assert task["code"] == render_graph_queries(spec)
+            task_obj = Task.model_validate(task).model_copy(
+                update={"spec": spec.model_dump()}
+            )
+            issues = validate_graph_queries_task(task_obj)
+            assert not any(
+                i.code == GRAPH_QUERIES_CODE_UNSAFE_AST for i in issues
+            )
 
     def test_generate_sequence_dp_honors_shared_ranges(
         self, tmp_path
@@ -706,6 +737,76 @@ class TestGenerate:
         )
         assert result.exit_code == 1
         assert "Invalid difficulty 6 for sequence_dp" in result.output
+
+    def test_generate_graph_queries_with_difficulty(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "graph_queries",
+                "-n",
+                "4",
+                "--difficulty",
+                "4",
+                "-s",
+                "123",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 4
+        assert all(t["family"] == "graph_queries" for t in tasks)
+        assert all(t["difficulty"] in {3, 4, 5} for t in tasks)
+
+    def test_generate_graph_queries_with_variant(self, tmp_path) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "graph_queries",
+                "-n",
+                "2",
+                "--difficulty",
+                "3",
+                "--variant",
+                "3A",
+                "-s",
+                "12",
+            ],
+        )
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert len(tasks) == 2
+        assert all(t["family"] == "graph_queries" for t in tasks)
+
+    def test_generate_graph_queries_invalid_difficulty(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "graph_queries",
+                "-n",
+                "1",
+                "--difficulty",
+                "6",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Invalid difficulty 6 for graph_queries" in result.output
 
     def test_generate_stack_bytecode_invalid_difficulty(self, tmp_path) -> None:
         if not _supports_stack_bytecode_family():
@@ -1582,6 +1683,7 @@ class TestInfo:
         assert "stringrules:" in result.stdout
         assert "intervals:" in result.stdout
         assert "fsm:" in result.stdout
+        assert "graph_queries:" in result.stdout
         assert "sequence_dp:" in result.stdout
         if _supports_stack_bytecode_family():
             assert "stack_bytecode:" in result.stdout

@@ -13,6 +13,7 @@ from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.presets import (
     BITOPS_PRESETS,
     FSM_PRESETS,
+    GRAPH_QUERIES_PRESETS,
     INTERVALS_PRESETS,
     PIECEWISE_PRESETS,
     SEQUENCE_DP_PRESETS,
@@ -26,6 +27,8 @@ from genfxn.core.presets import (
 )
 from genfxn.fsm.models import FsmAxes
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.graph_queries.models import GraphQueriesAxes
+from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.models import IntervalsAxes
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.piecewise.models import PiecewiseAxes
@@ -88,6 +91,10 @@ class TestGetValidDifficulties:
         valid = get_valid_difficulties("intervals")
         assert valid == [1, 2, 3, 4, 5]
 
+    def test_graph_queries_range(self) -> None:
+        valid = get_valid_difficulties("graph_queries")
+        assert valid == [1, 2, 3, 4, 5]
+
     def test_unknown_family_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown family"):
             get_valid_difficulties("unknown")
@@ -148,12 +155,30 @@ class TestGetDifficultyAxes:
         axes = get_difficulty_axes("intervals", 3)
         assert isinstance(axes, IntervalsAxes)
 
+    def test_graph_queries_returns_correct_type(self) -> None:
+        axes = get_difficulty_axes("graph_queries", 3)
+        assert isinstance(axes, GraphQueriesAxes)
+
     @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
     def test_intervals_sets_target_difficulty(self, difficulty: int) -> None:
         axes = cast(
             IntervalsAxes,
             get_difficulty_axes(
                 "intervals",
+                difficulty,
+                variant=f"{difficulty}A",
+            ),
+        )
+        assert axes.target_difficulty == difficulty
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_graph_queries_sets_target_difficulty(
+        self, difficulty: int
+    ) -> None:
+        axes = cast(
+            GraphQueriesAxes,
+            get_difficulty_axes(
+                "graph_queries",
                 difficulty,
                 variant=f"{difficulty}A",
             ),
@@ -253,6 +278,11 @@ class TestPresetAccuracy:
                 task = generate_intervals_task(
                     axes=cast(IntervalsAxes, axes), rng=rng
                 )
+            elif family == "graph_queries":
+                task = generate_graph_queries_task(
+                    axes=cast(GraphQueriesAxes, axes),
+                    rng=rng,
+                )
             else:
                 raise ValueError(f"Unknown family: {family}")
 
@@ -302,6 +332,13 @@ class TestPresetAccuracy:
             "intervals", difficulty
         )
         self._verify_accuracy(difficulties, difficulty, "intervals")
+
+    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    def test_graph_queries_preset_accuracy(self, difficulty: int) -> None:
+        difficulties = self._generate_tasks_for_preset(
+            "graph_queries", difficulty
+        )
+        self._verify_accuracy(difficulties, difficulty, "graph_queries")
 
     def _verify_accuracy(
         self, difficulties: list[int], target: int, family: str
@@ -521,6 +558,14 @@ class TestPresetCompleteness:
             for preset in presets:
                 assert preset.name.startswith(f"{difficulty}")
 
+    def test_graph_queries_presets_structure(self) -> None:
+        for difficulty, presets in GRAPH_QUERIES_PRESETS.items():
+            assert isinstance(difficulty, int)
+            assert 1 <= difficulty <= 5
+            assert len(presets) >= 1
+            for preset in presets:
+                assert preset.name.startswith(f"{difficulty}")
+
     def test_all_presets_produce_valid_axes(self) -> None:
         """Verify all preset overrides create valid axes objects."""
         for family, preset_dict in [
@@ -532,6 +577,7 @@ class TestPresetCompleteness:
             ("bitops", BITOPS_PRESETS),
             ("sequence_dp", SEQUENCE_DP_PRESETS),
             ("intervals", INTERVALS_PRESETS),
+            ("graph_queries", GRAPH_QUERIES_PRESETS),
         ]:
             for difficulty, presets in preset_dict.items():
                 for preset in presets:
