@@ -231,6 +231,46 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
 - This batch should add a startup-specific timeout floor (or equivalent init
   timeout separation) while preserving function execution timeout behavior.
 
+## Latest Intake Extension (2026-02-10, graph/interval overflow follow-up)
+- `graph_queries` shortest-path overflow handling still had algorithm drift:
+  Python evaluator re-queued improved nodes, while Java/Rust frontier logic only
+  enqueued first discovery. Under overflow-cycle inputs this produced concrete
+  parity mismatch.
+- Reproduced mismatch case:
+  - edges: `0->1 (1)`, `1->0 (2^63-1)`, `1->2 (0)`, query `(0,2)`
+  - Python evaluator: `-9223372036854775807`
+  - Java/Rust runtime: `1`
+- Reproduced evaluator liveness risk case:
+  - edges: `0->1 (2^63-1)`, `1->2 (2^63-1)`, `2->0 (1)`, query `(0,3)`
+  - Python evaluator entered long-running relaxation behavior; Java/Rust
+    returned `-1` quickly.
+- Python renderers still lag evaluator/runtime i64 hardening in these families:
+  - `graph_queries` Python renderer uses unwrapped cost accumulation and can
+    diverge on overflow-cycle cases.
+  - `intervals` Python renderer still used unbounded arithmetic for boundary
+    adjustments/aggregation/event sweeps, diverging from evaluator/runtime
+    signed-i64 behavior on boundary specs.
+
+## Completed This Chunk (2026-02-10, graph/interval overflow follow-up)
+- Aligned `graph_queries` evaluator shortest-path logic to the same
+  frontier-update contract used by Java/Rust renderers while preserving signed
+  i64-wrapped accumulation.
+- Updated Python renderer overflow semantics:
+  - `src/genfxn/graph_queries/render.py` now wraps shortest-path accumulation.
+  - `src/genfxn/intervals/render.py` now mirrors evaluator i64 wrap behavior for
+    boundary handling, merge thresholding, coverage accumulation, overlap event
+    accounting, and gap counting.
+- Added focused regressions:
+  - `tests/test_graph_queries.py`
+  - `tests/test_graph_queries_runtime_parity.py`
+  - `tests/test_intervals.py`
+  covering overflow-cycle behavior and rendered-Python parity on i64 boundaries.
+- Validation evidence:
+  - targeted full-mode pytest slice: 6 passed
+  - full touched-module pytest run (`graph_queries`, `intervals`): 86 passed
+  - targeted `ruff` on touched files: passed
+  - targeted `ty` on touched files: passed
+
 ## Latest Intake Extension (2026-02-10, Review Comment Sweep)
 - `tests/test_verification_levels.py` creates pytester probe files whose module
   basenames collide with real suite modules (`test_piecewise_runtime_parity`,
@@ -1590,6 +1630,29 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
     - max_overlap_count at endpoint `2^63-1`:
       Python `1` vs Java/Rust `0` due `end + 1` wrap.
 
+## Completed This Chunk (2026-02-10, graph_queries + intervals i64 overflow parity)
+- Aligned Python evaluator overflow semantics with Java/Rust runtime behavior:
+  - `src/genfxn/graph_queries/eval.py`:
+    shortest-path cost accumulation now uses signed i64 wrapping.
+  - `src/genfxn/intervals/eval.py`:
+    signed i64 wrapping applied to overflow-adjacent arithmetic in merge/gap
+    thresholds, total coverage accumulation, and max-overlap event sweep logic.
+- Added focused regressions:
+  - `tests/test_graph_queries.py`
+  - `tests/test_intervals.py`
+  - `tests/test_graph_queries_runtime_parity.py`
+  - `tests/test_intervals_runtime_parity.py`
+- Validation evidence:
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - `uv run pytest tests/test_graph_queries.py tests/test_intervals.py -v
+    --verification-level=standard` -> 73 passed.
+  - `uv run pytest tests/test_graph_queries_runtime_parity.py
+    tests/test_intervals_runtime_parity.py -v --verification-level=full`
+    -> 13 passed.
+  - `uv run pytest tests/ -q --verification-level=standard`
+    -> 1998 passed, 106 skipped.
+
 ## Latest Intake Extension (2026-02-10, int32-family literal fail-closed + hash canonicalization)
 - Related-issue sweep found remaining compile-safety drift in int32 families
   (`piecewise`, `stateful`, `simple_algorithms`) for constants above signed
@@ -1634,3 +1697,78 @@ strict in validation, and consistent across Python/Java/Rust runtime behavior.
     tests/test_simple_algorithms.py tests/test_piecewise.py
     tests/test_suites.py tests/test_presets.py tests/test_rust_render.py -v
     --verification-level=standard` -> 631 passed, 19 skipped.
+
+## Latest Intake Extension (2026-02-10, CodeRabbit plain-review follow-up)
+- CodeRabbit plain review reported four actionable items in current tree:
+  - remove no-op `validate_k` validator in
+    `src/genfxn/simple_algorithms/models.py`.
+  - align piecewise Java expression rendering call sites with explicit
+    `int32_wrap=True` usage to match predicate rendering intent.
+  - fix `piecewise` evaluator `ExprMod` branch to use i32 modulo semantics
+    (`i32_mod`) instead of native Python `%`.
+  - simplify/clarify Rust `sequence_dp` `abs_diff_le` comparison by replacing
+    manual `wrapping_sub` absolute-diff assembly with `i64::abs_diff(...)`.
+- Intake triage: all four findings appear independent and not part of
+  incomplete in-progress code; safe to apply in this pass with focused tests.
+
+## Latest Intake Extension (2026-02-10, review follow-up recs)
+- `task_id_from_spec` canonicalization currently conflates container types for
+  values (`list`/`tuple` and `set`/`frozenset`) because all are normalized to
+  the same JSON shape, causing false task-id collisions.
+- `graph_queries` `shortest_path_cost` currently uses frontier-first-return
+  behavior that can return a non-minimal wrapped-i64 path cost when a better
+  path is discovered after an earlier destination pop.
+- Clarifying docs are needed so contributors understand both:
+  - task-id hashing is expected to preserve container-type distinctions.
+  - graph shortest-path semantics are "best wrapped cost over simple paths"
+    rather than first-hit frontier behavior.
+
+## Completed This Chunk (2026-02-10, task_id + graph shortest-path semantics)
+- Fixed `task_id_from_spec` value-container type conflation in
+  `src/genfxn/core/codegen.py`:
+  - canonicalization now preserves `list` vs `tuple` and `set` vs `frozenset`
+    distinctions for value containers.
+- Added task-id collision regression in `tests/test_core_dsl.py`:
+  - `TestTaskId.test_container_value_types_do_not_collide`.
+- Replaced `graph_queries` shortest-path frontier-first behavior with
+  deterministic best wrapped cost over simple paths (`<= n_nodes - 1` edges)
+  across:
+  - `src/genfxn/graph_queries/eval.py`
+  - `src/genfxn/graph_queries/render.py`
+  - `src/genfxn/langs/java/graph_queries.py`
+  - `src/genfxn/langs/rust/graph_queries.py`
+- Updated graph regressions/parity locks for late-improvement wrapped-path
+  behavior:
+  - `tests/test_graph_queries.py`
+  - `tests/test_graph_queries_runtime_parity.py`
+- Added contributor-facing contract notes in:
+  - `README.md`
+  - `CLAUDE.md`
+- Validation evidence:
+  - focused standard slice: 3 passed.
+  - focused full runtime parity test: 1 passed.
+  - full touched graph suite (`full`): 49 passed.
+  - targeted `ruff` and `ty`: passed.
+
+## Completed This Chunk (2026-02-10, CodeRabbit plain-review follow-up)
+- Applied all four accepted CodeRabbit findings:
+  - removed no-op `validate_k` in
+    `src/genfxn/simple_algorithms/models.py`.
+  - added explicit Java piecewise expression int32-wrap threading in
+    `src/genfxn/langs/java/expressions.py` and
+    `src/genfxn/langs/java/piecewise.py`.
+  - switched `piecewise` `ExprMod` evaluator path to `i32_mod(...)` in
+    `src/genfxn/piecewise/eval.py`.
+  - replaced manual Rust wrapping abs-diff assembly with `ai.abs_diff(bj)` in
+    `src/genfxn/langs/rust/sequence_dp.py`.
+- Added focused regression coverage:
+  - `tests/test_java_render.py`:
+    `TestPiecewiseJava.test_expression_constants_use_int32_wrap_literals`.
+- Validation evidence:
+  - `uv run ruff check` on touched files -> passed.
+  - `uv run ty check` on touched files -> passed.
+  - focused pytest slices:
+    - Java render: 13 passed.
+    - piecewise eval/branch selection: 9 passed.
+    - simple_algorithms max-window/axes subset: 9 passed.
+    - full-mode sequence_dp extreme abs-diff parity: 1 passed.

@@ -614,3 +614,43 @@ class TestTaskGeneration:
             expected = eval_intervals(spec, query.input)
             actual = fn_obj(query.input)  # type: ignore[misc]
             assert actual == expected
+
+    def test_rendered_python_matches_evaluator_total_coverage_i64_overflow(
+        self,
+    ) -> None:
+        i64_max = (1 << 63) - 1
+        spec = IntervalsSpec(
+            operation=OperationType.TOTAL_COVERAGE,
+            boundary_mode=BoundaryMode.CLOSED_CLOSED,
+            merge_touching=True,
+            endpoint_clip_abs=i64_max,
+            endpoint_quantize_step=1,
+        )
+        namespace: dict[str, object] = {}
+        exec(render_intervals(spec, func_name="f"), namespace)  # noqa: S102
+        rendered = namespace["f"]
+        intervals = [(-i64_max, i64_max)]
+        expected = eval_intervals(spec, intervals)
+        actual = rendered(intervals)  # type: ignore[misc]
+        assert expected == -1
+        assert actual == expected
+
+    def test_rendered_python_matches_evaluator_max_overlap_end_plus_one_wrap(
+        self,
+    ) -> None:
+        i64_max = (1 << 63) - 1
+        spec = IntervalsSpec(
+            operation=OperationType.MAX_OVERLAP_COUNT,
+            boundary_mode=BoundaryMode.CLOSED_CLOSED,
+            merge_touching=False,
+            endpoint_clip_abs=i64_max,
+            endpoint_quantize_step=1,
+        )
+        namespace: dict[str, object] = {}
+        exec(render_intervals(spec, func_name="f"), namespace)  # noqa: S102
+        rendered = namespace["f"]
+        intervals = [(i64_max, i64_max)]
+        expected = eval_intervals(spec, intervals)
+        actual = rendered(intervals)  # type: ignore[misc]
+        assert expected == 0
+        assert actual == expected

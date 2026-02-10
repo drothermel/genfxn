@@ -1,4 +1,3 @@
-import heapq
 from collections import deque
 
 from genfxn.graph_queries.models import GraphQueriesSpec, GraphQueryType
@@ -96,24 +95,27 @@ def _min_hops(adjacency: Adjacency, src: int, dst: int) -> int:
 
 
 def _shortest_path_cost(adjacency: Adjacency, src: int, dst: int) -> int:
-    best_cost: dict[int, int] = {src: 0}
-    heap: list[tuple[int, int]] = [(0, src)]
-
-    while heap:
-        cost, node = heapq.heappop(heap)
-        if cost > best_cost.get(node, cost):
-            continue
-        if node == dst:
-            return cost
-        for neighbor, weight in adjacency[node]:
-            next_cost = _wrap_i64(cost + weight)
-            prior = best_cost.get(neighbor)
-            if prior is not None and next_cost >= prior:
+    best_cost_prev: dict[int, int] = {src: 0}
+    # shortest_path_cost is evaluated over simple paths (<= n_nodes - 1 edges).
+    for _ in range(len(adjacency) - 1):
+        changed = False
+        best_cost_curr = best_cost_prev.copy()
+        for node, neighbors in adjacency.items():
+            cost = best_cost_prev.get(node)
+            if cost is None:
                 continue
-            best_cost[neighbor] = next_cost
-            heapq.heappush(heap, (next_cost, neighbor))
+            for neighbor, weight in neighbors:
+                next_cost = _wrap_i64(cost + weight)
+                prior = best_cost_curr.get(neighbor)
+                if prior is not None and next_cost >= prior:
+                    continue
+                best_cost_curr[neighbor] = next_cost
+                changed = True
+        best_cost_prev = best_cost_curr
+        if not changed:
+            break
 
-    return -1
+    return best_cost_prev.get(dst, -1)
 
 
 def eval_graph_queries(spec: GraphQueriesSpec, src: int, dst: int) -> int:

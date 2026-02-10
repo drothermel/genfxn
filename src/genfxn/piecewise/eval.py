@@ -1,4 +1,4 @@
-from genfxn.core.int32 import i32_abs, i32_add, i32_mul, wrap_i32
+from genfxn.core.int32 import i32_abs, i32_add, i32_mod, i32_mul, wrap_i32
 from genfxn.core.predicates import eval_predicate
 from genfxn.piecewise.models import (
     ExprAbs,
@@ -28,7 +28,7 @@ def eval_expression(expr: Expression, x: int) -> int:
         case ExprAbs(a=a, b=b):
             return _eval_linear_i32(a, i32_abs(x), b)
         case ExprMod(divisor=d, a=a, b=b):
-            return _eval_linear_i32(a, x % d, b)
+            return _eval_linear_i32(a, i32_mod(x, d), b)
         case _:
             raise ValueError(f"Unknown expression: {expr}")
 

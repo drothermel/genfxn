@@ -580,6 +580,24 @@ class TestPiecewiseJava:
         code = render_piecewise(spec)
         assert "(x == 1 || x == 2)" in code
 
+    def test_expression_constants_use_int32_wrap_literals(self) -> None:
+        from genfxn.langs.java.piecewise import render_piecewise
+        from genfxn.piecewise.models import Branch, PiecewiseSpec
+
+        oversized = 2_147_483_648
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=oversized, b=0),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=oversized),
+        )
+        code = render_piecewise(spec)
+        assert "return ((int) 2147483648L) * x;" in code
+        assert "return ((int) 2147483648L);" in code
+
 
 class TestBitopsJava:
     def test_renders_fixed_width_operations(self) -> None:

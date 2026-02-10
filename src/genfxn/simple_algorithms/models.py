@@ -98,10 +98,6 @@ class MaxWindowSumSpec(BaseModel):
         default=None, ge=INT64_MIN, le=INT64_MAX
     )
 
-    @model_validator(mode="after")
-    def validate_k(self) -> "MaxWindowSumSpec":
-        return self
-
 
 SimpleAlgorithmsSpec = Annotated[
     MostFrequentSpec | CountPairsSumSpec | MaxWindowSumSpec,

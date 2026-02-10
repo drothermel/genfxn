@@ -66,13 +66,28 @@ def _canonicalize_for_hash(value: Any) -> Any:
                 [key, item] for key, item in canonical_items
             ]
         }
-    if isinstance(value, list | tuple):
-        return [_canonicalize_for_hash(v) for v in value]
-    if isinstance(value, set | frozenset):
+    if isinstance(value, list):
+        return {
+            "__list__": [_canonicalize_for_hash(v) for v in value]
+        }
+    if isinstance(value, tuple):
+        return {
+            "__tuple__": [_canonicalize_for_hash(v) for v in value]
+        }
+    if isinstance(value, set):
         items = [_canonicalize_for_hash(v) for v in value]
-        return sorted(
-            items, key=lambda item: srsly.json_dumps(item, sort_keys=True)
-        )
+        return {
+            "__set__": sorted(
+                items, key=lambda item: srsly.json_dumps(item, sort_keys=True)
+            )
+        }
+    if isinstance(value, frozenset):
+        items = [_canonicalize_for_hash(v) for v in value]
+        return {
+            "__frozenset__": sorted(
+                items, key=lambda item: srsly.json_dumps(item, sort_keys=True)
+            )
+        }
     return value
 
 

@@ -133,6 +133,11 @@ Graph query tasks over a fixed spec graph where each query asks for
 `reachable`, `min_hops`, or `shortest_path_cost` between two nodes under
 deterministic normalization and path semantics.
 
+`shortest_path_cost` semantics:
+- costs are accumulated in signed i64 space (wrapping on overflow).
+- the result is the minimum wrapped cost over simple paths from `src` to `dst`
+  (paths with at most `n_nodes - 1` edges).
+
 ### Temporal Logic
 
 Temporal logic tasks evaluate a finite-trace formula over integer sequences and
@@ -156,6 +161,11 @@ Overflow semantics (`stack_bytecode` and `sequence_dp`):
 - Java/Rust runtimes execute with signed 64-bit (`long`/`i64`) behavior; in
   overflow-adjacent parity tests, evaluator expectations are normalized to
   signed 64-bit representation before asserting Java/Rust parity.
+
+Task-id hashing semantics:
+- `task_id_from_spec(...)` canonicalization is type-sensitive for container
+  values (`list`, `tuple`, `set`, `frozenset`) and does not intentionally
+  collapse those container types.
 
 ## Generation
 

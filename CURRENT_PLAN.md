@@ -32,6 +32,57 @@ behavior remains stable across languages and verification levels.
 - [x] Add verification-level guard test/doc assertion so runtime parity skip
       behavior in `standard` remains explicit and intentional.
 
+New intake extension (2026-02-10, graph/interval overflow semantics follow-up):
+- [x] Align `graph_queries` Python evaluator shortest-path overflow semantics
+      with Java/Rust frontier behavior and remove re-queue divergence.
+- [x] Add explicit `graph_queries` regressions for overflow-cycle parity and
+      unreachable overflow-cycle termination behavior.
+- [x] Align Python renderer overflow behavior with evaluator in
+      `src/genfxn/graph_queries/render.py`.
+- [x] Align Python renderer overflow behavior with evaluator in
+      `src/genfxn/intervals/render.py` for boundary adjustment, merge threshold,
+      total coverage, overlap events, and gap counting.
+- [x] Add focused renderer-vs-evaluator regressions in
+      `tests/test_graph_queries.py` and `tests/test_intervals.py` that exercise
+      i64-boundary overflow cases.
+- [x] Add full runtime parity regression in
+      `tests/test_graph_queries_runtime_parity.py` for overflow-cycle behavior.
+- [x] Run targeted validation (`pytest`, `ruff`, `ty`) and record evidence.
+
+Progress update (2026-02-10, graph/interval overflow semantics follow-up):
+- Updated `src/genfxn/graph_queries/eval.py` shortest-path evaluation to use
+  the same frontier-selection/update contract as Java/Rust renderers while
+  retaining signed-i64 wrap on accumulation.
+- Hardened Python renderer parity with evaluator/runtime semantics:
+  - `src/genfxn/graph_queries/render.py`: added `_wrap_i64(...)` and wrapped
+    shortest-path cost accumulation.
+  - `src/genfxn/intervals/render.py`: added `_wrap_i64(...)` and aligned
+    boundary adjustments, merge threshold, total coverage accumulation,
+    max-overlap event sweep, and gap counting with evaluator signed-i64 logic.
+- Added focused regressions:
+  - `tests/test_graph_queries.py`:
+    overflow-cycle frontier behavior, unreachable overflow-cycle behavior,
+    and rendered-Python overflow-cycle parity.
+  - `tests/test_graph_queries_runtime_parity.py`:
+    full-mode Java/Rust parity lock for overflow-cycle frontier behavior.
+  - `tests/test_intervals.py`:
+    rendered-Python parity for total-coverage i64 overflow and wrapped
+    `end + 1` max-overlap behavior.
+- Validation evidence:
+  - `uv run pytest tests/test_graph_queries.py
+    tests/test_graph_queries_runtime_parity.py tests/test_intervals.py -v
+    --verification-level=full -k "overflow_cycle or uses_frontier_semantics or
+    unreachable_returns_minus_one or total_coverage_i64_overflow or
+    end_plus_one_wrap or rendered_python_matches_evaluator_overflow_cycle_case
+    or rendered_python_matches_evaluator_total_coverage_i64_overflow or
+    rendered_python_matches_evaluator_max_overlap_end_plus_one_wrap"`
+    -> 6 passed.
+  - `uv run pytest tests/test_graph_queries.py
+    tests/test_graph_queries_runtime_parity.py tests/test_intervals.py -v
+    --verification-level=full` -> 86 passed.
+  - `uv run ruff check` on touched source/test files -> passed.
+  - `uv run ty check` on touched source/test files -> passed.
+
 Exit criterion:
 - All three reported findings are fixed with regression tests, and full/standard
   behavior is unambiguous in docs/tests.
@@ -1743,3 +1794,117 @@ Progress update (2026-02-10, graph_queries + intervals i64 overflow parity compl
     -> 13 passed.
   - `uv run pytest tests/ -q --verification-level=standard`
     -> 1998 passed, 106 skipped.
+
+### 31) CodeRabbit Plain-Review Follow-up (Current Batch)
+Current execution batch (2026-02-10):
+- [x] Remove no-op `MaxWindowSumSpec.validate_k` validator in
+      `src/genfxn/simple_algorithms/models.py`.
+- [x] Align Java piecewise renderer expression calls to explicitly pass
+      `int32_wrap=True`, and thread the kwarg through
+      `render_expression_java(...)`.
+- [x] Fix `ExprMod` int32 semantics in `src/genfxn/piecewise/eval.py` by using
+      `i32_mod` instead of native `%`.
+- [x] Replace manual `wrapping_sub` absolute-difference block in
+      `src/genfxn/langs/rust/sequence_dp.py` with `i64::abs_diff(...)`.
+- [x] Add/update focused regression tests and run targeted `uv run pytest`,
+      `uv run ruff check`, and `uv run ty check` on touched files.
+
+Exit criterion:
+- All accepted CodeRabbit findings are implemented without semantic drift, and
+  focused validations pass on touched code paths.
+
+Progress update (2026-02-10, CodeRabbit plain-review follow-up complete):
+- Removed no-op validator from `MaxWindowSumSpec` in
+  `src/genfxn/simple_algorithms/models.py`.
+- Added explicit `int32_wrap` threading in Java piecewise expression rendering:
+  - `src/genfxn/langs/java/expressions.py`
+  - `src/genfxn/langs/java/piecewise.py`
+- Updated piecewise evaluator `ExprMod` path to use `i32_mod` in:
+  - `src/genfxn/piecewise/eval.py`
+- Replaced manual wrapping-abs-diff block with `i64::abs_diff(...)` in:
+  - `src/genfxn/langs/rust/sequence_dp.py`
+- Added regression coverage:
+  - `tests/test_java_render.py`
+    - `test_expression_constants_use_int32_wrap_literals`
+- Validation evidence:
+  - `uv run ruff check src/genfxn/simple_algorithms/models.py
+    src/genfxn/langs/java/expressions.py src/genfxn/langs/java/piecewise.py
+    src/genfxn/piecewise/eval.py src/genfxn/langs/rust/sequence_dp.py
+    tests/test_java_render.py` -> passed.
+  - `uv run ty check src/genfxn/simple_algorithms/models.py
+    src/genfxn/langs/java/expressions.py src/genfxn/langs/java/piecewise.py
+    src/genfxn/piecewise/eval.py src/genfxn/langs/rust/sequence_dp.py
+    tests/test_java_render.py` -> passed.
+  - `uv run pytest tests/test_java_render.py -v
+    --verification-level=standard -k "TestExpressionJava or TestPiecewiseJava"`
+    -> 13 passed.
+  - `uv run pytest tests/test_piecewise.py -v
+    --verification-level=standard -k "TestExpressionEval or TestBranchSelection"`
+    -> 9 passed.
+  - `uv run pytest tests/test_simple_algorithms.py -v
+    --verification-level=standard -k "MaxWindowSum or window_size_range or
+    axes_reject_bool_in_int_range_bounds"` -> 9 passed.
+  - `uv run pytest
+    tests/test_sequence_dp_runtime_parity.py::test_sequence_dp_abs_diff_extreme_values_parity
+    -v --verification-level=full` -> 1 passed.
+
+### 32) Review Follow-up: task_id + graph shortest-path semantics
+Current execution batch (2026-02-10):
+- [x] Make `task_id_from_spec` canonicalization container-type-sensitive for
+      value containers (`list`, `tuple`, `set`, `frozenset`) to prevent
+      cross-type hash collisions.
+- [x] Add focused task-id regressions proving no collisions across those
+      container-type pairs.
+- [x] Replace `graph_queries` shortest-path frontier-first semantics with a
+      deterministic best-cost-over-simple-paths algorithm under signed i64
+      wrapping in:
+      - `src/genfxn/graph_queries/eval.py`
+      - `src/genfxn/graph_queries/render.py`
+      - `src/genfxn/langs/java/graph_queries.py`
+      - `src/genfxn/langs/rust/graph_queries.py`
+- [x] Update graph unit/runtime parity tests to lock corrected shortest-path
+      behavior and remove assertions that pin previous frontier-first behavior.
+- [x] Document updated contracts in contributor-facing docs (`README.md`,
+      `CLAUDE.md`) so future agents do not regress semantics.
+- [x] Run targeted validation (`uv run pytest`, `uv run ruff check`,
+      `uv run ty check`) and record outcomes.
+
+Exit criterion:
+- `task_id` collisions across container types are eliminated with regression
+  coverage, graph shortest-path semantics are aligned across Python/Java/Rust,
+  and docs clearly state the intended contracts.
+
+Progress update (2026-02-10, review follow-up recs complete):
+- Fixed container-type collisions in task-id canonicalization:
+  - `src/genfxn/core/codegen.py`
+    - value containers now retain explicit type tags for `list`, `tuple`,
+      `set`, and `frozenset`.
+- Added focused task-id regression:
+  - `tests/test_core_dsl.py`
+    - `TestTaskId.test_container_value_types_do_not_collide`.
+- Replaced graph shortest-path frontier-first behavior with deterministic
+  best-cost-over-simple-paths semantics (<= `n_nodes - 1` edges) under signed
+  i64 wrapping across evaluator/renderers:
+  - `src/genfxn/graph_queries/eval.py`
+  - `src/genfxn/graph_queries/render.py`
+  - `src/genfxn/langs/java/graph_queries.py`
+  - `src/genfxn/langs/rust/graph_queries.py`
+- Updated graph tests/parity locks for late-improvement wrapped-path behavior:
+  - `tests/test_graph_queries.py`
+  - `tests/test_graph_queries_runtime_parity.py`
+- Documented clarified contracts:
+  - `README.md`
+  - `CLAUDE.md`
+- Validation evidence:
+  - `uv run pytest tests/test_core_dsl.py tests/test_graph_queries.py -v
+    --verification-level=standard -k "container_value_types_do_not_collide or
+    shortest_path_cost_picks_best_wrapped_simple_path or
+    late_better_wrapped_path"` -> 3 passed.
+  - `uv run pytest
+    tests/test_graph_queries_runtime_parity.py::test_graph_queries_runtime_parity_late_better_wrapped_path
+    -v --verification-level=full` -> 1 passed.
+  - `uv run pytest tests/test_graph_queries.py
+    tests/test_graph_queries_runtime_parity.py -v --verification-level=full`
+    -> 49 passed.
+  - `uv run ruff check` on touched source/test files -> passed.
+  - `uv run ty check` on touched source/test files -> passed.

@@ -216,6 +216,37 @@ def test_shortest_path_cost_uses_signed_i64_wrap_semantics() -> None:
     assert eval_graph_queries(spec, 0, 2) == -(1 << 63)
 
 
+def test_shortest_path_cost_picks_best_wrapped_simple_path() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=5),
+            GraphEdge(u=0, v=2, w=(1 << 63) - 1),
+            GraphEdge(u=2, v=1, w=(1 << 63) - 1),
+        ],
+    )
+    assert eval_graph_queries(spec, 0, 1) == -2
+
+
+def test_shortest_path_cost_overflow_cycle_unreachable_returns_minus_one(
+) -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=4,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 63) - 1),
+            GraphEdge(u=1, v=2, w=(1 << 63) - 1),
+            GraphEdge(u=2, v=0, w=1),
+        ],
+    )
+    assert eval_graph_queries(spec, 0, 3) == -1
+
+
 @pytest.mark.parametrize(
     ("query_type", "expected"),
     [
@@ -305,6 +336,24 @@ def test_rendered_python_matches_evaluator_across_v1_matrix(
     inputs = [(0, 2), (2, 0), (0, 4), (4, 0), (5, 0), (5, 5)]
     for src, dst in inputs:
         assert rendered(src, dst) == eval_graph_queries(spec, src, dst)
+
+
+def test_rendered_python_matches_evaluator_late_better_wrapped_path() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=5),
+            GraphEdge(u=0, v=2, w=(1 << 63) - 1),
+            GraphEdge(u=2, v=1, w=(1 << 63) - 1),
+        ],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[int, int], int], namespace["f"])
+    assert rendered(0, 1) == eval_graph_queries(spec, 0, 1)
 
 
 def test_sampler_is_deterministic_for_seed() -> None:

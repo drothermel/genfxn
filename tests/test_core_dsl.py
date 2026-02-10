@@ -461,6 +461,19 @@ class TestTaskId:
         id_b = task_id_from_spec("test", spec_b)
         assert id_a == id_b
 
+    def test_container_value_types_do_not_collide(self) -> None:
+        id_list = task_id_from_spec("test", {"x": [1, 2]})
+        id_tuple = task_id_from_spec("test", {"x": (1, 2)})
+        id_set = task_id_from_spec("test", {"x": {1, 2}})
+        id_frozenset = task_id_from_spec("test", {"x": frozenset({1, 2})})
+
+        assert id_list != id_tuple
+        assert id_list != id_set
+        assert id_list != id_frozenset
+        assert id_tuple != id_set
+        assert id_tuple != id_frozenset
+        assert id_set != id_frozenset
+
 
 class TestRenderTests:
     def test_render_tests(self) -> None:
