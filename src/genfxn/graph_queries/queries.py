@@ -25,7 +25,7 @@ def generate_graph_queries_queries(
     rng: random.Random | None = None,
 ) -> list[Query]:
     if rng is None:
-        rng = random.Random()
+        rng = random.Random()  # noqa: S311
 
     del axes  # M0: keep signature consistent with other families.
     n_nodes = spec.n_nodes

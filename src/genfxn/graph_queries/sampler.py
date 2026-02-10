@@ -89,7 +89,7 @@ def _pick_from_ranked_preference[T](
     ]
     total = sum(weights)
     draw = rng.randrange(total)
-    for item, weight in zip(preferred_available, weights):
+    for item, weight in zip(preferred_available, weights, strict=True):
         if draw < weight:
             return item
         draw -= weight
@@ -189,13 +189,21 @@ def sample_graph_queries_spec(
     trace: list[TraceStep] | None = None,
 ) -> GraphQueriesSpec:
     if rng is None:
-        rng = random.Random()
+        rng = random.Random()  # noqa: S311
 
     target_difficulty = axes.target_difficulty
     if target_difficulty is None:
         query_type = rng.choice(axes.query_types)
         directed = rng.choice(axes.directed_choices)
-        weighted = rng.choice(axes.weighted_choices)
+        if query_type == GraphQueryType.SHORTEST_PATH_COST:
+            weighted_candidates = [
+                value for value in axes.weighted_choices if value
+            ]
+            if not weighted_candidates:
+                raise ValueError("shortest_path_cost requires weighted=True")
+            weighted = rng.choice(weighted_candidates)
+        else:
+            weighted = rng.choice(axes.weighted_choices)
         n_nodes = rng.randint(axes.n_nodes_range[0], axes.n_nodes_range[1])
     else:
         query_type = _pick_from_ranked_preference(
@@ -208,11 +216,23 @@ def sample_graph_queries_spec(
             _TARGET_DIRECTED_PREFS[target_difficulty],
             rng,
         )
-        weighted = _pick_from_ranked_preference(
-            axes.weighted_choices,
-            _TARGET_WEIGHTED_PREFS[target_difficulty],
-            rng,
-        )
+        if query_type == GraphQueryType.SHORTEST_PATH_COST:
+            weighted_candidates = [
+                value for value in axes.weighted_choices if value
+            ]
+            if not weighted_candidates:
+                raise ValueError("shortest_path_cost requires weighted=True")
+            weighted = _pick_from_ranked_preference(
+                weighted_candidates,
+                [True],
+                rng,
+            )
+        else:
+            weighted = _pick_from_ranked_preference(
+                axes.weighted_choices,
+                _TARGET_WEIGHTED_PREFS[target_difficulty],
+                rng,
+            )
         n_nodes = _sample_int_with_preferred_overlap(
             available=axes.n_nodes_range,
             preferred=_TARGET_NODES_RANGES[target_difficulty],

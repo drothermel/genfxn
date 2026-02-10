@@ -4,6 +4,7 @@
 import json
 import random
 from collections import Counter
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
 
@@ -20,6 +21,32 @@ FAMILY = "graph_queries"
 DIFFICULTIES = (1, 2, 3, 4, 5)
 STRICT_EXACT_MIN = 0.50
 STRICT_WITHIN_ONE_MIN = 0.90
+OUTPUT_OPTION = typer.Option(
+    Path("artifacts/graph_queries_calibration.json"),
+    "--output",
+    "-o",
+    help="Path for calibration JSON report",
+)
+SAMPLES_OPTION = typer.Option(
+    200,
+    "--samples",
+    "-n",
+    min=1,
+    help="Samples per targeted difficulty",
+)
+SEED_OPTION = typer.Option(42, help="Base random seed")
+POOL_SIZE_OPTION = typer.Option(
+    3000,
+    help="Candidate pool size for suite generation",
+)
+STRICT_OPTION = typer.Option(
+    False,
+    "--strict",
+    help=(
+        "Exit non-zero unless exact>=0.50, within_one>=0.90, "
+        "monotonic means pass, and quota rows have no UNDER status"
+    ),
+)
 
 
 def _difficulty_label(difficulty: int) -> str:
@@ -85,7 +112,7 @@ def _check_monotonic_means(
     }
 
     violations: list[dict[str, Any]] = []
-    for previous, current in zip(DIFFICULTIES, DIFFICULTIES[1:], strict=False):
+    for previous, current in pairwise(DIFFICULTIES):
         previous_mean = means[previous]
         current_mean = means[current]
         if current_mean < previous_mean:
@@ -220,32 +247,11 @@ def _strict_summary(
 
 @app.command()
 def main(
-    output: Path = typer.Option(
-        Path("artifacts/graph_queries_calibration.json"),
-        "--output",
-        "-o",
-        help="Path for calibration JSON report",
-    ),
-    samples: int = typer.Option(
-        200,
-        "--samples",
-        "-n",
-        min=1,
-        help="Samples per targeted difficulty",
-    ),
-    seed: int = typer.Option(42, help="Base random seed"),
-    pool_size: int = typer.Option(
-        3000,
-        help="Candidate pool size for suite generation",
-    ),
-    strict: bool = typer.Option(
-        False,
-        "--strict",
-        help=(
-            "Exit non-zero unless exact>=0.50, within_one>=0.90, "
-            "monotonic means pass, and quota rows have no UNDER status"
-        ),
-    ),
+    output: Path = OUTPUT_OPTION,
+    samples: int = SAMPLES_OPTION,
+    seed: int = SEED_OPTION,
+    pool_size: int = POOL_SIZE_OPTION,
+    strict: bool = STRICT_OPTION,
 ) -> None:
     """Run graph_queries calibration checks and write a JSON report."""
     reachability = _compute_reachability(samples=samples, seed=seed)

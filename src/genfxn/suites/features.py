@@ -784,7 +784,9 @@ def graph_queries_features(spec: dict[str, Any]) -> dict[str, str]:
     unique_count = len(unique_edges)
     has_duplicates = edge_count > unique_count
 
-    if n_nodes <= 3:
+    if n_nodes == 1:
+        nodes_bucket = "1"
+    elif n_nodes <= 3:
         nodes_bucket = "2-3"
     elif n_nodes <= 5:
         nodes_bucket = "4-5"

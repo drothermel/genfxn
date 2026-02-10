@@ -26,6 +26,11 @@ class GraphQueriesSpec(BaseModel):
     def validate_spec(self) -> "GraphQueriesSpec":
         if self.n_nodes < 1:
             raise ValueError("n_nodes must be >= 1")
+        if (
+            self.query_type == GraphQueryType.SHORTEST_PATH_COST
+            and not self.weighted
+        ):
+            raise ValueError("shortest_path_cost requires weighted=True")
         for edge in self.edges:
             if edge.w < 0:
                 raise ValueError("edge.w must be >= 0")
@@ -62,6 +67,11 @@ class GraphQueriesAxes(BaseModel):
             raise ValueError("directed_choices must not be empty")
         if not self.weighted_choices:
             raise ValueError("weighted_choices must not be empty")
+        if (
+            GraphQueryType.SHORTEST_PATH_COST in self.query_types
+            and True not in self.weighted_choices
+        ):
+            raise ValueError("shortest_path_cost requires weighted=True")
 
         for name in (
             "n_nodes_range",

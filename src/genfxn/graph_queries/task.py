@@ -37,7 +37,7 @@ def generate_graph_queries_task(
     if axes is None:
         axes = GraphQueriesAxes()
     if rng is None:
-        rng = random.Random()
+        rng = random.Random()  # noqa: S311
 
     trace_steps: list[TraceStep] = []
     spec = sample_graph_queries_spec(axes, rng, trace=trace_steps)

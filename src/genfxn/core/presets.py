@@ -1251,19 +1251,16 @@ GRAPH_QUERIES_PRESETS: dict[int, list[DifficultyPreset]] = {
     3: [
         DifficultyPreset(
             "3A",
-            "mixed min-hops/cost with medium graph size",
+            "min-hops focused medium graph size",
             {
                 "target_difficulty": 3,
-                "query_types": [
-                    GraphQueryType.MIN_HOPS,
-                    GraphQueryType.SHORTEST_PATH_COST,
-                ],
+                "query_types": [GraphQueryType.MIN_HOPS],
                 "directed_choices": [False, True],
                 "weighted_choices": [False, True],
                 "n_nodes_range": (5, 8),
                 "edge_count_range": (6, 20),
                 "weight_range": (1, 8),
-                "disconnected_prob_range": (0.12, 0.35),
+                "disconnected_prob_range": (0.1, 0.35),
                 "multi_edge_prob_range": (0.0, 0.22),
                 "hub_bias_prob_range": (0.0, 0.3),
             },

@@ -73,6 +73,29 @@ def test_eval_semantics_for_v1_query_types() -> None:
     assert eval_graph_queries(cost_spec, 3, 3) == 0
 
 
+def test_shortest_path_cost_requires_weighted_true_in_spec() -> None:
+    with pytest.raises(
+        ValueError, match="shortest_path_cost requires weighted=True"
+    ):
+        GraphQueriesSpec(
+            query_type=GraphQueryType.SHORTEST_PATH_COST,
+            directed=True,
+            weighted=False,
+            n_nodes=3,
+            edges=[GraphEdge(u=0, v=1, w=2)],
+        )
+
+
+def test_axes_reject_shortest_path_cost_without_weighted_true() -> None:
+    with pytest.raises(
+        ValueError, match="shortest_path_cost requires weighted=True"
+    ):
+        GraphQueriesAxes(
+            query_types=[GraphQueryType.SHORTEST_PATH_COST],
+            weighted_choices=[False],
+        )
+
+
 def test_normalize_graph_keeps_min_weight_for_duplicate_edges() -> None:
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.SHORTEST_PATH_COST,
@@ -148,6 +171,9 @@ def test_eval_invalid_nodes_raise_value_error(
             (False, True),
             (False, True),
         )
+        if not (
+            query_type == GraphQueryType.SHORTEST_PATH_COST and not weighted
+        )
     ],
     ids=[
         f"{query_type.value}-directed-{directed}-weighted-{weighted}"
@@ -155,6 +181,9 @@ def test_eval_invalid_nodes_raise_value_error(
             GraphQueryType,
             (False, True),
             (False, True),
+        )
+        if not (
+            query_type == GraphQueryType.SHORTEST_PATH_COST and not weighted
         )
     ],
 )

@@ -755,6 +755,17 @@ class TestGraphQueriesFeatures:
         assert f["density_bucket"] in {"light", "medium"}
         assert f["has_duplicates"] == "false"
 
+    def test_single_node_bucket(self) -> None:
+        spec = {
+            "query_type": "reachable",
+            "directed": False,
+            "weighted": False,
+            "n_nodes": 1,
+            "edges": [],
+        }
+        f = graph_queries_features(spec)
+        assert f["nodes_bucket"] == "1"
+
 
 class _FixedChoiceRng:
     def __init__(self, choices: list[object]) -> None:
