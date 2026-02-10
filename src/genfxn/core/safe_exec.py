@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import atexit
 import errno
+import math
 import multiprocessing as mp
 import os
 import pickle
@@ -226,6 +227,37 @@ def _persistent_startup_timeout_sec(timeout_sec: float) -> float:
     return max(timeout_sec, _PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC)
 
 
+def _validate_execution_limits(
+    *,
+    timeout_sec: float,
+    memory_limit_mb: int | None,
+    max_result_bytes: int | None,
+) -> None:
+    if (
+        isinstance(timeout_sec, bool)
+        or not isinstance(timeout_sec, int | float)
+        or not math.isfinite(timeout_sec)
+        or timeout_sec <= 0
+    ):
+        raise ValueError("timeout_sec must be a finite number > 0")
+
+    if memory_limit_mb is not None and (
+        isinstance(memory_limit_mb, bool)
+        or not isinstance(memory_limit_mb, int)
+        or memory_limit_mb <= 0
+    ):
+        raise ValueError("memory_limit_mb must be a positive integer or None")
+
+    if max_result_bytes is not None and (
+        isinstance(max_result_bytes, bool)
+        or not isinstance(max_result_bytes, int)
+        or max_result_bytes <= 0
+    ):
+        raise ValueError(
+            "max_result_bytes must be a positive integer or None"
+        )
+
+
 def _is_spawn_bootstrap_error(exc: BaseException) -> bool:
     msg = str(exc)
     return (
@@ -279,12 +311,11 @@ def _exec_worker(
 ) -> None:
     _set_process_group()
     _set_memory_limit(memory_limit_mb)
-    globals_dict: dict[str, Any] = {"__builtins__": allowed_builtins}
-    namespace: dict[str, Any] = {}
+    execution_env: dict[str, Any] = {"__builtins__": allowed_builtins}
 
     try:
-        exec(code, globals_dict, namespace)  # noqa: S102
-        func = namespace.get("f")
+        exec(code, execution_env, execution_env)  # noqa: S102
+        func = execution_env.get("f")
         if func is None:
             raise NameError("Function 'f' not found in code namespace")
         if not callable(func):
@@ -320,21 +351,24 @@ def _put_worker_result(
     result: _WorkerResult,
     max_result_bytes: int | None,
 ) -> None:
-    if max_result_bytes is not None:
-        try:
-            payload = pickle.dumps(result, protocol=pickle.HIGHEST_PROTOCOL)
-        except Exception as exc:
-            queue.put(
-                _WorkerResult(
-                    ok=False,
-                    error_type="RuntimeError",
-                    error_message=(
-                        "Failed to serialize worker result: "
-                        f"{type(exc).__name__}: {exc}"
-                    ),
-                )
+    # Always pre-serialize to surface serialization failures synchronously.
+    # Otherwise Queue feeder-thread errors can be misreported as timeouts.
+    try:
+        payload = pickle.dumps(result, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception as exc:
+        queue.put(
+            _WorkerResult(
+                ok=False,
+                error_type="RuntimeError",
+                error_message=(
+                    "Failed to serialize worker result: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
             )
-            return
+        )
+        return
+
+    if max_result_bytes is not None:
         payload_size = len(payload)
         if payload_size > max_result_bytes:
             queue.put(
@@ -483,12 +517,11 @@ def _persistent_worker(
 ) -> None:
     _set_process_group()
     _set_memory_limit(memory_limit_mb)
-    globals_dict: dict[str, Any] = {"__builtins__": allowed_builtins}
-    namespace: dict[str, Any] = {}
+    execution_env: dict[str, Any] = {"__builtins__": allowed_builtins}
 
     try:
-        exec(code, globals_dict, namespace)  # noqa: S102
-        func = namespace.get("f")
+        exec(code, execution_env, execution_env)  # noqa: S102
+        func = execution_env.get("f")
         if func is None:
             raise NameError("Function 'f' not found in code namespace")
         if not callable(func):
@@ -621,6 +654,12 @@ class _PersistentWorker:
                 timeout=timeout_sec
             )
         except Empty:
+            if not self._process.is_alive():
+                exit_code = self._process.exitcode
+                self._terminate()
+                raise RuntimeError(
+                    f"Execution worker crashed with exit code {exit_code}"
+                )
             self._terminate()
             raise SafeExecTimeoutError(
                 f"Code execution timed out after {timeout_sec} seconds"
@@ -679,6 +718,11 @@ def execute_code_restricted(
             "Pass trust_untrusted_code=True only for trusted inputs."
         )
 
+    _validate_execution_limits(
+        timeout_sec=timeout_sec,
+        memory_limit_mb=memory_limit_mb,
+        max_result_bytes=max_result_bytes,
+    )
     _validate_untrusted_code(code)
     return {
         "f": _IsolatedFunction(

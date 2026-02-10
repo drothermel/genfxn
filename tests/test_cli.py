@@ -1333,6 +1333,31 @@ class TestSplit:
             in result.output
         )
 
+    def test_split_output_io_error_has_clean_message(self, tmp_path) -> None:
+        input_file = tmp_path / "tasks.jsonl"
+        srsly.write_jsonl(input_file, [])
+        missing_dir = tmp_path / "missing"
+        train_file = missing_dir / "train.jsonl"
+        test_file = missing_dir / "test.jsonl"
+
+        result = runner.invoke(
+            app,
+            [
+                "split",
+                str(input_file),
+                "--train",
+                str(train_file),
+                "--test",
+                str(test_file),
+                "--random-ratio",
+                "0.5",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "file operation failed" in result.output
+        assert "Traceback" not in result.output
+
     def test_split_requires_random_or_holdout_mode(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
         train_file = tmp_path / "train.jsonl"
@@ -3177,4 +3202,13 @@ class TestInfo:
         assert "invalid JSONL row" in result.output
         assert "line 2" in result.output
         assert "malformed JSON" in result.output
+        assert "Traceback" not in result.output
+
+    def test_info_missing_file_has_clean_error(self, tmp_path) -> None:
+        missing_file = tmp_path / "missing.jsonl"
+
+        result = runner.invoke(app, ["info", str(missing_file)])
+
+        assert result.exit_code != 0
+        assert "file operation failed" in result.output
         assert "Traceback" not in result.output

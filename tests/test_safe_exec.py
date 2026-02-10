@@ -311,6 +311,34 @@ def test_persistent_worker_startup_timeout_uses_floor(monkeypatch) -> None:
     ]
 
 
+def test_persistent_worker_call_reports_crash_not_timeout() -> None:
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            raise safe_exec.Empty
+
+    class _FakeRequestQueue:
+        def put(self, item: object) -> None:  # noqa: ARG002
+            return
+
+    class _FakeProcess:
+        def __init__(self) -> None:
+            self.exitcode = 9
+            self._alive_checks = 0
+
+        def is_alive(self) -> bool:
+            self._alive_checks += 1
+            return self._alive_checks == 1
+
+    worker = safe_exec._PersistentWorker.__new__(safe_exec._PersistentWorker)
+    worker._process = _FakeProcess()
+    worker._request_queue = _FakeRequestQueue()
+    worker._response_queue = _FakeQueue()
+    worker._terminate = lambda: None
+
+    with pytest.raises(RuntimeError, match="crashed with exit code 9"):
+        worker.call((1,), timeout_sec=0.01)
+
+
 @pytest.mark.skipif(
     os.name != "posix",
     reason="POSIX start-method preference is only relevant on POSIX",
@@ -450,6 +478,57 @@ def test_execute_code_restricted_runtime_error_wrapped() -> None:
         fn(1)
 
 
+def test_execute_code_restricted_allows_helper_functions() -> None:
+    fn = execute_code_restricted(
+        "def helper(x):\n    return x + 1\n\ndef f(x):\n    return helper(x)",
+        {},
+        trust_untrusted_code=True,
+    )["f"]
+    try:
+        assert fn(2) == 3
+    finally:
+        fn.close()
+
+
+@pytest.mark.parametrize("timeout_sec", [0.0, -1.0])
+def test_execute_code_restricted_rejects_non_positive_timeout(
+    timeout_sec: float,
+) -> None:
+    with pytest.raises(ValueError, match="timeout_sec must be"):
+        execute_code_restricted(
+            "def f(x):\n    return x",
+            {},
+            timeout_sec=timeout_sec,
+            trust_untrusted_code=True,
+        )
+
+
+@pytest.mark.parametrize("memory_limit_mb", [0, -1])
+def test_execute_code_restricted_rejects_non_positive_memory_limit(
+    memory_limit_mb: int,
+) -> None:
+    with pytest.raises(ValueError, match="memory_limit_mb must be"):
+        execute_code_restricted(
+            "def f(x):\n    return x",
+            {},
+            memory_limit_mb=memory_limit_mb,
+            trust_untrusted_code=True,
+        )
+
+
+@pytest.mark.parametrize("max_result_bytes", [0, -1])
+def test_execute_code_restricted_rejects_non_positive_max_result_bytes(
+    max_result_bytes: int,
+) -> None:
+    with pytest.raises(ValueError, match="max_result_bytes must be"):
+        execute_code_restricted(
+            "def f(x):\n    return x",
+            {},
+            max_result_bytes=max_result_bytes,
+            trust_untrusted_code=True,
+        )
+
+
 def test_execute_code_restricted_result_size_limit() -> None:
     fn = execute_code_restricted(
         "def f(x):\n    return 'a' * x",
@@ -459,6 +538,20 @@ def test_execute_code_restricted_result_size_limit() -> None:
     )["f"]
     with pytest.raises(SafeExecExecutionError, match="max_result_bytes"):
         fn(10_000)
+
+
+def test_execute_code_restricted_non_picklable_result_unlimited() -> None:
+    fn = execute_code_restricted(
+        "def f(x):\n    return lambda y: y + x",
+        {},
+        trust_untrusted_code=True,
+        max_result_bytes=None,
+    )["f"]
+    with pytest.raises(
+        SafeExecExecutionError,
+        match="Failed to serialize worker result",
+    ):
+        fn(1)
 
 
 def test_get_mp_context_invalid_override_raises(monkeypatch) -> None:

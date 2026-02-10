@@ -277,6 +277,14 @@ def _render_task_row_error(input_file: Path, error: _TaskRowError) -> str:
     )
 
 
+def _render_os_error(error: OSError) -> str:
+    path = error.filename or error.filename2
+    if path is not None:
+        detail = error.strerror or str(error)
+        return f"Error: file operation failed for '{path}': {detail}"
+    return f"Error: file operation failed: {error}"
+
+
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
@@ -1332,6 +1340,9 @@ def split(
     except _TaskRowError as err:
         typer.echo(_render_task_row_error(input_file, err), err=True)
         raise typer.Exit(1) from err
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
 
 
 @app.command()
@@ -1351,4 +1362,7 @@ def info(
             typer.echo(f"  {fam}: {cnt}")
     except _TaskRowError as err:
         typer.echo(_render_task_row_error(input_file, err), err=True)
+        raise typer.Exit(1) from err
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
         raise typer.Exit(1) from err
