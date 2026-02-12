@@ -1060,74 +1060,78 @@ def generate(
             )
             raise typer.Exit(1)
 
-    # Build axes for all families (or use preset if difficulty specified)
-    if difficulty is not None:
-        # Use difficulty preset - generate axes per task for variety
-        pass  # Will build axes in the generation loop
-    else:
-        # Build static axes from CLI options
-        stateful_axes = _build_stateful_axes(
-            templates=templates,
-            predicate_types=predicate_types,
-            transform_types=transform_types,
-            value_range=value_range,
-            threshold_range=threshold_range,
-            divisor_range=divisor_range,
-            list_length_range=list_length_range,
-            shift_range=shift_range,
-            scale_range=scale_range,
-        )
-        piecewise_axes = _build_piecewise_axes(
-            n_branches=n_branches,
-            expr_types=expr_types,
-            value_range=value_range,
-            threshold_range=threshold_range,
-            divisor_range=divisor_range,
-            coeff_range=coeff_range,
-        )
-        simple_algo_axes = _build_simple_algorithms_axes(
-            algorithm_types=algorithm_types,
-            tie_break_modes=tie_break_modes,
-            counting_modes=counting_modes,
-            window_size_range=window_size_range,
-            target_range=target_range,
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
-        stringrules_axes = _build_stringrules_axes(
-            n_rules=n_rules,
-            string_predicate_types=string_predicate_types,
-            string_transform_types=string_transform_types,
-            overlap_level=overlap_level,
-            string_length_range=string_length_range,
-        )
-        stack_bytecode_axes = _build_stack_bytecode_axes(
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
-        fsm_axes = _build_fsm_axes(
-            value_range=value_range,
-            threshold_range=threshold_range,
-            divisor_range=divisor_range,
-        )
-        bitops_axes = _build_bitops_axes(value_range=value_range)
-        sequence_dp_axes = _build_sequence_dp_axes(
-            value_range=value_range,
-            divisor_range=divisor_range,
-            list_length_range=list_length_range,
-        )
-        intervals_axes = _build_intervals_axes(
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
-        graph_queries_axes = _build_graph_queries_axes(
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
-        temporal_logic_axes = _build_temporal_logic_axes(
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
+    try:
+        # Build axes for all families (or use preset if difficulty specified)
+        if difficulty is not None:
+            # Use difficulty preset - generate axes per task for variety
+            pass  # Will build axes in the generation loop
+        else:
+            # Build static axes from CLI options
+            stateful_axes = _build_stateful_axes(
+                templates=templates,
+                predicate_types=predicate_types,
+                transform_types=transform_types,
+                value_range=value_range,
+                threshold_range=threshold_range,
+                divisor_range=divisor_range,
+                list_length_range=list_length_range,
+                shift_range=shift_range,
+                scale_range=scale_range,
+            )
+            piecewise_axes = _build_piecewise_axes(
+                n_branches=n_branches,
+                expr_types=expr_types,
+                value_range=value_range,
+                threshold_range=threshold_range,
+                divisor_range=divisor_range,
+                coeff_range=coeff_range,
+            )
+            simple_algo_axes = _build_simple_algorithms_axes(
+                algorithm_types=algorithm_types,
+                tie_break_modes=tie_break_modes,
+                counting_modes=counting_modes,
+                window_size_range=window_size_range,
+                target_range=target_range,
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            stringrules_axes = _build_stringrules_axes(
+                n_rules=n_rules,
+                string_predicate_types=string_predicate_types,
+                string_transform_types=string_transform_types,
+                overlap_level=overlap_level,
+                string_length_range=string_length_range,
+            )
+            stack_bytecode_axes = _build_stack_bytecode_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            fsm_axes = _build_fsm_axes(
+                value_range=value_range,
+                threshold_range=threshold_range,
+                divisor_range=divisor_range,
+            )
+            bitops_axes = _build_bitops_axes(value_range=value_range)
+            sequence_dp_axes = _build_sequence_dp_axes(
+                value_range=value_range,
+                divisor_range=divisor_range,
+                list_length_range=list_length_range,
+            )
+            intervals_axes = _build_intervals_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            graph_queries_axes = _build_graph_queries_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            temporal_logic_axes = _build_temporal_logic_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
 
     with _atomic_output_file_or_exit(output) as output_handle:
 

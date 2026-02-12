@@ -588,7 +588,7 @@ def _validate_rule_diagnostics(
                 code=CODE_INVALID_CHARSET,
                 severity=Severity.ERROR,
                 message=str(e),
-                location="spec.axes",
+                location="axes.charset",
                 task_id=task.task_id,
             )
         )

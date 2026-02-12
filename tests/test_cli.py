@@ -143,6 +143,28 @@ class TestGenerate:
         assert str(missing_dir) in result.output
         assert "Traceback" not in result.output
 
+    def test_generate_invalid_enum_option_has_clean_error(
+        self, tmp_path
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "stateful",
+                "--templates",
+                "not_a_template",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "not_a_template" in result.output
+        assert "TemplateType" in result.output
+        assert "Traceback" not in result.output
+
     def test_generate_stateful(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(

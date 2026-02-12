@@ -12,6 +12,7 @@ from genfxn.graph_queries.validate import (
     CODE_CODE_EXEC_ERROR,
     CODE_CODE_MISSING_FUNC,
     CODE_CODE_PARSE_ERROR,
+    CODE_QUERY_INPUT_BOUNDS,
     CODE_QUERY_INPUT_DUPLICATE,
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
@@ -98,6 +99,29 @@ def test_bool_query_values_are_rejected(baseline_task: Task) -> None:
     issues = validate_graph_queries_task(corrupted)
     assert any(issue.code == CODE_QUERY_INPUT_TYPE for issue in issues)
     assert any(issue.code == CODE_QUERY_OUTPUT_TYPE for issue in issues)
+
+
+def test_query_input_out_of_bounds_has_dedicated_code(
+    baseline_task: Task,
+) -> None:
+    spec = GraphQueriesSpec.model_validate(baseline_task.spec, strict=True)
+    corrupted = baseline_task.model_copy(
+        update={
+            "queries": [
+                Query(
+                    input={"src": spec.n_nodes, "dst": 0},
+                    output=0,
+                    tag=QueryTag.TYPICAL,
+                )
+            ]
+        }
+    )
+    issues = validate_graph_queries_task(corrupted)
+    assert any(
+        issue.code == CODE_QUERY_INPUT_BOUNDS
+        and issue.location == "queries[0].input"
+        for issue in issues
+    )
 
 
 def test_query_output_mismatch_detected(baseline_task: Task) -> None:

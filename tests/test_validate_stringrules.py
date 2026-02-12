@@ -432,7 +432,7 @@ class TestDiagnostics:
         assert any(
             i.code == CODE_INVALID_CHARSET
             and i.severity == Severity.ERROR
-            and i.location == "spec.axes"
+            and i.location == "axes.charset"
             and i.task_id == task.task_id
             for i in issues
         )

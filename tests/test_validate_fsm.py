@@ -3,8 +3,17 @@ from typing import Any
 
 import pytest
 
+from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import WRONG_FAMILY, Severity
+from genfxn.fsm.models import (
+    FsmSpec,
+    MachineType,
+    OutputMode,
+    State,
+    UndefinedTransitionPolicy,
+)
+from genfxn.fsm.render import render_fsm
 from genfxn.fsm.task import generate_fsm_task
 from genfxn.fsm.validate import (
     CODE_CODE_EXEC_ERROR,
@@ -191,6 +200,32 @@ class TestQueryAndSemantics:
         issues = validate_fsm_task(corrupted)
         assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+
+    def test_error_policy_invalid_query_input_is_reported(self) -> None:
+        spec = FsmSpec(
+            machine_type=MachineType.MOORE,
+            output_mode=OutputMode.FINAL_STATE_ID,
+            undefined_transition_policy=UndefinedTransitionPolicy.ERROR,
+            start_state_id=0,
+            states=[State(id=0, transitions=[], is_accept=False)],
+        )
+        spec_dict = spec.model_dump()
+        task = Task(
+            task_id=task_id_from_spec("fsm", spec_dict),
+            family="fsm",
+            spec=spec_dict,
+            code=render_fsm(spec),
+            queries=[
+                Query(input=[123], output=0, tag=QueryTag.TYPICAL),
+            ],
+            description="fsm query validation repro",
+        )
+
+        issues = validate_fsm_task(task)
+        assert any(
+            i.code == CODE_QUERY_INPUT_TYPE and i.location == "queries[0].input"
+            for i in issues
+        )
 
     def test_wrong_query_output_caught(self, baseline_task: Task) -> None:
         query = baseline_task.queries[0]

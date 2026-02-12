@@ -415,7 +415,16 @@ def _validate_query_outputs(
             continue
         try:
             expected = eval_fsm(spec, q.input)
-        except ValueError:
+        except ValueError as e:
+            issues.append(
+                Issue(
+                    code=CODE_QUERY_INPUT_TYPE,
+                    severity=severity,
+                    message=f"Query input is invalid for spec: {e}",
+                    location=f"queries[{i}].input",
+                    task_id=task.task_id,
+                )
+            )
             continue
         if q.output != expected:
             issues.append(

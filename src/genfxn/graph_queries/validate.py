@@ -31,6 +31,7 @@ CODE_CODE_EXEC_ERROR = "CODE_CODE_EXEC_ERROR"
 CODE_CODE_MISSING_FUNC = "CODE_CODE_MISSING_FUNC"
 CODE_CODE_RUNTIME_ERROR = "CODE_CODE_RUNTIME_ERROR"
 CODE_QUERY_INPUT_TYPE = "CODE_QUERY_INPUT_TYPE"
+CODE_QUERY_INPUT_BOUNDS = "CODE_QUERY_INPUT_BOUNDS"
 CODE_QUERY_OUTPUT_TYPE = "CODE_QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "CODE_QUERY_OUTPUT_MISMATCH"
 CODE_QUERY_INPUT_DUPLICATE = "CODE_QUERY_INPUT_DUPLICATE"
@@ -463,7 +464,7 @@ def _validate_query_outputs(
         except ValueError as e:
             issues.append(
                 Issue(
-                    code=CODE_QUERY_INPUT_TYPE,
+                    code=CODE_QUERY_INPUT_BOUNDS,
                     severity=severity,
                     message=f"Query input is out of spec bounds: {e}",
                     location=f"queries[{i}].input",
