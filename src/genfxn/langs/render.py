@@ -2,18 +2,21 @@
 
 from typing import Any
 
-from genfxn.langs.registry import get_render_fn
+from genfxn.langs.registry import get_render_fn, is_known_family
 from genfxn.langs.types import Language
 
 
-def _available_languages() -> list[Language]:
-    """Return languages that have render modules implemented."""
+def _available_languages(family: str = "piecewise") -> list[Language]:
+    """Return languages that have a render function for the requested family."""
+    if not is_known_family(family):
+        raise ValueError(f"Unknown family: {family}")
+
     available: list[Language] = []
     for lang in Language:
         try:
-            get_render_fn(lang, "piecewise")
+            get_render_fn(lang, family)
             available.append(lang)
-        except (ImportError, ModuleNotFoundError, ValueError):
+        except ValueError:
             pass
     return available
 
@@ -29,7 +32,7 @@ def render_all_languages(
     Returns a dict mapping language name to rendered code string.
     """
     if languages is None:
-        languages = _available_languages()
+        languages = _available_languages(family)
 
     result: dict[str, str] = {}
     for lang in languages:

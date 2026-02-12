@@ -104,4 +104,39 @@ def generate_stack_bytecode_queries(
         )
     )
 
-    return dedupe_queries(queries)
+    deduped = dedupe_queries(queries)
+    present_tags = {query.tag for query in deduped}
+    if present_tags == set(QueryTag):
+        return deduped
+
+    len_lo, len_hi = axes.list_length_range
+    value_span = max(1, v_hi - v_lo + 1)
+    for missing_tag in QueryTag:
+        if missing_tag in present_tags:
+            continue
+        for attempt in range(32):
+            if len_hi == 0:
+                candidate_input: list[int] = []
+            else:
+                length_span = max(1, len_hi - len_lo + 1)
+                length = len_lo + (attempt % length_span)
+                candidate_input = [
+                    _clamp(
+                        v_lo + ((attempt + i) % value_span),
+                        axes.value_range,
+                    )
+                    for i in range(length)
+                ]
+            if any(existing.input == candidate_input for existing in deduped):
+                continue
+            deduped.append(
+                Query(
+                    input=candidate_input,
+                    output=eval_stack_bytecode(spec, candidate_input),
+                    tag=missing_tag,
+                )
+            )
+            present_tags.add(missing_tag)
+            break
+
+    return deduped

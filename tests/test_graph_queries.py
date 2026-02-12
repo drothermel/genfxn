@@ -1,9 +1,11 @@
 import random
+from collections import defaultdict
 from collections.abc import Callable
 from itertools import product
 from typing import cast
 
 import pytest
+from pydantic import ValidationError
 
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
@@ -96,6 +98,89 @@ def test_axes_reject_shortest_path_cost_without_weighted_true() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("field_name", "range_value"),
+    [
+        ("n_nodes_range", (False, 5)),
+        ("edge_count_range", (1, True)),
+        ("weight_range", (False, 9)),
+    ],
+)
+def test_axes_reject_bool_in_int_range_bounds(
+    field_name: str, range_value: tuple[int | bool, int | bool]
+) -> None:
+    with pytest.raises(
+        ValidationError,
+        match=rf"{field_name}: bool is not allowed for int range bounds",
+    ):
+        GraphQueriesAxes.model_validate({field_name: range_value})
+
+
+def test_graph_edge_rejects_bool_int_fields() -> None:
+    with pytest.raises(
+        ValidationError,
+        match=r"u: bool is not allowed for int fields",
+    ):
+        GraphEdge.model_validate({"u": True, "v": 1, "w": 1})
+
+
+def test_graph_edge_rejects_weight_above_i64_max() -> None:
+    with pytest.raises(ValidationError, match=r"w"):
+        GraphEdge.model_validate(
+            {"u": 0, "v": 1, "w": (1 << 63)}
+        )
+
+
+def test_graph_spec_rejects_bool_n_nodes() -> None:
+    with pytest.raises(
+        ValidationError,
+        match=r"n_nodes: bool is not allowed for int fields",
+    ):
+        GraphQueriesSpec.model_validate(
+            {
+                "query_type": GraphQueryType.REACHABLE.value,
+                "directed": True,
+                "weighted": False,
+                "n_nodes": False,
+                "edges": [],
+            }
+        )
+
+
+def test_graph_spec_rejects_n_nodes_above_int32_max() -> None:
+    with pytest.raises(ValidationError, match=r"n_nodes"):
+        GraphQueriesSpec.model_validate(
+            {
+                "query_type": GraphQueryType.REACHABLE.value,
+                "directed": True,
+                "weighted": False,
+                "n_nodes": 1 << 31,
+                "edges": [],
+            }
+        )
+
+
+def test_axes_rejects_ranges_above_supported_numeric_bounds() -> None:
+    with pytest.raises(ValueError, match=r"n_nodes_range: high"):
+        GraphQueriesAxes(n_nodes_range=(2, 1 << 31))
+    with pytest.raises(ValueError, match=r"weight_range: high"):
+        GraphQueriesAxes(weight_range=(1, 1 << 63))
+
+
+def test_eval_rejects_bool_src_dst_inputs() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.REACHABLE,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    with pytest.raises(ValueError, match=r"src must be int"):
+        eval_graph_queries(spec, False, 1)
+    with pytest.raises(ValueError, match=r"dst must be int"):
+        eval_graph_queries(spec, 0, True)
+
+
 def test_normalize_graph_keeps_min_weight_for_duplicate_edges() -> None:
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.SHORTEST_PATH_COST,
@@ -115,6 +200,51 @@ def test_normalize_graph_keeps_min_weight_for_duplicate_edges() -> None:
         2: [],
     }
     assert eval_graph_queries(spec, 0, 2) == 7
+
+
+def test_shortest_path_cost_saturates_at_i64_max() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 63) - 1),
+            GraphEdge(u=1, v=2, w=1),
+        ],
+    )
+    assert eval_graph_queries(spec, 0, 2) == (1 << 63) - 1
+
+
+def test_shortest_path_cost_prefers_lower_non_saturated_path() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=5),
+            GraphEdge(u=0, v=2, w=(1 << 63) - 1),
+            GraphEdge(u=2, v=1, w=(1 << 63) - 1),
+        ],
+    )
+    assert eval_graph_queries(spec, 0, 1) == 5
+
+
+def test_shortest_path_cost_overflow_cycle_unreachable_returns_minus_one(
+) -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=4,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 63) - 1),
+            GraphEdge(u=1, v=2, w=(1 << 63) - 1),
+            GraphEdge(u=2, v=0, w=1),
+        ],
+    )
+    assert eval_graph_queries(spec, 0, 3) == -1
 
 
 @pytest.mark.parametrize(
@@ -208,6 +338,116 @@ def test_rendered_python_matches_evaluator_across_v1_matrix(
         assert rendered(src, dst) == eval_graph_queries(spec, src, dst)
 
 
+def test_rendered_python_matches_evaluator_late_better_path() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=5),
+            GraphEdge(u=0, v=2, w=(1 << 63) - 1),
+            GraphEdge(u=2, v=1, w=(1 << 63) - 1),
+        ],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[int, int], int], namespace["f"])
+    assert rendered(0, 1) == eval_graph_queries(spec, 0, 1)
+
+
+def test_rendered_python_rejects_bool_src_dst_inputs() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[int, int], int], namespace["f"])
+
+    with pytest.raises(ValueError, match=r"src must be int"):
+        rendered(True, 0)
+    with pytest.raises(ValueError, match=r"dst must be int"):
+        rendered(0, False)
+
+
+@pytest.mark.parametrize(
+    ("src", "dst", "match"),
+    [
+        (1.2, 0, "src must be int"),
+        ("0", 0, "src must be int"),
+        (None, 0, "src must be int"),
+        (0, 1.2, "dst must be int"),
+        (0, "0", "dst must be int"),
+        (0, None, "dst must be int"),
+    ],
+)
+def test_rendered_python_rejects_non_int_src_dst_inputs(
+    src: object,
+    dst: object,
+    match: str,
+) -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[object, object], int], namespace["f"])
+
+    with pytest.raises(ValueError, match=match):
+        rendered(src, dst)
+
+
+def test_rendered_python_matches_evaluator_for_int_subclass_inputs() -> None:
+    class _DerivedInt(int):
+        pass
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[object, object], int], namespace["f"])
+
+    assert rendered(_DerivedInt(0), _DerivedInt(1)) == eval_graph_queries(
+        spec,
+        _DerivedInt(0),
+        _DerivedInt(1),
+    )
+
+
+def test_rendered_python_rejects_invalid_edge_endpoints() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.MIN_HOPS,
+        directed=True,
+        weighted=False,
+        n_nodes=2,
+        edges=[GraphEdge(u=0, v=1, w=1)],
+    )
+    # Mutate post-validation to exercise runtime edge checks.
+    spec.edges[0].v = 99
+
+    namespace: dict[str, object] = {}
+    exec(render_graph_queries(spec), namespace)  # noqa: S102
+    rendered = cast(Callable[[int, int], int], namespace["f"])
+
+    with pytest.raises(ValueError, match=r"edges\[0\]\.v=99 must be in"):
+        eval_graph_queries(spec, 0, 1)
+    with pytest.raises(ValueError, match=r"edge\.v out of range"):
+        rendered(0, 1)
+
+
 def test_sampler_is_deterministic_for_seed() -> None:
     axes = GraphQueriesAxes(
         target_difficulty=3,
@@ -265,6 +505,41 @@ def test_queries_cover_all_tags_and_match_eval_across_multiple_seeds() -> None:
                 query.input["src"],
                 query.input["dst"],
             )
+
+
+def test_query_input_uniqueness_contract_is_per_tag() -> None:
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.REACHABLE,
+        directed=False,
+        weighted=False,
+        n_nodes=1,
+        edges=[],
+    )
+    axes = GraphQueriesAxes(
+        query_types=[GraphQueryType.REACHABLE],
+        directed_choices=[False],
+        weighted_choices=[False],
+        n_nodes_range=(1, 1),
+        edge_count_range=(0, 0),
+        weight_range=(1, 1),
+        disconnected_prob_range=(0.0, 0.0),
+        multi_edge_prob_range=(0.0, 0.0),
+        hub_bias_prob_range=(0.0, 0.0),
+    )
+    queries = generate_graph_queries_queries(spec, axes, random.Random(0))
+
+    seen_by_tag: dict[QueryTag, set[tuple[int, int]]] = {
+        tag: set() for tag in QueryTag
+    }
+    tags_by_pair: dict[tuple[int, int], set[QueryTag]] = defaultdict(set)
+    for query in queries:
+        pair = (query.input["src"], query.input["dst"])
+        assert pair not in seen_by_tag[query.tag]
+        seen_by_tag[query.tag].add(pair)
+        tags_by_pair[pair].add(query.tag)
+
+    assert len(tags_by_pair) == 1
+    assert any(len(tags) > 1 for tags in tags_by_pair.values())
 
 
 def test_queries_inputs_stay_within_node_bounds_across_multiple_seeds() -> None:

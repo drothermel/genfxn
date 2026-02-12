@@ -35,12 +35,14 @@ CODE_QUERY_OUTPUT_TYPE = "CODE_QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "CODE_QUERY_OUTPUT_MISMATCH"
 CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
+CODE_AXES_INVALID = "AXES_INVALID"
 CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "CODE_UNSAFE_AST"
 CURRENT_FAMILY = "stack_bytecode"
 PYTHON_CODE_KEY = "python"
 
 _spec_adapter = TypeAdapter(StackBytecodeSpec)
+_axes_adapter = TypeAdapter(StackBytecodeAxes)
 _ALLOWED_BUILTINS = {
     "abs": abs,
     "len": len,
@@ -48,6 +50,27 @@ _ALLOWED_BUILTINS = {
     "min": min,
     "range": range,
 }
+
+
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _ast_defines_function_f(parsed_tree: ast.Module) -> bool:
+    return any(
+        isinstance(stmt, ast.FunctionDef) and stmt.name == "f"
+        for stmt in parsed_tree.body
+    )
+
+
+def _validation_error_loc_part(error: ValidationError) -> str:
+    err = error.errors()[0] if error.errors() else {}
+    loc = err.get("loc", ())
+    if isinstance(loc, tuple):
+        return ".".join(str(part) for part in loc) or "value"
+    if isinstance(loc, list):
+        return ".".join(str(part) for part in loc) or "value"
+    return str(loc) if loc else "value"
 
 
 def _validate_ast_whitelist(
@@ -60,6 +83,28 @@ def _validate_ast_whitelist(
         tree = ast.parse(code)
     except (SyntaxError, TypeError):
         return [], None
+
+    for stmt in tree.body:
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
+        if not isinstance(stmt, ast.FunctionDef):
+            return [
+                Issue(
+                    code=CODE_UNSAFE_AST,
+                    severity=Severity.ERROR,
+                    message=(
+                        "Top-level statement "
+                        f"{type(stmt).__name__} at line "
+                        f"{getattr(stmt, 'lineno', '?')} is not allowed; "
+                        "only function definitions are permitted"
+                    ),
+                    location="code",
+                )
+            ], None
 
     annotation_positions: set[tuple[int, int]] = set()
     for node in ast.walk(tree):
@@ -150,6 +195,18 @@ def _validate_ast_whitelist(
                         location="code",
                     )
                 )
+            elif node.attr not in ALLOWED_METHOD_NAMES:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{node.attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             in_annotation = (
                 node.lineno,
@@ -173,21 +230,32 @@ def _validate_ast_whitelist(
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
-    expected = task_id_from_spec(family=task.family, spec=task.spec)
-    if task.task_id != expected:
+    try:
+        expected = task_id_from_spec(family=task.family, spec=task.spec)
+    except Exception as e:
         return [
             Issue(
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
-                message=(
-                    f"task_id '{task.task_id}' does not match spec hash "
-                    f"'{expected}'"
-                ),
+                message=f"Failed to compute task_id from spec: {e}",
                 location="task_id",
                 task_id=task.task_id,
             )
         ]
-    return []
+    if task.task_id == expected:
+        return []
+    return [
+        Issue(
+            code=CODE_TASK_ID_MISMATCH,
+            severity=Severity.ERROR,
+            message=(
+                f"task_id '{task.task_id}' does not match spec hash "
+                f"'{expected}'"
+            ),
+            location="task_id",
+            task_id=task.task_id,
+        )
+    ]
 
 
 def _validate_spec_deserialize(
@@ -212,7 +280,7 @@ def _validate_code_compile(
     task: Task,
     code: str | None = None,
     parsed_tree: ast.Module | None = None,
-    execute_untrusted_code: bool = True,
+    execute_untrusted_code: bool = False,
 ) -> tuple[list[Issue], Callable[[list[int]], tuple[int, int]] | None]:
     if code is None:
         if isinstance(task.code, str):
@@ -223,22 +291,45 @@ def _validate_code_compile(
     if code is None:
         return [], None
 
+    if not isinstance(code, str):
+        return [
+            Issue(
+                code=CODE_CODE_PARSE_ERROR,
+                severity=Severity.ERROR,
+                message=(
+                    "Code payload must be a string, got "
+                    f"{type(code).__name__}"
+                ),
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
+
     if parsed_tree is None:
         try:
             parsed_tree = ast.parse(code)
-        except SyntaxError as e:
+        except (SyntaxError, TypeError) as e:
             return [
                 Issue(
                     code=CODE_CODE_PARSE_ERROR,
                     severity=Severity.ERROR,
-                    message=f"Syntax error in code: {e}",
+                    message=f"Failed to parse code: {e}",
                     location="code",
                     task_id=task.task_id,
                 )
             ], None
-    _ = parsed_tree
 
     if not execute_untrusted_code:
+        if not _ast_defines_function_f(parsed_tree):
+            return [
+                Issue(
+                    code=CODE_CODE_MISSING_FUNC,
+                    severity=Severity.ERROR,
+                    message="Function 'f' not found in code namespace",
+                    location="code",
+                    task_id=task.task_id,
+                )
+            ], None
         return [], None
 
     namespace: dict[str, object]
@@ -311,7 +402,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             issues.append(
                 Issue(
@@ -350,7 +441,7 @@ def _validate_query_outputs(
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             continue
         actual = _coerce_query_output(q.output)
@@ -375,8 +466,8 @@ def _validate_query_outputs(
 
 def _coerce_query_output(output: object) -> tuple[int, int] | None:
     if isinstance(output, (tuple, list)) and len(output) == 2:
-        if isinstance(output[0], int) and isinstance(output[1], int):
-            return (output[0], output[1])
+        if _is_int_not_bool(output[0]) and _is_int_not_bool(output[1]):
+            return (cast(int, output[0]), cast(int, output[1]))
     return None
 
 
@@ -452,7 +543,7 @@ def validate_stack_bytecode_task(
     task: Task,
     axes: StackBytecodeAxes | None = None,
     strict: bool = True,
-    execute_untrusted_code: bool = True,
+    execute_untrusted_code: bool = False,
     max_semantic_issues: int = 10,
     semantic_trials: int = 16,
     random_seed: int = 0,
@@ -473,6 +564,20 @@ def validate_stack_bytecode_task(
 
     if axes is None:
         axes = StackBytecodeAxes()
+    else:
+        try:
+            axes = _axes_adapter.validate_python(axes, strict=True)
+        except ValidationError as e:
+            loc_part = _validation_error_loc_part(e)
+            return [
+                Issue(
+                    code=CODE_AXES_INVALID,
+                    severity=Severity.ERROR,
+                    message=f"Invalid axes: {e}",
+                    location=f"axes.{loc_part}",
+                    task_id=task.task_id,
+                )
+            ]
 
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
@@ -489,33 +594,42 @@ def validate_stack_bytecode_task(
     elif isinstance(task.code, dict):
         code = task.code.get(PYTHON_CODE_KEY)
 
+    ast_issues: list[Issue] = []
     parsed_tree: ast.Module | None = None
     if code is not None:
         ast_issues, parsed_tree = _validate_ast_whitelist(code)
         issues.extend(ast_issues)
 
-    compile_issues, fn = _validate_code_compile(
-        task,
-        code=code,
-        parsed_tree=parsed_tree,
-        execute_untrusted_code=execute_untrusted_code,
-    )
-    issues.extend(compile_issues)
-
-    issues.extend(_validate_query_outputs(task, spec, strict=strict))
-
-    rng = random.Random(random_seed)
-    issues.extend(
-        _validate_semantics(
+    fn = None
+    has_unsafe_ast = any(i.code == CODE_UNSAFE_AST for i in ast_issues)
+    if not has_unsafe_ast:
+        compile_issues, fn = _validate_code_compile(
             task,
-            spec,
-            fn,
-            axes,
-            strict=strict,
-            semantic_trials=semantic_trials,
-            max_semantic_issues=max_semantic_issues,
-            rng=rng,
+            code=code,
+            parsed_tree=parsed_tree,
+            execute_untrusted_code=execute_untrusted_code,
         )
-    )
+        issues.extend(compile_issues)
+
+    try:
+        issues.extend(_validate_query_outputs(task, spec, strict=strict))
+
+        rng = random.Random(random_seed)
+        issues.extend(
+            _validate_semantics(
+                task,
+                spec,
+                fn,
+                axes,
+                strict=strict,
+                semantic_trials=semantic_trials,
+                max_semantic_issues=max_semantic_issues,
+                rng=rng,
+            )
+        )
+    finally:
+        close = getattr(fn, "close", None)
+        if callable(close):
+            close()
 
     return issues

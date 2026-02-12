@@ -1,7 +1,10 @@
 import random
 
 import pytest
+from pydantic import ValidationError
 
+from genfxn.core.int32 import INT32_MAX, INT32_MIN
+from genfxn.core.models import QueryTag
 from genfxn.core.predicates import PredicateLe, PredicateLt
 from genfxn.piecewise.eval import eval_expression, eval_piecewise
 from genfxn.piecewise.models import (
@@ -18,6 +21,8 @@ from genfxn.piecewise.queries import generate_piecewise_queries
 from genfxn.piecewise.render import render_expression, render_piecewise
 from genfxn.piecewise.sampler import sample_piecewise_spec
 from genfxn.piecewise.task import generate_piecewise_task
+
+INT64_MAX = (1 << 63) - 1
 
 
 class TestExpressionEval:
@@ -46,6 +51,19 @@ class TestExpressionEval:
         assert eval_expression(expr, 1) == 3
         assert eval_expression(expr, 3) == 1
         assert eval_expression(expr, 7) == 3
+
+    def test_mod_rejects_divisor_above_int32_max(self) -> None:
+        with pytest.raises(ValueError):
+            ExprMod(divisor=INT32_MAX + 1, a=1, b=0)
+
+    def test_affine_rejects_coefficients_above_signed_i64(self) -> None:
+        with pytest.raises(ValueError, match="9223372036854775807"):
+            ExprAffine(a=INT64_MAX + 1, b=0)
+
+    def test_rejects_bool_input(self) -> None:
+        expr = ExprAffine(a=1, b=0)
+        with pytest.raises(ValueError, match="x must be int, got bool"):
+            eval_expression(expr, True)
 
 
 class TestBranchSelection:
@@ -92,6 +110,18 @@ class TestBranchSelection:
         assert eval_piecewise(spec, 5) == 5
         assert eval_piecewise(spec, 10) == 100
 
+    def test_rejects_bool_input(self) -> None:
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateLt(value=0), expr=ExprAffine(a=1, b=0)
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=10),
+        )
+        with pytest.raises(ValueError, match="x must be int, got bool"):
+            eval_piecewise(spec, False)
+
 
 class TestQueryGeneration:
     def test_generates_queries(self) -> None:
@@ -118,6 +148,27 @@ class TestQueryGeneration:
         queries = generate_piecewise_queries(spec, (-10, 10), random.Random(42))
         for q in queries:
             assert q.output == eval_piecewise(spec, q.input)
+
+    def test_boundary_queries_use_wrapped_thresholds(self) -> None:
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateLt(value=INT32_MAX + 1),
+                    expr=ExprAffine(a=1, b=0),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=7),
+        )
+        queries = generate_piecewise_queries(
+            spec, (INT32_MIN - 2, INT32_MIN + 2), random.Random(0)
+        )
+
+        wrapped_boundary = [
+            q
+            for q in queries
+            if q.input == INT32_MIN and q.tag == QueryTag.BOUNDARY
+        ]
+        assert wrapped_boundary
 
 
 class TestRender:
@@ -174,6 +225,45 @@ class TestRender:
         for x in range(-20, 30):
             assert f(x) == eval_piecewise(spec, x), f"Mismatch at x={x}"
 
+    def test_render_roundtrip_int32_large_values(self) -> None:
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateLt(value=3_000_000_000),
+                    expr=ExprQuadratic(a=1, b=0, c=0),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=7),
+        )
+        code = render_piecewise(spec, func_name="f")
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        for x in (0, 50_000, 2_000_000_000):
+            assert f(x) == eval_piecewise(spec, x), f"Mismatch at x={x}"
+
+    def test_render_roundtrip_without_i32_wrap(self) -> None:
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateLt(value=0),
+                    expr=ExprAffine(a=2, b=1),
+                ),
+                Branch(
+                    condition=PredicateLt(value=10),
+                    expr=ExprQuadratic(a=1, b=0, c=0),
+                ),
+            ],
+            default_expr=ExprAffine(a=0, b=50),
+        )
+        code = render_piecewise(spec, func_name="f", int32_wrap=False)
+        assert "__i32_" not in code
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        for x in range(-20, 30):
+            assert f(x) == eval_piecewise(spec, x, int32_wrap=False)
+
 
 class TestSampler:
     def test_reproducible(self) -> None:
@@ -198,6 +288,13 @@ class TestAxesValidation:
         with pytest.raises(ValueError, match="coeff_range"):
             PiecewiseAxes(coeff_range=(5, -5))
 
+    def test_coeff_range_rejects_values_above_signed_i64(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"coeff_range: high .* must be <= {INT64_MAX}",
+        ):
+            PiecewiseAxes(coeff_range=(0, INT64_MAX + 1))
+
     def test_invalid_threshold_range(self) -> None:
         with pytest.raises(ValueError, match="threshold_range"):
             PiecewiseAxes(threshold_range=(50, -50))
@@ -205,6 +302,17 @@ class TestAxesValidation:
     def test_invalid_divisor_range(self) -> None:
         with pytest.raises(ValueError, match="divisor_range"):
             PiecewiseAxes(divisor_range=(10, 2))
+
+    def test_divisor_range_low_must_be_positive(self) -> None:
+        with pytest.raises(ValueError, match=r"divisor_range: low .*>= 1"):
+            PiecewiseAxes(divisor_range=(0, 10))
+
+    def test_divisor_range_high_must_fit_int32(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"divisor_range: high .*<= {INT32_MAX}",
+        ):
+            PiecewiseAxes(divisor_range=(2, INT32_MAX + 1))
 
     def test_n_branches_exceeds_threshold_range(self) -> None:
         with pytest.raises(
@@ -215,6 +323,24 @@ class TestAxesValidation:
     def test_empty_expr_types(self) -> None:
         with pytest.raises(ValueError, match="expr_types must not be empty"):
             PiecewiseAxes(expr_types=[])
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (False, 5)),
+            ("coeff_range", (True, 5)),
+            ("threshold_range", (-5, False)),
+            ("divisor_range", (2, True)),
+        ],
+    )
+    def test_rejects_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            PiecewiseAxes.model_validate({field_name: range_value})
 
 
 class TestTaskGeneration:

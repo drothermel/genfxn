@@ -1,7 +1,35 @@
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
+
+_INT_RANGE_FIELDS = (
+    "len_a_range",
+    "len_b_range",
+    "value_range",
+    "match_score_range",
+    "mismatch_score_range",
+    "gap_score_range",
+    "abs_diff_range",
+    "divisor_range",
+)
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
+
+
+def _validate_no_bool_int_range_bounds(data: Any) -> None:
+    if not isinstance(data, dict):
+        return
+
+    for field_name in _INT_RANGE_FIELDS:
+        value = data.get(field_name)
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            continue
+        low, high = value
+        if isinstance(low, bool) or isinstance(high, bool):
+            raise ValueError(
+                f"{field_name}: bool is not allowed for int range bounds"
+            )
 
 
 class TemplateType(str, Enum):
@@ -36,13 +64,13 @@ class PredicateEq(BaseModel):
 
 class PredicateAbsDiffLe(BaseModel):
     kind: Literal["abs_diff_le"] = "abs_diff_le"
-    max_diff: int = Field(ge=0)
+    max_diff: int = Field(ge=0, le=INT64_MAX)
 
 
 class PredicateModEq(BaseModel):
     kind: Literal["mod_eq"] = "mod_eq"
-    divisor: int = Field(ge=1)
-    remainder: int = Field(ge=0)
+    divisor: int = Field(ge=1, le=INT64_MAX)
+    remainder: int = Field(ge=0, le=INT64_MAX)
 
     @model_validator(mode="after")
     def validate_remainder(self) -> "PredicateModEq":
@@ -61,9 +89,9 @@ class SequenceDpSpec(BaseModel):
     template: TemplateType
     output_mode: OutputMode
     match_predicate: SequenceDpPredicate
-    match_score: int
-    mismatch_score: int
-    gap_score: int
+    match_score: int = Field(ge=INT64_MIN, le=INT64_MAX)
+    mismatch_score: int = Field(ge=INT64_MIN, le=INT64_MAX)
+    gap_score: int = Field(ge=INT64_MIN, le=INT64_MAX)
     step_tie_break: TieBreakOrder
 
 
@@ -89,6 +117,12 @@ class SequenceDpAxes(BaseModel):
     tie_break_orders: list[TieBreakOrder] = Field(
         default_factory=lambda: list(TieBreakOrder)
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_axes(cls, data: Any) -> Any:
+        _validate_no_bool_int_range_bounds(data)
+        return data
 
     @model_validator(mode="after")
     def validate_axes(self) -> "SequenceDpAxes":
@@ -123,5 +157,26 @@ class SequenceDpAxes(BaseModel):
             raise ValueError("abs_diff_range: low must be >= 0")
         if self.divisor_range[0] < 1:
             raise ValueError("divisor_range: low must be >= 1")
+
+        for name in (
+            "value_range",
+            "match_score_range",
+            "mismatch_score_range",
+            "gap_score_range",
+        ):
+            lo, hi = getattr(self, name)
+            if lo < INT64_MIN:
+                raise ValueError(
+                    f"{name}: low must be >= {INT64_MIN}"
+                )
+            if hi > INT64_MAX:
+                raise ValueError(
+                    f"{name}: high must be <= {INT64_MAX}"
+                )
+
+        if self.abs_diff_range[1] > INT64_MAX:
+            raise ValueError(f"abs_diff_range: high must be <= {INT64_MAX}")
+        if self.divisor_range[1] > INT64_MAX:
+            raise ValueError(f"divisor_range: high must be <= {INT64_MAX}")
 
         return self

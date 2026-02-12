@@ -1,3 +1,4 @@
+from genfxn.langs.java._helpers import java_int_literal
 from genfxn.langs.java.predicates import render_predicate_java
 from genfxn.langs.java.transforms import render_transform_java
 from genfxn.simple_algorithms.models import (
@@ -15,7 +16,7 @@ def _render_preprocess_java(
 ) -> list[str]:
     lines: list[str] = []
     if spec.pre_filter is not None:
-        cond = render_predicate_java(spec.pre_filter, "x")
+        cond = render_predicate_java(spec.pre_filter, "x", int32_wrap=True)
         lines.extend(
             [
                 f"    int[] _filtered = java.util.Arrays.stream({var})"
@@ -39,13 +40,19 @@ def _render_most_frequent(
     spec: MostFrequentSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     preprocess = _render_preprocess_java(spec, var)
+    empty_default = java_int_literal(spec.empty_default)
+    tie_default = (
+        java_int_literal(spec.tie_default)
+        if spec.tie_default is not None
+        else None
+    )
 
     if spec.tie_break == TieBreakMode.SMALLEST:
         lines = [
             f"public static int {func_name}(int[] {var}) {{",
             *preprocess,
             f"    if ({var}.length == 0) {{",
-            f"        return {spec.empty_default};",
+            f"        return {empty_default};",
             "    }",
             "    java.util.HashMap<Integer, Integer> counts = "
             "new java.util.HashMap<>();",
@@ -63,7 +70,8 @@ def _render_most_frequent(
         ]
         if spec.tie_default is not None:
             lines.append("    if (candidates.size() > 1) {")
-            lines.append(f"        return {spec.tie_default};")
+            assert tie_default is not None
+            lines.append(f"        return {tie_default};")
             lines.append("    }")
         lines.append("    return java.util.Collections.min(candidates);")
         lines.append("}")
@@ -72,7 +80,7 @@ def _render_most_frequent(
             f"public static int {func_name}(int[] {var}) {{",
             *preprocess,
             f"    if ({var}.length == 0) {{",
-            f"        return {spec.empty_default};",
+            f"        return {empty_default};",
             "    }",
             "    java.util.HashMap<Integer, Integer> counts = "
             "new java.util.HashMap<>();",
@@ -90,7 +98,8 @@ def _render_most_frequent(
         ]
         if spec.tie_default is not None:
             lines.append("    if (candidates.size() > 1) {")
-            lines.append(f"        return {spec.tie_default};")
+            assert tie_default is not None
+            lines.append(f"        return {tie_default};")
             lines.append("    }")
         lines.extend(
             [
@@ -99,7 +108,7 @@ def _render_most_frequent(
                 "            return x;",
                 "        }",
                 "    }",
-                f"    return {spec.empty_default};",
+                f"    return {empty_default};",
                 "}",
             ]
         )
@@ -110,6 +119,17 @@ def _render_count_pairs_sum(
     spec: CountPairsSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     preprocess = _render_preprocess_java(spec, var)
+    target = java_int_literal(spec.target)
+    short_list_default = (
+        java_int_literal(spec.short_list_default)
+        if spec.short_list_default is not None
+        else None
+    )
+    no_result_default = (
+        java_int_literal(spec.no_result_default)
+        if spec.no_result_default is not None
+        else None
+    )
 
     if spec.counting_mode == CountingMode.ALL_INDICES:
         lines = [
@@ -118,14 +138,15 @@ def _render_count_pairs_sum(
         ]
         if spec.short_list_default is not None:
             lines.append(f"    if ({var}.length < 2) {{")
-            lines.append(f"        return {spec.short_list_default};")
+            assert short_list_default is not None
+            lines.append(f"        return {short_list_default};")
             lines.append("    }")
         lines.extend(
             [
                 "    int count = 0;",
                 f"    for (int i = 0; i < {var}.length; i++) {{",
                 f"        for (int j = i + 1; j < {var}.length; j++) {{",
-                f"            if ({var}[i] + {var}[j] == {spec.target}) {{",
+                f"            if ({var}[i] + {var}[j] == {target}) {{",
                 "                count += 1;",
                 "            }",
                 "        }",
@@ -134,7 +155,8 @@ def _render_count_pairs_sum(
         )
         if spec.no_result_default is not None:
             lines.append("    if (count == 0) {")
-            lines.append(f"        return {spec.no_result_default};")
+            assert no_result_default is not None
+            lines.append(f"        return {no_result_default};")
             lines.append("    }")
         lines.append("    return count;")
         lines.append("}")
@@ -145,7 +167,8 @@ def _render_count_pairs_sum(
         ]
         if spec.short_list_default is not None:
             lines.append(f"    if ({var}.length < 2) {{")
-            lines.append(f"        return {spec.short_list_default};")
+            assert short_list_default is not None
+            lines.append(f"        return {short_list_default};")
             lines.append("    }")
         lines.extend(
             [
@@ -153,7 +176,7 @@ def _render_count_pairs_sum(
                 "new java.util.HashSet<>();",
                 f"    for (int i = 0; i < {var}.length; i++) {{",
                 f"        for (int j = i + 1; j < {var}.length; j++) {{",
-                f"            if ({var}[i] + {var}[j] == {spec.target}) {{",
+                f"            if ({var}[i] + {var}[j] == {target}) {{",
                 "                seen_pairs.add("
                 f"java.util.List.of(Math.min({var}[i], {var}[j]), "
                 f"Math.max({var}[i], {var}[j])));",
@@ -164,7 +187,8 @@ def _render_count_pairs_sum(
         )
         if spec.no_result_default is not None:
             lines.append("    if (seen_pairs.isEmpty()) {")
-            lines.append(f"        return {spec.no_result_default};")
+            assert no_result_default is not None
+            lines.append(f"        return {no_result_default};")
             lines.append("    }")
         lines.append("    return seen_pairs.size();")
         lines.append("}")
@@ -175,6 +199,13 @@ def _render_max_window_sum(
     spec: MaxWindowSumSpec, func_name: str = "f", var: str = "xs"
 ) -> str:
     preprocess = _render_preprocess_java(spec, var)
+    k = java_int_literal(spec.k)
+    invalid_k_default = java_int_literal(spec.invalid_k_default)
+    empty_default = (
+        java_int_literal(spec.empty_default)
+        if spec.empty_default is not None
+        else None
+    )
 
     lines = [
         f"public static int {func_name}(int[] {var}) {{",
@@ -182,21 +213,22 @@ def _render_max_window_sum(
     ]
     if spec.empty_default is not None:
         lines.append(f"    if ({var}.length == 0) {{")
-        lines.append(f"        return {spec.empty_default};")
+        assert empty_default is not None
+        lines.append(f"        return {empty_default};")
         lines.append("    }")
     lines.extend(
         [
-            f"    if ({var}.length < {spec.k}) {{",
-            f"        return {spec.invalid_k_default};",
+            f"    if ({var}.length < {k}) {{",
+            f"        return {invalid_k_default};",
             "    }",
             "    int window_sum = 0;",
-            f"    for (int i = 0; i < {spec.k}; i++) {{",
+            f"    for (int i = 0; i < {k}; i++) {{",
             f"        window_sum += {var}[i];",
             "    }",
             "    int max_sum = window_sum;",
-            f"    for (int i = {spec.k}; i < {var}.length; i++) {{",
+            f"    for (int i = {k}; i < {var}.length; i++) {{",
             "        window_sum = window_sum "
-            f"- {var}[i - {spec.k}] + {var}[i];",
+            f"- {var}[i - {k}] + {var}[i];",
             "        max_sum = Math.max(max_sum, window_sum);",
             "    }",
             "    return max_sum;",

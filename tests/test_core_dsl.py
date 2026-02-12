@@ -3,6 +3,7 @@ import random
 import pytest
 
 from genfxn.core.codegen import render_tests, task_id_from_spec
+from genfxn.core.int32 import INT32_MAX
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
     PredicateAnd,
@@ -32,6 +33,8 @@ from genfxn.core.transforms import (
     eval_transform,
     render_transform,
 )
+
+INT64_MAX = (1 << 63) - 1
 
 
 class TestPredicates:
@@ -94,8 +97,38 @@ class TestPredicates:
         assert render_predicate(p) == "x % 3 == 1"
 
     def test_mod_eq_rejects_zero_divisor(self) -> None:
-        with pytest.raises(ValueError, match="divisor must be non-zero"):
+        with pytest.raises(ValueError, match="divisor must be >= 1"):
             PredicateModEq(divisor=0, remainder=1)
+
+    def test_mod_eq_rejects_negative_remainder(self) -> None:
+        with pytest.raises(ValueError, match="remainder must be >= 0"):
+            PredicateModEq(divisor=3, remainder=-1)
+
+    def test_mod_eq_rejects_large_remainder(self) -> None:
+        with pytest.raises(ValueError, match="remainder must be < divisor"):
+            PredicateModEq(divisor=3, remainder=3)
+
+    def test_mod_eq_rejects_divisor_above_int32_max(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"divisor must be <= {INT32_MAX}",
+        ):
+            PredicateModEq(divisor=INT32_MAX + 1, remainder=0)
+
+    def test_int32_wrap_mode_wraps_comparison_constants(self) -> None:
+        p = PredicateGe(value=3_000_000_005)
+        assert eval_predicate(p, 0, int32_wrap=False) is False
+        assert eval_predicate(p, 0, int32_wrap=True) is True
+
+    def test_int32_wrap_mode_wraps_input_before_mod_eq(self) -> None:
+        p = PredicateModEq(divisor=3, remainder=1)
+        x = (1 << 32) + 1
+        assert eval_predicate(p, x, int32_wrap=False) is False
+        assert eval_predicate(p, x, int32_wrap=True) is True
+
+    def test_lt_rejects_values_above_signed_i64(self) -> None:
+        with pytest.raises(ValueError, match="9223372036854775807"):
+            PredicateLt(value=INT64_MAX + 1)
 
     def test_in_set(self) -> None:
         p = PredicateInSet(values=frozenset({1, 2, 3}))
@@ -105,6 +138,10 @@ class TestPredicates:
         assert eval_predicate(p, 0) is False
         assert eval_predicate(p, 4) is False
         assert render_predicate(p) == "x in {1, 2, 3}"
+
+    def test_in_set_rejects_values_above_signed_i64(self) -> None:
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            PredicateInSet(values=frozenset({INT64_MAX + 1}))
 
 
 class TestComposedPredicates:
@@ -279,6 +316,10 @@ class TestTransforms:
         assert eval_transform(t, -5) == -8
         assert render_transform(t) == "x - 3"
 
+    def test_shift_rejects_offset_above_signed_i64(self) -> None:
+        with pytest.raises(ValueError, match="9223372036854775807"):
+            TransformShift(offset=INT64_MAX + 1)
+
     def test_clip(self) -> None:
         t = TransformClip(low=0, high=10)
         assert eval_transform(t, 5) == 5
@@ -291,6 +332,14 @@ class TestTransforms:
     def test_clip_rejects_invalid_bounds(self) -> None:
         with pytest.raises(ValueError, match="low .* must be <= high"):
             TransformClip(low=10, high=0)
+
+    def test_clip_rejects_bounds_above_signed_i64(self) -> None:
+        with pytest.raises(ValueError, match="9223372036854775807"):
+            TransformClip(low=0, high=INT64_MAX + 1)
+
+    def test_clip_int32_wrap_uses_wrapped_bounds(self) -> None:
+        t = TransformClip(low=3_000_000_000, high=3_000_000_100)
+        assert eval_transform(t, 0, int32_wrap=True) == -1_294_967_196
 
     def test_negate(self) -> None:
         t = TransformNegate()
@@ -305,6 +354,10 @@ class TestTransforms:
         assert eval_transform(t, -2) == -6
         assert eval_transform(t, 0) == 0
         assert render_transform(t) == "x * 3"
+
+    def test_scale_rejects_factor_above_signed_i64(self) -> None:
+        with pytest.raises(ValueError, match="9223372036854775807"):
+            TransformScale(factor=INT64_MAX + 1)
 
 
 class TestTransformPipeline:
@@ -396,6 +449,31 @@ class TestTaskId:
         id2 = task_id_from_spec("stateful", spec2)
         assert id1 == id2
 
+    def test_mixed_key_types_do_not_collide(self) -> None:
+        id_int_key = task_id_from_spec("test", {1: "a"})
+        id_str_key = task_id_from_spec("test", {"1": "a"})
+        assert id_int_key != id_str_key
+
+    def test_mixed_key_type_hash_is_insertion_order_independent(self) -> None:
+        spec_a = {1: "a", "1": "b"}
+        spec_b = {"1": "b", 1: "a"}
+        id_a = task_id_from_spec("test", spec_a)
+        id_b = task_id_from_spec("test", spec_b)
+        assert id_a == id_b
+
+    def test_container_value_types_do_not_collide(self) -> None:
+        id_list = task_id_from_spec("test", {"x": [1, 2]})
+        id_tuple = task_id_from_spec("test", {"x": (1, 2)})
+        id_set = task_id_from_spec("test", {"x": {1, 2}})
+        id_frozenset = task_id_from_spec("test", {"x": frozenset({1, 2})})
+
+        assert id_list != id_tuple
+        assert id_list != id_set
+        assert id_list != id_frozenset
+        assert id_tuple != id_set
+        assert id_tuple != id_frozenset
+        assert id_set != id_frozenset
+
 
 class TestRenderTests:
     def test_render_tests(self) -> None:
@@ -404,14 +482,181 @@ class TestRenderTests:
             Query(input=-3, output=3, tag=QueryTag.BOUNDARY),
         ]
         result = render_tests("my_func", queries)
-        assert "assert my_func(5) == 10" in result
-        assert "assert my_func(-3) == 3" in result
+        assert "__genfxn_query_outputs_equal" in result
+        assert "assert __genfxn_query_outputs_equal(my_func(5), 10)" in result
+        assert (
+            "assert __genfxn_query_outputs_equal(my_func(-3), 3)"
+            in result
+        )
         assert "query 0 (typical)" in result
         assert "query 1 (boundary)" in result
 
     def test_render_tests_empty(self) -> None:
         result = render_tests("f", [])
-        assert result == ""
+        assert "__genfxn_query_outputs_equal" in result
+        assert "assert __genfxn_query_outputs_equal(" not in result
+
+    def test_render_tests_emits_valid_non_finite_literals(self) -> None:
+        queries = [
+            Query(
+                input=[float("inf"), float("-inf")],
+                output=[float("inf"), float("-inf")],
+                tag=QueryTag.TYPICAL,
+            )
+        ]
+        rendered_asserts = render_tests("f", queries)
+        namespace: dict[str, object] = {}
+        exec(  # noqa: S102
+            "def f(x):\n    return x\n" + rendered_asserts,
+            namespace,
+        )
+
+    def test_render_tests_emits_nan_expression_not_bare_name(self) -> None:
+        queries = [
+            Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),
+        ]
+        rendered_asserts = render_tests("f", queries)
+        assert 'float("nan")' in rendered_asserts
+        assert " == nan" not in rendered_asserts
+
+    def test_render_tests_uses_nan_safe_assertion_for_nan_outputs(self) -> None:
+        queries = [
+            Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),
+        ]
+        rendered_asserts = render_tests("f", queries)
+        assert "__genfxn_query_outputs_equal" in rendered_asserts
+
+    def test_render_tests_executes_with_nan_outputs(self) -> None:
+        queries = [
+            Query(input=1, output=float("nan"), tag=QueryTag.TYPICAL),
+            Query(
+                input=2,
+                output=[float("nan"), {"k": float("nan")}],
+                tag=QueryTag.BOUNDARY,
+            ),
+            Query(
+                input=3,
+                output=frozenset({float("nan")}),
+                tag=QueryTag.COVERAGE,
+            ),
+        ]
+        rendered_asserts = render_tests("f", queries)
+        namespace: dict[str, object] = {}
+        exec(  # noqa: S102
+            "\n".join(
+                [
+                    "def f(x):",
+                    "    if x == 1:",
+                    "        return float('nan')",
+                    "    if x == 2:",
+                    "        return [float('nan'), {'k': float('nan')}]",
+                    "    return frozenset({float('nan')})",
+                    rendered_asserts,
+                ]
+            ),
+            namespace,
+        )
+
+    def test_render_tests_renders_set_literals_in_stable_order(self) -> None:
+        queries = [
+            Query(
+                input=1,
+                output={"gamma", "alpha", "beta"},
+                tag=QueryTag.TYPICAL,
+            )
+        ]
+        rendered_asserts = render_tests("f", queries)
+        assert (
+            rendered_asserts
+            == "from genfxn.core.models import (\n"
+            "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
+            ")\n"
+            "\n"
+            "assert __genfxn_query_outputs_equal("
+            "f(1), {'alpha', 'beta', 'gamma'}), 'query 0 (typical)'"
+        )
+
+    def test_render_tests_renders_frozenset_literals_in_stable_order(
+        self,
+    ) -> None:
+        queries = [
+            Query(
+                input=frozenset({"gamma", "alpha", "beta"}),
+                output=frozenset({"gamma", "alpha", "beta"}),
+                tag=QueryTag.TYPICAL,
+            )
+        ]
+        rendered_asserts = render_tests("f", queries)
+        assert (
+            rendered_asserts
+            == "from genfxn.core.models import (\n"
+            "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
+            ")\n"
+            "\n"
+            "assert __genfxn_query_outputs_equal("
+            "f(frozenset({'alpha', 'beta', 'gamma'})), "
+            "frozenset({'alpha', 'beta', 'gamma'})), 'query 0 (typical)'"
+        )
+
+    def test_render_tests_renders_dict_literals_in_stable_key_order(
+        self,
+    ) -> None:
+        queries = [
+            Query(
+                input=1,
+                output={
+                    "gamma": 3,
+                    "alpha": 1,
+                    "beta": 2,
+                },
+                tag=QueryTag.TYPICAL,
+            )
+        ]
+        rendered_asserts = render_tests("f", queries)
+        assert (
+            rendered_asserts
+            == "from genfxn.core.models import (\n"
+            "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
+            ")\n"
+            "\n"
+            "assert __genfxn_query_outputs_equal("
+            "f(1), {'alpha': 1, 'beta': 2, 'gamma': 3}), 'query 0 (typical)'"
+        )
+
+    def test_render_tests_dict_order_is_independent_of_insertion(
+        self,
+    ) -> None:
+        output_a = {}
+        output_a["b"] = 2
+        output_a["a"] = 1
+        output_b = {}
+        output_b["a"] = 1
+        output_b["b"] = 2
+        rendered_a = render_tests(
+            "f",
+            [Query(input=1, output=output_a, tag=QueryTag.TYPICAL)],
+        )
+        rendered_b = render_tests(
+            "f",
+            [Query(input=1, output=output_b, tag=QueryTag.TYPICAL)],
+        )
+        assert rendered_a == rendered_b
+
+    def test_render_tests_enforces_type_sensitive_equality(self) -> None:
+        queries = [Query(input=1, output=0, tag=QueryTag.TYPICAL)]
+        rendered_asserts = render_tests("f", queries)
+        namespace: dict[str, object] = {}
+        with pytest.raises(AssertionError):
+            exec(  # noqa: S102
+                "\n".join(
+                    [
+                        "def f(x):",
+                        "    return False",
+                        rendered_asserts,
+                    ]
+                ),
+                namespace,
+            )
 
 
 class TestCorpusIdUniqueness:

@@ -1,6 +1,38 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+
+_FAMILIES = frozenset(
+    {
+        "bitops",
+        "fsm",
+        "graph_queries",
+        "intervals",
+        "piecewise",
+        "sequence_dp",
+        "simple_algorithms",
+        "stack_bytecode",
+        "stateful",
+        "stringrules",
+        "temporal_logic",
+    }
+)
+
+
+def _full_family_marker_for_item(item: pytest.Item) -> str | None:
+    filename = Path(item.path).name
+    family: str | None = None
+    if filename.startswith("test_validate_") and filename.endswith(".py"):
+        family = filename[len("test_validate_") : -len(".py")]
+    elif filename.startswith("test_") and filename.endswith(
+        "_runtime_parity.py"
+    ):
+        family = filename[len("test_") : -len("_runtime_parity.py")]
+    if family in _FAMILIES:
+        return f"full_{family}"
+    return None
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -16,6 +48,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "full (run all)."
         ),
     )
+
+
+def pytest_itemcollected(item: pytest.Item) -> None:
+    if "full" not in item.keywords:
+        return
+    family_marker = _full_family_marker_for_item(item)
+    if family_marker is None:
+        return
+    item.add_marker(getattr(pytest.mark, family_marker))
 
 
 def pytest_collection_modifyitems(

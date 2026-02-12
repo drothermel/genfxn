@@ -1,7 +1,7 @@
 import random
 from typing import Any
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries_per_tag_input
 from genfxn.intervals.eval import eval_intervals
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
 
@@ -224,16 +224,9 @@ def generate_intervals_queries(
         ]
         _append(fallback, tag)
 
-    deduped: list[Query] = []
-    for tag in QueryTag:
-        seen: set[tuple[tuple[int, int], ...]] = set()
-        for query in queries:
-            if query.tag != tag:
-                continue
-            frozen = tuple((int(a), int(b)) for a, b in query.input)
-            if frozen in seen:
-                continue
-            seen.add(frozen)
-            deduped.append(query)
-
-    return deduped
+    # Keep historical tag-grouped ordering while enforcing the explicit
+    # per-tag input uniqueness contract via shared core helper.
+    queries_by_tag = [
+        query for tag in QueryTag for query in queries if query.tag == tag
+    ]
+    return dedupe_queries_per_tag_input(queries_by_tag)

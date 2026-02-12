@@ -19,16 +19,25 @@ from genfxn.simple_algorithms.sampler import sample_simple_algorithms_spec
 def _render_simple_algorithms_for_languages(
     spec: SimpleAlgorithmsSpec,
     languages: list[Language] | None,
+    *,
+    no_i32_wrap: bool = False,
 ) -> str | dict[str, str]:
     if languages is None:
-        return render_simple_algorithms(spec)
+        return render_simple_algorithms(spec, int32_wrap=not no_i32_wrap)
     if len(languages) == 0:
         raise ValueError("languages list is empty")
 
     rendered: dict[str, str] = {}
     for language in dict.fromkeys(languages):
         render_fn = get_render_fn(language, "simple_algorithms")
-        rendered[language.value] = render_fn(spec, func_name="f")
+        if language == Language.PYTHON:
+            rendered[language.value] = render_fn(
+                spec,
+                func_name="f",
+                int32_wrap=not no_i32_wrap,
+            )
+        else:
+            rendered[language.value] = render_fn(spec, func_name="f")
     return rendered
 
 
@@ -36,6 +45,8 @@ def generate_simple_algorithms_task(
     axes: SimpleAlgorithmsAxes | None = None,
     rng: random.Random | None = None,
     languages: list[Language] | None = None,
+    *,
+    no_i32_wrap: bool = False,
 ) -> Task:
     if axes is None:
         axes = SimpleAlgorithmsAxes()
@@ -46,8 +57,17 @@ def generate_simple_algorithms_task(
     spec = sample_simple_algorithms_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
     task_id = task_id_from_spec("simple_algorithms", spec_dict)
-    code = _render_simple_algorithms_for_languages(spec, languages)
-    queries = generate_simple_algorithms_queries(spec, axes, rng)
+    code = _render_simple_algorithms_for_languages(
+        spec,
+        languages,
+        no_i32_wrap=no_i32_wrap,
+    )
+    queries = generate_simple_algorithms_queries(
+        spec,
+        axes,
+        rng,
+        int32_wrap=not no_i32_wrap,
+    )
 
     trace = GenerationTrace(family="simple_algorithms", steps=trace_steps)
 

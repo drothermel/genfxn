@@ -14,7 +14,9 @@ Notes on risk and rollout:
 
 ## Testing Evidence
 - [ ] `uv run ruff check .`
-- [ ] `uv run pytest tests/ -v` (or targeted subset)
+- [ ] `uv run ty check`
+- [ ] `uv run pytest tests/ -v --verification-level=standard` (or targeted subset)
+- [ ] `uv run pytest tests/ -v --verification-level=full`
 - [ ] Additional manual verification (if applicable)
 
 Commands and outcomes:

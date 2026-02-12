@@ -57,9 +57,41 @@ class TestModels:
         with pytest.raises(ValueError, match="halt"):
             _spec([Instruction(op=InstructionOp.PUSH_CONST, value=1)])
 
+    def test_spec_rejects_max_step_count_above_i64_max(self) -> None:
+        with pytest.raises(ValueError, match="max_step_count"):
+            _spec(
+                [
+                    Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                    Instruction(op=InstructionOp.HALT),
+                ],
+                max_step_count=(1 << 63),
+            )
+
     def test_axes_validate_ranges(self) -> None:
         with pytest.raises(ValueError, match="value_range"):
             StackBytecodeAxes(value_range=(2, -2))
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (False, 5)),
+            ("list_length_range", (0, True)),
+            ("const_range", (False, 3)),
+            ("max_step_count_range", (1, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            StackBytecodeAxes.model_validate({field_name: range_value})
+
+    def test_axes_reject_max_step_count_range_above_i64_max(self) -> None:
+        with pytest.raises(ValueError, match="max_step_count_range: high"):
+            StackBytecodeAxes(max_step_count_range=(20, 1 << 63))
 
 
 class TestEvaluatorArithmeticAndComparison:
@@ -148,6 +180,78 @@ class TestEvaluatorArithmeticAndComparison:
             RuntimeStatus.DIV_OR_MOD_BY_ZERO,
             0,
         )
+
+    def test_i64_arithmetic_wraps_for_add_sub_mul(self) -> None:
+        max_i64 = (1 << 63) - 1
+        min_i64 = -(1 << 63)
+
+        add_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.ADD),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        sub_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=1),
+                Instruction(op=InstructionOp.SUB),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        mul_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=max_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=2),
+                Instruction(op=InstructionOp.MUL),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+
+        assert eval_stack_bytecode(add_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(sub_spec, []) == (RuntimeStatus.OK, max_i64)
+        assert eval_stack_bytecode(mul_spec, []) == (RuntimeStatus.OK, -2)
+
+    def test_i64_min_edge_ops_match_java_long_semantics(self) -> None:
+        min_i64 = -(1 << 63)
+
+        neg_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.NEG),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        abs_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.ABS),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        div_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                Instruction(op=InstructionOp.DIV),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+        mod_spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.PUSH_CONST, value=-1),
+                Instruction(op=InstructionOp.MOD),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+
+        assert eval_stack_bytecode(neg_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(abs_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(div_spec, []) == (RuntimeStatus.OK, min_i64)
+        assert eval_stack_bytecode(mod_spec, []) == (RuntimeStatus.OK, 0)
 
     def test_comparison_ops(self) -> None:
         spec_eq = _spec(
@@ -386,6 +490,16 @@ class TestSamplerAndQueries:
         for q in queries:
             assert q.output == eval_stack_bytecode(spec, list(q.input))
 
+    def test_queries_cover_all_tags_when_inputs_can_vary(self) -> None:
+        axes = StackBytecodeAxes(
+            target_difficulty=3,
+            value_range=(-2, 2),
+            list_length_range=(0, 4),
+        )
+        spec = sample_stack_bytecode_spec(axes, random.Random(31))
+        queries = generate_stack_bytecode_queries(spec, axes, random.Random(31))
+        assert {q.tag for q in queries} == set(QueryTag)
+
     def test_queries_respect_value_and_length_ranges(self) -> None:
         axes = StackBytecodeAxes(
             target_difficulty=3,
@@ -458,6 +572,25 @@ class TestRenderRoundtrip:
             rendered_out = f(xs)
             eval_out = eval_stack_bytecode(spec, xs)
             assert rendered_out == eval_out
+
+    def test_python_render_matches_i64_min_edge_semantics(self) -> None:
+        min_i64 = -(1 << 63)
+        spec = _spec(
+            [
+                Instruction(op=InstructionOp.PUSH_CONST, value=min_i64),
+                Instruction(op=InstructionOp.NEG),
+                Instruction(op=InstructionOp.HALT),
+            ]
+        )
+
+        code = render_stack_bytecode(spec)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(RenderedStackFn, f_obj)
+
+        assert f([]) == eval_stack_bytecode(spec, [])
 
 
 class TestTaskGeneration:

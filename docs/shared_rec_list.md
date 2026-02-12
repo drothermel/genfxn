@@ -14,7 +14,8 @@ Date: 2026-02-09
 - In progress: `Temporal Logic Over Streams`
 - Implementation plans:
   `docs/fsm_plan.md`, `docs/bitops_plan.md`, `docs/sequence_dp_plan.md`,
-  `docs/intervals_plan.md`, `docs/graph_queries_plan.md`
+  `docs/intervals_plan.md`, `docs/graph_queries_plan.md`,
+  `docs/temporal_logic_plan.md`
 
 1. Stack/Bytecode Interpreter
 Signature: `f(xs: list[int]) -> int` (program baked into spec; optional `f(program, xs)` variant)

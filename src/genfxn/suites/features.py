@@ -182,10 +182,32 @@ def _enum_or_str(value: Any, default: str) -> str:
 
 
 def _coerce_int(value: Any, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
     try:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value == 0:
+            return False
+        if value == 1:
+            return True
+        return default
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    return default
 
 
 # ── Public feature extractors ────────────────────────────────────────────
@@ -712,7 +734,9 @@ def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
 def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
     operation = _enum_or_str(spec.get("operation"), "total_coverage")
     boundary_mode = _enum_or_str(spec.get("boundary_mode"), "closed_closed")
-    merge_touching = str(bool(spec.get("merge_touching", False))).lower()
+    merge_touching = str(
+        _coerce_bool(spec.get("merge_touching"), False)
+    ).lower()
     endpoint_clip_abs = _coerce_int(spec.get("endpoint_clip_abs"), 20)
     endpoint_quantize_step = _coerce_int(
         spec.get("endpoint_quantize_step"),
@@ -756,8 +780,8 @@ def intervals_features(spec: dict[str, Any]) -> dict[str, str]:
 
 def graph_queries_features(spec: dict[str, Any]) -> dict[str, str]:
     query_type = _enum_or_str(spec.get("query_type"), "reachable")
-    directed = bool(spec.get("directed", False))
-    weighted = bool(spec.get("weighted", False))
+    directed = _coerce_bool(spec.get("directed"), False)
+    weighted = _coerce_bool(spec.get("weighted"), False)
     n_nodes = max(1, _coerce_int(spec.get("n_nodes"), 1))
 
     edges_raw = spec.get("edges")
@@ -841,4 +865,97 @@ def graph_queries_features(spec: dict[str, Any]) -> dict[str, str]:
         "density_bucket": density_bucket,
         "has_duplicates": str(has_duplicates).lower(),
         "has_isolated": str(has_isolated).lower(),
+    }
+
+
+def _temporal_formula_metrics(formula: Any) -> dict[str, int]:
+    if not isinstance(formula, dict):
+        return {
+            "max_depth": 1,
+            "temporal_count": 0,
+            "hard_temporal_count": 0,
+            "binary_count": 0,
+        }
+
+    op = _enum_or_str(formula.get("op"), "atom")
+    if op == "atom":
+        return {
+            "max_depth": 1,
+            "temporal_count": 0,
+            "hard_temporal_count": 0,
+            "binary_count": 0,
+        }
+
+    if op in {"not", "next", "eventually", "always"}:
+        child = _temporal_formula_metrics(formula.get("child"))
+        temporal_add = 1 if op in {"next", "eventually", "always"} else 0
+        return {
+            "max_depth": child["max_depth"] + 1,
+            "temporal_count": child["temporal_count"] + temporal_add,
+            "hard_temporal_count": child["hard_temporal_count"],
+            "binary_count": child["binary_count"],
+        }
+
+    if op in {"and", "or", "until", "since"}:
+        left = _temporal_formula_metrics(formula.get("left"))
+        right = _temporal_formula_metrics(formula.get("right"))
+        temporal_add = 1 if op in {"until", "since"} else 0
+        hard_add = 1 if op == "since" else 0
+        return {
+            "max_depth": 1 + max(left["max_depth"], right["max_depth"]),
+            "temporal_count": (
+                left["temporal_count"] + right["temporal_count"] + temporal_add
+            ),
+            "hard_temporal_count": (
+                left["hard_temporal_count"]
+                + right["hard_temporal_count"]
+                + hard_add
+            ),
+            "binary_count": left["binary_count"] + right["binary_count"] + 1,
+        }
+
+    return _temporal_formula_metrics({"op": "atom"})
+
+
+def temporal_logic_features(spec: dict[str, Any]) -> dict[str, str]:
+    output_mode = _enum_or_str(spec.get("output_mode"), "sat_at_start")
+    metrics = _temporal_formula_metrics(spec.get("formula"))
+    max_depth = metrics["max_depth"]
+
+    if max_depth <= 1:
+        depth_bucket = "1"
+    elif max_depth == 2:
+        depth_bucket = "2"
+    elif max_depth == 3:
+        depth_bucket = "3"
+    elif max_depth == 4:
+        depth_bucket = "4"
+    else:
+        depth_bucket = "5+"
+
+    temporal_count = metrics["temporal_count"]
+    hard_temporal_count = metrics["hard_temporal_count"]
+    if hard_temporal_count > 0:
+        temporal_bucket = "hard"
+    elif temporal_count >= 2:
+        temporal_bucket = "multi"
+    elif temporal_count == 1:
+        temporal_bucket = "single"
+    else:
+        temporal_bucket = "none"
+
+    binary_count = metrics["binary_count"]
+    if binary_count == 0:
+        binary_bucket = "0"
+    elif binary_count <= 2:
+        binary_bucket = "1-2"
+    else:
+        binary_bucket = "3+"
+
+    return {
+        "output_mode": output_mode,
+        "depth_bucket": depth_bucket,
+        "temporal_bucket": temporal_bucket,
+        "binary_bucket": binary_bucket,
+        "has_since": str(hard_temporal_count > 0).lower(),
     }

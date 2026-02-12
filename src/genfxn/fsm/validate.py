@@ -50,6 +50,10 @@ _ALLOWED_BUILTINS = {
 }
 
 
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _validate_ast_whitelist(
     code: str, param_name: str = "xs"
 ) -> tuple[list[Issue], ast.Module | None]:
@@ -60,6 +64,28 @@ def _validate_ast_whitelist(
         tree = ast.parse(code)
     except (SyntaxError, TypeError):
         return [], None
+
+    for stmt in tree.body:
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
+        if not isinstance(stmt, ast.FunctionDef):
+            return [
+                Issue(
+                    code=CODE_UNSAFE_AST,
+                    severity=Severity.ERROR,
+                    message=(
+                        "Top-level statement "
+                        f"{type(stmt).__name__} at line "
+                        f"{getattr(stmt, 'lineno', '?')} is not allowed; "
+                        "only function definitions are permitted"
+                    ),
+                    location="code",
+                )
+            ], None
 
     annotation_positions: set[tuple[int, int]] = set()
     for node in ast.walk(tree):
@@ -150,6 +176,18 @@ def _validate_ast_whitelist(
                         location="code",
                     )
                 )
+            elif node.attr not in ALLOWED_METHOD_NAMES:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{node.attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             in_annotation = (
                 node.lineno,
@@ -173,21 +211,32 @@ def _validate_ast_whitelist(
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
-    expected = task_id_from_spec(family=task.family, spec=task.spec)
-    if task.task_id != expected:
+    try:
+        expected = task_id_from_spec(family=task.family, spec=task.spec)
+    except Exception as e:
         return [
             Issue(
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
-                message=(
-                    f"task_id '{task.task_id}' does not match spec hash "
-                    f"'{expected}'"
-                ),
+                message=f"Failed to compute task_id from spec: {e}",
                 location="task_id",
                 task_id=task.task_id,
             )
         ]
-    return []
+    if task.task_id == expected:
+        return []
+    return [
+        Issue(
+            code=CODE_TASK_ID_MISMATCH,
+            severity=Severity.ERROR,
+            message=(
+                f"task_id '{task.task_id}' does not match spec hash "
+                f"'{expected}'"
+            ),
+            location="task_id",
+            task_id=task.task_id,
+        )
+    ]
 
 
 def _validate_spec_deserialize(
@@ -223,15 +272,29 @@ def _validate_code_compile(
     if code is None:
         return [], None
 
+    if not isinstance(code, str):
+        return [
+            Issue(
+                code=CODE_CODE_PARSE_ERROR,
+                severity=Severity.ERROR,
+                message=(
+                    "Code payload must be a string, got "
+                    f"{type(code).__name__}"
+                ),
+                location="code",
+                task_id=task.task_id,
+            )
+        ], None
+
     if parsed_tree is None:
         try:
             parsed_tree = ast.parse(code)
-        except SyntaxError as e:
+        except (SyntaxError, TypeError) as e:
             return [
                 Issue(
                     code=CODE_CODE_PARSE_ERROR,
                     severity=Severity.ERROR,
-                    message=f"Syntax error in code: {e}",
+                    message=f"Failed to parse code: {e}",
                     location="code",
                     task_id=task.task_id,
                 )
@@ -309,7 +372,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             issues.append(
                 Issue(
@@ -321,7 +384,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                 )
             )
 
-        if not isinstance(q.output, int):
+        if not _is_int_not_bool(q.output):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -345,14 +408,23 @@ def _validate_query_outputs(
 
     for i, q in enumerate(task.queries):
         if not isinstance(q.input, list) or not all(
-            isinstance(x, int) for x in q.input
+            _is_int_not_bool(x) for x in q.input
         ):
             continue
-        if not isinstance(q.output, int):
+        if not _is_int_not_bool(q.output):
             continue
         try:
             expected = eval_fsm(spec, q.input)
-        except ValueError:
+        except ValueError as e:
+            issues.append(
+                Issue(
+                    code=CODE_QUERY_INPUT_TYPE,
+                    severity=severity,
+                    message=f"Query input is invalid for spec: {e}",
+                    location=f"queries[{i}].input",
+                    task_id=task.task_id,
+                )
+            )
             continue
         if q.output != expected:
             issues.append(
@@ -445,7 +517,7 @@ def validate_fsm_task(
     task: Task,
     axes: FsmAxes | None = None,
     strict: bool = True,
-    execute_untrusted_code: bool = True,
+    execute_untrusted_code: bool = False,
     max_semantic_issues: int = 10,
     semantic_trials: int = 16,
     random_seed: int = 0,
@@ -482,33 +554,42 @@ def validate_fsm_task(
     elif isinstance(task.code, dict):
         code = task.code.get(PYTHON_CODE_KEY)
 
+    ast_issues: list[Issue] = []
     parsed_tree: ast.Module | None = None
     if code is not None:
         ast_issues, parsed_tree = _validate_ast_whitelist(code)
         issues.extend(ast_issues)
 
-    compile_issues, fn = _validate_code_compile(
-        task,
-        code=code,
-        parsed_tree=parsed_tree,
-        execute_untrusted_code=execute_untrusted_code,
-    )
-    issues.extend(compile_issues)
-
-    issues.extend(_validate_query_outputs(task, spec, strict=strict))
-
-    rng = random.Random(random_seed)
-    issues.extend(
-        _validate_semantics(
+    fn = None
+    has_unsafe_ast = any(i.code == CODE_UNSAFE_AST for i in ast_issues)
+    if not has_unsafe_ast:
+        compile_issues, fn = _validate_code_compile(
             task,
-            spec,
-            fn,
-            axes,
-            strict=strict,
-            semantic_trials=semantic_trials,
-            max_semantic_issues=max_semantic_issues,
-            rng=rng,
+            code=code,
+            parsed_tree=parsed_tree,
+            execute_untrusted_code=execute_untrusted_code,
         )
-    )
+        issues.extend(compile_issues)
+
+    try:
+        issues.extend(_validate_query_outputs(task, spec, strict=strict))
+
+        rng = random.Random(random_seed)
+        issues.extend(
+            _validate_semantics(
+                task,
+                spec,
+                fn,
+                axes,
+                strict=strict,
+                semantic_trials=semantic_trials,
+                max_semantic_issues=max_semantic_issues,
+                rng=rng,
+            )
+        )
+    finally:
+        close = getattr(fn, "close", None)
+        if callable(close):
+            close()
 
     return issues

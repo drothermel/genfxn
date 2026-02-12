@@ -8,6 +8,7 @@ from genfxn.core.transforms import (
     TransformScale,
     TransformShift,
 )
+from genfxn.langs.java._helpers import java_int_literal
 
 
 def render_transform_java(t: Transform, var: str = "x") -> str:
@@ -19,14 +20,16 @@ def render_transform_java(t: Transform, var: str = "x") -> str:
             return f"Math.abs({var})"
         case TransformShift(offset=o):
             if o >= 0:
-                return f"{var} + {o}"
-            return f"{var} - {-o}"
+                return f"{var} + {java_int_literal(o)}"
+            return f"{var} - {java_int_literal(-o)}"
         case TransformClip(low=lo, high=hi):
-            return f"Math.max({lo}, Math.min({hi}, {var}))"
+            low = java_int_literal(lo)
+            high = java_int_literal(hi)
+            return f"Math.max({low}, Math.min({high}, {var}))"
         case TransformNegate():
             return f"-{var}"
         case TransformScale(factor=f):
-            return f"{var} * {f}"
+            return f"{var} * {java_int_literal(f)}"
         case TransformPipeline(steps=steps):
             expr = var
             for i, step in enumerate(steps):

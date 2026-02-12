@@ -486,6 +486,48 @@ _GRAPH_QUERIES_D5 = QuotaSpec(
     buckets=[Bucket("query_type", "shortest_path_cost", 50)],
 )
 
+# ── Temporal logic quotas ───────────────────────────────────────────────
+
+_TEMPORAL_LOGIC_D1 = QuotaSpec(
+    hard_constraints={
+        "output_mode": "sat_at_start",
+        "depth_bucket": "1",
+    },
+    buckets=[Bucket("depth_bucket", "1", 50)],
+)
+
+_TEMPORAL_LOGIC_D2 = QuotaSpec(
+    hard_constraints={
+        "output_mode": "sat_at_start",
+        "depth_bucket": "2",
+    },
+    buckets=[Bucket("depth_bucket", "2", 50)],
+)
+
+_TEMPORAL_LOGIC_D3 = QuotaSpec(
+    hard_constraints={
+        "output_mode": "sat_count",
+        "depth_bucket": "3",
+    },
+    buckets=[Bucket("depth_bucket", "3", 50)],
+)
+
+_TEMPORAL_LOGIC_D4 = QuotaSpec(
+    hard_constraints={
+        "output_mode": "first_sat_index",
+        "depth_bucket": "4",
+    },
+    buckets=[Bucket("depth_bucket", "4", 50)],
+)
+
+_TEMPORAL_LOGIC_D5 = QuotaSpec(
+    hard_constraints={
+        "output_mode": "first_sat_index",
+        "depth_bucket": "5+",
+    },
+    buckets=[Bucket("depth_bucket", "5+", 50)],
+)
+
 # ── Combined lookup ──────────────────────────────────────────────────────
 
 QUOTAS: dict[str, dict[int, QuotaSpec]] = {
@@ -537,5 +579,12 @@ QUOTAS: dict[str, dict[int, QuotaSpec]] = {
         3: _GRAPH_QUERIES_D3,
         4: _GRAPH_QUERIES_D4,
         5: _GRAPH_QUERIES_D5,
+    },
+    "temporal_logic": {
+        1: _TEMPORAL_LOGIC_D1,
+        2: _TEMPORAL_LOGIC_D2,
+        3: _TEMPORAL_LOGIC_D3,
+        4: _TEMPORAL_LOGIC_D4,
+        5: _TEMPORAL_LOGIC_D5,
     },
 }

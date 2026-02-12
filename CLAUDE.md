@@ -28,3 +28,11 @@ Required:
 - Runtime parity tests must execute code (not only inspect rendered strings).
 - Tests must compare Python, Java, and Rust outputs on the same specs/inputs.
 - Parity harness coverage must be part of the family's test evidence in PRs.
+
+## Semantic Invariants
+
+- `graph_queries.shortest_path_cost` is defined as the minimum wrapped-i64
+  cost over simple paths (`<= n_nodes - 1` edges), not first-hit frontier
+  behavior.
+- `task_id_from_spec(...)` hashing must preserve container value types
+  (`list`, `tuple`, `set`, `frozenset`) to avoid cross-type collisions.

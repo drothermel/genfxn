@@ -3,8 +3,17 @@ from typing import Any
 
 import pytest
 
+from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import WRONG_FAMILY, Severity
+from genfxn.fsm.models import (
+    FsmSpec,
+    MachineType,
+    OutputMode,
+    State,
+    UndefinedTransitionPolicy,
+)
+from genfxn.fsm.render import render_fsm
 from genfxn.fsm.task import generate_fsm_task
 from genfxn.fsm.validate import (
     CODE_CODE_EXEC_ERROR,
@@ -14,6 +23,7 @@ from genfxn.fsm.validate import (
     CODE_QUERY_INPUT_TYPE,
     CODE_QUERY_OUTPUT_MISMATCH,
     CODE_QUERY_OUTPUT_TYPE,
+    CODE_SEMANTIC_ISSUES_CAPPED,
     CODE_SEMANTIC_MISMATCH,
     CODE_SPEC_DESERIALIZE_ERROR,
     CODE_TASK_ID_MISMATCH,
@@ -114,12 +124,38 @@ class TestSpecAndCodeValidation:
         assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
         assert not any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
+    def test_non_string_python_code_payload_reports_parse_error(
+        self, baseline_task: Task
+    ) -> None:
+        corrupted = baseline_task.model_copy(update={"code": {"python": 123}})
+        issues = validate_fsm_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
     def test_runtime_error_caught(self, baseline_task: Task) -> None:
         corrupted = baseline_task.model_copy(
-            update={"code": "def f(xs):\n    return 1/0"}
+            update={"code": "def f(xs):\n    return 1 // 0"}
         )
         issues = validate_fsm_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
+
+    def test_unsafe_ast_short_circuits_execution(
+        self, baseline_task: Task, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        called = False
+
+        def _spy(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            nonlocal called
+            called = True
+            return {}
+
+        monkeypatch.setattr("genfxn.fsm.validate.execute_code_restricted", _spy)
+        corrupted = baseline_task.model_copy(
+            update={"code": "while True:\n    pass\ndef f(xs):\n    return 0"}
+        )
+        issues = _validate_fsm_task(corrupted, execute_untrusted_code=True)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+        assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert called is False
 
 
 class TestQueryAndSemantics:
@@ -149,6 +185,48 @@ class TestQueryAndSemantics:
         issues = validate_fsm_task(corrupted)
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
+    def test_bool_query_values_are_rejected(self, baseline_task: Task) -> None:
+        corrupted = baseline_task.model_copy(
+            update={
+                "queries": [
+                    Query(
+                        input=[True, 1],
+                        output=False,
+                        tag=QueryTag.TYPICAL,
+                    )
+                ]
+            }
+        )
+        issues = validate_fsm_task(corrupted)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+        assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+
+    def test_error_policy_invalid_query_input_is_reported(self) -> None:
+        spec = FsmSpec(
+            machine_type=MachineType.MOORE,
+            output_mode=OutputMode.FINAL_STATE_ID,
+            undefined_transition_policy=UndefinedTransitionPolicy.ERROR,
+            start_state_id=0,
+            states=[State(id=0, transitions=[], is_accept=False)],
+        )
+        spec_dict = spec.model_dump()
+        task = Task(
+            task_id=task_id_from_spec("fsm", spec_dict),
+            family="fsm",
+            spec=spec_dict,
+            code=render_fsm(spec),
+            queries=[
+                Query(input=[123], output=0, tag=QueryTag.TYPICAL),
+            ],
+            description="fsm query validation repro",
+        )
+
+        issues = validate_fsm_task(task)
+        assert any(
+            i.code == CODE_QUERY_INPUT_TYPE and i.location == "queries[0].input"
+            for i in issues
+        )
+
     def test_wrong_query_output_caught(self, baseline_task: Task) -> None:
         query = baseline_task.queries[0]
         bad_query = Query(
@@ -170,6 +248,26 @@ class TestQueryAndSemantics:
             max_semantic_issues=8,
         )
         assert any(i.code == CODE_SEMANTIC_MISMATCH for i in issues)
+
+    def test_semantic_issue_capping(self, baseline_task: Task) -> None:
+        corrupted = baseline_task.model_copy(
+            update={"code": "def f(xs):\n    return 1000000000"}
+        )
+        issues = validate_fsm_task(
+            corrupted,
+            execute_untrusted_code=True,
+            semantic_trials=64,
+            max_semantic_issues=3,
+            random_seed=17,
+        )
+        mismatches = [
+            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
+        ]
+        capped = [
+            i for i in issues if i.code == CODE_SEMANTIC_ISSUES_CAPPED
+        ]
+        assert len(mismatches) == 3
+        assert len(capped) == 1
 
 
 class TestAstSafety:

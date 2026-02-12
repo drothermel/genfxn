@@ -3,6 +3,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from genfxn.core.int32 import INT32_MAX, i32_mod, wrap_i32
+
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
+
 
 class PredicateEven(BaseModel):
     kind: Literal["even"] = "even"
@@ -14,22 +19,22 @@ class PredicateOdd(BaseModel):
 
 class PredicateLt(BaseModel):
     kind: Literal["lt"] = "lt"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateLe(BaseModel):
     kind: Literal["le"] = "le"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateGt(BaseModel):
     kind: Literal["gt"] = "gt"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateGe(BaseModel):
     kind: Literal["ge"] = "ge"
-    value: int
+    value: int = Field(ge=INT64_MIN, le=INT64_MAX)
 
 
 class PredicateModEq(BaseModel):
@@ -39,16 +44,37 @@ class PredicateModEq(BaseModel):
 
     @field_validator("divisor")
     @classmethod
-    def divisor_nonzero(cls, v: int) -> int:
-        if v == 0:
-            raise ValueError("divisor must be non-zero")
+    def divisor_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("divisor must be >= 1")
+        if v > INT32_MAX:
+            raise ValueError(f"divisor must be <= {INT32_MAX}")
         return v
+
+    @model_validator(mode="after")
+    def validate_remainder(self) -> "PredicateModEq":
+        if self.remainder < 0:
+            raise ValueError("remainder must be >= 0")
+        if self.remainder >= self.divisor:
+            raise ValueError("remainder must be < divisor")
+        return self
 
 
 class PredicateInSet(BaseModel):
     model_config = {"frozen": True}
     kind: Literal["in_set"] = "in_set"
     values: frozenset[int]
+
+    @field_validator("values")
+    @classmethod
+    def validate_values_i64(cls, values: frozenset[int]) -> frozenset[int]:
+        for value in values:
+            if value < INT64_MIN or value > INT64_MAX:
+                raise ValueError(
+                    "in_set values must be within signed 64-bit range "
+                    f"[{INT64_MIN}, {INT64_MAX}]"
+                )
+        return values
 
 
 _AtomicPredUnion = (
@@ -125,58 +151,126 @@ Predicate = Annotated[
 ]
 
 
-def eval_predicate(pred: Predicate, x: int) -> bool:
+def eval_predicate(
+    pred: Predicate, x: int, *, int32_wrap: bool = False
+) -> bool:
+    if int32_wrap:
+        x = wrap_i32(x)
+
     match pred:
         case PredicateEven():
             return x % 2 == 0
         case PredicateOdd():
             return x % 2 == 1
         case PredicateLt(value=v):
+            if int32_wrap:
+                v = wrap_i32(v)
             return x < v
         case PredicateLe(value=v):
+            if int32_wrap:
+                v = wrap_i32(v)
             return x <= v
         case PredicateGt(value=v):
+            if int32_wrap:
+                v = wrap_i32(v)
             return x > v
         case PredicateGe(value=v):
+            if int32_wrap:
+                v = wrap_i32(v)
             return x >= v
         case PredicateModEq(divisor=d, remainder=r):
+            if d < 1:
+                raise ValueError("divisor must be >= 1")
+            if int32_wrap:
+                d = wrap_i32(d)
+                if d < 1:
+                    raise ValueError(
+                        "divisor must be in [1, 2147483647] "
+                        "for int32 semantics"
+                    )
+                if r < 0:
+                    raise ValueError("remainder must be >= 0")
+                if r >= d:
+                    raise ValueError("remainder must be < divisor")
+                return i32_mod(x, d) == r
             return x % d == r
         case PredicateInSet(values=vals):
+            if int32_wrap:
+                return x in {wrap_i32(v) for v in vals}
             return x in vals
         case PredicateNot(operand=op):
-            return not eval_predicate(op, x)
+            return not eval_predicate(op, x, int32_wrap=int32_wrap)
         case PredicateAnd(operands=ops):
-            return all(eval_predicate(op, x) for op in ops)
+            return all(
+                eval_predicate(op, x, int32_wrap=int32_wrap)
+                for op in ops
+            )
         case PredicateOr(operands=ops):
-            return any(eval_predicate(op, x) for op in ops)
+            return any(
+                eval_predicate(op, x, int32_wrap=int32_wrap)
+                for op in ops
+            )
         case _:
             raise ValueError(f"Unknown predicate: {pred}")
 
 
-def render_predicate(pred: Predicate, var: str = "x") -> str:
+def render_predicate(
+    pred: Predicate,
+    var: str = "x",
+    *,
+    int32_wrap: bool = False,
+) -> str:
     match pred:
         case PredicateEven():
+            if int32_wrap:
+                return f"__i32_wrap({var}) % 2 == 0"
             return f"{var} % 2 == 0"
         case PredicateOdd():
+            if int32_wrap:
+                return f"__i32_wrap({var}) % 2 == 1"
             return f"{var} % 2 == 1"
         case PredicateLt(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) < __i32_wrap({v})"
             return f"{var} < {v}"
         case PredicateLe(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) <= __i32_wrap({v})"
             return f"{var} <= {v}"
         case PredicateGt(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) > __i32_wrap({v})"
             return f"{var} > {v}"
         case PredicateGe(value=v):
+            if int32_wrap:
+                return f"__i32_wrap({var}) >= __i32_wrap({v})"
             return f"{var} >= {v}"
         case PredicateModEq(divisor=d, remainder=r):
+            if int32_wrap:
+                return f"__i32_mod({var}, {d}) == {r}"
             return f"{var} % {d} == {r}"
         case PredicateInSet(values=vals):
+            if int32_wrap:
+                wrapped_values = sorted({wrap_i32(v) for v in vals})
+                values_str = ", ".join(map(str, wrapped_values))
+                return f"__i32_wrap({var}) in {{{values_str}}}"
             return f"{var} in {{{', '.join(map(str, sorted(vals)))}}}"
         case PredicateNot(operand=op):
-            return f"not ({render_predicate(op, var)})"
+            return (
+                f"not ({render_predicate(op, var, int32_wrap=int32_wrap)})"
+            )
         case PredicateAnd(operands=ops):
-            return f"({' and '.join(render_predicate(op, var) for op in ops)})"
+            parts = [
+                render_predicate(op, var, int32_wrap=int32_wrap)
+                for op in ops
+            ]
+            return f"({' and '.join(parts)})"
         case PredicateOr(operands=ops):
-            return f"({' or '.join(render_predicate(op, var) for op in ops)})"
+            parts = [
+                render_predicate(op, var, int32_wrap=int32_wrap)
+                for op in ops
+            ]
+            return f"({' or '.join(parts)})"
         case _:
             raise ValueError(f"Unknown predicate: {pred}")
 

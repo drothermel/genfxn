@@ -26,6 +26,9 @@ def _sink_state_id(spec: FsmSpec) -> int:
 
 
 def eval_fsm(spec: FsmSpec, xs: list[int]) -> int:
+    # NOTE: `machine_type` is intentionally non-semantic today.
+    # We retain it for schema/backward compatibility, but runtime behavior is
+    # identical for MOORE and MEALY values.
     states = {state.id: state for state in spec.states}
     current_state_id = spec.start_state_id
     sink_state_id = _sink_state_id(spec)

@@ -14,10 +14,7 @@ def find_satisfying(
     Returns the first satisfying value, or None if none found.
     """
     for _ in range(max_attempts):
-        try:
-            value = generate()
-            if predicate(value):
-                return value
-        except ValueError:
-            continue
+        value = generate()
+        if predicate(value):
+            return value
     return None

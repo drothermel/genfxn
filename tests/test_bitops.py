@@ -4,14 +4,13 @@ from typing import Any
 
 import pytest
 
+import genfxn.bitops.eval as bitops_eval
+import genfxn.bitops.models as bitops_models
+import genfxn.bitops.queries as bitops_queries
+import genfxn.bitops.sampler as bitops_sampler
+import genfxn.bitops.task as bitops_task
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
-
-bitops_models = pytest.importorskip("genfxn.bitops.models")
-bitops_eval = pytest.importorskip("genfxn.bitops.eval")
-bitops_queries = pytest.importorskip("genfxn.bitops.queries")
-bitops_sampler = pytest.importorskip("genfxn.bitops.sampler")
-bitops_task = pytest.importorskip("genfxn.bitops.task")
 
 
 def _find_callable(module: ModuleType, *names: str) -> Any:
@@ -153,6 +152,51 @@ class TestModels:
         with pytest.raises(Exception):
             AxesCls(width_choices=[8, 64])
 
+    def test_instruction_rejects_arg_above_i64_max(self) -> None:
+        bit_instruction_cls = bitops_models.BitInstruction
+        bit_op = bitops_models.BitOp
+        with pytest.raises(Exception, match="less than or equal"):
+            bit_instruction_cls(op=bit_op.AND_MASK, arg=(1 << 63))
+
+    def test_instruction_rejects_arg_below_i64_min(self) -> None:
+        bit_instruction_cls = bitops_models.BitInstruction
+        bit_op = bitops_models.BitOp
+        with pytest.raises(Exception, match="greater than or equal"):
+            bit_instruction_cls(op=bit_op.AND_MASK, arg=-(1 << 63) - 1)
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("n_ops_range", (False, 3)),
+            ("value_range", (0, True)),
+            ("mask_range", (False, 255)),
+            ("shift_range", (0, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            AxesCls.model_validate({field_name: range_value})
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (-(1 << 63) - 1, 0)),
+            ("value_range", (0, 1 << 63)),
+            ("mask_range", (0, 1 << 63)),
+            ("shift_range", (-(1 << 63) - 1, 10)),
+        ],
+    )
+    def test_axes_reject_i64_out_of_range_bounds(
+        self, field_name: str, range_value: tuple[int, int]
+    ) -> None:
+        with pytest.raises(Exception, match=field_name):
+            AxesCls.model_validate({field_name: range_value})
+
 
 class TestEvaluatorSemantics:
     def test_evaluator_applies_fixed_width_semantics(self) -> None:
@@ -251,7 +295,7 @@ class TestQueries:
     def test_queries_stay_within_signed_i64_bounds(self) -> None:
         axes = AxesCls(
             width_choices=[63],
-            value_range=(-(1 << 80), (1 << 80)),
+            value_range=(-(1 << 63), (1 << 63) - 1),
         )
         spec = SpecCls.model_validate(
             {

@@ -1,12 +1,14 @@
-import heapq
 from collections import deque
 
 from genfxn.graph_queries.models import GraphQueriesSpec, GraphQueryType
 
 Adjacency = dict[int, list[tuple[int, int]]]
+_I64_MAX = (1 << 63) - 1
 
 
 def _validate_node(node: int, n_nodes: int, name: str) -> None:
+    if (not isinstance(node, int)) or node is True or node is False:
+        raise ValueError(f"{name} must be int, got {type(node).__name__}")
     if node < 0 or node >= n_nodes:
         raise ValueError(f"{name}={node} must be in [0, {n_nodes - 1}]")
 
@@ -86,24 +88,32 @@ def _min_hops(adjacency: Adjacency, src: int, dst: int) -> int:
 
 
 def _shortest_path_cost(adjacency: Adjacency, src: int, dst: int) -> int:
-    best_cost: dict[int, int] = {src: 0}
-    heap: list[tuple[int, int]] = [(0, src)]
-
-    while heap:
-        cost, node = heapq.heappop(heap)
-        if cost > best_cost.get(node, cost):
-            continue
-        if node == dst:
-            return cost
-        for neighbor, weight in adjacency[node]:
-            next_cost = cost + weight
-            prior = best_cost.get(neighbor)
-            if prior is not None and next_cost >= prior:
+    best_cost_prev: dict[int, int] = {src: 0}
+    # shortest_path_cost is evaluated over simple paths (<= n_nodes - 1 edges).
+    # Cost accumulation is saturating i64 so -1 remains a unique unreachable
+    # sentinel.
+    for _ in range(len(adjacency) - 1):
+        changed = False
+        best_cost_curr = best_cost_prev.copy()
+        for node, neighbors in adjacency.items():
+            cost = best_cost_prev.get(node)
+            if cost is None:
                 continue
-            best_cost[neighbor] = next_cost
-            heapq.heappush(heap, (next_cost, neighbor))
+            for neighbor, weight in neighbors:
+                if cost > _I64_MAX - weight:
+                    next_cost = _I64_MAX
+                else:
+                    next_cost = cost + weight
+                prior = best_cost_curr.get(neighbor)
+                if prior is not None and next_cost >= prior:
+                    continue
+                best_cost_curr[neighbor] = next_cost
+                changed = True
+        best_cost_prev = best_cost_curr
+        if not changed:
+            break
 
-    return -1
+    return best_cost_prev.get(dst, -1)
 
 
 def eval_graph_queries(spec: GraphQueriesSpec, src: int, dst: int) -> int:

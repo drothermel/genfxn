@@ -1,4 +1,5 @@
 import random
+from collections import defaultdict
 from typing import Any
 
 import pytest
@@ -6,24 +7,17 @@ from pydantic import ValidationError
 
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
-
-intervals_models = pytest.importorskip("genfxn.intervals.models")
-intervals_eval = pytest.importorskip("genfxn.intervals.eval")
-intervals_queries = pytest.importorskip("genfxn.intervals.queries")
-intervals_render = pytest.importorskip("genfxn.intervals.render")
-intervals_sampler = pytest.importorskip("genfxn.intervals.sampler")
-intervals_task = pytest.importorskip("genfxn.intervals.task")
-
-IntervalsAxes = intervals_models.IntervalsAxes
-IntervalsSpec = intervals_models.IntervalsSpec
-BoundaryMode = intervals_models.BoundaryMode
-OperationType = intervals_models.OperationType
-
-eval_intervals = intervals_eval.eval_intervals
-generate_intervals_queries = intervals_queries.generate_intervals_queries
-render_intervals = intervals_render.render_intervals
-sample_intervals_spec = intervals_sampler.sample_intervals_spec
-generate_intervals_task = intervals_task.generate_intervals_task
+from genfxn.intervals.eval import eval_intervals
+from genfxn.intervals.models import (
+    BoundaryMode,
+    IntervalsAxes,
+    IntervalsSpec,
+    OperationType,
+)
+from genfxn.intervals.queries import generate_intervals_queries
+from genfxn.intervals.render import render_intervals
+from genfxn.intervals.sampler import sample_intervals_spec
+from genfxn.intervals.task import generate_intervals_task
 
 
 def _call_sample(sample_fn: Any, axes: Any, seed: int) -> Any:
@@ -244,6 +238,30 @@ class TestEvaluatorSemantics:
         )
         assert eval_intervals(spec, [(-10, 10)]) == 7
 
+    def test_total_coverage_uses_signed_i64_wrap_semantics(self) -> None:
+        i64_max = (1 << 63) - 1
+        spec = IntervalsSpec(
+            operation=OperationType.TOTAL_COVERAGE,
+            boundary_mode=BoundaryMode.CLOSED_CLOSED,
+            merge_touching=True,
+            endpoint_clip_abs=i64_max,
+            endpoint_quantize_step=1,
+        )
+        assert eval_intervals(spec, [(-i64_max, i64_max)]) == -1
+
+    def test_max_overlap_count_uses_wrapped_end_plus_one_event_key(
+        self,
+    ) -> None:
+        i64_max = (1 << 63) - 1
+        spec = IntervalsSpec(
+            operation=OperationType.MAX_OVERLAP_COUNT,
+            boundary_mode=BoundaryMode.CLOSED_CLOSED,
+            merge_touching=False,
+            endpoint_clip_abs=i64_max,
+            endpoint_quantize_step=1,
+        )
+        assert eval_intervals(spec, [(i64_max, i64_max)]) == 0
+
 
 class TestModels:
     def test_spec_and_axes_roundtrip_model_validation(self) -> None:
@@ -266,6 +284,59 @@ class TestModels:
     def test_axes_reject_invalid_endpoint_clip_range(self) -> None:
         with pytest.raises(ValidationError):
             IntervalsAxes(endpoint_clip_abs_range=(0, 5))
+
+    def test_spec_rejects_endpoint_clip_abs_above_i64_max(self) -> None:
+        with pytest.raises(ValidationError, match="endpoint_clip_abs"):
+            IntervalsSpec(
+                operation=OperationType.TOTAL_COVERAGE,
+                boundary_mode=BoundaryMode.CLOSED_CLOSED,
+                merge_touching=False,
+                endpoint_clip_abs=1 << 63,
+            )
+
+    def test_spec_rejects_endpoint_quantize_step_above_i64_max(self) -> None:
+        with pytest.raises(ValidationError, match="endpoint_quantize_step"):
+            IntervalsSpec(
+                operation=OperationType.TOTAL_COVERAGE,
+                boundary_mode=BoundaryMode.CLOSED_CLOSED,
+                merge_touching=False,
+                endpoint_quantize_step=1 << 63,
+            )
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("n_intervals_range", (False, 5)),
+            ("endpoint_range", (-5, True)),
+            ("max_span_range", (True, 5)),
+            ("endpoint_clip_abs_range", (False, 5)),
+            ("endpoint_quantize_step_range", (1, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            IntervalsAxes.model_validate({field_name: range_value})
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("endpoint_range", (-(1 << 63) - 1, 0)),
+            ("endpoint_range", (0, 1 << 63)),
+            ("max_span_range", (0, 1 << 63)),
+            ("endpoint_clip_abs_range", (1, 1 << 63)),
+            ("endpoint_quantize_step_range", (1, 1 << 63)),
+        ],
+    )
+    def test_axes_reject_i64_out_of_range_bounds(
+        self, field_name: str, range_value: tuple[int, int]
+    ) -> None:
+        with pytest.raises(ValidationError, match=field_name):
+            IntervalsAxes.model_validate({field_name: range_value})
 
 
 class TestSampler:
@@ -332,6 +403,32 @@ class TestQueries:
             for query in queries:
                 assert query.output == eval_intervals(spec, query.input)
 
+    def test_query_input_uniqueness_contract_is_per_tag(self) -> None:
+        axes = IntervalsAxes(
+            n_intervals_range=(1, 1),
+            endpoint_range=(0, 0),
+            max_span_range=(0, 0),
+            allow_reversed_interval_prob_range=(0.0, 0.0),
+            degenerate_interval_prob_range=(1.0, 1.0),
+            nested_interval_prob_range=(0.0, 0.0),
+        )
+        spec = _call_sample(sample_intervals_spec, axes, seed=0)
+        queries = _call_queries(generate_intervals_queries, spec, axes, seed=0)
+
+        seen_by_tag: dict[QueryTag, set[tuple[tuple[int, int], ...]]] = {
+            tag: set() for tag in QueryTag
+        }
+        tags_by_input: dict[tuple[tuple[int, int], ...], set[QueryTag]] = (
+            defaultdict(set)
+        )
+        for query in queries:
+            frozen = tuple((int(a), int(b)) for a, b in query.input)
+            assert frozen not in seen_by_tag[query.tag]
+            seen_by_tag[query.tag].add(frozen)
+            tags_by_input[frozen].add(query.tag)
+
+        assert any(len(tags) > 1 for tags in tags_by_input.values())
+
     def test_queries_respect_narrow_endpoint_range(self) -> None:
         axes = IntervalsAxes(
             n_intervals_range=(1, 4),
@@ -397,7 +494,7 @@ class TestQueries:
             assert all(a == b for a, b in query.input)
 
     def test_queries_use_reverse_probability_for_typical_cases(self) -> None:
-        common_axes = dict(
+        common_axes: dict[str, Any] = dict(
             n_intervals_range=(3, 3),
             endpoint_range=(-8, 8),
             max_span_range=(1, 6),
@@ -517,3 +614,43 @@ class TestTaskGeneration:
             expected = eval_intervals(spec, query.input)
             actual = fn_obj(query.input)  # type: ignore[misc]
             assert actual == expected
+
+    def test_rendered_python_matches_evaluator_total_coverage_i64_overflow(
+        self,
+    ) -> None:
+        i64_max = (1 << 63) - 1
+        spec = IntervalsSpec(
+            operation=OperationType.TOTAL_COVERAGE,
+            boundary_mode=BoundaryMode.CLOSED_CLOSED,
+            merge_touching=True,
+            endpoint_clip_abs=i64_max,
+            endpoint_quantize_step=1,
+        )
+        namespace: dict[str, object] = {}
+        exec(render_intervals(spec, func_name="f"), namespace)  # noqa: S102
+        rendered = namespace["f"]
+        intervals = [(-i64_max, i64_max)]
+        expected = eval_intervals(spec, intervals)
+        actual = rendered(intervals)  # type: ignore[misc]
+        assert expected == -1
+        assert actual == expected
+
+    def test_rendered_python_matches_evaluator_max_overlap_end_plus_one_wrap(
+        self,
+    ) -> None:
+        i64_max = (1 << 63) - 1
+        spec = IntervalsSpec(
+            operation=OperationType.MAX_OVERLAP_COUNT,
+            boundary_mode=BoundaryMode.CLOSED_CLOSED,
+            merge_touching=False,
+            endpoint_clip_abs=i64_max,
+            endpoint_quantize_step=1,
+        )
+        namespace: dict[str, object] = {}
+        exec(render_intervals(spec, func_name="f"), namespace)  # noqa: S102
+        rendered = namespace["f"]
+        intervals = [(i64_max, i64_max)]
+        expected = eval_intervals(spec, intervals)
+        actual = rendered(intervals)  # type: ignore[misc]
+        assert expected == 0
+        assert actual == expected

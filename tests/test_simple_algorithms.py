@@ -1,6 +1,7 @@
 import random
 
 import pytest
+from pydantic import ValidationError
 
 from genfxn.core.models import QueryTag
 from genfxn.core.predicates import PredicateGt, PredicateModEq, PredicateType
@@ -28,6 +29,9 @@ from genfxn.simple_algorithms.queries import generate_simple_algorithms_queries
 from genfxn.simple_algorithms.render import render_simple_algorithms
 from genfxn.simple_algorithms.sampler import sample_simple_algorithms_spec
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
+
+INT32_MAX = (1 << 31) - 1
+INT64_MAX = (1 << 63) - 1
 
 
 class TestMostFrequentEval:
@@ -173,8 +177,8 @@ class TestRender:
             target=10, counting_mode=CountingMode.ALL_INDICES
         )
         code = render_simple_algorithms(spec)
-        assert "count += 1" in code
-        assert "== 10" in code
+        assert "count = __i32_add(count, 1)" in code
+        assert "__i32_add(" in code
 
     def test_count_pairs_unique_values(self) -> None:
         spec = CountPairsSumSpec(
@@ -189,6 +193,15 @@ class TestRender:
         code = render_simple_algorithms(spec)
         assert "window_sum" in code
         assert "max_sum" in code
+
+    def test_render_without_i32_wrap(self) -> None:
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
+        code = render_simple_algorithms(spec, int32_wrap=False)
+        assert "__i32_" not in code
+        assert "count += 1" in code
 
 
 class TestRenderRoundtrip:
@@ -237,6 +250,45 @@ class TestRenderRoundtrip:
                     f"k={k}, xs={xs}"
                 )
 
+    def test_count_pairs_roundtrip_without_i32_wrap(self) -> None:
+        spec = CountPairsSumSpec(
+            target=-46,
+            counting_mode=CountingMode.UNIQUE_VALUES,
+            no_result_default=5,
+            pre_filter=PredicateModEq(divisor=8, remainder=2),
+        )
+        code = render_simple_algorithms(spec, int32_wrap=False)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        for xs in ([2, 10, 18], [-46, 2, -48, 6], [1, 2, 3, 4]):
+            assert f(xs) == eval_simple_algorithms(
+                spec,
+                list(xs),
+                int32_wrap=False,
+            )
+
+    def test_count_pairs_roundtrip_int32_wrapped_sum_comparison(self) -> None:
+        spec = CountPairsSumSpec(
+            target=-294_967_296,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
+        code = render_simple_algorithms(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        xs = [2_000_000_000, 2_000_000_000]
+        assert f(xs) == eval_simple_algorithms(spec, xs)
+
+    def test_max_window_roundtrip_int32_large_values(self) -> None:
+        spec = MaxWindowSumSpec(k=2, invalid_k_default=0)
+        code = render_simple_algorithms(spec)
+        namespace: dict = {}
+        exec(code, namespace)  # noqa: S102
+        f = namespace["f"]
+        xs = [2_000_000_000, 2_000_000_000, 0]
+        assert f(xs) == eval_simple_algorithms(spec, xs)
+
 
 class TestSampler:
     def test_reproducible(self) -> None:
@@ -276,7 +328,10 @@ class TestQueryGeneration:
 
     def test_includes_empty_list(self) -> None:
         spec = MaxWindowSumSpec(k=3, invalid_k_default=0)
-        axes = SimpleAlgorithmsAxes()
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(0, 20),
+            window_size_range=(1, 10),
+        )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )
@@ -285,7 +340,10 @@ class TestQueryGeneration:
 
     def test_max_window_empty_query_uses_empty_default_when_set(self) -> None:
         spec = MaxWindowSumSpec(k=3, invalid_k_default=-1, empty_default=-99)
-        axes = SimpleAlgorithmsAxes()
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(0, 20),
+            window_size_range=(1, 10),
+        )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )
@@ -305,6 +363,18 @@ class TestQueryGeneration:
         assert queries
         assert all(len(q.input) <= axes.list_length_range[1] for q in queries)
 
+    def test_max_window_queries_respect_list_length_lower_bound(self) -> None:
+        spec = MaxWindowSumSpec(k=2, invalid_k_default=-1)
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(2, 3),
+            window_size_range=(1, 3),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(42)
+        )
+        assert queries
+        assert all(len(q.input) >= axes.list_length_range[0] for q in queries)
+
     def test_max_window_k_minus_one_query_uses_eval_with_empty_default(
         self,
     ) -> None:
@@ -315,7 +385,10 @@ class TestQueryGeneration:
             pre_filter=PredicateGt(value=100),
             pre_transform=TransformShift(offset=1),
         )
-        axes = SimpleAlgorithmsAxes()
+        axes = SimpleAlgorithmsAxes(
+            list_length_range=(0, 20),
+            window_size_range=(1, 10),
+        )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )
@@ -379,6 +452,23 @@ class TestAxesValidation:
                 list_length_range=(1, 3), window_size_range=(1, 5)
             )
 
+    def test_window_size_range_high_must_fit_int32(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"window_size_range: high .* must be <= {INT32_MAX}",
+        ):
+            SimpleAlgorithmsAxes(
+                list_length_range=(1, INT32_MAX + 1),
+                window_size_range=(1, INT32_MAX + 1),
+            )
+
+    def test_value_range_rejects_values_above_signed_i64(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match=rf"value_range: high .* must be <= {INT64_MAX}",
+        ):
+            SimpleAlgorithmsAxes(value_range=(0, INT64_MAX + 1))
+
     def test_empty_templates(self) -> None:
         with pytest.raises(ValueError, match="templates must not be empty"):
             SimpleAlgorithmsAxes(templates=[])
@@ -414,6 +504,33 @@ class TestAxesValidation:
             ValueError, match="pre_transform_types contains unsupported"
         ):
             SimpleAlgorithmsAxes(pre_transform_types=[TransformType.CLIP])
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (False, 5)),
+            ("list_length_range", (1, True)),
+            ("target_range", (True, 5)),
+            ("window_size_range", (1, False)),
+            ("empty_default_range", (False, 0)),
+            ("tie_default_range", (0, True)),
+            ("no_result_default_range", (False, 0)),
+            ("short_list_default_range", (0, True)),
+            ("empty_default_for_empty_range", (False, 0)),
+        ],
+    )
+    def test_rejects_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            SimpleAlgorithmsAxes.model_validate({field_name: range_value})
+
+    def test_max_window_sum_rejects_k_above_int32(self) -> None:
+        with pytest.raises(ValueError, match="2147483647"):
+            MaxWindowSumSpec(k=INT32_MAX + 1)
 
 
 class TestTaskGeneration:

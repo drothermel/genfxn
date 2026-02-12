@@ -1,7 +1,7 @@
 # genfxn
 
 Synthetic function dataset generator for code reasoning research. Generates
-executable function tasks with structured test cases across ten function
+executable function tasks with structured test cases across eleven function
 families. CLI output is single-language (Python by default, or Java/Rust via
 `--language`).
 
@@ -25,6 +25,7 @@ uv sync
 | **sequence_dp** | `f(a: list[int], b: list[int]) -> int` | Sequence dynamic-programming alignment variants with custom scoring |
 | **intervals** | `f(intervals: list[tuple[int, int]]) -> int` | Interval normalization/merging statistics under configurable boundary modes |
 | **graph_queries** | `f(src: int, dst: int) -> int` | Deterministic graph-query evaluation (`reachable`, `min_hops`, `shortest_path_cost`) |
+| **temporal_logic** | `f(xs: list[int]) -> int` | Finite-trace temporal-logic evaluation with integer predicates and deterministic temporal semantics |
 
 ### Family Roadmap
 
@@ -132,6 +133,41 @@ Graph query tasks over a fixed spec graph where each query asks for
 `reachable`, `min_hops`, or `shortest_path_cost` between two nodes under
 deterministic normalization and path semantics.
 
+`shortest_path_cost` semantics:
+- costs are accumulated as non-negative signed i64 values with saturation at
+  `2^63 - 1`.
+- the result is the minimum saturated cost over simple paths from `src` to
+  `dst` (paths with at most `n_nodes - 1` edges), or `-1` when unreachable.
+
+### Temporal Logic
+
+Temporal logic tasks evaluate a finite-trace formula over integer sequences and
+return either a boolean-at-start signal (`sat_at_start`), count of satisfying
+indices (`sat_count`), or first satisfying index (`first_sat_index`).
+
+## Query and Numeric Semantics
+
+Query uniqueness contract:
+- Default: query inputs are globally deduplicated by input value
+  (`dedupe_queries`), preserving only one query per input (highest tag
+  priority wins) for `piecewise`, `stateful`, `simple_algorithms`,
+  `stringrules`, `stack_bytecode`, `fsm`, and `bitops`.
+- Exception: generators for `intervals`, `graph_queries`, `sequence_dp`, and
+  `temporal_logic` enforce uniqueness per `(tag, input)` via
+  `dedupe_queries_per_tag_input` to preserve per-tag coverage on
+  compact/relation-style input domains.
+
+Overflow semantics (`stack_bytecode` and `sequence_dp`):
+- Python evaluator semantics remain the source for generated expected outputs.
+- Java/Rust runtimes execute with signed 64-bit (`long`/`i64`) behavior; in
+  overflow-adjacent parity tests, evaluator expectations are normalized to
+  signed 64-bit representation before asserting Java/Rust parity.
+
+Task-id hashing semantics:
+- `task_id_from_spec(...)` canonicalization is type-sensitive for container
+  values (`list`, `tuple`, `set`, `frozenset`) and does not intentionally
+  collapse those container types.
+
 ## Generation
 
 Generate tasks to JSONL files.
@@ -145,7 +181,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-o, --output PATH` | Output JSONL file |
-| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, `sequence_dp`, `intervals`, `graph_queries`, or `all` |
+| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, `sequence_dp`, `intervals`, `graph_queries`, `temporal_logic`, or `all` |
 | `-n, --count INT` | Number of tasks to generate |
 
 ### General Options
@@ -200,10 +236,10 @@ These apply to multiple families:
 
 | Option | Families | Default | Description |
 |--------|----------|---------|-------------|
-| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-20,20` for intervals endpoints, `0,20` effective for graph_queries weights, `-1024,1024` for bitops) |
+| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-20,20` for intervals endpoints, `0,20` effective for graph_queries weights, `-20,20` for temporal_logic sequence values and predicate constants, `-1024,1024` for bitops) |
 | `--threshold-range LO,HI` | piecewise, stateful, fsm | family-specific | Range for predicate thresholds (`-50,50` for piecewise/stateful, `-10,10` for fsm) |
 | `--divisor-range LO,HI` | piecewise, stateful, fsm, sequence_dp | family-specific | Range for mod divisors (`2,10` for piecewise/stateful/fsm, `1,10` for sequence_dp) |
-| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp, intervals, graph_queries | family-specific | Range for test list lengths (`5,20` for stateful/simple_algorithms, `0,8` for stack_bytecode, `2,10` for sequence_dp, `0,10` for intervals query interval-counts, mapped to `n_nodes_range` for graph_queries) |
+| `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp, intervals, graph_queries, temporal_logic | family-specific | Range for test list lengths (`5,20` for stateful/simple_algorithms, `0,8` for stack_bytecode, `2,10` for sequence_dp, `0,10` for intervals query interval-counts, mapped to `n_nodes_range` for graph_queries, mapped to `sequence_length_range` for temporal_logic) |
 
 ### Examples
 
@@ -244,6 +280,9 @@ genfxn generate -o tasks.jsonl -f intervals -n 50 --difficulty 4
 
 # Graph query tasks at target difficulty 4
 genfxn generate -o tasks.jsonl -f graph_queries -n 50 --difficulty 4
+
+# Temporal logic tasks at target difficulty 5
+genfxn generate -o tasks.jsonl -f temporal_logic -n 50 --difficulty 5
 ```
 
 See [AXES.md](AXES.md) for complete axis documentation.
@@ -312,9 +351,22 @@ genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
 
 **Holdout types**: `exact` (default), `range`, `contains`
 
+For `--holdout-type exact` and `--holdout-type contains`, `--holdout-value` is
+parsed as JSON:
+- Use JSON scalars/literals directly (for example: `true`, `42`, `[1, 2]`).
+- JSON parsing errors for JSON-like input are fail-fast (no silent fallback).
+- If you need a string that looks like a JSON scalar/number, pass a JSON
+  string literal (for example: `\"01\"`, `\"True\"`, `\"nan\"`).
+
 Axis paths use dot notation for nested fields: `predicate.kind`, `rules.0.transform.kind`
 
 See [AXES.md](AXES.md) for all spec field paths.
+
+For `--random-ratio`, the CLI uses a streaming split algorithm to avoid
+materializing all tasks in memory. For the same input/seed/ratio, CLI and
+library splits are each deterministic and preserve split invariants (exact
+floor train count, disjoint train/test, union equals input), but exact
+membership may differ from library `random_split` shuffle+slice behavior.
 
 ### Python API
 
@@ -351,13 +403,38 @@ uv run pytest tests/ -v --verification-level=standard
 uv run pytest tests/ -v --verification-level=full
 ```
 
+Runtime parity suites are marked `@pytest.mark.full`, so they run only with
+`--verification-level=full`.
+Family-scoped full markers are available for family-owned full tests (for
+example `full_piecewise`, `full_stateful`, `full_sequence_dp`):
+
+```bash
+# Run only piecewise full tests
+uv run pytest tests/ -v --verification-level=full -m "full_piecewise"
+```
+
+Pytest runs in parallel by default with xdist workers (`-n auto`,
+`--dist=worksteal`). Use `-n 0` to force single-process execution.
+
+### CI Gate
+
+GitHub Actions now enforces a full verification gate on push and pull request
+via `.github/workflows/ci.yml`:
+
+```bash
+uv sync
+uv run ruff check .
+uv run ty check
+uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal
+```
+
 ### Local Performance Budgets
 
-Use the helper runner to apply tuned xdist worker counts and optional
+Use the helper runner to apply default max-parallel xdist workers with optional
 runtime budget checks.
 
 ```bash
-# Standard tier with tuned workers and duration report
+# Standard tier with auto-max workers and duration report
 uv run python scripts/run_tests.py --tier standard
 
 # Enforce runtime budget for the selected tier

@@ -1,14 +1,22 @@
 import random
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import pytest
-from helpers import require_java_runtime, require_rust_runtime
+from helpers import (
+    require_java_runtime,
+    require_rust_runtime,
+    run_checked_subprocess,
+)
 
 from genfxn.graph_queries.eval import eval_graph_queries
-from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
+from genfxn.graph_queries.models import (
+    GraphEdge,
+    GraphQueriesAxes,
+    GraphQueriesSpec,
+    GraphQueryType,
+)
 from genfxn.graph_queries.sampler import sample_graph_queries_spec
 from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.langs.registry import get_render_fn
@@ -47,19 +55,13 @@ def _run_java_f(
         tmp = Path(tmp_dir)
         src_path = tmp / "Main.java"
         src_path.write_text(main_src, encoding="utf-8")
-        subprocess.run(  # noqa: S603
+        run_checked_subprocess(
             [javac, str(src_path)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
-        proc = subprocess.run(  # noqa: S603
+        proc = run_checked_subprocess(
             [java, "-cp", str(tmp), "Main"],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
         return int(proc.stdout.strip())
 
@@ -81,19 +83,13 @@ def _run_rust_f(
         src_path = tmp / "main.rs"
         out = tmp / "main_bin"
         src_path.write_text(main_src, encoding="utf-8")
-        subprocess.run(  # noqa: S603
+        run_checked_subprocess(
             [rustc, str(src_path), "-O", "-o", str(out)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
-        proc = subprocess.run(  # noqa: S603
+        proc = run_checked_subprocess(
             [str(out)],
-            check=True,
             cwd=tmp,
-            capture_output=True,
-            text=True,
         )
         return int(proc.stdout.strip())
 
@@ -172,3 +168,155 @@ def test_graph_queries_runtime_parity_across_sampled_specs() -> None:
             expected = eval_graph_queries(spec, src, dst)
             assert _run_java_f(javac, java, java_code, src, dst) == expected
             assert _run_rust_f(rustc, rust_code, src, dst) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_forced_query_types() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    base_edges = [
+        GraphEdge(u=0, v=1, w=2),
+        GraphEdge(u=1, v=2, w=3),
+        GraphEdge(u=0, v=2, w=10),
+    ]
+    specs: tuple[GraphQueriesSpec, ...] = (
+        GraphQueriesSpec(
+            query_type=GraphQueryType.REACHABLE,
+            directed=False,
+            weighted=False,
+            n_nodes=3,
+            edges=base_edges,
+        ),
+        GraphQueriesSpec(
+            query_type=GraphQueryType.MIN_HOPS,
+            directed=True,
+            weighted=False,
+            n_nodes=3,
+            edges=base_edges,
+        ),
+        GraphQueriesSpec(
+            query_type=GraphQueryType.SHORTEST_PATH_COST,
+            directed=True,
+            weighted=True,
+            n_nodes=3,
+            edges=base_edges,
+        ),
+    )
+    pairs = ((0, 2), (2, 0), (1, 1))
+
+    for spec in specs:
+        java_code = render_graph_queries_java(spec, func_name="f")
+        rust_code = render_graph_queries_rust(spec, func_name="f")
+        for src, dst in pairs:
+            expected = eval_graph_queries(spec, src, dst)
+            assert _run_java_f(javac, java, java_code, src, dst) == expected
+            assert _run_rust_f(rustc, rust_code, src, dst) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_large_weight_cost_accumulation() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=2_000_000_000),
+            GraphEdge(u=1, v=2, w=2_000_000_000),
+        ],
+    )
+    java_code = render_graph_queries_java(spec, func_name="f")
+    rust_code = render_graph_queries_rust(spec, func_name="f")
+
+    expected = eval_graph_queries(spec, 0, 2)
+    assert expected == 4_000_000_000
+    assert _run_java_f(javac, java, java_code, 0, 2) == expected
+    assert _run_rust_f(rustc, rust_code, 0, 2) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_int32_plus_one_weight() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 31)),
+            GraphEdge(u=1, v=2, w=(1 << 31)),
+        ],
+    )
+    java_code = render_graph_queries_java(spec, func_name="f")
+    rust_code = render_graph_queries_rust(spec, func_name="f")
+
+    expected = eval_graph_queries(spec, 0, 2)
+    assert expected == 4_294_967_296
+    assert _run_java_f(javac, java, java_code, 0, 2) == expected
+    assert _run_rust_f(rustc, rust_code, 0, 2) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_i64_overflow_accumulation() -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=(1 << 63) - 1),
+            GraphEdge(u=1, v=2, w=1),
+        ],
+    )
+    java_code = render_graph_queries_java(spec, func_name="f")
+    rust_code = render_graph_queries_rust(spec, func_name="f")
+
+    expected = eval_graph_queries(spec, 0, 2)
+    assert expected == (1 << 63) - 1
+    assert _run_java_f(javac, java, java_code, 0, 2) == expected
+    assert _run_rust_f(rustc, rust_code, 0, 2) == expected
+
+
+@pytest.mark.full
+def test_graph_queries_runtime_parity_late_better_path(
+) -> None:
+    javac, java = require_java_runtime()
+    rustc = require_rust_runtime()
+    render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")
+    render_graph_queries_rust = get_render_fn(Language.RUST, "graph_queries")
+
+    spec = GraphQueriesSpec(
+        query_type=GraphQueryType.SHORTEST_PATH_COST,
+        directed=True,
+        weighted=True,
+        n_nodes=3,
+        edges=[
+            GraphEdge(u=0, v=1, w=5),
+            GraphEdge(u=0, v=2, w=(1 << 63) - 1),
+            GraphEdge(u=2, v=1, w=(1 << 63) - 1),
+        ],
+    )
+    java_code = render_graph_queries_java(spec, func_name="f")
+    rust_code = render_graph_queries_rust(spec, func_name="f")
+
+    expected = eval_graph_queries(spec, 0, 1)
+    assert expected == 5
+    assert _run_java_f(javac, java, java_code, 0, 1) == expected
+    assert _run_rust_f(rustc, rust_code, 0, 1) == expected

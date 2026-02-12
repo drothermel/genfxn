@@ -53,7 +53,8 @@ Freeze and document exact semantics before parallel implementation:
 3. Query behavior:
    - `reachable`: return `1` iff any path exists else `0`
    - `min_hops`: BFS hop count; return `-1` if no path
-   - `shortest_path_cost`: Dijkstra over normalized non-negative weights;
+   - `shortest_path_cost`: minimum non-negative path cost over normalized
+     weights using saturating i64 accumulation (`2^63 - 1` cap);
      return `-1` if no path
 4. Same-node queries:
    - `reachable(src, src) = 1`

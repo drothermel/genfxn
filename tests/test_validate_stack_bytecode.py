@@ -9,6 +9,7 @@ from genfxn.stack_bytecode.models import StackBytecodeAxes, StackBytecodeSpec
 from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
 from genfxn.stack_bytecode.validate import (
+    CODE_AXES_INVALID,
     CODE_CODE_EXEC_ERROR,
     CODE_CODE_MISSING_FUNC,
     CODE_CODE_PARSE_ERROR,
@@ -143,6 +144,13 @@ class TestCodeCompilationAndExecution:
         assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
         assert not any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
+    def test_non_string_python_code_payload_reports_parse_error(
+        self, baseline_task: Task
+    ) -> None:
+        corrupted = baseline_task.model_copy(update={"code": {"python": 123}})
+        issues = validate_stack_bytecode_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
     def test_exec_error_caught(self, baseline_task: Task) -> None:
         corrupted = baseline_task.model_copy(
             update={"code": "raise ValueError('boom')"}
@@ -159,9 +167,21 @@ class TestCodeCompilationAndExecution:
         issues = validate_stack_bytecode_task(corrupted)
         assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
+    def test_missing_func_caught_without_untrusted_execution(
+        self, baseline_task: Task
+    ) -> None:
+        corrupted = baseline_task.model_copy(
+            update={"code": "def g(xs):\n    return (0, 0)"}
+        )
+        issues = _validate_stack_bytecode_task(
+            corrupted,
+            execute_untrusted_code=False,
+        )
+        assert any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
+
     def test_runtime_error_caught(self, baseline_task: Task) -> None:
         corrupted = baseline_task.model_copy(
-            update={"code": "def f(xs):\n    return 1/0"}
+            update={"code": "def f(xs):\n    return 1 // 0"}
         )
         issues = validate_stack_bytecode_task(corrupted)
         assert any(i.code == CODE_CODE_RUNTIME_ERROR for i in issues)
@@ -182,6 +202,38 @@ class TestCodeCompilationAndExecution:
             execute_untrusted_code=False,
         )
         assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+
+    def test_unsafe_ast_short_circuits_execution(
+        self, baseline_task: Task, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        called = False
+
+        def _spy(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            nonlocal called
+            called = True
+            return {}
+
+        monkeypatch.setattr(
+            "genfxn.stack_bytecode.validate.execute_code_restricted",
+            _spy,
+        )
+        corrupted = baseline_task.model_copy(
+            update={
+                "code": (
+                    "while True:\n"
+                    "    pass\n"
+                    "def f(xs):\n"
+                    "    return (0, 0)"
+                )
+            }
+        )
+        issues = _validate_stack_bytecode_task(
+            corrupted,
+            execute_untrusted_code=True,
+        )
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+        assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
+        assert called is False
 
 
 class TestQueryTypeValidation:
@@ -245,6 +297,22 @@ class TestQueryTypeValidation:
             }
         )
         issues = validate_stack_bytecode_task(corrupted, strict=True)
+        assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+
+    def test_bool_query_values_are_rejected(self, baseline_task: Task) -> None:
+        corrupted = baseline_task.model_copy(
+            update={
+                "queries": [
+                    Query(
+                        input=[True, 1],
+                        output=(True, 0),
+                        tag=QueryTag.TYPICAL,
+                    )
+                ]
+            }
+        )
+        issues = validate_stack_bytecode_task(corrupted, strict=True)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
     def test_location_includes_specific_query_index(
@@ -326,6 +394,16 @@ class TestAxesAndParanoidHelpers:
         )
         issues = _validate_query_types(corrupted, strict=True)
         assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+
+    def test_invalid_axes_returns_structured_issue(
+        self, baseline_task: Task
+    ) -> None:
+        issues = _validate_stack_bytecode_task(
+            baseline_task,
+            axes={"list_length_range": "bad"},  # type: ignore[arg-type]
+            execute_untrusted_code=False,
+        )
+        assert any(i.code == CODE_AXES_INVALID for i in issues)
 
     def test_ast_whitelist_rejects_import(self) -> None:
         issues, _ = _validate_ast_whitelist(

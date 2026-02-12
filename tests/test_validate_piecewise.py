@@ -204,6 +204,14 @@ class TestCodeCompilation:
         issues = validate_piecewise_task(corrupted)
         assert not any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
 
+    def test_non_string_python_code_payload_reports_parse_error(
+        self, baseline_task
+    ) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(update={"code": {"python": 123}})
+        issues = validate_piecewise_task(corrupted)
+        assert any(i.code == CODE_CODE_PARSE_ERROR for i in issues)
+
     def test_exec_error_caught(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         # Code that raises at module exec time (not at call time)
@@ -222,6 +230,42 @@ class TestCodeCompilation:
             i.code == CODE_CODE_MISSING_FUNC and i.severity == Severity.ERROR
             for i in issues
         )
+
+    def test_exec_function_is_closed_after_validation(
+        self,
+        baseline_task: Task,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        state = {"closed": False, "calls": 0}
+
+        def fake_fn(x: int) -> int:
+            del x
+            state["calls"] += 1
+            return 0
+
+        def _close() -> None:
+            state["closed"] = True
+
+        setattr(fake_fn, "close", _close)
+
+        def _fake_exec(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            del args, kwargs
+            return {"f": fake_fn}
+
+        monkeypatch.setattr(
+            "genfxn.piecewise.validate.execute_code_restricted",
+            _fake_exec,
+        )
+
+        validate_piecewise_task(
+            baseline_task,
+            execute_untrusted_code=True,
+            value_range=(0, 1),
+            max_semantic_issues=1,
+        )
+
+        assert state["calls"] >= 1
+        assert state["closed"] is True
 
 
 class TestCodeRuntime:
@@ -286,6 +330,31 @@ class TestQueryTypeValidation:
         assert len(type_issues) > 0
         assert all(i.severity == Severity.ERROR for i in type_issues)
 
+    def test_non_int_output_is_warning_lenient(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={
+                "queries": [Query(input=0, output="text", tag=QueryTag.TYPICAL)]
+            }
+        )
+        issues = validate_piecewise_task(corrupted, strict=False)
+        type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
+        assert len(type_issues) > 0
+        assert all(i.severity == Severity.WARNING for i in type_issues)
+
+    def test_bool_query_values_are_rejected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={
+                "queries": [
+                    Query(input=True, output=False, tag=QueryTag.TYPICAL)
+                ]
+            }
+        )
+        issues = validate_piecewise_task(corrupted)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+        assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+
     def test_float_input_detected(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
@@ -326,6 +395,13 @@ class TestHelperLevelValidation:
     def test_ast_whitelist_helper_without_execution(self) -> None:
         issues, _ = _validate_ast_whitelist("import os\ndef f(x): return x")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_allows_generated_int32_helpers(
+        self, baseline_task: Task
+    ) -> None:
+        assert isinstance(baseline_task.code, str)
+        issues, _ = _validate_ast_whitelist(baseline_task.code)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
 
 
 class TestQueryOutputValidation:

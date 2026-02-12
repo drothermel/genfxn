@@ -62,6 +62,8 @@ from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.langs.java._helpers import (
     _regex_char_class_escape,
+    java_int_literal,
+    java_long_literal,
     java_string_literal,
 )
 from genfxn.langs.java.expressions import render_expression_java
@@ -76,6 +78,7 @@ from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 
 def _code_map(task: Task) -> dict[str, str]:
@@ -112,6 +115,60 @@ class TestJavaStringLiteral:
 
     def test_escapes_tab(self) -> None:
         assert java_string_literal("a\tb") == '"a\\tb"'
+
+
+class TestJavaIntLiteral:
+    def test_small_int(self) -> None:
+        assert java_int_literal(123) == "123"
+
+    def test_int32_boundary_values_stay_plain_literals(self) -> None:
+        assert java_int_literal((1 << 31) - 1) == "2147483647"
+        assert java_int_literal(-(1 << 31)) == "-2147483648"
+
+    def test_int32_overflow_boundary_values_use_long_cast(self) -> None:
+        assert java_int_literal(1 << 31) == "((int) 2147483648L)"
+        assert java_int_literal(-(1 << 31) - 1) == "((int) -2147483649L)"
+
+    def test_large_positive_int_uses_long_cast(self) -> None:
+        assert java_int_literal(3_000_000_001) == "((int) 3000000001L)"
+
+    def test_large_negative_int_uses_long_cast(self) -> None:
+        assert java_int_literal(-3_000_000_001) == "((int) -3000000001L)"
+
+    def test_extreme_long_range_values_use_long_cast(self) -> None:
+        max_long = (1 << 63) - 1
+        min_long_plus_one = -(1 << 63) + 1
+        assert java_int_literal(max_long) == f"((int) {max_long}L)"
+        assert java_int_literal(min_long_plus_one) == (
+            f"((int) {min_long_plus_one}L)"
+        )
+
+    def test_rejects_values_outside_i64_range(self) -> None:
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_int_literal(1 << 63)
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_int_literal(-(1 << 63) - 1)
+
+
+class TestJavaLongLiteral:
+    def test_small_long(self) -> None:
+        assert java_long_literal(123) == "123L"
+
+    def test_int32_boundary_values_are_long_literals(self) -> None:
+        assert java_long_literal((1 << 31) - 1) == "2147483647L"
+        assert java_long_literal(1 << 31) == "2147483648L"
+
+    def test_long_min_value_uses_constant(self) -> None:
+        assert java_long_literal(-(1 << 63)) == "Long.MIN_VALUE"
+
+    def test_long_max_value(self) -> None:
+        assert java_long_literal((1 << 63) - 1) == "9223372036854775807L"
+
+    def test_rejects_values_outside_i64_range(self) -> None:
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_long_literal(1 << 63)
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            java_long_literal(-(1 << 63) - 1)
 
 
 class TestRegexCharClassEscape:
@@ -179,6 +236,29 @@ class TestPredicateJava:
 
     def test_custom_var(self) -> None:
         assert render_predicate_java(PredicateEven(), var="n") == "n % 2 == 0"
+
+    def test_lt_out_of_int32_unwrapped_preserves_int_input_semantics(
+        self,
+    ) -> None:
+        result = render_predicate_java(
+            PredicateLt(value=1 << 31),
+            int32_wrap=False,
+        )
+        assert result == "true"
+
+    def test_lt_out_of_int32_wrapped_narrows_constant(self) -> None:
+        result = render_predicate_java(
+            PredicateLt(value=1 << 31),
+            int32_wrap=True,
+        )
+        assert result == "x < ((int) 2147483648L)"
+
+    def test_in_set_unwrapped_ignores_out_of_int32_values(self) -> None:
+        result = render_predicate_java(
+            PredicateInSet(values=frozenset({1, 1 << 31})),
+            int32_wrap=False,
+        )
+        assert result == "(x == 1)"
 
 
 # ── Transforms ─────────────────────────────────────────────────────────
@@ -273,27 +353,32 @@ class TestStringPredicateJava:
     def test_is_alpha(self) -> None:
         result = render_string_predicate_java(StringPredicateIsAlpha())
         assert result == (
-            "!s.isEmpty() && s.chars().allMatch(Character::isLetter)"
+            "!s.isEmpty() && s.codePoints().allMatch(Character::isLetter)"
         )
 
     def test_is_digit(self) -> None:
         result = render_string_predicate_java(StringPredicateIsDigit())
         assert result == (
-            "!s.isEmpty() && s.chars().allMatch(Character::isDigit)"
+            "!s.isEmpty() && s.codePoints().allMatch(c -> "
+            "__genfxn_is_python_digit.test(c))"
         )
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_java(StringPredicateIsUpper())
         assert result == (
-            "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
-            "s.equals(s.toUpperCase(java.util.Locale.ROOT))"
+            "!s.isEmpty() && s.codePoints().anyMatch(c -> "
+            "Character.isUpperCase(c) || Character.isLowerCase(c) || "
+            "Character.isTitleCase(c)) && s.codePoints().allMatch(c -> "
+            "!Character.isLowerCase(c) && !Character.isTitleCase(c))"
         )
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_java(StringPredicateIsLower())
         assert result == (
-            "!s.isEmpty() && s.chars().anyMatch(Character::isLetter) && "
-            "s.equals(s.toLowerCase(java.util.Locale.ROOT))"
+            "!s.isEmpty() && s.codePoints().anyMatch(c -> "
+            "Character.isUpperCase(c) || Character.isLowerCase(c) || "
+            "Character.isTitleCase(c)) && s.codePoints().allMatch(c -> "
+            "!Character.isUpperCase(c) && !Character.isTitleCase(c))"
         )
 
     @pytest.mark.parametrize(
@@ -314,7 +399,9 @@ class TestStringPredicateJava:
         result = render_string_predicate_java(
             StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == f"s.length() {expected_op} 5"
+        assert result == (
+            f"s.codePointCount(0, s.length()) {expected_op} 5"
+        )
 
     def test_not(self) -> None:
         result = render_string_predicate_java(
@@ -497,6 +584,24 @@ class TestPiecewiseJava:
         )
         code = render_piecewise(spec)
         assert "(x == 1 || x == 2)" in code
+
+    def test_expression_constants_use_int32_wrap_literals(self) -> None:
+        from genfxn.langs.java.piecewise import render_piecewise
+        from genfxn.piecewise.models import Branch, PiecewiseSpec
+
+        oversized = 2_147_483_648
+        spec = PiecewiseSpec(
+            branches=[
+                Branch(
+                    condition=PredicateGt(value=0),
+                    expr=ExprAffine(a=oversized, b=0),
+                )
+            ],
+            default_expr=ExprAffine(a=0, b=oversized),
+        )
+        code = render_piecewise(spec)
+        assert "return ((int) 2147483648L) * x;" in code
+        assert "return ((int) 2147483648L);" in code
 
 
 class TestBitopsJava:
@@ -758,7 +863,7 @@ class TestMultiLanguageGeneration:
         code = _code_map(task)
         assert "python" in code
         assert "java" in code
-        assert code["python"].startswith("def f(")
+        assert "def f(" in code["python"]
         assert "public static int f(int x)" in code["java"]
 
     def test_stateful_generates_java(self) -> None:
@@ -849,6 +954,17 @@ class TestMultiLanguageGeneration:
         assert "def f(" in code["python"]
         assert "public static" in code["java"]
 
+    def test_temporal_logic_generates_java(self) -> None:
+        task = generate_temporal_logic_task(
+            rng=random.Random(42),
+            languages=[Language.PYTHON, Language.JAVA],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "java" in code
+        assert "def f(" in code["python"]
+        assert "public static long f(long[] xs)" in code["java"]
+
     def test_stack_bytecode_generates_java_when_available(self) -> None:
         if not _supports_stack_bytecode_java():
             pytest.skip("stack_bytecode Java rendering is not available")
@@ -862,8 +978,8 @@ class TestMultiLanguageGeneration:
         assert "python" in code
         assert "java" in code
         assert "def f(" in code["python"]
-        assert "public static int[] f(int[] xs)" in code["java"]
-        assert "return new int[] {" in code["java"]
+        assert "public static long[] f(long[] xs)" in code["java"]
+        assert "return new long[] {" in code["java"]
 
     def test_python_only(self) -> None:
         task = generate_piecewise_task(
@@ -902,6 +1018,10 @@ class TestMultiLanguageGeneration:
     def test_graph_queries_rejects_empty_languages(self) -> None:
         with pytest.raises(ValueError, match="languages list is empty"):
             generate_graph_queries_task(rng=random.Random(42), languages=[])
+
+    def test_temporal_logic_rejects_empty_languages(self) -> None:
+        with pytest.raises(ValueError, match="languages list is empty"):
+            generate_temporal_logic_task(rng=random.Random(42), languages=[])
 
     @pytest.mark.parametrize("seed", range(10))
     def test_piecewise_java_renders_non_empty(self, seed: int) -> None:
@@ -1013,6 +1133,13 @@ class TestLangsInfra:
         assert callable(get_render_fn(Language.JAVA, "graph_queries"))
         assert callable(get_render_fn(Language.RUST, "graph_queries"))
 
+    def test_registry_temporal_logic(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "temporal_logic"))
+        assert callable(get_render_fn(Language.JAVA, "temporal_logic"))
+        assert callable(get_render_fn(Language.RUST, "temporal_logic"))
+
     def test_available_languages_includes_python_and_java(self) -> None:
         from genfxn.langs.render import _available_languages
 
@@ -1036,6 +1163,47 @@ class TestLangsInfra:
         assert Language.PYTHON in available
         assert Language.JAVA not in available
 
+    def test_available_languages_raises_attribute_error(
+        self, monkeypatch
+    ) -> None:
+        from genfxn.langs import render as render_module
+
+        original_get_render_fn = render_module.get_render_fn
+
+        def _fake_get_render_fn(language: Language, family: str):
+            if language == Language.JAVA and family == "piecewise":
+                raise AttributeError("missing render function")
+            return original_get_render_fn(language, family)
+
+        monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
+
+        with pytest.raises(AttributeError, match="missing render function"):
+            render_module._available_languages()
+
+    @pytest.mark.parametrize(
+        ("error_type", "expected_message"),
+        [
+            (ImportError, "renderer import failed"),
+            (ModuleNotFoundError, "renderer module missing"),
+        ],
+    )
+    def test_available_languages_raises_import_errors(
+        self, monkeypatch, error_type: type[Exception], expected_message: str
+    ) -> None:
+        from genfxn.langs import render as render_module
+
+        original_get_render_fn = render_module.get_render_fn
+
+        def _fake_get_render_fn(language: Language, family: str):
+            if language == Language.JAVA and family == "piecewise":
+                raise error_type(expected_message)
+            return original_get_render_fn(language, family)
+
+        monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
+
+        with pytest.raises(error_type, match=expected_message):
+            render_module._available_languages()
+
     def test_render_all_languages_default(self) -> None:
         from genfxn.langs.render import render_all_languages
         from genfxn.piecewise.models import Branch, PiecewiseSpec
@@ -1054,6 +1222,39 @@ class TestLangsInfra:
         assert "java" in result
         assert "def f(" in result["python"]
         assert "public static" in result["java"]
+
+    def test_render_all_languages_default_uses_requested_family(
+        self, monkeypatch
+    ) -> None:
+        from genfxn.core.predicates import PredicateEven
+        from genfxn.core.transforms import TransformIdentity
+        from genfxn.langs import render as render_module
+        from genfxn.stateful.models import ConditionalLinearSumSpec
+
+        original_get_render_fn = render_module.get_render_fn
+
+        def _fake_get_render_fn(language: Language, family: str):
+            if language == Language.JAVA and family == "stateful":
+                raise ValueError("unsupported")
+            return original_get_render_fn(language, family)
+
+        monkeypatch.setattr(render_module, "get_render_fn", _fake_get_render_fn)
+
+        spec = ConditionalLinearSumSpec(
+            predicate=PredicateEven(),
+            true_transform=TransformIdentity(),
+            false_transform=TransformIdentity(),
+            init_value=0,
+        )
+        result = render_module.render_all_languages("stateful", spec)
+        assert "python" in result
+        assert "java" not in result
+
+    def test_render_all_languages_unknown_family_raises(self) -> None:
+        from genfxn.langs.render import render_all_languages
+
+        with pytest.raises(ValueError, match="Unknown family: nope"):
+            render_all_languages("nope", object())
 
     def test_render_all_languages_custom_selection_and_func_name(self) -> None:
         from genfxn.langs.render import render_all_languages

@@ -30,7 +30,9 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.Subscript,
         ast.Slice,
         ast.Attribute,
+        ast.BitAnd,
         ast.Load,
+        ast.LShift,
         ast.Store,
         ast.Add,
         ast.Sub,
@@ -58,6 +60,7 @@ ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
         "sorted",
         "abs",
         "_quantize",
+        "_wrap_i64",
     }
 )
 
@@ -71,6 +74,7 @@ ALLOWED_METHOD_NAMES: frozenset[str] = frozenset(
 
 ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
     {
+        "_i64_mask",
         "active",
         "adjusted",
         "best",
@@ -97,9 +101,12 @@ ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
         "raw_a",
         "raw_b",
         "start",
+        "span_size",
         "threshold",
         "total",
         "v",
+        "value",
+        "wrapped",
     }
 )
 
@@ -112,6 +119,7 @@ CALL_ARITIES: dict[str, set[int]] = {
     "sorted": {1},
     "abs": {1},
     "_quantize": {1},
+    "_wrap_i64": {1},
 }
 
 METHOD_ARITIES: dict[str, set[int]] = {

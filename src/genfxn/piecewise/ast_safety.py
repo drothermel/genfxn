@@ -22,22 +22,62 @@ ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.arg,
         ast.If,
         ast.Return,
+        ast.Assign,
+        ast.Raise,
         ast.Compare,
         ast.Lt,
         ast.LtE,
+        ast.Eq,
         ast.BinOp,
         ast.Add,
         ast.Sub,
         ast.Mult,
         ast.Mod,
+        ast.BitAnd,
         ast.UnaryOp,
         ast.USub,
         ast.Call,
         ast.Name,
         ast.Constant,
         ast.Load,
+        ast.Store,
     }
 )
 
 # Names used in function calls and type annotations
-ALLOWED_CALL_NAMES: frozenset[str] = frozenset({"abs", "int"})
+ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
+    {
+        "abs",
+        "int",
+        "ValueError",
+        "__i32_wrap",
+        "__i32_add",
+        "__i32_mul",
+        "__i32_abs",
+        "__i32_mod",
+    }
+)
+
+# Variable names used in int32 helper prelude and rendered function body.
+ALLOWED_VAR_NAMES: frozenset[str] = frozenset(
+    {
+        "value",
+        "lhs",
+        "rhs",
+        "divisor",
+        "value_i32",
+        "divisor_i32",
+    }
+)
+
+# Call arity requirements: function name -> allowed arg counts.
+CALL_ARITIES: dict[str, set[int]] = {
+    "abs": {1},
+    "int": {1},
+    "ValueError": {1},
+    "__i32_wrap": {1},
+    "__i32_add": {2},
+    "__i32_mul": {2},
+    "__i32_abs": {1},
+    "__i32_mod": {2},
+}

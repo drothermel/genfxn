@@ -14,9 +14,9 @@ DEFAULT_BUDGETS = {
 }
 
 DEFAULT_WORKERS = {
-    "fast": 4,
-    "standard": 4,
-    "full": 2,
+    "fast": "auto",
+    "standard": "auto",
+    "full": "auto",
 }
 
 
@@ -31,6 +31,17 @@ def _parse_duration_seconds(output: str) -> float | None:
     return float(matches[-1])
 
 
+def _parse_workers(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized == "auto":
+        return "auto"
+    if normalized.isdigit():
+        return str(int(normalized))
+    raise argparse.ArgumentTypeError(
+        "workers must be a non-negative integer or 'auto'"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -41,14 +52,17 @@ def main() -> int:
     parser.add_argument(
         "--tier",
         choices=("fast", "standard", "full"),
-        default="standard",
+        default="full",
         help="Verification tier to run.",
     )
     parser.add_argument(
         "--workers",
-        type=int,
+        type=_parse_workers,
         default=None,
-        help="xdist worker count. Defaults to tuned per-tier values.",
+        help=(
+            "xdist worker count or 'auto'. "
+            "Defaults to machine-maximizing per-tier values."
+        ),
     )
     parser.add_argument(
         "--durations",
@@ -106,7 +120,7 @@ def main() -> int:
         f"--durations={args.durations}",
         f"--durations-min={args.durations_min}",
     ]
-    if workers > 0 and _has_xdist():
+    if _has_xdist():
         cmd.extend(["-n", str(workers)])
     if args.pytest_args:
         passthrough = (

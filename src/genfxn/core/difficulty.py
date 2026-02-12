@@ -30,6 +30,12 @@ GRAPH_QUERIES_WEIGHTS = {
     "mode": 0.15,
     "structure": 0.20,
 }
+TEMPORAL_LOGIC_WEIGHTS = {
+    "depth": 0.35,
+    "output_mode": 0.25,
+    "operator": 0.25,
+    "structure": 0.15,
+}
 
 
 def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
@@ -54,6 +60,8 @@ def compute_difficulty(family: str, spec: dict[str, Any]) -> int:
         return _intervals_difficulty(spec)
     elif family == "graph_queries":
         return _graph_queries_difficulty(spec)
+    elif family == "temporal_logic":
+        return _temporal_logic_difficulty(spec)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -659,8 +667,12 @@ def _intervals_difficulty(spec: dict[str, Any]) -> int:
     """Compute difficulty for intervals tasks."""
     operation_value = _enum_or_str_value(spec.get("operation"))
     boundary_value = _enum_or_str_value(spec.get("boundary_mode"))
-    merge_touching = bool(spec.get("merge_touching", False))
+    merge_touching = _coerce_bool(spec.get("merge_touching"), False)
     endpoint_clip_abs = _coerce_int(spec.get("endpoint_clip_abs"), 20)
+    endpoint_quantize_step = _coerce_int(
+        spec.get("endpoint_quantize_step"),
+        1,
+    )
 
     operation_score = _intervals_operation_score(operation_value)
     boundary_score = _intervals_boundary_score(boundary_value)
@@ -679,6 +691,7 @@ def _intervals_difficulty(spec: dict[str, Any]) -> int:
         boundary_value,
         merge_touching,
     )
+    raw += _intervals_quantize_bonus(endpoint_quantize_step)
 
     return max(1, min(5, round(raw)))
 
@@ -715,6 +728,16 @@ def _intervals_clip_score(endpoint_clip_abs: int) -> int:
     if endpoint_clip_abs <= 14:
         return 2
     return 1
+
+
+def _intervals_quantize_bonus(endpoint_quantize_step: int) -> float:
+    if endpoint_quantize_step <= 1:
+        return 0.0
+    if endpoint_quantize_step <= 2:
+        return 0.1
+    if endpoint_quantize_step <= 4:
+        return 0.15
+    return 0.4
 
 
 def _intervals_interaction_bonus(
@@ -954,6 +977,204 @@ def _graph_interaction_adjustment(
             adjustment += 0.1
 
     return adjustment
+
+
+def _temporal_logic_difficulty(spec: dict[str, Any]) -> int:
+    """Compute difficulty for temporal_logic tasks."""
+    output_mode = _enum_or_str_value(spec.get("output_mode"))
+    metrics = _temporal_formula_metrics(spec.get("formula"))
+
+    depth_score = _temporal_depth_score(metrics["max_depth"])
+    output_mode_score = _temporal_output_mode_score(output_mode)
+    operator_score = _temporal_operator_score(
+        op_sum=metrics["op_sum"],
+        op_count=metrics["op_count"],
+        op_max=metrics["op_max"],
+    )
+    structure_score = _temporal_structure_score(metrics)
+
+    w = TEMPORAL_LOGIC_WEIGHTS
+    raw = (
+        w["depth"] * depth_score
+        + w["output_mode"] * output_mode_score
+        + w["operator"] * operator_score
+        + w["structure"] * structure_score
+    )
+    raw += _temporal_interaction_adjustment(
+        output_mode=output_mode,
+        max_depth=metrics["max_depth"],
+        temporal_count=metrics["temporal_count"],
+        hard_temporal_count=metrics["hard_temporal_count"],
+    )
+    return max(1, min(5, round(raw)))
+
+
+def _temporal_output_mode_score(output_mode: str) -> int:
+    if output_mode == "sat_at_start":
+        return 1
+    if output_mode == "sat_count":
+        return 3
+    if output_mode == "first_sat_index":
+        return 5
+    return 3
+
+
+def _temporal_depth_score(max_depth: int) -> int:
+    if max_depth <= 1:
+        return 1
+    if max_depth == 2:
+        return 2
+    if max_depth == 3:
+        return 3
+    if max_depth == 4:
+        return 4
+    return 5
+
+
+def _temporal_operator_score(*, op_sum: int, op_count: int, op_max: int) -> int:
+    if op_count <= 0:
+        return 1
+    avg_score = op_sum / op_count
+    combined = 0.45 * op_max + 0.55 * avg_score
+    return max(1, min(5, round(combined)))
+
+
+def _temporal_structure_score(metrics: dict[str, int]) -> int:
+    score = 1
+    if metrics["binary_count"] >= 1:
+        score += 1
+    if metrics["binary_count"] >= 3:
+        score += 1
+    if metrics["temporal_count"] >= 2:
+        score += 1
+    if (
+        metrics["hard_temporal_count"] >= 1
+        or metrics["predicate_avg_score"] >= 2
+    ):
+        score += 1
+    return max(1, min(5, score))
+
+
+def _temporal_interaction_adjustment(
+    *,
+    output_mode: str,
+    max_depth: int,
+    temporal_count: int,
+    hard_temporal_count: int,
+) -> float:
+    adjustment = 0.0
+
+    if output_mode == "first_sat_index":
+        adjustment += 0.2
+    if max_depth <= 1 and temporal_count == 0 and output_mode == "sat_at_start":
+        adjustment -= 0.35
+    if hard_temporal_count >= 1 and max_depth >= 4:
+        adjustment += 0.35
+
+    return adjustment
+
+
+def _temporal_formula_metrics(formula: Any) -> dict[str, int]:
+    def _walk(node: Any) -> dict[str, int]:
+        if not isinstance(node, dict):
+            return {
+                "max_depth": 1,
+                "node_count": 1,
+                "op_sum": 1,
+                "op_count": 1,
+                "op_max": 1,
+                "binary_count": 0,
+                "temporal_count": 0,
+                "hard_temporal_count": 0,
+                "predicate_score_sum": 2,
+                "atom_count": 1,
+            }
+
+        op = _enum_or_str_value(node.get("op"))
+        if op == "atom":
+            predicate_score = _temporal_predicate_score(node.get("predicate"))
+            return {
+                "max_depth": 1,
+                "node_count": 1,
+                "op_sum": 1,
+                "op_count": 1,
+                "op_max": 1,
+                "binary_count": 0,
+                "temporal_count": 0,
+                "hard_temporal_count": 0,
+                "predicate_score_sum": predicate_score,
+                "atom_count": 1,
+            }
+
+        if op in {"not", "next", "eventually", "always"}:
+            child = _walk(node.get("child"))
+            op_score = 2 if op == "not" else 3
+            temporal_count = 1 if op in {"next", "eventually", "always"} else 0
+            return {
+                "max_depth": child["max_depth"] + 1,
+                "node_count": child["node_count"] + 1,
+                "op_sum": child["op_sum"] + op_score,
+                "op_count": child["op_count"] + 1,
+                "op_max": max(child["op_max"], op_score),
+                "binary_count": child["binary_count"],
+                "temporal_count": child["temporal_count"] + temporal_count,
+                "hard_temporal_count": child["hard_temporal_count"],
+                "predicate_score_sum": child["predicate_score_sum"],
+                "atom_count": child["atom_count"],
+            }
+
+        if op in {"and", "or", "until", "since"}:
+            left = _walk(node.get("left"))
+            right = _walk(node.get("right"))
+            if op in {"and", "or"}:
+                op_score = 3
+            elif op == "until":
+                op_score = 4
+            else:
+                op_score = 5
+            temporal_count = 1 if op in {"until", "since"} else 0
+            hard_temporal = 1 if op == "since" else 0
+            return {
+                "max_depth": 1 + max(left["max_depth"], right["max_depth"]),
+                "node_count": left["node_count"] + right["node_count"] + 1,
+                "op_sum": left["op_sum"] + right["op_sum"] + op_score,
+                "op_count": left["op_count"] + right["op_count"] + 1,
+                "op_max": max(left["op_max"], right["op_max"], op_score),
+                "binary_count": (
+                    left["binary_count"] + right["binary_count"] + 1
+                ),
+                "temporal_count": (
+                    left["temporal_count"]
+                    + right["temporal_count"]
+                    + temporal_count
+                ),
+                "hard_temporal_count": (
+                    left["hard_temporal_count"]
+                    + right["hard_temporal_count"]
+                    + hard_temporal
+                ),
+                "predicate_score_sum": (
+                    left["predicate_score_sum"] + right["predicate_score_sum"]
+                ),
+                "atom_count": left["atom_count"] + right["atom_count"],
+            }
+
+        return _walk({"op": "atom", "predicate": node.get("predicate")})
+
+    metrics = _walk(formula)
+    atom_count = max(1, metrics["atom_count"])
+    predicate_avg = metrics["predicate_score_sum"] / atom_count
+    metrics["predicate_avg_score"] = round(predicate_avg)
+    return metrics
+
+
+def _temporal_predicate_score(predicate: Any) -> int:
+    value = _enum_or_str_value(predicate)
+    if value in {"eq", "ne"}:
+        return 1
+    if value in {"lt", "le", "gt", "ge"}:
+        return 2
+    return 2
 
 
 def _enum_or_str_value(value: Any) -> str:

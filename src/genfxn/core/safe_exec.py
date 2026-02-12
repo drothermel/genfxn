@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import atexit
 import errno
+import logging
+import math
 import multiprocessing as mp
 import os
 import pickle
@@ -11,6 +13,8 @@ import time
 from dataclasses import dataclass
 from queue import Empty
 from typing import Any, cast
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SafeExecValidationError(ValueError):
@@ -159,11 +163,32 @@ def _set_process_group() -> None:
         return
 
 
+def _can_kill_process_group(pid: int | None) -> bool:
+    if os.name != "posix" or pid is None or pid <= 0:
+        return False
+    try:
+        return os.getpgid(pid) == pid
+    except ProcessLookupError:
+        return False
+    except OSError as exc:
+        if exc.errno == errno.ESRCH:
+            return False
+        return False
+    except Exception:
+        return False
+
+
 def _terminate_process_tree(process: mp.Process) -> None:
     pid = process.pid
+    can_killpg = os.name == "posix" and pid is not None and pid > 0
+    # If the worker is still alive, only use killpg when it is clearly a
+    # process-group leader. If it already exited, keep the historical killpg
+    # attempt so lingering descendants in that group are still cleaned up.
+    if can_killpg and process.is_alive():
+        can_killpg = _can_kill_process_group(pid)
 
     def _killpg(sig: signal.Signals) -> None:
-        if pid is None or pid <= 0:
+        if not can_killpg or pid is None or pid <= 0:
             return
         try:
             os.killpg(pid, sig)
@@ -191,14 +216,20 @@ def _terminate_process_tree(process: mp.Process) -> None:
         try:
             process.terminate()
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: process.terminate() failed",
+                exc_info=True,
+            )
         process.join(timeout=0.2)
 
     if process.is_alive():
         try:
             process.kill()
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: process.kill() failed",
+                exc_info=True,
+            )
         process.join(timeout=0.2)
 
 
@@ -219,6 +250,43 @@ _SAFE_EXEC_START_METHOD_ENV = "GENFXN_SAFE_EXEC_START_METHOD"
 _DEFAULT_MAX_RESULT_BYTES = 1_000_000
 _RESULT_QUEUE_GRACE_SEC = 0.25
 _RESULT_QUEUE_POLL_SEC = 0.05
+_PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC = 1.0
+_MAX_RESULT_NESTING_DEPTH = 32
+
+
+def _persistent_startup_timeout_sec(timeout_sec: float) -> float:
+    return max(timeout_sec, _PERSISTENT_STARTUP_TIMEOUT_FLOOR_SEC)
+
+
+def _validate_execution_limits(
+    *,
+    timeout_sec: float,
+    memory_limit_mb: int | None,
+    max_result_bytes: int | None,
+) -> None:
+    if (
+        isinstance(timeout_sec, bool)
+        or not isinstance(timeout_sec, int | float)
+        or not math.isfinite(timeout_sec)
+        or timeout_sec <= 0
+    ):
+        raise ValueError("timeout_sec must be a finite number > 0")
+
+    if memory_limit_mb is not None and (
+        isinstance(memory_limit_mb, bool)
+        or not isinstance(memory_limit_mb, int)
+        or memory_limit_mb <= 0
+    ):
+        raise ValueError("memory_limit_mb must be a positive integer or None")
+
+    if max_result_bytes is not None and (
+        isinstance(max_result_bytes, bool)
+        or not isinstance(max_result_bytes, int)
+        or max_result_bytes <= 0
+    ):
+        raise ValueError(
+            "max_result_bytes must be a positive integer or None"
+        )
 
 
 def _is_spawn_bootstrap_error(exc: BaseException) -> bool:
@@ -238,6 +306,31 @@ def _bootstrap_error(method: str, exc: BaseException) -> SafeExecBootstrapError:
         "`freeze_support()` when needed), or on POSIX use "
         f"`{_SAFE_EXEC_START_METHOD_ENV}=fork`. Original error: {exc}"
     )
+
+
+def _is_spawn_like_method(method: str) -> bool:
+    return method in {"spawn", "forkserver"}
+
+
+def _has_importable_main_module() -> bool:
+    try:
+        import __main__
+    except Exception:
+        return False
+
+    main_file = getattr(__main__, "__file__", None)
+    if not isinstance(main_file, str) or not main_file:
+        return False
+
+    # `spawn`/`forkserver` need an importable script file. Interactive modes
+    # (`<stdin>`, `<string>`, REPL) do not satisfy this requirement.
+    if main_file.startswith("<") and main_file.endswith(">"):
+        return False
+    return True
+
+
+def _should_map_startup_crash_to_bootstrap_error(method: str) -> bool:
+    return _is_spawn_like_method(method) and not _has_importable_main_module()
 
 
 def _get_mp_context() -> mp.context.BaseContext:
@@ -274,12 +367,11 @@ def _exec_worker(
 ) -> None:
     _set_process_group()
     _set_memory_limit(memory_limit_mb)
-    globals_dict: dict[str, Any] = {"__builtins__": allowed_builtins}
-    namespace: dict[str, Any] = {}
+    execution_env: dict[str, Any] = {"__builtins__": allowed_builtins}
 
     try:
-        exec(code, globals_dict, namespace)  # noqa: S102
-        func = namespace.get("f")
+        exec(code, execution_env, execution_env)  # noqa: S102
+        func = execution_env.get("f")
         if func is None:
             raise NameError("Function 'f' not found in code namespace")
         if not callable(func):
@@ -310,14 +402,63 @@ def _exec_worker(
         )
 
 
+def _sanitize_worker_result_value(value: Any, depth: int = 0) -> Any:
+    if depth > _MAX_RESULT_NESTING_DEPTH:
+        raise TypeError("Worker result exceeded maximum nesting depth")
+
+    if (
+        value is None
+        or isinstance(value, bool)
+        or isinstance(value, int)
+        or isinstance(value, float)
+        or isinstance(value, str)
+    ):
+        return value
+
+    if isinstance(value, list):
+        return [
+            _sanitize_worker_result_value(item, depth + 1)
+            for item in value
+        ]
+
+    if isinstance(value, tuple):
+        return tuple(
+            _sanitize_worker_result_value(item, depth + 1)
+            for item in value
+        )
+
+    if isinstance(value, dict):
+        sanitized: dict[Any, Any] = {}
+        for key, item in value.items():
+            if not (
+                key is None
+                or isinstance(key, bool)
+                or isinstance(key, int)
+                or isinstance(key, float)
+                or isinstance(key, str)
+            ):
+                raise TypeError(
+                    "Unsupported worker result dict key type: "
+                    f"{type(key).__name__}"
+                )
+            sanitized[key] = _sanitize_worker_result_value(item, depth + 1)
+        return sanitized
+
+    raise TypeError(f"Unsupported worker result type: {type(value).__name__}")
+
+
 def _put_worker_result(
     queue: mp.Queue,
     result: _WorkerResult,
     max_result_bytes: int | None,
 ) -> None:
-    if max_result_bytes is not None:
+    sanitized_result = result
+    if result.ok:
         try:
-            payload = pickle.dumps(result, protocol=pickle.HIGHEST_PROTOCOL)
+            sanitized_result = _WorkerResult(
+                ok=True,
+                value=_sanitize_worker_result_value(result.value),
+            )
         except Exception as exc:
             queue.put(
                 _WorkerResult(
@@ -330,6 +471,28 @@ def _put_worker_result(
                 )
             )
             return
+
+    # Always pre-serialize to surface serialization failures synchronously.
+    # Otherwise Queue feeder-thread errors can be misreported as timeouts.
+    try:
+        payload = pickle.dumps(
+            sanitized_result,
+            protocol=pickle.HIGHEST_PROTOCOL,
+        )
+    except Exception as exc:
+        queue.put(
+            _WorkerResult(
+                ok=False,
+                error_type="RuntimeError",
+                error_message=(
+                    "Failed to serialize worker result: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+            )
+        )
+        return
+
+    if max_result_bytes is not None:
         payload_size = len(payload)
         if payload_size > max_result_bytes:
             queue.put(
@@ -343,7 +506,7 @@ def _put_worker_result(
                 )
             )
             return
-    queue.put(result)
+    queue.put(sanitized_result)
 
 
 def _run_isolated(
@@ -376,15 +539,8 @@ def _run_isolated(
         if _is_spawn_bootstrap_error(exc):
             raise _bootstrap_error(method, exc) from exc
         raise
-    process.join(timeout_sec)
 
-    if process.is_alive():
-        _terminate_process_tree(process)
-        raise SafeExecTimeoutError(
-            f"Code execution timed out after {timeout_sec} seconds"
-        )
-
-    deadline = time.monotonic() + _RESULT_QUEUE_GRACE_SEC
+    deadline = time.monotonic() + timeout_sec
     result: _WorkerResult | None = None
     while result is None:
         remaining = deadline - time.monotonic()
@@ -394,13 +550,36 @@ def _run_isolated(
         try:
             result = queue.get(timeout=timeout)
         except Empty:
-            continue
+            if not process.is_alive():
+                break
+
+    if result is None and process.is_alive():
+        _terminate_process_tree(process)
+        raise SafeExecTimeoutError(
+            f"Code execution timed out after {timeout_sec} seconds"
+        )
+
+    if result is None:
+        deadline = time.monotonic() + _RESULT_QUEUE_GRACE_SEC
+        while result is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            timeout = min(_RESULT_QUEUE_POLL_SEC, remaining)
+            try:
+                result = queue.get(timeout=timeout)
+            except Empty:
+                continue
+
     if result is None:
         if process.exitcode not in (None, 0):
             raise RuntimeError(
                 f"Execution worker crashed with exit code {process.exitcode}"
             )
         raise RuntimeError("Execution worker exited without a result")
+
+    process.join(timeout=0)
+
     if not result.ok:
         error_type = result.error_type or "RuntimeError"
         error_message = result.error_message or "Unknown execution error"
@@ -442,14 +621,20 @@ class _IsolatedFunction:
         try:
             atexit.unregister(self.close)
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: atexit.unregister() failed",
+                exc_info=True,
+            )
         self._worker.close()
 
     def __del__(self) -> None:
         try:
             self.close()
         except Exception:
-            pass
+            _LOGGER.debug(
+                "safe_exec cleanup: __del__ close() failed",
+                exc_info=True,
+            )
 
 
 def _persistent_worker(
@@ -462,12 +647,11 @@ def _persistent_worker(
 ) -> None:
     _set_process_group()
     _set_memory_limit(memory_limit_mb)
-    globals_dict: dict[str, Any] = {"__builtins__": allowed_builtins}
-    namespace: dict[str, Any] = {}
+    execution_env: dict[str, Any] = {"__builtins__": allowed_builtins}
 
     try:
-        exec(code, globals_dict, namespace)  # noqa: S102
-        func = namespace.get("f")
+        exec(code, execution_env, execution_env)  # noqa: S102
+        func = execution_env.get("f")
         if func is None:
             raise NameError("Function 'f' not found in code namespace")
         if not callable(func):
@@ -567,18 +751,30 @@ class _PersistentWorker:
             raise
 
         try:
+            startup_timeout_sec = _persistent_startup_timeout_sec(timeout_sec)
             init_result: _WorkerResult = self._response_queue.get(
-                timeout=timeout_sec
+                timeout=startup_timeout_sec
             )
         except Empty:
             self._terminate()
             if self._process.exitcode not in (None, 0):
+                if _should_map_startup_crash_to_bootstrap_error(
+                    self._start_method
+                ):
+                    raise _bootstrap_error(
+                        self._start_method,
+                        RuntimeError(
+                            "worker exited during startup with exit code "
+                            f"{self._process.exitcode}"
+                        ),
+                    )
                 raise RuntimeError(
                     "Execution worker crashed during startup with "
                     f"exit code {self._process.exitcode}"
                 )
             raise SafeExecTimeoutError(
-                f"Code execution timed out after {timeout_sec} seconds"
+                "Code execution startup timed out after "
+                f"{startup_timeout_sec} seconds"
             )
 
         if not init_result.ok:
@@ -598,6 +794,12 @@ class _PersistentWorker:
                 timeout=timeout_sec
             )
         except Empty:
+            if not self._process.is_alive():
+                exit_code = self._process.exitcode
+                self._terminate()
+                raise RuntimeError(
+                    f"Execution worker crashed with exit code {exit_code}"
+                )
             self._terminate()
             raise SafeExecTimeoutError(
                 f"Code execution timed out after {timeout_sec} seconds"
@@ -619,18 +821,27 @@ class _PersistentWorker:
                     )
                     self._process.join(timeout=0.2)
                 except Exception:
-                    pass
+                    _LOGGER.debug(
+                        "safe_exec cleanup: worker shutdown signal failed",
+                        exc_info=True,
+                    )
                 self._terminate()
         finally:
             for q in (self._request_queue, self._response_queue):
                 try:
                     q.close()
                 except Exception:
-                    pass
+                    _LOGGER.debug(
+                        "safe_exec cleanup: queue.close() failed",
+                        exc_info=True,
+                    )
                 try:
                     q.join_thread()
                 except Exception:
-                    pass
+                    _LOGGER.debug(
+                        "safe_exec cleanup: queue.join_thread() failed",
+                        exc_info=True,
+                    )
 
 
 def execute_code_restricted(
@@ -656,6 +867,11 @@ def execute_code_restricted(
             "Pass trust_untrusted_code=True only for trusted inputs."
         )
 
+    _validate_execution_limits(
+        timeout_sec=timeout_sec,
+        memory_limit_mb=memory_limit_mb,
+        max_result_bytes=max_result_bytes,
+    )
     _validate_untrusted_code(code)
     return {
         "f": _IsolatedFunction(

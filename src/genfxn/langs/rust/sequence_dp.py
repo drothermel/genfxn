@@ -1,3 +1,4 @@
+from genfxn.langs.rust._helpers import rust_i64_literal
 from genfxn.sequence_dp.models import SequenceDpSpec, TieBreakOrder
 
 _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
@@ -8,13 +9,6 @@ _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
     TieBreakOrder.LEFT_DIAG_UP: ("left", "diag", "up"),
     TieBreakOrder.LEFT_UP_DIAG: ("left", "up", "diag"),
 }
-
-
-def _i64_literal(value: int) -> str:
-    if value == -(1 << 63):
-        return "i64::MIN"
-    return f"{value}i64"
-
 
 def render_sequence_dp(
     spec: SequenceDpSpec,
@@ -36,12 +30,15 @@ def render_sequence_dp(
         f'    let template = "{spec.template.value}";',
         f'    let output_mode = "{spec.output_mode.value}";',
         f'    let predicate_kind = "{kind}";',
-        f"    let max_diff: i64 = {_i64_literal(max_diff)};",
-        f"    let divisor: i64 = {_i64_literal(divisor)};",
-        f"    let remainder: i64 = {_i64_literal(remainder)};",
-        f"    let match_score: i64 = {_i64_literal(spec.match_score)};",
-        f"    let mismatch_score: i64 = {_i64_literal(spec.mismatch_score)};",
-        f"    let gap_score: i64 = {_i64_literal(spec.gap_score)};",
+        f"    let max_diff: i64 = {rust_i64_literal(max_diff)};",
+        f"    let divisor: i64 = {rust_i64_literal(divisor)};",
+        f"    let remainder: i64 = {rust_i64_literal(remainder)};",
+        f"    let match_score: i64 = {rust_i64_literal(spec.match_score)};",
+        (
+            "    let mismatch_score: i64 = "
+            f"{rust_i64_literal(spec.mismatch_score)};"
+        ),
+        f"    let gap_score: i64 = {rust_i64_literal(spec.gap_score)};",
         "    let tie_order: [&str; 3] = [" + tie_values + "];",
         "",
         f"    let n = {a_var}.len();",
@@ -52,17 +49,19 @@ def render_sequence_dp(
         "    if template == \"global\" {",
         "        for i in 1..=n {",
         "            let prev = dp[i - 1][0];",
-        (
-            "            dp[i][0] = [prev[0] + gap_score, prev[1] + 1, "
-            "prev[2] + 1];"
-        ),
+        "            dp[i][0] = [",
+        "                prev[0].wrapping_add(gap_score),",
+        "                prev[1].wrapping_add(1),",
+        "                prev[2].wrapping_add(1),",
+        "            ];",
         "        }",
         "        for j in 1..=m {",
         "            let prev = dp[0][j - 1];",
-        (
-            "            dp[0][j] = [prev[0] + gap_score, prev[1] + 1, "
-            "prev[2] + 1];"
-        ),
+        "            dp[0][j] = [",
+        "                prev[0].wrapping_add(gap_score),",
+        "                prev[1].wrapping_add(1),",
+        "                prev[2].wrapping_add(1),",
+        "            ];",
         "        }",
         "    }",
         "",
@@ -72,13 +71,16 @@ def render_sequence_dp(
         "        for j in 1..=m {",
         f"            let ai = {a_var}[i - 1];",
         f"            let bj = {b_var}[j - 1];",
-        "            let is_match = if predicate_kind == \"eq\" {",
-        "                ai == bj",
-        "            } else if predicate_kind == \"abs_diff_le\" {",
-        "                ai.abs_diff(bj) <= max_diff as u64",
-        "            } else {",
-        "                (ai - bj).rem_euclid(divisor) == remainder",
-        "            };",
+            "            let is_match = if predicate_kind == \"eq\" {",
+            "                ai == bj",
+            "            } else if predicate_kind == \"abs_diff_le\" {",
+            "                ai.abs_diff(bj) <= (max_diff as u64)",
+            "            } else {",
+            (
+                "                ai.wrapping_sub(bj).rem_euclid(divisor) == "
+                "remainder"
+            ),
+            "            };",
         "",
         "            let prev_diag = dp[i - 1][j - 1];",
         "            let delta = if is_match {",
@@ -86,16 +88,25 @@ def render_sequence_dp(
         "            } else {",
         "                mismatch_score",
         "            };",
-        "            let diag = [prev_diag[0] + delta, prev_diag[1] + 1, "
-        "prev_diag[2]];",
+        "            let diag = [",
+        "                prev_diag[0].wrapping_add(delta),",
+        "                prev_diag[1].wrapping_add(1),",
+        "                prev_diag[2],",
+        "            ];",
         "",
         "            let prev_up = dp[i - 1][j];",
-        "            let up = [prev_up[0] + gap_score, prev_up[1] + 1, "
-        "prev_up[2] + 1];",
+        "            let up = [",
+        "                prev_up[0].wrapping_add(gap_score),",
+        "                prev_up[1].wrapping_add(1),",
+        "                prev_up[2].wrapping_add(1),",
+        "            ];",
         "",
         "            let prev_left = dp[i][j - 1];",
-        "            let left = [prev_left[0] + gap_score, prev_left[1] + 1, "
-        "prev_left[2] + 1];",
+        "            let left = [",
+        "                prev_left[0].wrapping_add(gap_score),",
+        "                prev_left[1].wrapping_add(1),",
+        "                prev_left[2].wrapping_add(1),",
+        "            ];",
         "",
         "            let best_score = diag[0].max(up[0]).max(left[0]);",
         "            let mut chosen = diag;",

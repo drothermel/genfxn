@@ -1,15 +1,25 @@
 import json
+import math
+import os
 import random
+import re
+import stat
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, TextIO, cast
 
 import srsly
 import typer
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
-from genfxn.core.codegen import get_spec_value, task_id_from_spec
+from genfxn.core.codegen import (
+    get_spec_value,
+    task_id_from_spec,
+)
 from genfxn.core.describe import describe_task
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
@@ -41,7 +51,7 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.splits import AxisHoldout, HoldoutType
+from genfxn.splits import AxisHoldout, HoldoutType, matches_holdout
 from genfxn.stack_bytecode.models import (
     StackBytecodeAxes,
     StackBytecodeSpec,
@@ -57,6 +67,8 @@ from genfxn.stringrules.models import (
     StringRulesSpec,
 )
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
@@ -66,6 +78,31 @@ _bitops_spec_adapter = TypeAdapter(BitopsSpec)
 _sequence_dp_spec_adapter = TypeAdapter(SequenceDpSpec)
 _intervals_spec_adapter = TypeAdapter(IntervalsSpec)
 _graph_queries_spec_adapter = TypeAdapter(GraphQueriesSpec)
+_temporal_logic_spec_adapter = TypeAdapter(TemporalLogicSpec)
+_NON_FINITE_TOKENS = frozenset(
+    {
+        "nan",
+        "+nan",
+        "-nan",
+        "inf",
+        "+inf",
+        "-inf",
+        "infinity",
+        "+infinity",
+        "-infinity",
+    }
+)
+_UNSET_SAMPLE = object()
+_NUMERIC_LIKE_TOKEN_RE = re.compile(
+    r"^[+\-]?(?:\d[\d.eE+\-]*|\.\d[\d.eE+\-]*)$"
+)
+
+
+class _TaskRowError(Exception):
+    def __init__(self, *, line_number: int, reason: str):
+        self.line_number = line_number
+        self.reason = reason
+        super().__init__(reason)
 
 
 def _parse_range(value: str | None) -> tuple[int, int] | None:
@@ -96,9 +133,325 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
         ) from err
 
 
+def _parse_numeric_range(
+    value: str | None,
+) -> tuple[int | float, int | float] | None:
+    """Parse 'lo,hi' into numeric tuple (ints or floats)."""
+    if value is None:
+        return None
+    try:
+        parts = value.split(",")
+        if len(parts) != 2:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
+            )
+        lo_s, hi_s = parts[0].strip(), parts[1].strip()
+        if not lo_s or not hi_s:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
+            )
+
+        def _parse_bound(raw: str) -> int | float:
+            # Parse integer-looking tokens as ints first to avoid precision loss
+            # from float round-trips on large values.
+            if "." not in raw and "e" not in raw.lower():
+                try:
+                    return int(raw)
+                except ValueError:
+                    pass
+
+            parsed_float = float(raw)
+            if not math.isfinite(parsed_float):
+                raise typer.BadParameter(
+                    f"Invalid range '{value}': bounds must be finite numbers "
+                    "(no nan/inf/-inf)"
+                )
+            return parsed_float
+
+        lo = _parse_bound(lo_s)
+        hi = _parse_bound(hi_s)
+        if lo > hi:
+            raise typer.BadParameter(
+                f"Invalid range '{value}': low must be <= high"
+            )
+        return lo, hi
+    except ValueError as err:
+        raise typer.BadParameter(
+            f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
+        ) from err
+
+
+def _contains_non_finite_number(value: Any) -> bool:
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, list | tuple | set | frozenset):
+        return any(_contains_non_finite_number(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            _contains_non_finite_number(key)
+            or _contains_non_finite_number(item)
+            for key, item in value.items()
+        )
+    return False
+
+
+def _looks_like_json_literal(value: str) -> bool:
+    stripped = value.lstrip()
+    return stripped.startswith(("[", "{", '"'))
+
+
+def _looks_like_malformed_json_scalar(value: str) -> bool:
+    stripped = value.strip()
+    if not stripped:
+        return False
+
+    lowered = stripped.lower()
+    if lowered in {"true", "false", "null"} and stripped != lowered:
+        return True
+
+    for keyword in ("true", "false", "null"):
+        if keyword.startswith(lowered) and lowered != keyword:
+            return True
+
+    return _NUMERIC_LIKE_TOKEN_RE.fullmatch(stripped) is not None
+
+
+def _parse_non_range_holdout_value(value: str) -> Any:
+    try:
+        parsed_value = json.loads(value)
+    except json.JSONDecodeError as err:
+        if value.strip().lower() in _NON_FINITE_TOKENS:
+            raise typer.BadParameter(
+                f"Invalid holdout value '{value}': non-finite numbers "
+                "(nan/inf/-inf) are not allowed for exact/contains "
+                "holdouts"
+            )
+        if _looks_like_json_literal(value):
+            raise typer.BadParameter(
+                f"Invalid holdout value '{value}': malformed JSON literal "
+                "for exact/contains holdouts"
+            ) from err
+        if _looks_like_malformed_json_scalar(value):
+            raise typer.BadParameter(
+                f"Invalid holdout value '{value}': malformed JSON scalar "
+                "for exact/contains holdouts"
+            ) from err
+        return value
+
+    if _contains_non_finite_number(parsed_value):
+        raise typer.BadParameter(
+            f"Invalid holdout value '{value}': non-finite numbers "
+            "(nan/inf/-inf) are not allowed for exact/contains holdouts"
+        )
+    return parsed_value
+
+
 def _iter_validated_tasks(input_file: Path):
-    for raw in srsly.read_jsonl(input_file):
-        yield Task.model_validate(raw)
+    with input_file.open("r", encoding="utf-8") as input_handle:
+        for line_number, line in enumerate(input_handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                raw = json.loads(stripped)
+            except json.JSONDecodeError as err:
+                raise _TaskRowError(
+                    line_number=line_number,
+                    reason=f"malformed JSON ({err.msg})",
+                ) from err
+            try:
+                yield Task.model_validate(raw)
+            except ValidationError as err:
+                first_error = err.errors(include_url=False)[0]
+                loc = ".".join(str(item) for item in first_error["loc"])
+                message = first_error["msg"]
+                raise _TaskRowError(
+                    line_number=line_number,
+                    reason=f"invalid task row at '{loc}': {message}",
+                ) from err
+
+
+def _render_task_row_error(input_file: Path, error: _TaskRowError) -> str:
+    return (
+        f"Error: invalid JSONL row in {input_file} at line "
+        f"{error.line_number}: {error.reason}"
+    )
+
+
+def _render_os_error(error: OSError) -> str:
+    path = error.filename2 or error.filename
+    if path is not None:
+        detail = error.strerror or str(error)
+        return f"Error: file operation failed for '{path}': {detail}"
+    return f"Error: file operation failed: {error}"
+
+
+def _safe_unlink(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def _safe_close_fd(fd: int | None) -> None:
+    if fd is None:
+        return
+    try:
+        os.close(fd)
+    except OSError:
+        return
+
+
+def _move_existing_output_to_backup(path: Path) -> Path | None:
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return None
+
+    backup_fd, backup_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".bak",
+        dir=path.parent,
+    )
+    os.close(backup_fd)
+    backup = Path(backup_name)
+    _safe_unlink(backup)
+    os.replace(path, backup)
+    return backup
+
+
+def _restore_backup(path: Path, backup: Path | None) -> None:
+    if backup is None:
+        return
+    os.replace(backup, path)
+
+
+def _commit_split_outputs(
+    *,
+    train_tmp: Path,
+    train: Path,
+    test_tmp: Path,
+    test: Path,
+) -> None:
+    train_backup: Path | None = None
+    test_backup: Path | None = None
+    train_replaced = False
+    test_replaced = False
+    try:
+        train_backup = _move_existing_output_to_backup(train)
+        test_backup = _move_existing_output_to_backup(test)
+
+        os.replace(train_tmp, train)
+        train_replaced = True
+        os.replace(test_tmp, test)
+        test_replaced = True
+    except Exception:
+        if train_replaced:
+            _safe_unlink(train)
+        if test_replaced:
+            _safe_unlink(test)
+        _restore_backup(train, train_backup)
+        _restore_backup(test, test_backup)
+        raise
+    finally:
+        _safe_unlink(train_tmp)
+        _safe_unlink(test_tmp)
+        if train_backup is not None:
+            _safe_unlink(train_backup)
+        if test_backup is not None:
+            _safe_unlink(test_backup)
+
+
+def _paths_resolve_to_same_target(left: Path, right: Path) -> bool:
+    left_resolved = left.expanduser().resolve(strict=False)
+    right_resolved = right.expanduser().resolve(strict=False)
+    return left_resolved == right_resolved
+
+
+@contextmanager
+def _atomic_split_outputs(
+    train: Path, test: Path
+) -> Iterator[tuple[TextIO, TextIO]]:
+    train_fd: int | None = None
+    test_fd: int | None = None
+    train_tmp: Path | None = None
+    test_tmp: Path | None = None
+    try:
+        train_fd, train_tmp_name = tempfile.mkstemp(
+            prefix=f".{train.name}.",
+            suffix=".tmp",
+            dir=train.parent,
+        )
+        train_tmp = Path(train_tmp_name)
+
+        test_fd, test_tmp_name = tempfile.mkstemp(
+            prefix=f".{test.name}.",
+            suffix=".tmp",
+            dir=test.parent,
+        )
+        test_tmp = Path(test_tmp_name)
+
+        with (
+            os.fdopen(train_fd, "w", encoding="utf-8") as train_handle,
+            os.fdopen(test_fd, "w", encoding="utf-8") as test_handle,
+        ):
+            train_fd = None
+            test_fd = None
+            yield train_handle, test_handle
+        _commit_split_outputs(
+            train_tmp=train_tmp,
+            train=train,
+            test_tmp=test_tmp,
+            test=test,
+        )
+    except Exception:
+        _safe_close_fd(train_fd)
+        _safe_close_fd(test_fd)
+        if train_tmp is not None:
+            _safe_unlink(train_tmp)
+        if test_tmp is not None:
+            _safe_unlink(test_tmp)
+        raise
+
+
+@contextmanager
+def _atomic_output_file(path: Path) -> Iterator[TextIO]:
+    try:
+        target_mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        target_mode = 0o666 & ~current_umask
+
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+        )
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = None
+            yield handle
+        os.chmod(tmp_path, target_mode)
+        os.replace(tmp_path, path)
+    except Exception:
+        _safe_close_fd(fd)
+        if tmp_path is not None:
+            _safe_unlink(tmp_path)
+        raise
+
+
+@contextmanager
+def _atomic_output_file_or_exit(path: Path) -> Iterator[TextIO]:
+    try:
+        with _atomic_output_file(path) as handle:
+            yield handle
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
 
 
 def _write_task_line(handle, task: Task) -> None:
@@ -107,33 +460,11 @@ def _write_task_line(handle, task: Task) -> None:
 
 
 def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
-    value = get_spec_value(task.spec, holdout.axis_path)
-    if value is None:
-        return False
-
-    match holdout.holdout_type:
-        case HoldoutType.EXACT:
-            return value == holdout.holdout_value
-        case HoldoutType.RANGE:
-            lo, hi = holdout.holdout_value
-            if not isinstance(value, int | float):
-                return False
-            return lo <= value <= hi
-        case HoldoutType.CONTAINS:
-            try:
-                return holdout.holdout_value in value
-            except TypeError:
-                return False
-    return False
+    return matches_holdout(task, holdout)
 
 
-def _count_nonempty_jsonl_lines(input_file: Path) -> int:
-    count = 0
-    with input_file.open("rb") as handle:
-        for line in handle:
-            if line.strip():
-                count += 1
-    return count
+def _count_validated_tasks(input_file: Path) -> int:
+    return sum(1 for _ in _iter_validated_tasks(input_file))
 
 
 def _parse_single_language(language: str) -> Language:
@@ -207,6 +538,11 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
         case "graph_queries":
             spec_obj = _graph_queries_spec_adapter.validate_python(
                 task.spec, strict=True
+            )
+        case "temporal_logic":
+            spec_obj = _temporal_logic_spec_adapter.validate_python(
+                task.spec,
+                strict=True,
             )
         case _:
             raise typer.BadParameter(f"Unknown family: {task.family}")
@@ -425,11 +761,29 @@ def _build_graph_queries_axes(
         parsed = _parse_range(value_range)
         if parsed is not None:
             lo, hi = parsed
-            if hi >= 0:
-                kwargs["weight_range"] = (max(0, lo), hi)
+            if hi < 0:
+                raise typer.BadParameter(
+                    "Invalid --value-range for graph_queries: "
+                    "range must overlap non-negative edge weights"
+                )
+            kwargs["weight_range"] = (max(0, lo), hi)
     if list_length_range:
         kwargs["n_nodes_range"] = _parse_range(list_length_range)
     return GraphQueriesAxes(**kwargs)
+
+
+def _build_temporal_logic_axes(
+    value_range: str | None,
+    list_length_range: str | None,
+) -> TemporalLogicAxes:
+    kwargs: dict[str, Any] = {}
+    if value_range:
+        parsed = _parse_range(value_range)
+        kwargs["value_range"] = parsed
+        kwargs["predicate_constant_range"] = parsed
+    if list_length_range:
+        kwargs["sequence_length_range"] = _parse_range(list_length_range)
+    return TemporalLogicAxes(**kwargs)
 
 
 def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
@@ -479,7 +833,7 @@ def generate(
             help=(
                 "piecewise, stateful, simple_algorithms, stringrules, "
                 "bitops, sequence_dp, intervals, graph_queries, "
-                "stack_bytecode, fsm, or all"
+                "temporal_logic, stack_bytecode, fsm, or all"
             ),
         ),
     ] = "all",
@@ -497,6 +851,16 @@ def generate(
             help="Single language to render: python, java, or rust.",
         ),
     ] = "python",
+    no_i32_wrap: Annotated[
+        bool,
+        typer.Option(
+            "--no-i32-wrap",
+            help=(
+                "Disable int32 wrapping helpers in generated Python for "
+                "piecewise/stateful/simple_algorithms."
+            ),
+        ),
+    ] = False,
     # Difficulty presets
     difficulty: Annotated[
         int | None,
@@ -629,6 +993,10 @@ def generate(
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1) from err
 
+    if count < 0:
+        typer.echo("Error: --count must be >= 0", err=True)
+        raise typer.Exit(1)
+
     # Validate difficulty/variant options
     if difficulty is not None:
         if family == "all":
@@ -692,72 +1060,80 @@ def generate(
             )
             raise typer.Exit(1)
 
-    # Build axes for all families (or use preset if difficulty specified)
-    if difficulty is not None:
-        # Use difficulty preset - generate axes per task for variety
-        pass  # Will build axes in the generation loop
-    else:
-        # Build static axes from CLI options
-        stateful_axes = _build_stateful_axes(
-            templates=templates,
-            predicate_types=predicate_types,
-            transform_types=transform_types,
-            value_range=value_range,
-            threshold_range=threshold_range,
-            divisor_range=divisor_range,
-            list_length_range=list_length_range,
-            shift_range=shift_range,
-            scale_range=scale_range,
-        )
-        piecewise_axes = _build_piecewise_axes(
-            n_branches=n_branches,
-            expr_types=expr_types,
-            value_range=value_range,
-            threshold_range=threshold_range,
-            divisor_range=divisor_range,
-            coeff_range=coeff_range,
-        )
-        simple_algo_axes = _build_simple_algorithms_axes(
-            algorithm_types=algorithm_types,
-            tie_break_modes=tie_break_modes,
-            counting_modes=counting_modes,
-            window_size_range=window_size_range,
-            target_range=target_range,
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
-        stringrules_axes = _build_stringrules_axes(
-            n_rules=n_rules,
-            string_predicate_types=string_predicate_types,
-            string_transform_types=string_transform_types,
-            overlap_level=overlap_level,
-            string_length_range=string_length_range,
-        )
-        stack_bytecode_axes = _build_stack_bytecode_axes(
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
-        fsm_axes = _build_fsm_axes(
-            value_range=value_range,
-            threshold_range=threshold_range,
-            divisor_range=divisor_range,
-        )
-        bitops_axes = _build_bitops_axes(value_range=value_range)
-        sequence_dp_axes = _build_sequence_dp_axes(
-            value_range=value_range,
-            divisor_range=divisor_range,
-            list_length_range=list_length_range,
-        )
-        intervals_axes = _build_intervals_axes(
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
-        graph_queries_axes = _build_graph_queries_axes(
-            value_range=value_range,
-            list_length_range=list_length_range,
-        )
+    try:
+        # Build axes for all families (or use preset if difficulty specified)
+        if difficulty is not None:
+            # Use difficulty preset - generate axes per task for variety
+            pass  # Will build axes in the generation loop
+        else:
+            # Build static axes from CLI options
+            stateful_axes = _build_stateful_axes(
+                templates=templates,
+                predicate_types=predicate_types,
+                transform_types=transform_types,
+                value_range=value_range,
+                threshold_range=threshold_range,
+                divisor_range=divisor_range,
+                list_length_range=list_length_range,
+                shift_range=shift_range,
+                scale_range=scale_range,
+            )
+            piecewise_axes = _build_piecewise_axes(
+                n_branches=n_branches,
+                expr_types=expr_types,
+                value_range=value_range,
+                threshold_range=threshold_range,
+                divisor_range=divisor_range,
+                coeff_range=coeff_range,
+            )
+            simple_algo_axes = _build_simple_algorithms_axes(
+                algorithm_types=algorithm_types,
+                tie_break_modes=tie_break_modes,
+                counting_modes=counting_modes,
+                window_size_range=window_size_range,
+                target_range=target_range,
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            stringrules_axes = _build_stringrules_axes(
+                n_rules=n_rules,
+                string_predicate_types=string_predicate_types,
+                string_transform_types=string_transform_types,
+                overlap_level=overlap_level,
+                string_length_range=string_length_range,
+            )
+            stack_bytecode_axes = _build_stack_bytecode_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            fsm_axes = _build_fsm_axes(
+                value_range=value_range,
+                threshold_range=threshold_range,
+                divisor_range=divisor_range,
+            )
+            bitops_axes = _build_bitops_axes(value_range=value_range)
+            sequence_dp_axes = _build_sequence_dp_axes(
+                value_range=value_range,
+                divisor_range=divisor_range,
+                list_length_range=list_length_range,
+            )
+            intervals_axes = _build_intervals_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            graph_queries_axes = _build_graph_queries_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+            temporal_logic_axes = _build_temporal_logic_axes(
+                value_range=value_range,
+                list_length_range=list_length_range,
+            )
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
 
-    with output.open("w", encoding="utf-8") as output_handle:
+    with _atomic_output_file_or_exit(output) as output_handle:
 
         def emit(task: Task) -> None:
             nonlocal generated_count
@@ -776,6 +1152,7 @@ def generate(
                 "sequence_dp",
                 "intervals",
                 "graph_queries",
+                "temporal_logic",
                 "stack_bytecode",
                 "fsm",
             ]
@@ -787,14 +1164,27 @@ def generate(
             }
 
             for _ in range(family_counts["piecewise"]):
-                emit(generate_piecewise_task(axes=piecewise_axes, rng=rng))
+                emit(
+                    generate_piecewise_task(
+                        axes=piecewise_axes,
+                        rng=rng,
+                        no_i32_wrap=no_i32_wrap,
+                    )
+                )
             for _ in range(family_counts["stateful"]):
-                emit(generate_stateful_task(axes=stateful_axes, rng=rng))
+                emit(
+                    generate_stateful_task(
+                        axes=stateful_axes,
+                        rng=rng,
+                        no_i32_wrap=no_i32_wrap,
+                    )
+                )
             for _ in range(family_counts["simple_algorithms"]):
                 emit(
                     generate_simple_algorithms_task(
                         axes=simple_algo_axes,
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
             for _ in range(family_counts["stringrules"]):
@@ -809,6 +1199,13 @@ def generate(
                 emit(
                     generate_graph_queries_task(
                         axes=graph_queries_axes,
+                        rng=rng,
+                    )
+                )
+            for _ in range(family_counts["temporal_logic"]):
+                emit(
+                    generate_temporal_logic_task(
+                        axes=temporal_logic_axes,
                         rng=rng,
                     )
                 )
@@ -859,6 +1256,18 @@ def generate(
                         rng=rng,
                     )
                 )
+        elif family == "temporal_logic":
+            for _ in range(count):
+                if difficulty is not None:
+                    axes = get_difficulty_axes(family, difficulty, variant, rng)
+                else:
+                    axes = temporal_logic_axes
+                emit(
+                    generate_temporal_logic_task(
+                        axes=cast(TemporalLogicAxes, axes),
+                        rng=rng,
+                    )
+                )
         elif family == "piecewise":
             for _ in range(count):
                 if difficulty is not None:
@@ -869,6 +1278,7 @@ def generate(
                     generate_piecewise_task(
                         axes=cast(PiecewiseAxes, axes),
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
         elif family == "stateful":
@@ -881,6 +1291,7 @@ def generate(
                     generate_stateful_task(
                         axes=cast(StatefulAxes, axes),
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
         elif family == "simple_algorithms":
@@ -893,6 +1304,7 @@ def generate(
                     generate_simple_algorithms_task(
                         axes=cast(SimpleAlgorithmsAxes, axes),
                         rng=rng,
+                        no_i32_wrap=no_i32_wrap,
                     )
                 )
         elif family == "stringrules":
@@ -962,125 +1374,151 @@ def split(
     ] = HoldoutType.EXACT,
 ) -> None:
     """Split tasks using random split or axis holdouts."""
-    # Validate options
-    has_random = random_ratio is not None
-    has_holdout = holdout_axis is not None or holdout_value is not None
+    try:
+        # Validate options
+        has_random = random_ratio is not None
+        has_holdout = holdout_axis is not None or holdout_value is not None
 
-    if has_random and has_holdout:
-        typer.echo(
-            "Error: Cannot use both --random-ratio and holdout options",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    if not has_random and not has_holdout:
-        typer.echo(
-            "Error: Must provide --random-ratio or holdout options",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    if has_random:
-        if random_ratio is None:
+        if has_random and has_holdout:
             typer.echo(
-                "Error: --random-ratio is required for random split", err=True
-            )
-            raise typer.Exit(1)
-        if random_ratio < 0 or random_ratio > 1:
-            typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
-            raise typer.Exit(1)
-        total_count = _count_nonempty_jsonl_lines(input_file)
-        target_train_count = int(total_count * random_ratio)
-        rng = random.Random(split_seed)
-        with (
-            train.open("w", encoding="utf-8") as train_handle,
-            test.open("w", encoding="utf-8") as test_handle,
-        ):
-            remaining_total = total_count
-            remaining_train = target_train_count
-            train_count = 0
-            test_count = 0
-            for task in _iter_validated_tasks(input_file):
-                if remaining_train == 0:
-                    send_to_train = False
-                elif remaining_train == remaining_total:
-                    send_to_train = True
-                else:
-                    send_to_train = rng.random() < (
-                        remaining_train / remaining_total
-                    )
-
-                if send_to_train:
-                    _write_task_line(train_handle, task)
-                    train_count += 1
-                    remaining_train -= 1
-                else:
-                    _write_task_line(test_handle, task)
-                    test_count += 1
-
-                remaining_total -= 1
-    else:
-        if holdout_axis is None or holdout_value is None:
-            typer.echo(
-                "Error: Both --holdout-axis and --holdout-value are required",
+                "Error: Cannot use both --random-ratio and holdout options",
                 err=True,
             )
             raise typer.Exit(1)
 
-        parsed_value: str | int | float | bool | None | tuple[int, int]
-        if holdout_type == HoldoutType.RANGE:
-            range_val = _parse_range(holdout_value)
-            if range_val is None:
+        if not has_random and not has_holdout:
+            typer.echo(
+                "Error: Must provide --random-ratio or holdout options",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        if _paths_resolve_to_same_target(train, test):
+            typer.echo(
+                "Error: --train and --test must be different output paths",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if _paths_resolve_to_same_target(input_file, train):
+            typer.echo(
+                "Error: input file and --train must be different paths",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if _paths_resolve_to_same_target(input_file, test):
+            typer.echo(
+                "Error: input file and --test must be different paths",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        if has_random:
+            if random_ratio is None:
                 typer.echo(
-                    "Error: --holdout-value is required for range holdout",
+                    "Error: --random-ratio is required for random split",
                     err=True,
                 )
                 raise typer.Exit(1)
-            parsed_value = range_val
+            if (
+                not math.isfinite(random_ratio)
+                or random_ratio < 0
+                or random_ratio > 1
+            ):
+                typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
+                raise typer.Exit(1)
+            total_count = _count_validated_tasks(input_file)
+            train_target = int(total_count * random_ratio)
+            remaining_items = total_count
+            remaining_train = train_target
+            rng = random.Random(split_seed)
+            train_count = 0
+            test_count = 0
+            with _atomic_split_outputs(train, test) as (
+                train_handle,
+                test_handle,
+            ):
+                for task in _iter_validated_tasks(input_file):
+                    assign_to_train = False
+                    if remaining_train > 0:
+                        assign_to_train = (
+                            rng.random() * remaining_items < remaining_train
+                        )
+
+                    if assign_to_train:
+                        _write_task_line(train_handle, task)
+                        train_count += 1
+                        remaining_train -= 1
+                    else:
+                        _write_task_line(test_handle, task)
+                        test_count += 1
+                    remaining_items -= 1
         else:
-            try:
-                parsed_value = json.loads(holdout_value)
-            except json.JSONDecodeError:
-                parsed_value = holdout_value
+            if holdout_axis is None or holdout_value is None:
+                typer.echo(
+                    "Error: Both --holdout-axis and --holdout-value are "
+                    "required",
+                    err=True,
+                )
+                raise typer.Exit(1)
 
-        holdouts = [
-            AxisHoldout(
-                axis_path=holdout_axis,
-                holdout_type=holdout_type,
-                holdout_value=parsed_value,
-            )
-        ]
-        total_count = 0
-        train_count = 0
-        test_count = 0
-        first_sample: Any = None
-        with (
-            train.open("w", encoding="utf-8") as train_handle,
-            test.open("w", encoding="utf-8") as test_handle,
-        ):
-            for task in _iter_validated_tasks(input_file):
-                total_count += 1
-                if first_sample is None:
-                    first_sample = get_spec_value(task.spec, holdout_axis)
-                if any(_matches_holdout(task, h) for h in holdouts):
-                    _write_task_line(test_handle, task)
-                    test_count += 1
-                else:
-                    _write_task_line(train_handle, task)
-                    train_count += 1
+            parsed_value: Any
+            if holdout_type == HoldoutType.RANGE:
+                range_val = _parse_numeric_range(holdout_value)
+                if range_val is None:
+                    typer.echo(
+                        "Error: --holdout-value is required for range holdout",
+                        err=True,
+                    )
+                    raise typer.Exit(1)
+                parsed_value = range_val
+            else:
+                parsed_value = _parse_non_range_holdout_value(holdout_value)
 
-        if test_count == 0 and total_count > 0:
-            typer.echo(
-                f"Warning: holdout matched 0 of {total_count} tasks. "
-                f"Check --holdout-axis spelling (got '{holdout_axis}').",
-                err=True,
-            )
-            typer.echo(
-                f"  First task's value at '{holdout_axis}': {first_sample!r}",
-                err=True,
-            )
+            holdouts = [
+                AxisHoldout(
+                    axis_path=holdout_axis,
+                    holdout_type=holdout_type,
+                    holdout_value=parsed_value,
+                )
+            ]
+            total_count = 0
+            train_count = 0
+            test_count = 0
+            first_sample: Any = _UNSET_SAMPLE
+            with _atomic_split_outputs(train, test) as (
+                train_handle,
+                test_handle,
+            ):
+                for task in _iter_validated_tasks(input_file):
+                    total_count += 1
+                    if first_sample is _UNSET_SAMPLE:
+                        first_sample = get_spec_value(task.spec, holdout_axis)
+                    if any(_matches_holdout(task, h) for h in holdouts):
+                        _write_task_line(test_handle, task)
+                        test_count += 1
+                    else:
+                        _write_task_line(train_handle, task)
+                        train_count += 1
 
-    typer.echo(f"Train: {train_count}, Test: {test_count}")
+            if test_count == 0 and total_count > 0:
+                typer.echo(
+                    f"Warning: holdout matched 0 of {total_count} tasks. "
+                    f"Check --holdout-axis spelling (got '{holdout_axis}').",
+                    err=True,
+                )
+                typer.echo(
+                    "  First task's value at "
+                    f"'{holdout_axis}': {first_sample!r}",
+                    err=True,
+                )
+
+        typer.echo(f"Train: {train_count}, Test: {test_count}")
+    except _TaskRowError as err:
+        typer.echo(_render_task_row_error(input_file, err), err=True)
+        raise typer.Exit(1) from err
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
 
 
 @app.command()
@@ -1088,12 +1526,19 @@ def info(
     input_file: Annotated[Path, typer.Argument(help="Input JSONL file")],
 ) -> None:
     """Show info about tasks file."""
-    by_family: dict[str, int] = {}
-    total = 0
-    for t in _iter_validated_tasks(input_file):
-        total += 1
-        by_family[t.family] = by_family.get(t.family, 0) + 1
+    try:
+        by_family: dict[str, int] = {}
+        total = 0
+        for t in _iter_validated_tasks(input_file):
+            total += 1
+            by_family[t.family] = by_family.get(t.family, 0) + 1
 
-    typer.echo(f"{input_file}: {total} tasks")
-    for fam, cnt in sorted(by_family.items()):
-        typer.echo(f"  {fam}: {cnt}")
+        typer.echo(f"{input_file}: {total} tasks")
+        for fam, cnt in sorted(by_family.items()):
+            typer.echo(f"  {fam}: {cnt}")
+    except _TaskRowError as err:
+        typer.echo(_render_task_row_error(input_file, err), err=True)
+        raise typer.Exit(1) from err
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err

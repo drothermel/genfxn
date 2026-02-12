@@ -6,6 +6,16 @@ from typing import cast
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
+from genfxn.core.int32 import (
+    i32_abs,
+    i32_add,
+    i32_clip,
+    i32_mod,
+    i32_mul,
+    i32_neg,
+    i32_sub,
+    wrap_i32,
+)
 from genfxn.core.models import Task
 from genfxn.core.safe_exec import (
     SafeExecMissingFunctionError,
@@ -62,6 +72,15 @@ _ALLOWED_BUILTINS = {
     "sorted": sorted,
     "sum": sum,
     "tuple": tuple,
+    "ValueError": ValueError,
+    "__i32_wrap": wrap_i32,
+    "__i32_add": i32_add,
+    "__i32_sub": i32_sub,
+    "__i32_mul": i32_mul,
+    "__i32_neg": i32_neg,
+    "__i32_abs": i32_abs,
+    "__i32_clip": i32_clip,
+    "__i32_mod": i32_mod,
 }
 
 
@@ -92,6 +111,28 @@ def _validate_ast_whitelist(
             )
         )
         return issues, None
+
+    for stmt in tree.body:
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
+        if not isinstance(stmt, ast.FunctionDef):
+            return [
+                Issue(
+                    code=CODE_UNSAFE_AST,
+                    severity=Severity.ERROR,
+                    message=(
+                        "Top-level statement "
+                        f"{type(stmt).__name__} at line "
+                        f"{getattr(stmt, 'lineno', '?')} is not allowed; "
+                        "only function definitions are permitted"
+                    ),
+                    location="code",
+                )
+            ], None
 
     annotation_positions: set[tuple[int, int]] = set()
     for node in ast.walk(tree):
@@ -218,21 +259,32 @@ def _validate_ast_whitelist(
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
-    expected = task_id_from_spec(family=task.family, spec=task.spec)
-    if task.task_id != expected:
+    try:
+        expected = task_id_from_spec(family=task.family, spec=task.spec)
+    except Exception as e:
         return [
             Issue(
                 code=CODE_TASK_ID_MISMATCH,
                 severity=Severity.ERROR,
-                message=(
-                    f"task_id '{task.task_id}' does not match spec hash "
-                    f"'{expected}'"
-                ),
+                message=f"Failed to compute task_id from spec: {e}",
                 location="task_id",
                 task_id=task.task_id,
             )
         ]
-    return []
+    if task.task_id == expected:
+        return []
+    return [
+        Issue(
+            code=CODE_TASK_ID_MISMATCH,
+            severity=Severity.ERROR,
+            message=(
+                f"task_id '{task.task_id}' does not match spec hash "
+                f"'{expected}'"
+            ),
+            location="task_id",
+            task_id=task.task_id,
+        )
+    ]
 
 
 def _validate_spec_deserialize(

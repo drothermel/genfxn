@@ -19,6 +19,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "stateful": "genfxn.stateful.render",
         "simple_algorithms": "genfxn.simple_algorithms.render",
         "stack_bytecode": "genfxn.stack_bytecode.render",
+        "temporal_logic": "genfxn.temporal_logic.render",
         "stringrules": "genfxn.stringrules.render",
     },
     Language.JAVA: {
@@ -31,6 +32,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "stateful": "genfxn.langs.java.stateful",
         "simple_algorithms": "genfxn.langs.java.simple_algorithms",
         "stack_bytecode": "genfxn.langs.java.stack_bytecode",
+        "temporal_logic": "genfxn.langs.java.temporal_logic",
         "stringrules": "genfxn.langs.java.stringrules",
     },
     Language.RUST: {
@@ -43,6 +45,7 @@ _FAMILY_MODULES: dict[Language, dict[str, str]] = {
         "stateful": "genfxn.langs.rust.stateful",
         "simple_algorithms": "genfxn.langs.rust.simple_algorithms",
         "stack_bytecode": "genfxn.langs.rust.stack_bytecode",
+        "temporal_logic": "genfxn.langs.rust.temporal_logic",
         "stringrules": "genfxn.langs.rust.stringrules",
     },
 }
@@ -58,6 +61,7 @@ _RENDER_FUNCTIONS: dict[str, str] = {
     "stateful": "render_stateful",
     "simple_algorithms": "render_simple_algorithms",
     "stack_bytecode": "render_stack_bytecode",
+    "temporal_logic": "render_temporal_logic",
     "stringrules": "render_stringrules",
 }
 
@@ -77,3 +81,8 @@ def get_render_fn(language: Language, family: str) -> Any:
         raise ValueError(f"Unknown family: {family}")
     module: ModuleType = importlib.import_module(module_path)
     return getattr(module, fn_name)
+
+
+def is_known_family(family: str) -> bool:
+    """Return True if family is known to the render registry."""
+    return family in _RENDER_FUNCTIONS

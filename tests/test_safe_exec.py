@@ -65,8 +65,11 @@ def test_execute_code_restricted_times_out_infinite_loop() -> None:
         timeout_sec=0.2,
         trust_untrusted_code=True,
     )["f"]
-    with pytest.raises(SafeExecTimeoutError):
-        fn(1)
+    try:
+        with pytest.raises(SafeExecTimeoutError):
+            fn(1)
+    finally:
+        fn.close()
 
 
 def test_run_isolated_reports_worker_crash_exit_code(monkeypatch) -> None:
@@ -182,6 +185,47 @@ def test_run_isolated_retries_queue_reads_before_failing(monkeypatch) -> None:
     assert result == 123
 
 
+def test_run_isolated_reads_queue_before_process_exit(monkeypatch) -> None:
+    events: list[str] = []
+
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            events.append("get")
+            return safe_exec._WorkerResult(ok=True, value=123)
+
+    class _FakeProcess:
+        exitcode = None
+
+        def start(self) -> None:
+            events.append("start")
+
+        def join(self, timeout: float | None = None) -> None:
+            events.append(f"join:{timeout}")
+
+        def is_alive(self) -> bool:
+            return True
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_validate_untrusted_code", lambda _: None)
+    monkeypatch.setattr(safe_exec.mp, "get_context", lambda _: _FakeCtx())
+
+    result = safe_exec._run_isolated(
+        "def f(x):\n    return x", {}, (), 1.0, None
+    )
+
+    assert result == 123
+    assert events[:2] == ["start", "get"]
+
+
 def test_persistent_worker_raises_bootstrap_error(monkeypatch) -> None:
     class _FakeProcess:
         def start(self) -> None:
@@ -216,6 +260,193 @@ def test_persistent_worker_raises_bootstrap_error(monkeypatch) -> None:
             memory_limit_mb=None,
             timeout_sec=1.0,
         )
+
+
+def test_persistent_worker_startup_crash_maps_to_bootstrap_error(
+    monkeypatch,
+) -> None:
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            raise safe_exec.Empty
+
+        def close(self) -> None:
+            return
+
+        def join_thread(self) -> None:
+            return
+
+    class _FakeProcess:
+        exitcode = 1
+
+        def start(self) -> None:
+            return
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def is_alive(self) -> bool:
+            return False
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_get_mp_context", lambda: _FakeCtx())
+    monkeypatch.setattr(safe_exec, "_terminate_process_tree", lambda _: None)
+    monkeypatch.setattr(
+        safe_exec,
+        "_has_importable_main_module",
+        lambda: False,
+    )
+
+    with pytest.raises(SafeExecBootstrapError, match="__main__"):
+        safe_exec._PersistentWorker(
+            code="def f(x):\n    return x",
+            allowed_builtins={},
+            memory_limit_mb=None,
+            timeout_sec=1.0,
+        )
+
+
+def test_persistent_worker_startup_crash_keeps_runtime_error(
+    monkeypatch,
+) -> None:
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            raise safe_exec.Empty
+
+        def close(self) -> None:
+            return
+
+        def join_thread(self) -> None:
+            return
+
+    class _FakeProcess:
+        exitcode = 1
+
+        def start(self) -> None:
+            return
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def is_alive(self) -> bool:
+            return False
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_get_mp_context", lambda: _FakeCtx())
+    monkeypatch.setattr(safe_exec, "_terminate_process_tree", lambda _: None)
+    monkeypatch.setattr(
+        safe_exec,
+        "_has_importable_main_module",
+        lambda: True,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Execution worker crashed during startup with exit code 1",
+    ):
+        safe_exec._PersistentWorker(
+            code="def f(x):\n    return x",
+            allowed_builtins={},
+            memory_limit_mb=None,
+            timeout_sec=1.0,
+        )
+
+
+def test_persistent_worker_startup_timeout_uses_floor(monkeypatch) -> None:
+    observed_timeouts: list[float] = []
+
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:
+            observed_timeouts.append(timeout)
+            raise safe_exec.Empty
+
+        def close(self) -> None:
+            return
+
+        def join_thread(self) -> None:
+            return
+
+    class _FakeProcess:
+        exitcode = 0
+
+        def start(self) -> None:
+            return
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def is_alive(self) -> bool:
+            return False
+
+    class _FakeCtx:
+        def get_start_method(self) -> str:
+            return "spawn"
+
+        def Queue(self) -> _FakeQueue:
+            return _FakeQueue()
+
+        def Process(self, target, args) -> _FakeProcess:  # noqa: ARG002
+            return _FakeProcess()
+
+    monkeypatch.setattr(safe_exec, "_get_mp_context", lambda: _FakeCtx())
+    monkeypatch.setattr(safe_exec, "_terminate_process_tree", lambda _: None)
+
+    with pytest.raises(SafeExecTimeoutError, match="startup timed out"):
+        safe_exec._PersistentWorker(
+            code="def f(x):\n    return x",
+            allowed_builtins={},
+            memory_limit_mb=None,
+            timeout_sec=0.2,
+        )
+
+    assert observed_timeouts == [
+        safe_exec._persistent_startup_timeout_sec(0.2)
+    ]
+
+
+def test_persistent_worker_call_reports_crash_not_timeout() -> None:
+    class _FakeQueue:
+        def get(self, timeout: float) -> object:  # noqa: ARG002
+            raise safe_exec.Empty
+
+    class _FakeRequestQueue:
+        def put(self, item: object) -> None:  # noqa: ARG002
+            return
+
+    class _FakeProcess:
+        def __init__(self) -> None:
+            self.exitcode = 9
+            self._alive_checks = 0
+
+        def is_alive(self) -> bool:
+            self._alive_checks += 1
+            return self._alive_checks == 1
+
+    worker = safe_exec._PersistentWorker.__new__(safe_exec._PersistentWorker)
+    worker._process = _FakeProcess()
+    worker._request_queue = _FakeRequestQueue()
+    worker._response_queue = _FakeQueue()
+    worker._terminate = lambda: None
+
+    with pytest.raises(RuntimeError, match="crashed with exit code 9"):
+        worker.call((1,), timeout_sec=0.01)
 
 
 @pytest.mark.skipif(
@@ -280,23 +511,26 @@ def test_timeout_terminates_descendant_processes(tmp_path) -> None:
         trust_untrusted_code=True,
     )["f"]
 
-    with pytest.raises(SafeExecTimeoutError):
-        fn(str(pid_file))
-
-    assert pid_file.exists()
-    child_pid = int(pid_file.read_text(encoding="utf-8"))
-
-    deadline = time.time() + 3.0
-    while time.time() < deadline:
-        if not _pid_exists(child_pid):
-            break
-        time.sleep(0.05)
-
     try:
+        with pytest.raises(SafeExecTimeoutError):
+            fn(str(pid_file))
+
+        assert pid_file.exists()
+        child_pid = int(pid_file.read_text(encoding="utf-8"))
+
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not _pid_exists(child_pid):
+                break
+            time.sleep(0.05)
+
         assert not _pid_exists(child_pid)
     finally:
-        if _pid_exists(child_pid):
-            os.kill(child_pid, signal.SIGKILL)
+        try:
+            if "child_pid" in locals() and _pid_exists(child_pid):
+                os.kill(child_pid, signal.SIGKILL)
+        finally:
+            fn.close()
 
 
 @pytest.mark.skipif(
@@ -353,8 +587,62 @@ def test_execute_code_restricted_runtime_error_wrapped() -> None:
         {},
         trust_untrusted_code=True,
     )["f"]
-    with pytest.raises(SafeExecExecutionError, match="ZeroDivisionError"):
-        fn(1)
+    try:
+        with pytest.raises(SafeExecExecutionError, match="ZeroDivisionError"):
+            fn(1)
+    finally:
+        fn.close()
+
+
+def test_execute_code_restricted_allows_helper_functions() -> None:
+    fn = execute_code_restricted(
+        "def helper(x):\n    return x + 1\n\ndef f(x):\n    return helper(x)",
+        {},
+        trust_untrusted_code=True,
+    )["f"]
+    try:
+        assert fn(2) == 3
+    finally:
+        fn.close()
+
+
+@pytest.mark.parametrize("timeout_sec", [0.0, -1.0])
+def test_execute_code_restricted_rejects_non_positive_timeout(
+    timeout_sec: float,
+) -> None:
+    with pytest.raises(ValueError, match="timeout_sec must be"):
+        execute_code_restricted(
+            "def f(x):\n    return x",
+            {},
+            timeout_sec=timeout_sec,
+            trust_untrusted_code=True,
+        )
+
+
+@pytest.mark.parametrize("memory_limit_mb", [0, -1])
+def test_execute_code_restricted_rejects_non_positive_memory_limit(
+    memory_limit_mb: int,
+) -> None:
+    with pytest.raises(ValueError, match="memory_limit_mb must be"):
+        execute_code_restricted(
+            "def f(x):\n    return x",
+            {},
+            memory_limit_mb=memory_limit_mb,
+            trust_untrusted_code=True,
+        )
+
+
+@pytest.mark.parametrize("max_result_bytes", [0, -1])
+def test_execute_code_restricted_rejects_non_positive_max_result_bytes(
+    max_result_bytes: int,
+) -> None:
+    with pytest.raises(ValueError, match="max_result_bytes must be"):
+        execute_code_restricted(
+            "def f(x):\n    return x",
+            {},
+            max_result_bytes=max_result_bytes,
+            trust_untrusted_code=True,
+        )
 
 
 def test_execute_code_restricted_result_size_limit() -> None:
@@ -364,8 +652,45 @@ def test_execute_code_restricted_result_size_limit() -> None:
         trust_untrusted_code=True,
         max_result_bytes=128,
     )["f"]
-    with pytest.raises(SafeExecExecutionError, match="max_result_bytes"):
-        fn(10_000)
+    try:
+        with pytest.raises(SafeExecExecutionError, match="max_result_bytes"):
+            fn(10_000)
+    finally:
+        fn.close()
+
+
+def test_execute_code_restricted_non_picklable_result_unlimited() -> None:
+    fn = execute_code_restricted(
+        "def f(x):\n    return lambda y: y + x",
+        {},
+        trust_untrusted_code=True,
+        max_result_bytes=None,
+    )["f"]
+    try:
+        with pytest.raises(
+            SafeExecExecutionError,
+            match="Failed to serialize worker result",
+        ):
+            fn(1)
+    finally:
+        fn.close()
+
+
+def test_execute_code_restricted_rejects_non_primitive_result_types() -> None:
+    fn = execute_code_restricted(
+        "def f(x):\n    return b'unsafe-bytes'",
+        {},
+        trust_untrusted_code=True,
+        max_result_bytes=None,
+    )["f"]
+    try:
+        with pytest.raises(
+            SafeExecExecutionError,
+            match="Unsupported worker result type: bytes",
+        ):
+            fn(1)
+    finally:
+        fn.close()
 
 
 def test_get_mp_context_invalid_override_raises(monkeypatch) -> None:
@@ -395,3 +720,56 @@ def test_get_mp_context_prefers_non_fork_defaults(monkeypatch) -> None:
     monkeypatch.setattr(safe_exec.mp, "get_context", _fake_get_context)
     ctx = safe_exec._get_mp_context()
     assert ctx.get_start_method() == "forkserver"
+
+
+def test_can_kill_process_group_requires_group_leader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(safe_exec.os, "name", "posix")
+    monkeypatch.setattr(safe_exec.os, "getpgid", lambda pid: pid + 1)
+    assert not safe_exec._can_kill_process_group(1234)
+
+    monkeypatch.setattr(safe_exec.os, "getpgid", lambda pid: pid)
+    assert safe_exec._can_kill_process_group(1234)
+
+
+def test_terminate_process_tree_skips_killpg_for_non_leader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeProcess:
+        pid = 1234
+
+        def __init__(self) -> None:
+            self._alive = True
+            self.terminated = False
+            self.killed = False
+
+        def is_alive(self) -> bool:
+            return self._alive
+
+        def join(self, timeout: float | None = None) -> None:  # noqa: ARG002
+            return
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self._alive = False
+
+        def kill(self) -> None:
+            self.killed = True
+            self._alive = False
+
+    process = _FakeProcess()
+    killpg_calls: list[tuple[int, signal.Signals]] = []
+
+    monkeypatch.setattr(safe_exec.os, "name", "posix")
+    monkeypatch.setattr(safe_exec, "_can_kill_process_group", lambda pid: False)
+    monkeypatch.setattr(
+        safe_exec.os,
+        "killpg",
+        lambda pid, sig: killpg_calls.append((pid, sig)),
+    )
+
+    safe_exec._terminate_process_tree(process)
+
+    assert killpg_calls == []
+    assert process.terminated is True

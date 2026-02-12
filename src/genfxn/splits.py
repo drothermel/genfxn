@@ -1,11 +1,12 @@
+import math
 import random
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from genfxn.core.codegen import get_spec_value
-from genfxn.core.models import Task
+from genfxn.core.codegen import get_spec_value, has_spec_value
+from genfxn.core.models import Task, _freeze_query_value
 
 
 class HoldoutType(str, Enum):
@@ -28,27 +29,81 @@ class SplitResult(BaseModel):
     holdouts: list[AxisHoldout] = Field(description="Holdout conditions used")
 
 
-def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
-    """Check if task matches a single holdout condition."""
-    value = get_spec_value(task.spec, holdout.axis_path)
-    if value is None:
+def _is_non_bool_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _is_finite_non_bool_number(value: Any) -> bool:
+    return _is_non_bool_number(value) and math.isfinite(value)
+
+
+def _contains_non_finite_number(value: Any) -> bool:
+    if isinstance(value, float):
+        return not math.isfinite(value)
+    if isinstance(value, list | tuple | set | frozenset):
+        return any(_contains_non_finite_number(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            _contains_non_finite_number(key)
+            or _contains_non_finite_number(item)
+            for key, item in value.items()
+        )
+    return False
+
+
+def _matches_exact_type_sensitive(value: Any, holdout_value: Any) -> bool:
+    return _freeze_query_value(value) == _freeze_query_value(holdout_value)
+
+
+def _contains_type_sensitive(value: Any, holdout_value: Any) -> bool:
+    if not isinstance(value, (list, tuple, set, frozenset)):
         return False
+    holdout_key = _freeze_query_value(holdout_value)
+    return any(
+        _freeze_query_value(item) == holdout_key for item in value
+    )
+
+
+def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
+    """Check if task matches a single holdout condition."""
+    if not has_spec_value(task.spec, holdout.axis_path):
+        return False
+    value = get_spec_value(task.spec, holdout.axis_path)
 
     match holdout.holdout_type:
         case HoldoutType.EXACT:
-            return value == holdout.holdout_value
+            if _contains_non_finite_number(holdout.holdout_value):
+                return False
+            return _matches_exact_type_sensitive(
+                value, holdout.holdout_value
+            )
         case HoldoutType.RANGE:
-            lo, hi = holdout.holdout_value
-            if not isinstance(value, (int, float)):
+            range_value = holdout.holdout_value
+            if (
+                not isinstance(range_value, tuple | list)
+                or len(range_value) != 2
+            ):
+                return False
+            lo, hi = range_value
+            if (
+                not _is_finite_non_bool_number(lo)
+                or not _is_finite_non_bool_number(hi)
+            ):
+                return False
+            if not _is_finite_non_bool_number(value):
                 return False
             return lo <= value <= hi
         case HoldoutType.CONTAINS:
-            try:
-                return holdout.holdout_value in value
-            except TypeError:
+            if _contains_non_finite_number(holdout.holdout_value):
                 return False
+            return _contains_type_sensitive(value, holdout.holdout_value)
         case _:
             raise ValueError(f"Unknown holdout type: {holdout.holdout_type}")
+
+
+def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
+    """Backward-compatible alias used by older tests/callers."""
+    return matches_holdout(task, holdout)
 
 
 def split_tasks(tasks: list[Task], holdouts: list[AxisHoldout]) -> SplitResult:
@@ -56,7 +111,7 @@ def split_tasks(tasks: list[Task], holdouts: list[AxisHoldout]) -> SplitResult:
     train: list[Task] = []
     test: list[Task] = []
     for task in tasks:
-        if any(_matches_holdout(task, h) for h in holdouts):
+        if any(matches_holdout(task, h) for h in holdouts):
             test.append(task)
         else:
             train.append(task)

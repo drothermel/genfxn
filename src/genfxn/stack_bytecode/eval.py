@@ -8,15 +8,28 @@ from genfxn.stack_bytecode.models import (
 )
 
 RuntimeResult = tuple[int, int]
+_I64_MASK = (1 << 64) - 1
+_I64_MIN = -(1 << 63)
 
 
-def _div_trunc_zero(a: int, b: int) -> int:
+def _wrap_i64(value: int) -> int:
+    wrapped = value & _I64_MASK
+    if wrapped >= (1 << 63):
+        return wrapped - (1 << 64)
+    return wrapped
+
+
+def _div_trunc_zero_i64(a: int, b: int) -> int:
     sign = -1 if (a < 0) ^ (b < 0) else 1
-    return sign * (abs(a) // abs(b))
+    if a == _I64_MIN and b == -1:
+        return _I64_MIN
+    return _wrap_i64(sign * (abs(a) // abs(b)))
 
 
-def _mod_trunc_zero(a: int, b: int) -> int:
-    return a - _div_trunc_zero(a, b) * b
+def _mod_trunc_zero_i64(a: int, b: int) -> int:
+    if a == _I64_MIN and b == -1:
+        return 0
+    return _wrap_i64(a - _div_trunc_zero_i64(a, b) * b)
 
 
 def _normalize_jump_target(
@@ -81,7 +94,8 @@ def eval_stack_bytecode(
         steps += 1
 
         if op == InstructionOp.PUSH_CONST:
-            stack.append(instr.value if instr.value is not None else 0)
+            value = instr.value if instr.value is not None else 0
+            stack.append(_wrap_i64(value))
             pc += 1
             continue
 
@@ -90,7 +104,7 @@ def eval_stack_bytecode(
             value = _load_input(idx, xs, spec.input_mode)
             if value is None:
                 return RuntimeStatus.INVALID_INPUT_INDEX, 0
-            stack.append(value)
+            stack.append(_wrap_i64(value))
             pc += 1
             continue
 
@@ -123,7 +137,7 @@ def eval_stack_bytecode(
             ok, a, b = _pop2(stack)
             if not ok:
                 return RuntimeStatus.STACK_UNDERFLOW, 0
-            stack.append(a + b)
+            stack.append(_wrap_i64(a + b))
             pc += 1
             continue
 
@@ -131,7 +145,7 @@ def eval_stack_bytecode(
             ok, a, b = _pop2(stack)
             if not ok:
                 return RuntimeStatus.STACK_UNDERFLOW, 0
-            stack.append(a - b)
+            stack.append(_wrap_i64(a - b))
             pc += 1
             continue
 
@@ -139,7 +153,7 @@ def eval_stack_bytecode(
             ok, a, b = _pop2(stack)
             if not ok:
                 return RuntimeStatus.STACK_UNDERFLOW, 0
-            stack.append(a * b)
+            stack.append(_wrap_i64(a * b))
             pc += 1
             continue
 
@@ -149,7 +163,7 @@ def eval_stack_bytecode(
                 return RuntimeStatus.STACK_UNDERFLOW, 0
             if b == 0:
                 return RuntimeStatus.DIV_OR_MOD_BY_ZERO, 0
-            stack.append(_div_trunc_zero(a, b))
+            stack.append(_div_trunc_zero_i64(a, b))
             pc += 1
             continue
 
@@ -159,7 +173,7 @@ def eval_stack_bytecode(
                 return RuntimeStatus.STACK_UNDERFLOW, 0
             if b == 0:
                 return RuntimeStatus.DIV_OR_MOD_BY_ZERO, 0
-            stack.append(_mod_trunc_zero(a, b))
+            stack.append(_mod_trunc_zero_i64(a, b))
             pc += 1
             continue
 
@@ -167,7 +181,7 @@ def eval_stack_bytecode(
             ok, a = _pop1(stack)
             if not ok:
                 return RuntimeStatus.STACK_UNDERFLOW, 0
-            stack.append(-a)
+            stack.append(_wrap_i64(-a))
             pc += 1
             continue
 
@@ -175,7 +189,7 @@ def eval_stack_bytecode(
             ok, a = _pop1(stack)
             if not ok:
                 return RuntimeStatus.STACK_UNDERFLOW, 0
-            stack.append(abs(a))
+            stack.append(_wrap_i64(abs(a)))
             pc += 1
             continue
 
@@ -274,7 +288,7 @@ def eval_instruction(instr: Instruction, stack: list[int]) -> list[int]:
     out = list(stack)
     op = instr.op
     if op == InstructionOp.PUSH_CONST:
-        out.append(instr.value if instr.value is not None else 0)
+        out.append(_wrap_i64(instr.value if instr.value is not None else 0))
         return out
     if op == InstructionOp.POP:
         if not out:

@@ -18,6 +18,7 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 80
+include = ["*.py", "*.pyi"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
@@ -26,6 +27,7 @@ select = ["E", "F", "I", "UP"]
 python-version = "3.12"
 
 [tool.ty.src]
+include = ["src", "scripts"]
 
 [dependency-groups]
 dev = [
@@ -36,7 +38,19 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "-n auto --dist=worksteal"
 markers = [
     "slow: longer-running tests for expanded confidence",
     "full: exhaustive validation tests (slowest, highest confidence)",
+    "full_bitops: full marker subset for bitops family tests",
+    "full_fsm: full marker subset for fsm family tests",
+    "full_graph_queries: full marker subset for graph_queries family tests",
+    "full_intervals: full marker subset for intervals family tests",
+    "full_piecewise: full marker subset for piecewise family tests",
+    "full_sequence_dp: full marker subset for sequence_dp family tests",
+    "full_simple_algorithms: full marker subset for simple_algorithms family tests",
+    "full_stack_bytecode: full marker subset for stack_bytecode family tests",
+    "full_stateful: full marker subset for stateful family tests",
+    "full_stringrules: full marker subset for stringrules family tests",
+    "full_temporal_logic: full marker subset for temporal_logic family tests",
 ]

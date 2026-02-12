@@ -7,26 +7,21 @@ import pytest
 
 from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
-
-sequence_dp_models = pytest.importorskip("genfxn.sequence_dp.models")
-sequence_dp_eval = pytest.importorskip("genfxn.sequence_dp.eval")
-sequence_dp_queries = pytest.importorskip("genfxn.sequence_dp.queries")
-sequence_dp_render = pytest.importorskip("genfxn.sequence_dp.render")
-sequence_dp_sampler = pytest.importorskip("genfxn.sequence_dp.sampler")
-sequence_dp_task = pytest.importorskip("genfxn.sequence_dp.task")
-
-SequenceDpSpec = sequence_dp_models.SequenceDpSpec
-SequenceDpAxes = sequence_dp_models.SequenceDpAxes
-TemplateType = sequence_dp_models.TemplateType
-OutputMode = sequence_dp_models.OutputMode
-PredicateType = sequence_dp_models.PredicateType
-TieBreakOrder = sequence_dp_models.TieBreakOrder
-
-eval_sequence_dp = sequence_dp_eval.eval_sequence_dp
-sample_sequence_dp_spec = sequence_dp_sampler.sample_sequence_dp_spec
-generate_sequence_dp_queries = sequence_dp_queries.generate_sequence_dp_queries
-render_sequence_dp = sequence_dp_render.render_sequence_dp
-generate_sequence_dp_task = sequence_dp_task.generate_sequence_dp_task
+from genfxn.sequence_dp.eval import eval_sequence_dp
+from genfxn.sequence_dp.models import (
+    OutputMode,
+    PredicateEq,
+    PredicateModEq,
+    PredicateType,
+    SequenceDpAxes,
+    SequenceDpSpec,
+    TemplateType,
+    TieBreakOrder,
+)
+from genfxn.sequence_dp.queries import generate_sequence_dp_queries
+from genfxn.sequence_dp.render import render_sequence_dp
+from genfxn.sequence_dp.sampler import sample_sequence_dp_spec
+from genfxn.sequence_dp.task import generate_sequence_dp_task
 
 
 def _call_sample(sample_fn: Any, axes: Any, seed: int) -> Any:
@@ -308,6 +303,103 @@ class TestModels:
 
         _assert_has_invalid_rejected(SequenceDpAxes, axes)
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("len_a_range", (False, 3)),
+            ("len_b_range", (0, True)),
+            ("value_range", (False, 5)),
+            ("match_score_range", (0, True)),
+            ("mismatch_score_range", (False, 0)),
+            ("gap_score_range", (0, True)),
+            ("abs_diff_range", (False, 2)),
+            ("divisor_range", (2, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            SequenceDpAxes.model_validate({field_name: range_value})
+
+    @pytest.mark.parametrize(
+        ("field_name", "value"),
+        [
+            ("match_score", 1 << 63),
+            ("mismatch_score", -(1 << 63) - 1),
+            ("gap_score", 1 << 63),
+        ],
+    )
+    def test_spec_rejects_i64_out_of_range_scores(
+        self, field_name: str, value: int
+    ) -> None:
+        payload = {
+            "template": "global",
+            "output_mode": "score",
+            "match_predicate": {"kind": "eq"},
+            "match_score": 1,
+            "mismatch_score": 0,
+            "gap_score": 0,
+            "step_tie_break": TieBreakOrder.DIAG_UP_LEFT.value,
+        }
+        payload[field_name] = value
+        with pytest.raises(Exception, match=field_name):
+            SequenceDpSpec.model_validate(payload)
+
+    def test_spec_rejects_i64_out_of_range_predicate_constants(self) -> None:
+        with pytest.raises(Exception, match="max_diff"):
+            SequenceDpSpec.model_validate(
+                {
+                    "template": "global",
+                    "output_mode": "score",
+                    "match_predicate": {
+                        "kind": "abs_diff_le",
+                        "max_diff": 1 << 63,
+                    },
+                    "match_score": 1,
+                    "mismatch_score": 0,
+                    "gap_score": 0,
+                    "step_tie_break": TieBreakOrder.DIAG_UP_LEFT.value,
+                }
+            )
+        with pytest.raises(Exception, match="divisor"):
+            SequenceDpSpec.model_validate(
+                {
+                    "template": "global",
+                    "output_mode": "score",
+                    "match_predicate": {
+                        "kind": "mod_eq",
+                        "divisor": 1 << 63,
+                        "remainder": 0,
+                    },
+                    "match_score": 1,
+                    "mismatch_score": 0,
+                    "gap_score": 0,
+                    "step_tie_break": TieBreakOrder.DIAG_UP_LEFT.value,
+                }
+            )
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (-(1 << 63) - 1, 0)),
+            ("value_range", (0, 1 << 63)),
+            ("match_score_range", (-(1 << 63) - 1, 0)),
+            ("mismatch_score_range", (0, 1 << 63)),
+            ("gap_score_range", (0, 1 << 63)),
+            ("abs_diff_range", (0, 1 << 63)),
+            ("divisor_range", (1, 1 << 63)),
+        ],
+    )
+    def test_axes_reject_i64_out_of_range_bounds(
+        self, field_name: str, range_value: tuple[int, int]
+    ) -> None:
+        with pytest.raises(Exception, match=field_name):
+            SequenceDpAxes.model_validate({field_name: range_value})
+
 
 class TestEvaluatorSemantics:
     def test_global_eq_scoring_known_small_case(self) -> None:
@@ -348,6 +440,36 @@ class TestEvaluatorSemantics:
         )
 
         assert eval_sequence_dp(spec, [1, 2], [1, 2]) == 0
+
+    def test_score_accumulation_uses_i64_wrap_semantics(self) -> None:
+        min_i64 = -(1 << 63)
+        spec = SequenceDpSpec(
+            template=TemplateType.GLOBAL,
+            output_mode=OutputMode.SCORE,
+            match_predicate=PredicateEq(),
+            match_score=1,
+            mismatch_score=-1,
+            gap_score=min_i64,
+            step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+        )
+
+        # Two forced global gap steps: min_i64 + min_i64 wraps to 0.
+        assert eval_sequence_dp(spec, [7, 8], []) == 0
+
+    def test_mod_eq_predicate_subtraction_uses_i64_wrap(self) -> None:
+        max_i64 = (1 << 63) - 1
+        spec = SequenceDpSpec(
+            template=TemplateType.GLOBAL,
+            output_mode=OutputMode.SCORE,
+            match_predicate=PredicateModEq(divisor=3, remainder=1),
+            match_score=9,
+            mismatch_score=-4,
+            gap_score=-2,
+            step_tie_break=TieBreakOrder.DIAG_UP_LEFT,
+        )
+
+        # (max_i64 - (-1)) wraps to min_i64, floorMod(min_i64, 3) == 1.
+        assert eval_sequence_dp(spec, [max_i64], [-1]) == 9
 
     def test_tie_break_order_changes_traceback_output_deterministically(
         self,
@@ -544,3 +666,28 @@ class TestTaskGeneration:
             expected = eval_sequence_dp(spec, a, b)
             actual = fn(a, b)
             assert actual == expected
+
+    def test_rendered_python_matches_evaluator_overflow_score_case(
+        self,
+    ) -> None:
+        spec = SequenceDpSpec.model_validate(
+            {
+                "template": "global",
+                "output_mode": "score",
+                "match_predicate": {"kind": "eq"},
+                "match_score": (1 << 63) - 1,
+                "mismatch_score": 0,
+                "gap_score": 0,
+                "step_tie_break": TieBreakOrder.DIAG_UP_LEFT.value,
+            }
+        )
+        code = render_sequence_dp(spec, func_name="f")
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        fn_obj = namespace["f"]
+        assert callable(fn_obj)
+        fn = cast(Callable[[list[int], list[int]], int], fn_obj)
+
+        a = [1, 1]
+        b = [1, 1]
+        assert fn(a, b) == eval_sequence_dp(spec, a, b)

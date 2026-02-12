@@ -93,6 +93,47 @@ class TestModels:
                 ],
             )
 
+    def test_state_id_rejects_values_that_overflow_sink_state(self) -> None:
+        with pytest.raises(Exception, match="states.0.id"):
+            FsmSpec.model_validate(
+                {
+                    "machine_type": "moore",
+                    "output_mode": "final_state_id",
+                    "undefined_transition_policy": "stay",
+                    "start_state_id": 2_147_483_647,
+                    "states": [
+                        {
+                            "id": 2_147_483_647,
+                            "is_accept": False,
+                            "transitions": [],
+                        }
+                    ],
+                }
+            )
+
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("n_states_range", (False, 3)),
+            ("transitions_per_state_range", (0, True)),
+            ("value_range", (False, 5)),
+            ("threshold_range", (0, True)),
+            ("divisor_range", (2, True)),
+        ],
+    )
+    def test_axes_reject_bool_in_int_range_bounds(
+        self, field_name: str, range_value: tuple[int | bool, int | bool]
+    ) -> None:
+        with pytest.raises(
+            Exception,
+            match=rf"{field_name}: bool is not allowed for int range bounds",
+        ):
+            FsmAxes.model_validate({field_name: range_value})
+
+    def test_axes_reject_n_states_range_above_int32_max(self) -> None:
+        with pytest.raises(Exception, match="n_states_range: high"):
+            FsmAxes.model_validate({"n_states_range": (2, 2_147_483_648)})
+
 
 class TestEvaluatorSemantics:
     def test_ordered_transitions_first_match_wins(self) -> None:

@@ -58,10 +58,20 @@ from genfxn.core.transforms import (
     TransformShift,
 )
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.graph_queries.models import (
+    GraphEdge,
+    GraphQueriesSpec,
+    GraphQueryType,
+)
 from genfxn.graph_queries.task import generate_graph_queries_task
+from genfxn.intervals.models import BoundaryMode, IntervalsSpec, OperationType
 from genfxn.intervals.task import generate_intervals_task
-from genfxn.langs.rust._helpers import rust_string_literal
+from genfxn.langs.rust._helpers import rust_i64_literal, rust_string_literal
 from genfxn.langs.rust.expressions import render_expression_rust
+from genfxn.langs.rust.graph_queries import render_graph_queries
+from genfxn.langs.rust.intervals import (
+    render_intervals as render_intervals_rust,
+)
 from genfxn.langs.rust.predicates import render_predicate_rust
 from genfxn.langs.rust.string_predicates import render_string_predicate_rust
 from genfxn.langs.rust.string_transforms import render_string_transform_rust
@@ -73,6 +83,7 @@ from genfxn.sequence_dp.task import generate_sequence_dp_task
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.task import generate_stringrules_task
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 
 def _code_map(task: Task) -> dict[str, str]:
@@ -113,6 +124,23 @@ class TestRustStringLiteral:
 
     def test_escapes_tab(self) -> None:
         assert rust_string_literal("a\tb") == '"a\\tb"'
+
+
+class TestRustI64Literal:
+    def test_small_i64(self) -> None:
+        assert rust_i64_literal(123) == "123i64"
+
+    def test_i64_min_uses_constant(self) -> None:
+        assert rust_i64_literal(-(1 << 63)) == "i64::MIN"
+
+    def test_i64_max_value(self) -> None:
+        assert rust_i64_literal((1 << 63) - 1) == "9223372036854775807i64"
+
+    def test_rejects_values_outside_i64_range(self) -> None:
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            rust_i64_literal(1 << 63)
+        with pytest.raises(ValueError, match="signed 64-bit range"):
+            rust_i64_literal(-(1 << 63) - 1)
 
 
 # ── Predicates ─────────────────────────────────────────────────────────
@@ -165,6 +193,74 @@ class TestPredicateRust:
 
     def test_custom_var(self) -> None:
         assert render_predicate_rust(PredicateEven(), var="n") == "n % 2 == 0"
+
+    def test_int32_wrap_mode_comparison(self) -> None:
+        result = render_predicate_rust(
+            PredicateGe(value=3_000_000_005),
+            int32_wrap=True,
+        )
+        assert result == "i32_wrap(x) >= i32_wrap(3000000005)"
+
+    def test_int32_wrap_mode_mod_eq(self) -> None:
+        result = render_predicate_rust(
+            PredicateModEq(divisor=3, remainder=1),
+            int32_wrap=True,
+        )
+        assert result == "i32_wrap(x).rem_euclid(i32_wrap(3)) == i32_wrap(1)"
+
+
+class TestIntervalsRust:
+    def test_wrapping_i64_arithmetic(self) -> None:
+        spec = IntervalsSpec(
+            operation=OperationType.TOTAL_COVERAGE,
+            boundary_mode=BoundaryMode.OPEN_OPEN,
+            merge_touching=True,
+            endpoint_clip_abs=20,
+            endpoint_quantize_step=1,
+        )
+        code = render_intervals_rust(spec)
+        assert "hi.wrapping_sub(1)" in code
+        assert "lo.wrapping_add(1)" in code
+        assert "prev_end.wrapping_add(1)" in code
+        assert "end.wrapping_sub(start).wrapping_add(1)" in code
+        assert "end.wrapping_add(1)" in code
+        assert "active = active.wrapping_add(*delta);" in code
+
+
+class TestGraphQueriesRust:
+    def test_shortest_path_cost_uses_saturating_i64_add(self) -> None:
+        spec = GraphQueriesSpec(
+            query_type=GraphQueryType.SHORTEST_PATH_COST,
+            directed=True,
+            weighted=True,
+            n_nodes=3,
+            edges=[
+                GraphEdge(u=0, v=1, w=1),
+                GraphEdge(u=1, v=2, w=2),
+            ],
+        )
+        code = render_graph_queries(spec)
+        assert "if cost > i64::MAX - weight" in code
+        assert "i64::MAX" in code
+
+    def test_rejects_invalid_edge_endpoints_at_runtime(self) -> None:
+        spec = GraphQueriesSpec(
+            query_type=GraphQueryType.MIN_HOPS,
+            directed=True,
+            weighted=False,
+            n_nodes=2,
+            edges=[GraphEdge(u=0, v=1, w=1)],
+        )
+        # Mutate post-validation to exercise runtime edge checks.
+        spec.edges[0].v = 99
+
+        code = render_graph_queries(spec)
+        assert "if raw_u_i64 < 0 || raw_u_i64 >= n_nodes as i64 || " in code
+        assert "raw_v_i64 < 0 || raw_v_i64 >= n_nodes as i64 {" in code
+        assert (
+            'panic!("edge endpoint out of range for '
+            'n_nodes={}", n_nodes);' in code
+        )
 
 
 # ── Transforms ─────────────────────────────────────────────────────────
@@ -263,26 +359,24 @@ class TestStringPredicateRust:
     def test_is_digit(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsDigit())
         assert result == (
-            "!s.is_empty() && s.chars().all(|c| c.is_numeric())"
+            "!s.is_empty() && s.chars().all(|c| __genfxn_is_python_digit(c))"
         )
 
-    def test_is_digit_uses_unicode_aware_numeric_check(self) -> None:
+    def test_is_digit_uses_python_authoritative_digit_helper(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsDigit())
-        assert "is_numeric()" in result
+        assert "__genfxn_is_python_digit" in result
 
     def test_is_upper(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsUpper())
-        assert result == (
-            "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && "
-            "s.to_uppercase() == s"
-        )
+        assert "!s.is_empty()" in result
+        assert "lower != upper" in result
+        assert "lower == upper || c.is_uppercase()" in result
 
     def test_is_lower(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsLower())
-        assert result == (
-            "!s.is_empty() && s.chars().any(|c| c.is_alphabetic()) && "
-            "s.to_lowercase() == s"
-        )
+        assert "!s.is_empty()" in result
+        assert "lower != upper" in result
+        assert "lower == upper || c.is_lowercase()" in result
 
     @pytest.mark.parametrize(
         ("op", "expected_op"),
@@ -302,7 +396,7 @@ class TestStringPredicateRust:
         result = render_string_predicate_rust(
             StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == f"s.len() {expected_op} 5"
+        assert result == f"s.chars().count() {expected_op} 5"
 
     def test_not(self) -> None:
         result = render_string_predicate_rust(
@@ -440,8 +534,8 @@ class TestPiecewiseRust:
         )
         code = render_piecewise(spec)
         assert "fn f(x: i64) -> i64" in code
-        assert "if x > 0 {" in code
-        assert "2 * x" in code
+        assert "if i32_wrap(x) > i32_wrap(0) {" in code
+        assert "i32_mul(2, x)" in code
         assert "-1" in code
 
     def test_no_branches(self) -> None:
@@ -471,8 +565,8 @@ class TestPiecewiseRust:
             default_expr=ExprAffine(a=1, b=0),
         )
         code = render_piecewise(spec)
-        assert "if x < -5 {" in code
-        assert "} else if x > 5 {" in code
+        assert "if i32_wrap(x) < i32_wrap(-5) {" in code
+        assert "} else if i32_wrap(x) > i32_wrap(5) {" in code
         assert "} else {" in code
 
     def test_in_set_condition_uses_array_contains(self) -> None:
@@ -489,7 +583,7 @@ class TestPiecewiseRust:
             default_expr=ExprAffine(a=0, b=0),
         )
         code = render_piecewise(spec)
-        assert "[1, 2].contains(&x)" in code
+        assert "[i32_wrap(1), i32_wrap(2)].contains(&i32_wrap(x))" in code
 
 
 class TestBitopsRust:
@@ -538,9 +632,9 @@ class TestStatefulRust:
         )
         code = render_stateful(spec)
         assert "fn f(xs: &[i64]) -> i64" in code
-        assert "for &x in xs" in code
-        assert "x % 2 == 0" in code
-        assert "-x" in code
+        assert "for &x_raw in xs" in code
+        assert "i32_wrap(x) % 2 == 0" in code
+        assert "i32_neg(x)" in code
 
     def test_longest_run(self) -> None:
         from genfxn.langs.rust.stateful import render_stateful
@@ -659,8 +753,8 @@ class TestSimpleAlgorithmsRust:
             counting_mode=CountingMode.ALL_INDICES,
         )
         code = render_simple_algorithms(spec)
-        assert "xs[i] + xs[j] == 10" in code
-        assert "count += 1" in code
+        assert "i32_add(xs[i], xs[j]) == 10" in code
+        assert "count = i32_add(count, 1)" in code
 
     def test_count_pairs_unique(self) -> None:
         from genfxn.langs.rust.simple_algorithms import render_simple_algorithms
@@ -753,8 +847,8 @@ class TestSimpleAlgorithmsRust:
             tie_default=99,
         )
         code = render_simple_algorithms(spec)
-        assert "return -1;" in code
-        assert "return 99;" in code
+        assert "return i32_wrap(-1);" in code
+        assert "return i32_wrap(99);" in code
         assert "candidates.len() > 1" in code
 
 
@@ -772,7 +866,7 @@ class TestMultiLanguageRustGeneration:
         code = _code_map(task)
         assert "python" in code
         assert "rust" in code
-        assert code["python"].startswith("def f(")
+        assert "def f(" in code["python"]
         assert "fn f(x: i64) -> i64" in code["rust"]
 
     def test_stateful_generates_rust(self) -> None:
@@ -863,6 +957,17 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(" in code["rust"]
 
+    def test_temporal_logic_generates_rust(self) -> None:
+        task = generate_temporal_logic_task(
+            rng=seeded_rng(42),
+            languages=[Language.PYTHON, Language.RUST],
+        )
+        code = _code_map(task)
+        assert "python" in code
+        assert "rust" in code
+        assert "def f(" in code["python"]
+        assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
             pytest.skip("stack_bytecode Rust rendering is not available")
@@ -948,6 +1053,7 @@ class TestRustRegistry:
             "graph_queries",
             "intervals",
             "sequence_dp",
+            "temporal_logic",
             "piecewise",
             "stateful",
             "simple_algorithms",
@@ -966,6 +1072,13 @@ class TestRustRegistry:
         assert callable(get_render_fn(Language.PYTHON, "graph_queries"))
         assert callable(get_render_fn(Language.JAVA, "graph_queries"))
         assert callable(get_render_fn(Language.RUST, "graph_queries"))
+
+    def test_registry_temporal_logic(self) -> None:
+        from genfxn.langs.registry import get_render_fn
+
+        assert callable(get_render_fn(Language.PYTHON, "temporal_logic"))
+        assert callable(get_render_fn(Language.JAVA, "temporal_logic"))
+        assert callable(get_render_fn(Language.RUST, "temporal_logic"))
 
     def test_available_languages_includes_rust(self) -> None:
         from genfxn.langs.render import _available_languages

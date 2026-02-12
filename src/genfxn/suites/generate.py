@@ -97,10 +97,21 @@ from genfxn.suites.features import (
     stack_bytecode_features,
     stateful_features,
     stringrules_features,
+    temporal_logic_features,
 )
 from genfxn.suites.quotas import QUOTAS, Bucket, QuotaSpec
+from genfxn.temporal_logic.models import (
+    TemporalLogicAxes,
+    TemporalOperator,
+    TemporalOutputMode,
+)
+from genfxn.temporal_logic.queries import generate_temporal_logic_queries
+from genfxn.temporal_logic.render import render_temporal_logic
+from genfxn.temporal_logic.sampler import sample_temporal_logic_spec
 
 logger = logging.getLogger(__name__)
+_SELECTION_RESTARTS = 3
+_MAX_POOL_VARIANTS_PER_ATTEMPT = 6
 
 # ── Candidate + PoolStats ────────────────────────────────────────────────
 
@@ -532,18 +543,19 @@ def _pool_axes_simple_algorithms_d5(rng: random.Random) -> SimpleAlgorithmsAxes:
     }
 
     # 2 edge defaults
-    if template == SATemplateType.MOST_FREQUENT:
-        axes_kwargs["tie_default_range"] = (-10, 10)
-        axes_kwargs["empty_default_range"] = (-5, 5)
-    elif template == SATemplateType.COUNT_PAIRS_SUM:
+    if template == SATemplateType.COUNT_PAIRS_SUM:
         axes_kwargs["no_result_default_range"] = (-10, 10)
         axes_kwargs["short_list_default_range"] = (-5, 5)
-    else:
+    elif template == SATemplateType.MAX_WINDOW_SUM:
         # max_window_sum: empty_default is the edge field, and
         # invalid_k_default != 0 adds to base_edge_score for D5 scoring
         axes_kwargs["empty_default_for_empty_range"] = (-10, 10)
         axes_kwargs["empty_default_range"] = (-10, -1)  # invalid_k_default ≠ 0
         axes_kwargs["window_size_range"] = (6, 10)
+    else:
+        raise ValueError(
+            f"unsupported simple_algorithms D5 template: {template}"
+        )
 
     return SimpleAlgorithmsAxes(**axes_kwargs)
 
@@ -1010,6 +1022,105 @@ def _pool_axes_graph_queries_d5(_: random.Random) -> GraphQueriesAxes:
     )
 
 
+def _pool_axes_temporal_logic_d1(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=1,
+        output_modes=[TemporalOutputMode.SAT_AT_START],
+        formula_depth_range=(1, 1),
+        operator_mix=[TemporalOperator.ATOM],
+        include_since_choices=[False],
+        sequence_length_range=(0, 5),
+        value_range=(-8, 8),
+        predicate_constant_range=(-6, 6),
+    )
+
+
+def _pool_axes_temporal_logic_d2(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=2,
+        output_modes=[TemporalOutputMode.SAT_AT_START],
+        formula_depth_range=(2, 2),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.NOT,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+        ],
+        include_since_choices=[False],
+        sequence_length_range=(1, 7),
+        value_range=(-10, 10),
+        predicate_constant_range=(-8, 8),
+    )
+
+
+def _pool_axes_temporal_logic_d3(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=3,
+        output_modes=[TemporalOutputMode.SAT_COUNT],
+        formula_depth_range=(3, 3),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.NOT,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+            TemporalOperator.NEXT,
+            TemporalOperator.EVENTUALLY,
+            TemporalOperator.ALWAYS,
+            TemporalOperator.UNTIL,
+        ],
+        include_since_choices=[False],
+        sequence_length_range=(3, 10),
+        value_range=(-12, 12),
+        predicate_constant_range=(-10, 10),
+    )
+
+
+def _pool_axes_temporal_logic_d4(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=4,
+        output_modes=[TemporalOutputMode.FIRST_SAT_INDEX],
+        formula_depth_range=(4, 4),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.NOT,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+            TemporalOperator.NEXT,
+            TemporalOperator.EVENTUALLY,
+            TemporalOperator.ALWAYS,
+            TemporalOperator.UNTIL,
+            TemporalOperator.SINCE,
+        ],
+        include_since_choices=[True],
+        sequence_length_range=(5, 12),
+        value_range=(-14, 14),
+        predicate_constant_range=(-12, 12),
+    )
+
+
+def _pool_axes_temporal_logic_d5(_: random.Random) -> TemporalLogicAxes:
+    return TemporalLogicAxes(
+        target_difficulty=5,
+        output_modes=[TemporalOutputMode.FIRST_SAT_INDEX],
+        formula_depth_range=(5, 6),
+        operator_mix=[
+            TemporalOperator.ATOM,
+            TemporalOperator.NOT,
+            TemporalOperator.AND,
+            TemporalOperator.OR,
+            TemporalOperator.NEXT,
+            TemporalOperator.EVENTUALLY,
+            TemporalOperator.ALWAYS,
+            TemporalOperator.UNTIL,
+            TemporalOperator.SINCE,
+        ],
+        include_since_choices=[True],
+        sequence_length_range=(8, 16),
+        value_range=(-16, 16),
+        predicate_constant_range=(-14, 14),
+    )
+
+
 # ── Pool axes dispatch ───────────────────────────────────────────────────
 
 _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
@@ -1070,6 +1181,13 @@ _POOL_AXES_FNS: dict[str, dict[int, Any]] = {
         4: _pool_axes_graph_queries_d4,
         5: _pool_axes_graph_queries_d5,
     },
+    "temporal_logic": {
+        1: _pool_axes_temporal_logic_d1,
+        2: _pool_axes_temporal_logic_d2,
+        3: _pool_axes_temporal_logic_d3,
+        4: _pool_axes_temporal_logic_d4,
+        5: _pool_axes_temporal_logic_d5,
+    },
 }
 
 # ── Sampling dispatch ────────────────────────────────────────────────────
@@ -1084,6 +1202,7 @@ _FEATURE_FNS = {
     "sequence_dp": sequence_dp_features,
     "intervals": intervals_features,
     "graph_queries": graph_queries_features,
+    "temporal_logic": temporal_logic_features,
 }
 
 
@@ -1145,6 +1264,8 @@ def _sample_spec(
         return sample_intervals_spec(axes, rng, trace=trace)
     elif family == "graph_queries":
         return sample_graph_queries_spec(axes, rng, trace=trace)
+    elif family == "temporal_logic":
+        return sample_temporal_logic_spec(axes, rng, trace=trace)
     raise ValueError(f"Unknown family: {family}")
 
 
@@ -1201,6 +1322,9 @@ def generate_pool(
     pool_size: int,
 ) -> tuple[list[Candidate], PoolStats]:
     """Generate a candidate pool of specs at the target difficulty."""
+    if pool_size <= 0:
+        raise ValueError(f"pool_size must be >= 1, got {pool_size}")
+
     _validate_family_key(
         family=family,
         family_keys=set(_POOL_AXES_FNS.keys()),
@@ -1224,7 +1348,7 @@ def generate_pool(
     seen_ids: set[str] = set()
     stats = PoolStats()
     # Surface systemic sampling failures instead of silently degrading pools.
-    max_failures = max(10, pool_size // 5)
+    max_failures = min(pool_size, max(10, pool_size // 5))
 
     for i in range(pool_size):
         stats.total_sampled += 1
@@ -1308,16 +1432,391 @@ def _condition_applies(bucket: Bucket, features: dict[str, str]) -> bool:
     return all(features.get(k) == v for k, v in bucket.condition.items())
 
 
+def _candidate_matches_hard_constraints(
+    candidate: Candidate,
+    hard_constraints: dict[str, str],
+) -> bool:
+    return all(
+        candidate.features.get(key) == val
+        for key, val in hard_constraints.items()
+    )
+
+
 def _quota_targets_met(selected: list[Candidate], quota: QuotaSpec) -> bool:
     """Return True when all bucket targets are met by selected candidates."""
-    filled: dict[int, int] = {i: 0 for i in range(len(quota.buckets))}
+    filled = _bucket_fill_counts(selected, quota)
+    return all(
+        filled[bi] >= bucket.target for bi, bucket in enumerate(quota.buckets)
+    )
+
+
+def _bucket_fill_counts(
+    selected: Sequence[Candidate],
+    quota: QuotaSpec,
+) -> list[int]:
+    """Count how many selected candidates fill each quota bucket."""
+    filled: list[int] = [0 for _ in range(len(quota.buckets))]
     for candidate in selected:
         for bi, bucket in enumerate(quota.buckets):
             if _bucket_applies(bucket, candidate.features):
                 filled[bi] += 1
-    return all(
-        filled[bi] >= bucket.target for bi, bucket in enumerate(quota.buckets)
+    return filled
+
+
+def _bucket_deficits(
+    filled: Sequence[int],
+    quota: QuotaSpec,
+) -> list[int]:
+    return [
+        max(0, bucket.target - filled[bi])
+        for bi, bucket in enumerate(quota.buckets)
+    ]
+
+
+def _deficit_score(filled: Sequence[int], quota: QuotaSpec) -> tuple[int, int]:
+    deficits = _bucket_deficits(filled, quota)
+    total_deficit = sum(deficits)
+    unmet_buckets = sum(1 for deficit in deficits if deficit > 0)
+    return total_deficit, unmet_buckets
+
+
+def _selection_rank(
+    selected: Sequence[Candidate], quota: QuotaSpec
+) -> tuple[int, int, int]:
+    """Rank selections by deficit first, then by larger size."""
+    filled = _bucket_fill_counts(selected, quota)
+    total_deficit, unmet_buckets = _deficit_score(filled, quota)
+    return total_deficit, unmet_buckets, -len(selected)
+
+
+def _selection_satisfies_quota(
+    selected: Sequence[Candidate],
+    quota: QuotaSpec,
+) -> bool:
+    return len(selected) >= quota.total and _quota_targets_met(
+        list(selected), quota
     )
+
+
+def _bucket_supply_shortfall(
+    candidates: Sequence[Candidate],
+    quota: QuotaSpec,
+) -> bool:
+    supply = [0 for _ in range(len(quota.buckets))]
+    for candidate in candidates:
+        if not _candidate_matches_hard_constraints(
+            candidate, quota.hard_constraints
+        ):
+            continue
+        for bi, bucket in enumerate(quota.buckets):
+            if _bucket_applies(bucket, candidate.features):
+                supply[bi] += 1
+    return any(
+        supply[bi] < bucket.target
+        for bi, bucket in enumerate(quota.buckets)
+    )
+
+
+def _merge_unique_candidates(
+    existing: list[Candidate],
+    additions: Sequence[Candidate],
+) -> list[Candidate]:
+    merged = list(existing)
+    seen_ids = {candidate.task_id for candidate in existing}
+    for candidate in additions:
+        if candidate.task_id in seen_ids:
+            continue
+        merged.append(candidate)
+        seen_ids.add(candidate.task_id)
+    return merged
+
+
+def _repair_selection_with_swaps(
+    selected: list[Candidate],
+    candidates: list[Candidate],
+    quota: QuotaSpec,
+    max_swaps: int = 64,
+) -> list[Candidate]:
+    """Repair near-miss selections via deterministic 1-for-1 swaps.
+
+    Greedy selection can get trapped in a local optimum where one bucket
+    remains underfilled even though the candidate pool contains a feasible
+    swap. This pass keeps selection size fixed and only applies improving
+    swaps.
+    """
+    if len(selected) == 0:
+        return selected
+
+    filtered = [
+        cand
+        for cand in candidates
+        if _candidate_matches_hard_constraints(cand, quota.hard_constraints)
+    ]
+    if not filtered:
+        return selected
+
+    selected_ids = {cand.task_id for cand in selected}
+    unselected = [cand for cand in filtered if cand.task_id not in selected_ids]
+    if not unselected:
+        return selected
+
+    applicable_buckets: dict[str, list[int]] = {}
+    for cand in filtered:
+        applicable: list[int] = []
+        for bi, bucket in enumerate(quota.buckets):
+            if _bucket_applies(bucket, cand.features):
+                applicable.append(bi)
+        applicable_buckets[cand.task_id] = applicable
+
+    repaired = list(selected[: quota.total])
+    filled = _bucket_fill_counts(repaired, quota)
+
+    while len(repaired) < quota.total and unselected:
+        deficits = _bucket_deficits(filled, quota)
+        best_fill_idx: int | None = None
+        best_fill_rank = (-1, -1, -1, "")
+        for ui, candidate in enumerate(unselected):
+            bucket_indices = applicable_buckets.get(candidate.task_id, [])
+            deficit_hits = sum(
+                1 for bi in bucket_indices if deficits[bi] > 0
+            )
+            deficit_weight = sum(
+                deficits[bi] for bi in bucket_indices if deficits[bi] > 0
+            )
+            fill_rank = (
+                deficit_hits,
+                deficit_weight,
+                len(bucket_indices),
+                candidate.task_id,
+            )
+            if fill_rank > best_fill_rank:
+                best_fill_rank = fill_rank
+                best_fill_idx = ui
+        if best_fill_idx is None:
+            break
+        candidate = unselected.pop(best_fill_idx)
+        repaired.append(candidate)
+        for bi in applicable_buckets.get(candidate.task_id, []):
+            filled[bi] += 1
+
+    if len(repaired) != quota.total:
+        return repaired
+
+    for _ in range(max_swaps):
+        base_score = _deficit_score(filled, quota)
+        if base_score == (0, 0):
+            break
+
+        deficits = _bucket_deficits(filled, quota)
+        deficit_buckets = {
+            bi for bi, deficit in enumerate(deficits) if deficit > 0
+        }
+        candidate_replacements = [
+            ui
+            for ui, cand in enumerate(unselected)
+            if any(
+                bi in deficit_buckets
+                for bi in applicable_buckets.get(cand.task_id, [])
+            )
+        ]
+        if not candidate_replacements:
+            break
+
+        best_swap: tuple[tuple[int, int], int, int, list[int]] | None = None
+        for si, current in enumerate(repaired):
+            current_buckets = applicable_buckets.get(current.task_id, [])
+            for ui in candidate_replacements:
+                replacement = unselected[ui]
+                replacement_buckets = applicable_buckets.get(
+                    replacement.task_id, []
+                )
+                if replacement_buckets == current_buckets:
+                    continue
+
+                new_filled = filled.copy()
+                for bi in current_buckets:
+                    new_filled[bi] -= 1
+                for bi in replacement_buckets:
+                    new_filled[bi] += 1
+
+                new_score = _deficit_score(new_filled, quota)
+                if new_score >= base_score:
+                    continue
+
+                if best_swap is None or new_score < best_swap[0]:
+                    best_swap = (new_score, si, ui, new_filled)
+                    if new_score == (0, 0):
+                        break
+            if best_swap is not None and best_swap[0] == (0, 0):
+                break
+
+        if best_swap is None:
+            break
+
+        _, selected_idx, unselected_idx, next_filled = best_swap
+        replacement = unselected.pop(unselected_idx)
+        removed = repaired[selected_idx]
+        repaired[selected_idx] = replacement
+        unselected.append(removed)
+        filled = next_filled
+
+    return repaired
+
+
+def _repair_selection_with_backtracking(
+    selected: list[Candidate],
+    candidates: list[Candidate],
+    quota: QuotaSpec,
+    max_rounds: int = 4,
+    max_branch: int = 8,
+) -> list[Candidate]:
+    """Run bounded deterministic backtracking for near-miss deficits."""
+    if len(selected) != quota.total or _quota_targets_met(selected, quota):
+        return selected
+
+    filtered = [
+        candidate
+        for candidate in candidates
+        if _candidate_matches_hard_constraints(
+            candidate, quota.hard_constraints
+        )
+    ]
+    if not filtered:
+        return selected
+
+    applicable_buckets: dict[str, list[int]] = {}
+    for candidate in filtered:
+        applicable_buckets[candidate.task_id] = [
+            bi
+            for bi, bucket in enumerate(quota.buckets)
+            if _bucket_applies(bucket, candidate.features)
+        ]
+
+    repaired = list(selected)
+    for _ in range(max_rounds):
+        base_rank = _selection_rank(repaired, quota)
+        if base_rank[:2] == (0, 0):
+            break
+
+        filled = _bucket_fill_counts(repaired, quota)
+        deficits = _bucket_deficits(filled, quota)
+        deficit_buckets = {bi for bi, deficit in enumerate(deficits) if deficit}
+        if not deficit_buckets:
+            break
+
+        selected_ids = {candidate.task_id for candidate in repaired}
+        unselected = [
+            candidate
+            for candidate in filtered
+            if candidate.task_id not in selected_ids
+        ]
+        if not unselected:
+            break
+
+        replacement_indices = [
+            ui
+            for ui, candidate in enumerate(unselected)
+            if any(
+                bi in deficit_buckets
+                for bi in applicable_buckets.get(candidate.task_id, [])
+            )
+        ]
+        if not replacement_indices:
+            break
+
+        replacement_indices = sorted(
+            replacement_indices,
+            key=lambda ui: (
+                -sum(
+                    1
+                    for bi in applicable_buckets[unselected[ui].task_id]
+                    if deficits[bi] > 0
+                ),
+                -sum(
+                    deficits[bi]
+                    for bi in applicable_buckets[unselected[ui].task_id]
+                    if deficits[bi] > 0
+                ),
+                unselected[ui].task_id,
+            ),
+        )[:max_branch]
+        removable_indices = sorted(
+            range(len(repaired)),
+            key=lambda si: (
+                sum(
+                    1
+                    for bi in applicable_buckets[repaired[si].task_id]
+                    if deficits[bi] > 0
+                ),
+                len(applicable_buckets[repaired[si].task_id]),
+                repaired[si].task_id,
+            ),
+        )[:max_branch]
+
+        best_trial: list[Candidate] | None = None
+        best_rank = base_rank
+        for ui in replacement_indices:
+            replacement = unselected[ui]
+            for si in removable_indices:
+                if repaired[si].task_id == replacement.task_id:
+                    continue
+                trial = list(repaired)
+                trial[si] = replacement
+                trial = _repair_selection_with_swaps(
+                    trial,
+                    filtered,
+                    quota,
+                    max_swaps=16,
+                )
+                rank = _selection_rank(trial, quota)
+                if rank < best_rank:
+                    best_trial = trial
+                    best_rank = rank
+                    if rank[:2] == (0, 0):
+                        break
+            if best_trial is not None and best_rank[:2] == (0, 0):
+                break
+
+        if best_trial is None:
+            break
+        repaired = best_trial
+
+    return repaired
+
+
+def _select_best_with_restarts(
+    candidates: list[Candidate],
+    quota: QuotaSpec,
+    family: str,
+    difficulty: int,
+    seed: int,
+    attempt: int,
+    selection_restarts: int = _SELECTION_RESTARTS,
+) -> list[Candidate]:
+    """Run deterministic greedy restarts and keep the best selection."""
+    best_selected: list[Candidate] = []
+    best_rank = _selection_rank(best_selected, quota)
+
+    for restart in range(selection_restarts):
+        select_rng = random.Random(
+            _stable_seed(
+                seed,
+                family,
+                difficulty,
+                900000 + (attempt * selection_restarts) + restart,
+            )
+        )
+        selected = greedy_select(candidates, quota, select_rng)
+        selected = _repair_selection_with_swaps(selected, candidates, quota)
+        selected = _repair_selection_with_backtracking(
+            selected, candidates, quota
+        )
+        rank = _selection_rank(selected, quota)
+        if rank < best_rank:
+            best_selected = selected
+            best_rank = rank
+
+    return best_selected
 
 
 def greedy_select(
@@ -1474,6 +1973,11 @@ def _generate_task_from_candidate(
             axes = GraphQueriesAxes()
         py_code = render_graph_queries(spec)
         queries = generate_graph_queries_queries(spec, axes, rng)
+    elif family == "temporal_logic":
+        if axes is None:
+            axes = TemporalLogicAxes()
+        py_code = render_temporal_logic(spec)
+        queries = generate_temporal_logic_queries(spec, axes, rng)
     else:
         raise ValueError(f"Unknown family: {family}")
 
@@ -1505,6 +2009,8 @@ def generate_suite(
     max_retries: int = 2,
 ) -> list[Task]:
     """Generate a balanced 50-task suite for (family, difficulty)."""
+    if pool_size <= 0:
+        raise ValueError(f"pool_size must be >= 1, got {pool_size}")
     if max_retries < 0:
         raise ValueError(f"max_retries must be >= 0, got {max_retries}")
 
@@ -1526,21 +2032,51 @@ def generate_suite(
 
     for attempt in range(max_retries + 1):
         current_pool_size = pool_size * (2**attempt)
+        pool_seed = _stable_seed(
+            seed, family, difficulty, 800000 + attempt
+        )
         candidates, stats = generate_pool(
-            family, difficulty, seed, current_pool_size
+            family, difficulty, pool_seed, current_pool_size
+        )
+        pool_variants_used = 1
+        if _bucket_supply_shortfall(candidates, quota):
+            for variant in range(1, _MAX_POOL_VARIANTS_PER_ATTEMPT):
+                variant_seed = _stable_seed(
+                    seed,
+                    family,
+                    difficulty,
+                    820000
+                    + attempt * (_MAX_POOL_VARIANTS_PER_ATTEMPT - 1)
+                    + (variant - 1),
+                )
+                extra_candidates, _ = generate_pool(
+                    family,
+                    difficulty,
+                    variant_seed,
+                    current_pool_size,
+                )
+                pool_variants_used += 1
+                candidates = _merge_unique_candidates(
+                    candidates, extra_candidates
+                )
+                if not _bucket_supply_shortfall(candidates, quota):
+                    break
+
+        selected = _select_best_with_restarts(
+            candidates,
+            quota,
+            family,
+            difficulty,
+            seed,
+            attempt,
         )
 
-        select_rng = random.Random(
-            _stable_seed(seed, family, difficulty, 999999)
-        )
-        selected = greedy_select(candidates, quota, select_rng)
-
-        if len(selected) >= quota.total and _quota_targets_met(selected, quota):
+        if _selection_satisfies_quota(selected, quota):
             break
         logger.debug(
             (
                 "%s D%d attempt %d: selected=%d/%d "
-                "targets_met=%s (pool=%d, candidates=%d)"
+                "targets_met=%s (pool=%d, candidates=%d, variants=%d)"
             ),
             family,
             difficulty,
@@ -1549,10 +2085,11 @@ def generate_suite(
             quota.total,
             _quota_targets_met(selected, quota),
             current_pool_size,
-            stats.candidates,
+            len(candidates),
+            pool_variants_used,
         )
 
-    if len(selected) < quota.total or not _quota_targets_met(selected, quota):
+    if not _selection_satisfies_quota(selected, quota):
         raise RuntimeError(
             f"Could not fill suite for {family} D{difficulty}: "
             f"selected {len(selected)}/{quota.total}, "

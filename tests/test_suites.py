@@ -22,6 +22,7 @@ from genfxn.suites.features import (
     simple_algorithms_features,
     stateful_features,
     stringrules_features,
+    temporal_logic_features,
 )
 from genfxn.suites.generate import (
     Candidate,
@@ -41,48 +42,49 @@ BitopsRenderFn = Callable[[int], int]
 SequenceDpRenderFn = Callable[[list[int], list[int]], int]
 IntervalsRenderFn = Callable[[list[tuple[int, int]]], int]
 GraphQueriesRenderFn = Callable[[int, int], int]
+TemporalLogicRenderFn = Callable[[list[int]], int]
+
+
+def _require_family_suite_module(family: str, module: str) -> None:
+    if family not in QUOTAS:
+        pytest.fail(f"{family} is missing from suite quotas")
+    if importlib.util.find_spec(module) is None:
+        pytest.fail(f"{module} is not importable")
 
 
 def _stack_suite_available() -> bool:
-    return (
-        "stack_bytecode" in QUOTAS
-        and importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
-    )
+    _require_family_suite_module("stack_bytecode", "genfxn.stack_bytecode.task")
+    return True
 
 
 def _fsm_suite_available() -> bool:
-    return (
-        "fsm" in QUOTAS
-        and importlib.util.find_spec("genfxn.fsm.task") is not None
-    )
+    _require_family_suite_module("fsm", "genfxn.fsm.task")
+    return True
 
 
 def _bitops_suite_available() -> bool:
-    return (
-        "bitops" in QUOTAS
-        and importlib.util.find_spec("genfxn.bitops.task") is not None
-    )
+    _require_family_suite_module("bitops", "genfxn.bitops.task")
+    return True
 
 
 def _sequence_dp_suite_available() -> bool:
-    return (
-        "sequence_dp" in QUOTAS
-        and importlib.util.find_spec("genfxn.sequence_dp.task") is not None
-    )
+    _require_family_suite_module("sequence_dp", "genfxn.sequence_dp.task")
+    return True
 
 
 def _intervals_suite_available() -> bool:
-    return (
-        "intervals" in QUOTAS
-        and importlib.util.find_spec("genfxn.intervals.task") is not None
-    )
+    _require_family_suite_module("intervals", "genfxn.intervals.task")
+    return True
 
 
 def _graph_queries_suite_available() -> bool:
-    return (
-        "graph_queries" in QUOTAS
-        and importlib.util.find_spec("genfxn.graph_queries.task") is not None
-    )
+    _require_family_suite_module("graph_queries", "genfxn.graph_queries.task")
+    return True
+
+
+def _temporal_logic_suite_available() -> bool:
+    _require_family_suite_module("temporal_logic", "genfxn.temporal_logic.task")
+    return True
 
 # ── Feature extraction tests ─────────────────────────────────────────────
 
@@ -711,6 +713,19 @@ class TestIntervalsFeatures:
         assert f["clip_bucket"] == "medium"
         assert f["quantize_bucket"] == "step3-4"
 
+    def test_bool_like_inputs_use_consistent_coercion(self) -> None:
+        spec = {
+            "operation": "merged_count",
+            "boundary_mode": "closed_open",
+            "merge_touching": "false",
+            "endpoint_clip_abs": True,
+            "endpoint_quantize_step": True,
+        }
+        f = intervals_features(spec)
+        assert f["merge_touching"] == "false"
+        assert f["clip_bucket"] == "very_wide"
+        assert f["quantize_bucket"] == "none"
+
 
 class TestGraphQueriesFeatures:
     def test_directed_unweighted_with_duplicates(self) -> None:
@@ -765,6 +780,70 @@ class TestGraphQueriesFeatures:
         }
         f = graph_queries_features(spec)
         assert f["nodes_bucket"] == "1"
+
+    def test_bool_like_mode_inputs_are_coerced(self) -> None:
+        spec = {
+            "query_type": "reachable",
+            "directed": "false",
+            "weighted": "true",
+            "n_nodes": 4,
+            "edges": [],
+        }
+        f = graph_queries_features(spec)
+        assert f["directed"] == "false"
+        assert f["weighted"] == "true"
+        assert f["mode"] == "undirected_weighted"
+
+
+class TestTemporalLogicFeatures:
+    def test_atom_sat_at_start(self) -> None:
+        spec = {
+            "output_mode": "sat_at_start",
+            "formula": {"op": "atom", "predicate": "eq", "constant": 1},
+        }
+        f = temporal_logic_features(spec)
+        assert f["output_mode"] == "sat_at_start"
+        assert f["depth_bucket"] == "1"
+        assert f["temporal_bucket"] == "none"
+        assert f["binary_bucket"] == "0"
+        assert f["has_since"] == "false"
+
+    def test_temporal_and_binary_buckets(self) -> None:
+        spec = {
+            "output_mode": "sat_count",
+            "formula": {
+                "op": "until",
+                "left": {
+                    "op": "eventually",
+                    "child": {"op": "atom", "predicate": "lt", "constant": 0},
+                },
+                "right": {
+                    "op": "and",
+                    "left": {"op": "atom", "predicate": "ge", "constant": 2},
+                    "right": {"op": "atom", "predicate": "ne", "constant": 4},
+                },
+            },
+        }
+        f = temporal_logic_features(spec)
+        assert f["output_mode"] == "sat_count"
+        assert f["depth_bucket"] == "3"
+        assert f["temporal_bucket"] in {"single", "multi"}
+        assert f["binary_bucket"] == "1-2"
+        assert f["has_since"] == "false"
+
+    def test_since_detected_as_hard_temporal(self) -> None:
+        spec = {
+            "output_mode": "first_sat_index",
+            "formula": {
+                "op": "since",
+                "left": {"op": "atom", "predicate": "gt", "constant": 3},
+                "right": {"op": "atom", "predicate": "le", "constant": 1},
+            },
+        }
+        f = temporal_logic_features(spec)
+        assert f["output_mode"] == "first_sat_index"
+        assert f["temporal_bucket"] == "hard"
+        assert f["has_since"] == "true"
 
 
 class _FixedChoiceRng:
@@ -975,6 +1054,33 @@ class TestHardConstraints:
         features_ok = {
             "query_type": "shortest_path_cost",
             "mode": "directed_weighted",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_temporal_logic_d4_filters_when_available(self) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+        quota = QUOTAS["temporal_logic"][4]
+        features_ok = {
+            "output_mode": "first_sat_index",
+            "depth_bucket": "4",
+        }
+        for key, val in quota.hard_constraints.items():
+            assert features_ok.get(key) == val
+
+    def test_temporal_logic_d2_uses_depth_bucket_quota_axis(self) -> None:
+        quota = QUOTAS["temporal_logic"][2]
+        assert quota.hard_constraints["depth_bucket"] == "2"
+        assert quota.buckets == [Bucket("depth_bucket", "2", 50)]
+
+    def test_temporal_logic_d5_filters_when_available(self) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+        quota = QUOTAS["temporal_logic"][5]
+        features_ok = {
+            "output_mode": "first_sat_index",
+            "depth_bucket": "5+",
         }
         for key, val in quota.hard_constraints.items():
             assert features_ok.get(key) == val
@@ -1513,6 +1619,54 @@ class TestPoolGeneration:
                     f"{bucket.axis}={bucket.value}"
                 )
 
+    def test_temporal_logic_pool_generates_candidates_when_available(
+        self,
+    ) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+
+        from genfxn.core.difficulty import compute_difficulty
+
+        for difficulty in sorted(QUOTAS["temporal_logic"].keys()):
+            candidates, stats = generate_pool(
+                "temporal_logic",
+                difficulty,
+                seed=42,
+                pool_size=260,
+            )
+            assert len(candidates) > 0
+            assert stats.candidates == len(candidates)
+            for cand in candidates:
+                assert (
+                    compute_difficulty("temporal_logic", cand.spec_dict)
+                    == difficulty
+                )
+
+    def test_temporal_logic_pool_features_cover_quota_axes_when_available(
+        self,
+    ) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["temporal_logic"].keys()):
+            candidates, _ = generate_pool(
+                "temporal_logic",
+                difficulty,
+                seed=43,
+                pool_size=320,
+            )
+            assert candidates
+            quota = QUOTAS["temporal_logic"][difficulty]
+            for bucket in quota.buckets:
+                assert any(
+                    cand.features.get(bucket.axis) == bucket.value
+                    for cand in candidates
+                ), (
+                    "Missing bucket coverage for temporal_logic "
+                    f"D{difficulty}: "
+                    f"{bucket.axis}={bucket.value}"
+                )
+
     def test_pool_raises_after_too_many_sampling_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1530,6 +1684,24 @@ class TestPoolGeneration:
 
         with pytest.raises(RuntimeError, match="Sampling failed"):
             generate_pool("stateful", 3, seed=42, pool_size=50)
+
+    def test_pool_raises_on_small_pool_when_all_samples_fail(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        def always_fail(
+            _family: str,
+            _axes: object,
+            _rng: random.Random,
+            trace: object = None,
+        ) -> object:
+            raise ValueError("forced sampler failure")
+
+        monkeypatch.setattr(suite_generate, "_sample_spec", always_fail)
+
+        with pytest.raises(RuntimeError, match="Sampling failed"):
+            generate_pool("stateful", 3, seed=42, pool_size=1)
 
 
 # ── Determinism test ─────────────────────────────────────────────────────
@@ -1562,6 +1734,59 @@ class TestDeterminism:
                 "stringrules", 3, seed=7, pool_size=20, max_retries=1
             )
 
+    def test_generate_suite_tries_pool_variants_when_first_pool_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        quota = QUOTAS["stringrules"][3]
+        calls = 0
+        fake_selected = [
+            Candidate(spec=None, spec_dict={}, task_id=f"id_{i}", features={})
+            for i in range(quota.total)
+        ]
+
+        def fake_generate_pool(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return [], PoolStats()
+            return (
+                fake_selected,
+                PoolStats(candidates=len(fake_selected)),
+            )
+
+        monkeypatch.setattr(
+            suite_generate, "generate_pool", fake_generate_pool
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_bucket_supply_shortfall",
+            lambda candidates, _quota: len(candidates) == 0,
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_select_best_with_restarts",
+            lambda candidates, *_args, **_kwargs: candidates[: quota.total],
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_selection_satisfies_quota",
+            lambda selected, _quota: len(selected) >= quota.total,
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "_generate_task_from_candidate",
+            lambda *_args, **_kwargs: object(),
+        )
+
+        tasks = suite_generate.generate_suite(
+            "stringrules", 3, seed=7, pool_size=20, max_retries=0
+        )
+
+        assert len(tasks) == quota.total
+        assert calls == 2
+
     def test_generate_suite_raises_when_targets_not_met(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1590,6 +1815,81 @@ class TestDeterminism:
             suite_generate.generate_suite(
                 "stringrules", 3, seed=7, pool_size=20, max_retries=0
             )
+
+    def test_generate_suite_retries_with_distinct_selection_rng(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        draws: list[float] = []
+        monkeypatch.setattr(
+            suite_generate,
+            "generate_pool",
+            lambda *_: ([], PoolStats()),
+        )
+
+        def _capture_rng_draw(
+            _candidates: list[Candidate],
+            _quota: QuotaSpec,
+            rng: random.Random,
+        ) -> list[Candidate]:
+            draws.append(rng.random())
+            return []
+
+        monkeypatch.setattr(suite_generate, "greedy_select", _capture_rng_draw)
+
+        with pytest.raises(RuntimeError, match="Could not fill suite"):
+            suite_generate.generate_suite(
+                "stringrules",
+                3,
+                seed=7,
+                pool_size=20,
+                max_retries=2,
+            )
+
+        # 3 attempts (max_retries=2) × 3 restarts per attempt.
+        assert len(draws) == 9
+        assert len(set(draws)) == 9
+
+    def test_generate_suite_retries_with_distinct_pool_seed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import genfxn.suites.generate as suite_generate
+
+        pool_seeds: list[int] = []
+
+        def _capture_pool_seed(
+            _family: str,
+            _difficulty: int,
+            pool_seed: int,
+            _pool_size: int,
+        ) -> tuple[list[Candidate], PoolStats]:
+            pool_seeds.append(pool_seed)
+            return [], PoolStats()
+
+        monkeypatch.setattr(suite_generate, "generate_pool", _capture_pool_seed)
+        monkeypatch.setattr(
+            suite_generate,
+            "_bucket_supply_shortfall",
+            lambda *_args, **_kwargs: False,
+        )
+        monkeypatch.setattr(
+            suite_generate,
+            "greedy_select",
+            lambda *_: [],
+        )
+
+        with pytest.raises(RuntimeError, match="Could not fill suite"):
+            suite_generate.generate_suite(
+                "stringrules",
+                3,
+                seed=7,
+                pool_size=20,
+                max_retries=2,
+            )
+
+        assert len(pool_seeds) == 3
+        assert len(set(pool_seeds)) == 3
 
     def test_stack_bytecode_generate_suite_deterministic_when_available(
         self,
@@ -1853,8 +2153,60 @@ class TestDeterminism:
             assert q.output == expected
             assert result == expected
 
+    def test_temporal_logic_generate_suite_deterministic_when_available(
+        self,
+    ) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+        difficulty = sorted(QUOTAS["temporal_logic"].keys())[0]
+        a = generate_suite("temporal_logic", difficulty, seed=19, pool_size=320)
+        b = generate_suite("temporal_logic", difficulty, seed=19, pool_size=320)
+        assert [t.task_id for t in a] == [t.task_id for t in b]
+
+    def test_temporal_logic_suite_renderer_and_queries_when_available(
+        self,
+    ) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+        from genfxn.temporal_logic.eval import eval_temporal_logic
+        from genfxn.temporal_logic.models import TemporalLogicSpec
+
+        difficulty = sorted(QUOTAS["temporal_logic"].keys())[0]
+        tasks = generate_suite(
+            "temporal_logic",
+            difficulty,
+            seed=42,
+            pool_size=320,
+        )
+        assert tasks
+        task = tasks[0]
+        spec = TemporalLogicSpec.model_validate(task.spec)
+
+        code = cast(str, task.code)
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        f_obj = namespace["f"]
+        assert callable(f_obj)
+        f = cast(TemporalLogicRenderFn, f_obj)
+
+        for q in task.queries:
+            xs = cast(list[int], list(q.input))
+            expected = eval_temporal_logic(spec, xs)
+            result = f(xs)
+            assert isinstance(q.output, int)
+            assert q.output == expected
+            assert result == expected
+
 
 class TestSuiteGenerationValidation:
+    def test_generate_suite_rejects_non_positive_pool_size(self) -> None:
+        with pytest.raises(ValueError, match="pool_size must be >= 1"):
+            generate_suite("stringrules", 3, seed=7, pool_size=0)
+
+    def test_generate_pool_rejects_non_positive_pool_size(self) -> None:
+        with pytest.raises(ValueError, match="pool_size must be >= 1"):
+            generate_pool("stringrules", 3, seed=7, pool_size=0)
+
     def test_generate_suite_rejects_negative_max_retries(self) -> None:
         with pytest.raises(ValueError, match="max_retries must be >= 0"):
             generate_suite("stringrules", 3, seed=7, max_retries=-1)
@@ -2138,6 +2490,78 @@ class TestIntegration:
                 assert achieved >= min_acceptable
 
     @pytest.mark.slow
+    def test_intervals_d2_local_optimum_recovery_when_available(
+        self,
+    ) -> None:
+        if not _intervals_suite_available():
+            pytest.skip("intervals suite generation is not available")
+        if 2 not in QUOTAS["intervals"]:
+            pytest.skip("intervals D2 suite generation is not available")
+        import genfxn.suites.generate as suite_generate
+
+        difficulty = 2
+        seed = 231
+        pool_size = 200
+        quota = QUOTAS["intervals"][difficulty]
+
+        # Baseline greedy restart-0 can miss quota targets on this pool.
+        pool_seed = suite_generate._stable_seed(
+            seed, "intervals", difficulty, 800000
+        )
+        candidates, _ = suite_generate.generate_pool(
+            "intervals",
+            difficulty,
+            pool_seed,
+            pool_size,
+        )
+        restart0_rng = random.Random(
+            suite_generate._stable_seed(
+                seed,
+                "intervals",
+                difficulty,
+                900000,
+            )
+        )
+        restart0_selected = suite_generate.greedy_select(
+            candidates,
+            quota,
+            restart0_rng,
+        )
+        restart0_selected = suite_generate._repair_selection_with_swaps(
+            restart0_selected,
+            candidates,
+            quota,
+        )
+        assert len(restart0_selected) == quota.total
+        assert not suite_generate._quota_targets_met(
+            restart0_selected,
+            quota,
+        )
+
+        tasks_a = generate_suite(
+            "intervals",
+            difficulty,
+            seed=seed,
+            pool_size=pool_size,
+            max_retries=0,
+        )
+        tasks_b = generate_suite(
+            "intervals",
+            difficulty,
+            seed=seed,
+            pool_size=pool_size,
+            max_retries=0,
+        )
+        assert len(tasks_a) == quota.total
+        assert [task.task_id for task in tasks_a] == [
+            task.task_id for task in tasks_b
+        ]
+
+        report = quota_report(tasks_a, "intervals", difficulty)
+        for _, _, target, achieved, _ in report:
+            assert achieved >= target
+
+    @pytest.mark.slow
     def test_graph_queries_suite_generation_when_available(self) -> None:
         if not _graph_queries_suite_available():
             pytest.skip("graph_queries suite generation is not available")
@@ -2175,6 +2599,48 @@ class TestIntegration:
             quota = QUOTAS["graph_queries"][difficulty]
             assert len(tasks) == quota.total
             report = quota_report(tasks, "graph_queries", difficulty)
+            for _, _, target, achieved, _ in report:
+                min_acceptable = max(1, int(target * 0.75))
+                assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_temporal_logic_suite_generation_when_available(self) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+        from genfxn.suites.generate import generate_suite, quota_report
+
+        difficulty = sorted(QUOTAS["temporal_logic"].keys())[0]
+        tasks = generate_suite(
+            "temporal_logic",
+            difficulty,
+            seed=102,
+            pool_size=1400,
+        )
+        quota = QUOTAS["temporal_logic"][difficulty]
+        assert len(tasks) == quota.total
+
+        report = quota_report(tasks, "temporal_logic", difficulty)
+        for _, _, target, achieved, _ in report:
+            min_acceptable = max(1, int(target * 0.75))
+            assert achieved >= min_acceptable
+
+    @pytest.mark.slow
+    def test_temporal_logic_all_difficulties_quota_report_when_available(
+        self,
+    ) -> None:
+        if not _temporal_logic_suite_available():
+            pytest.skip("temporal_logic suite generation is not available")
+
+        for difficulty in sorted(QUOTAS["temporal_logic"].keys()):
+            tasks = generate_suite(
+                "temporal_logic",
+                difficulty,
+                seed=701 + difficulty,
+                pool_size=1400,
+            )
+            quota = QUOTAS["temporal_logic"][difficulty]
+            assert len(tasks) == quota.total
+            report = quota_report(tasks, "temporal_logic", difficulty)
             for _, _, target, achieved, _ in report:
                 min_acceptable = max(1, int(target * 0.75))
                 assert achieved >= min_acceptable

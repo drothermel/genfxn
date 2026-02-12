@@ -1,4 +1,5 @@
 from genfxn.intervals.models import IntervalsSpec
+from genfxn.langs.rust._helpers import rust_i64_literal
 
 
 def render_intervals(
@@ -11,10 +12,13 @@ def render_intervals(
         f'    let operation = "{spec.operation.value}";',
         f'    let boundary_mode = "{spec.boundary_mode.value}";',
         f"    let merge_touching = {str(spec.merge_touching).lower()};",
-        f"    let endpoint_clip_abs: i64 = {spec.endpoint_clip_abs};",
+        (
+            "    let endpoint_clip_abs: i64 = "
+            f"{rust_i64_literal(spec.endpoint_clip_abs)};"
+        ),
         (
             "    let endpoint_quantize_step: i64 = "
-            f"{spec.endpoint_quantize_step};"
+            f"{rust_i64_literal(spec.endpoint_quantize_step)};"
         ),
         "",
         "    let mut adjusted: Vec<(i64, i64)> = Vec::new();",
@@ -37,11 +41,11 @@ def render_intervals(
         "        let (start, end) = if boundary_mode == \"closed_closed\" {",
         "            (lo, hi)",
         "        } else if boundary_mode == \"closed_open\" {",
-        "            (lo, hi - 1)",
+        "            (lo, hi.wrapping_sub(1))",
         "        } else if boundary_mode == \"open_closed\" {",
-        "            (lo + 1, hi)",
+        "            (lo.wrapping_add(1), hi)",
         "        } else if boundary_mode == \"open_open\" {",
-        "            (lo + 1, hi - 1)",
+        "            (lo.wrapping_add(1), hi.wrapping_sub(1))",
         "        } else {",
         "            panic!(\"Unsupported boundary mode\");",
         "        };",
@@ -61,7 +65,7 @@ def render_intervals(
         "        let last_idx = merged.len() - 1;",
         "        let (prev_start, prev_end) = merged[last_idx];",
         "        let threshold = if merge_touching {",
-        "            prev_end + 1",
+        "            prev_end.wrapping_add(1)",
         "        } else {",
         "            prev_end",
         "        };",
@@ -75,7 +79,10 @@ def render_intervals(
         "    if operation == \"total_coverage\" {",
         "        let mut total: i64 = 0;",
         "        for &(start, end) in &merged {",
-        "            total += end - start + 1;",
+        (
+            "            total = total.wrapping_add("
+            "end.wrapping_sub(start).wrapping_add(1));"
+        ),
         "        }",
         "        return total;",
         "    }",
@@ -89,7 +96,7 @@ def render_intervals(
         "        for idx in 1..merged.len() {",
         "            let prev_end = merged[idx - 1].1;",
         "            let next_start = merged[idx].0;",
-        "            if next_start > prev_end + 1 {",
+        "            if next_start > prev_end.wrapping_add(1) {",
         "                gaps += 1;",
         "            }",
         "        }",
@@ -103,13 +110,15 @@ def render_intervals(
         ),
         "        for &(start, end) in &adjusted {",
         "            *events.entry(start).or_insert(0) += 1;",
-        "            *events.entry(end + 1).or_insert(0) -= 1;",
+        (
+            "            *events.entry(end.wrapping_add(1)).or_insert(0) -= 1;"
+        ),
         "        }",
         "",
         "        let mut active: i64 = 0;",
         "        let mut best: i64 = 0;",
         "        for delta in events.values() {",
-        "            active += *delta;",
+        "            active = active.wrapping_add(*delta);",
         "            if active > best {",
         "                best = active;",
         "            }",

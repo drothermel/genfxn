@@ -31,8 +31,10 @@ CODE_CODE_EXEC_ERROR = "CODE_CODE_EXEC_ERROR"
 CODE_CODE_MISSING_FUNC = "CODE_CODE_MISSING_FUNC"
 CODE_CODE_RUNTIME_ERROR = "CODE_CODE_RUNTIME_ERROR"
 CODE_QUERY_INPUT_TYPE = "CODE_QUERY_INPUT_TYPE"
+CODE_QUERY_INPUT_BOUNDS = "CODE_QUERY_INPUT_BOUNDS"
 CODE_QUERY_OUTPUT_TYPE = "CODE_QUERY_OUTPUT_TYPE"
 CODE_QUERY_OUTPUT_MISMATCH = "CODE_QUERY_OUTPUT_MISMATCH"
+CODE_QUERY_INPUT_DUPLICATE = "CODE_QUERY_INPUT_DUPLICATE"
 CODE_SEMANTIC_MISMATCH = "CODE_SEMANTIC_MISMATCH"
 CODE_SEMANTIC_ISSUES_CAPPED = "CODE_SEMANTIC_ISSUES_CAPPED"
 CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
@@ -43,9 +45,16 @@ PYTHON_CODE_KEY = "python"
 _spec_adapter = TypeAdapter(GraphQueriesSpec)
 _ALLOWED_BUILTINS = {
     "ValueError": ValueError,
+    "dict": dict,
+    "isinstance": isinstance,
+    "int": int,
     "len": len,
     "range": range,
 }
+
+
+def _is_int_not_bool(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _validate_ast_whitelist(
@@ -59,6 +68,28 @@ def _validate_ast_whitelist(
         tree = ast.parse(code)
     except (SyntaxError, TypeError):
         return [], None
+
+    for stmt in tree.body:
+        if (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue
+        if not isinstance(stmt, ast.FunctionDef):
+            return [
+                Issue(
+                    code=CODE_UNSAFE_AST,
+                    severity=Severity.ERROR,
+                    message=(
+                        "Top-level statement "
+                        f"{type(stmt).__name__} at line "
+                        f"{getattr(stmt, 'lineno', '?')} is not allowed; "
+                        "only function definitions are permitted"
+                    ),
+                    location="code",
+                )
+            ], None
 
     annotation_positions: set[tuple[int, int]] = set()
     for node in ast.walk(tree):
@@ -146,6 +177,18 @@ def _validate_ast_whitelist(
                         location="code",
                     )
                 )
+            elif node.attr not in ALLOWED_METHOD_NAMES:
+                issues.append(
+                    Issue(
+                        code=CODE_UNSAFE_AST,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Disallowed attribute '{node.attr}' at line "
+                            f"{getattr(node, 'lineno', '?')}"
+                        ),
+                        location="code",
+                    )
+                )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             in_annotation = (
                 node.lineno,
@@ -170,7 +213,18 @@ def _validate_ast_whitelist(
 
 
 def _validate_task_id(task: Task) -> list[Issue]:
-    expected = task_id_from_spec(family=task.family, spec=task.spec)
+    try:
+        expected = task_id_from_spec(family=task.family, spec=task.spec)
+    except Exception as e:
+        return [
+            Issue(
+                code=CODE_TASK_ID_MISMATCH,
+                severity=Severity.ERROR,
+                message=f"Failed to compute task_id from spec: {e}",
+                location="task_id",
+                task_id=task.task_id,
+            )
+        ]
     if task.task_id == expected:
         return []
     return [
@@ -326,9 +380,9 @@ def _coerce_query_input(input_value: object) -> tuple[int, int] | None:
     typed_input = cast(dict[str, object], input_value)
     src = typed_input.get("src")
     dst = typed_input.get("dst")
-    if not isinstance(src, int) or not isinstance(dst, int):
+    if not _is_int_not_bool(src) or not _is_int_not_bool(dst):
         return None
-    return src, dst
+    return cast(int, src), cast(int, dst)
 
 
 def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
@@ -346,7 +400,7 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     task_id=task.task_id,
                 )
             )
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             issues.append(
                 Issue(
                     code=CODE_QUERY_OUTPUT_TYPE,
@@ -356,6 +410,35 @@ def _validate_query_types(task: Task, strict: bool) -> list[Issue]:
                     task_id=task.task_id,
                 )
             )
+
+    return issues
+
+
+def _validate_query_uniqueness(task: Task, strict: bool) -> list[Issue]:
+    issues: list[Issue] = []
+    severity = Severity.ERROR if strict else Severity.WARNING
+    seen: set[tuple[object, tuple[int, int]]] = set()
+
+    for i, query in enumerate(task.queries):
+        coerced = _coerce_query_input(query.input)
+        if coerced is None:
+            continue
+        key = (query.tag, coerced)
+        if key in seen:
+            issues.append(
+                Issue(
+                    code=CODE_QUERY_INPUT_DUPLICATE,
+                    severity=severity,
+                    message=(
+                        "Duplicate query input is not allowed within a single "
+                        f"tag ({query.tag.value})"
+                    ),
+                    location=f"queries[{i}].input",
+                    task_id=task.task_id,
+                )
+            )
+            continue
+        seen.add(key)
 
     return issues
 
@@ -372,7 +455,7 @@ def _validate_query_outputs(
         coerced = _coerce_query_input(query.input)
         if coerced is None:
             continue
-        if not isinstance(query.output, int):
+        if not _is_int_not_bool(query.output):
             continue
 
         src, dst = coerced
@@ -381,7 +464,7 @@ def _validate_query_outputs(
         except ValueError as e:
             issues.append(
                 Issue(
-                    code=CODE_QUERY_INPUT_TYPE,
+                    code=CODE_QUERY_INPUT_BOUNDS,
                     severity=severity,
                     message=f"Query input is out of spec bounds: {e}",
                     location=f"queries[{i}].input",
@@ -482,7 +565,7 @@ def validate_graph_queries_task(
     task: Task,
     axes: GraphQueriesAxes | None = None,
     strict: bool = True,
-    execute_untrusted_code: bool = True,
+    execute_untrusted_code: bool = False,
     max_semantic_issues: int = 10,
     semantic_trials: int = 16,
     random_seed: int = 0,
@@ -505,6 +588,7 @@ def validate_graph_queries_task(
 
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
+    issues.extend(_validate_query_uniqueness(task, strict=strict))
     issues.extend(_validate_task_id(task))
 
     spec_issues, spec = _validate_spec_deserialize(task)
@@ -535,20 +619,25 @@ def validate_graph_queries_task(
         )
         issues.extend(compile_issues)
 
-    issues.extend(_validate_query_outputs(task, spec, strict=strict))
+    try:
+        issues.extend(_validate_query_outputs(task, spec, strict=strict))
 
-    rng = random.Random(random_seed)
-    issues.extend(
-        _validate_semantics(
-            task,
-            spec,
-            fn,
-            axes,
-            strict=strict,
-            semantic_trials=semantic_trials,
-            max_semantic_issues=max_semantic_issues,
-            rng=rng,
+        rng = random.Random(random_seed)
+        issues.extend(
+            _validate_semantics(
+                task,
+                spec,
+                fn,
+                axes,
+                strict=strict,
+                semantic_trials=semantic_trials,
+                max_semantic_issues=max_semantic_issues,
+                rng=rng,
+            )
         )
-    )
+    finally:
+        close = getattr(fn, "close", None)
+        if callable(close):
+            close()
 
     return issues

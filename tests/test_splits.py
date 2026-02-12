@@ -1,3 +1,5 @@
+import random
+
 import pytest
 
 from genfxn.core.codegen import get_spec_value
@@ -100,6 +102,82 @@ class TestSplitTasks:
         assert len(result.test) == 1
         assert result.test[0].task_id == "t2"
 
+    def test_exact_holdout_distinguishes_bool_false_from_int_zero(
+        self,
+    ) -> None:
+        tasks = [
+            _make_task("t1", {"flag": False}),
+            _make_task("t2", {"flag": 0}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="flag",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=0,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+
+        assert [t.task_id for t in result.test] == ["t2"]
+        assert [t.task_id for t in result.train] == ["t1"]
+
+    @pytest.mark.parametrize(
+        ("holdout_value", "expected_test_ids"),
+        [
+            pytest.param(False, {"t-false"}, id="bool-false"),
+            pytest.param(0, {"t-int-zero"}, id="int-zero"),
+            pytest.param(True, {"t-true"}, id="bool-true"),
+            pytest.param(1, {"t-int-one"}, id="int-one"),
+            pytest.param(1.0, {"t-float-one"}, id="float-one"),
+            pytest.param("1", {"t-string-one"}, id="string-one"),
+            pytest.param(None, {"t-none"}, id="none"),
+        ],
+    )
+    def test_exact_holdout_type_matrix(
+        self, holdout_value: object, expected_test_ids: set[str]
+    ) -> None:
+        tasks = [
+            _make_task("t-false", {"value": False}),
+            _make_task("t-int-zero", {"value": 0}),
+            _make_task("t-true", {"value": True}),
+            _make_task("t-int-one", {"value": 1}),
+            _make_task("t-float-one", {"value": 1.0}),
+            _make_task("t-string-one", {"value": "1"}),
+            _make_task("t-none", {"value": None}),
+            _make_task("t-missing", {}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="value",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=holdout_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+
+        assert {t.task_id for t in result.test} == expected_test_ids
+        assert "t-missing" in {t.task_id for t in result.train}
+
+    def test_exact_holdout_nested_type_sensitive_match(self) -> None:
+        tasks = [
+            _make_task("t-bool", {"vals": [False]}),
+            _make_task("t-int", {"vals": [0]}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="vals",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=[False],
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+
+        assert {t.task_id for t in result.test} == {"t-bool"}
+        assert {t.task_id for t in result.train} == {"t-int"}
+
     def test_range_holdout(self) -> None:
         tasks = [
             _make_task("t1", {"threshold": 5}),
@@ -137,6 +215,190 @@ class TestSplitTasks:
         assert len(result.train) == 0
         assert len(result.test) == 2
 
+    def test_range_holdout_rejects_bool_spec_values(self) -> None:
+        tasks = [
+            _make_task("t1", {"flag": False}),
+            _make_task("t2", {"flag": True}),
+            _make_task("t3", {"flag": 0}),
+            _make_task("t4", {"flag": 0.0}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="flag",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(0, 0),
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert {t.task_id for t in result.test} == {"t3", "t4"}
+        assert {t.task_id for t in result.train} == {"t1", "t2"}
+
+    def test_range_holdout_rejects_bool_bounds(self) -> None:
+        tasks = [
+            _make_task("t1", {"score": 0}),
+            _make_task("t2", {"score": 1}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(False, 1),
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1", "t2"}
+
+    def test_range_holdout_rejects_non_finite_bounds_neg_inf_to_inf(
+        self,
+    ) -> None:
+        tasks = [
+            _make_task("t1", {"score": -5}),
+            _make_task("t2", {"score": 0}),
+            _make_task("t3", {"score": 5}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(float("-inf"), float("inf")),
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1", "t2", "t3"}
+
+    def test_range_holdout_rejects_non_finite_bounds_nan_lower(self) -> None:
+        tasks = [
+            _make_task("t1", {"score": 0}),
+            _make_task("t2", {"score": 10}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(float("nan"), 10),
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1", "t2"}
+
+    def test_range_holdout_rejects_non_finite_spec_values(self) -> None:
+        tasks = [
+            _make_task("t-nan", {"score": float("nan")}),
+            _make_task("t-inf", {"score": float("inf")}),
+            _make_task("t-neg-inf", {"score": float("-inf")}),
+            _make_task("t-finite", {"score": 5}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(0, 10),
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert {t.task_id for t in result.test} == {"t-finite"}
+        assert {t.task_id for t in result.train} == {
+            "t-nan",
+            "t-inf",
+            "t-neg-inf",
+        }
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "inf", "neg-inf"],
+    )
+    def test_exact_holdout_rejects_non_finite_holdout_values(
+        self, bad_value: float
+    ) -> None:
+        tasks = [_make_task("t1", {"value": bad_value})]
+        holdouts = [
+            AxisHoldout(
+                axis_path="value",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=bad_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1"}
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "inf", "neg-inf"],
+    )
+    def test_contains_holdout_rejects_non_finite_holdout_values(
+        self, bad_value: float
+    ) -> None:
+        tasks = [_make_task("t1", {"values": [bad_value]})]
+        holdouts = [
+            AxisHoldout(
+                axis_path="values",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value=bad_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1"}
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [
+            {float("nan")},
+            frozenset({float("inf")}),
+        ],
+        ids=["set-nan", "frozenset-inf"],
+    )
+    def test_exact_holdout_rejects_non_finite_values_in_set_like_containers(
+        self, bad_value: object
+    ) -> None:
+        tasks = [_make_task("t1", {"value": bad_value})]
+        holdouts = [
+            AxisHoldout(
+                axis_path="value",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=bad_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1"}
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [
+            {float("nan")},
+            frozenset({float("-inf")}),
+        ],
+        ids=["set-nan", "frozenset-neg-inf"],
+    )
+    def test_contains_holdout_rejects_non_finite_values_in_set_like_containers(
+        self, bad_value: object
+    ) -> None:
+        tasks = [_make_task("t1", {"values": [bad_value]})]
+        holdouts = [
+            AxisHoldout(
+                axis_path="values",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value=bad_value,
+            )
+        ]
+
+        result = split_tasks(tasks, holdouts)
+        assert result.test == []
+        assert {t.task_id for t in result.train} == {"t1"}
+
     def test_contains_holdout(self) -> None:
         tasks = [
             _make_task("t1", {"tags": ["fast", "simple"]}),
@@ -155,6 +417,86 @@ class TestSplitTasks:
         assert len(result.train) == 1
         assert len(result.test) == 2
         assert result.train[0].task_id == "t1"
+
+    @pytest.mark.parametrize(
+        ("holdout_value", "expected_test_ids"),
+        [
+            pytest.param(False, {"t-bool-false"}, id="bool-false"),
+            pytest.param(0, {"t-int-zero"}, id="int-zero"),
+            pytest.param(0.0, {"t-float-zero"}, id="float-zero"),
+            pytest.param(True, {"t-bool-true"}, id="bool-true"),
+            pytest.param(1, {"t-int-one"}, id="int-one"),
+        ],
+    )
+    def test_contains_holdout_type_matrix(
+        self, holdout_value: object, expected_test_ids: set[str]
+    ) -> None:
+        tasks = [
+            _make_task("t-bool-false", {"vals": [False]}),
+            _make_task("t-int-zero", {"vals": [0]}),
+            _make_task("t-float-zero", {"vals": [0.0]}),
+            _make_task("t-bool-true", {"vals": [True]}),
+            _make_task("t-int-one", {"vals": [1]}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="vals",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value=holdout_value,
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+
+        assert {t.task_id for t in result.test} == expected_test_ids
+
+    def test_contains_holdout_nested_type_sensitive_match(self) -> None:
+        tasks = [
+            _make_task("t-bool", {"vals": [[False]]}),
+            _make_task("t-int", {"vals": [[0]]}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="vals",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value=[False],
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+
+        assert {t.task_id for t in result.test} == {"t-bool"}
+        assert {t.task_id for t in result.train} == {"t-int"}
+
+    def test_contains_holdout_does_not_match_dict_keys(self) -> None:
+        tasks = [
+            _make_task("t1", {"meta": {"kind": "complex"}}),
+            _make_task("t2", {"meta": {"kind": "simple"}}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="meta",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value="kind",
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.train] == ["t1", "t2"]
+        assert result.test == []
+
+    def test_contains_holdout_does_not_match_string_substrings(self) -> None:
+        tasks = [
+            _make_task("t1", {"name": "complexity"}),
+            _make_task("t2", {"name": "simple"}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="name",
+                holdout_type=HoldoutType.CONTAINS,
+                holdout_value="complex",
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.train] == ["t1", "t2"]
+        assert result.test == []
 
     def test_multiple_holdouts_or_logic(self) -> None:
         tasks = [
@@ -274,6 +616,39 @@ class TestSplitTasks:
         assert result.holdouts == holdouts
         assert len(result.holdouts) == 2
 
+    def test_exact_holdout_matches_explicit_none_value(self) -> None:
+        tasks = [
+            _make_task("t1", {"value": None}),
+            _make_task("t2", {}),
+            _make_task("t3", {"value": 1}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="value",
+                holdout_type=HoldoutType.EXACT,
+                holdout_value=None,
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.test] == ["t1"]
+        assert {t.task_id for t in result.train} == {"t2", "t3"}
+
+    def test_malformed_range_holdout_fails_closed(self) -> None:
+        tasks = [
+            _make_task("t1", {"score": 10}),
+            _make_task("t2", {"score": 20}),
+        ]
+        holdouts = [
+            AxisHoldout(
+                axis_path="score",
+                holdout_type=HoldoutType.RANGE,
+                holdout_value=(0, 10, 20),
+            )
+        ]
+        result = split_tasks(tasks, holdouts)
+        assert [t.task_id for t in result.train] == ["t1", "t2"]
+        assert result.test == []
+
 
 class TestRandomSplit:
     def test_basic_split_ratio(self) -> None:
@@ -340,10 +715,17 @@ class TestRandomSplit:
         result1 = random_split(tasks, train_ratio=0.8, seed=1)
         result2 = random_split(tasks, train_ratio=0.8, seed=2)
 
-        # Very unlikely to be the same with different seeds
-        train_ids_1 = {t.task_id for t in result1.train}
-        train_ids_2 = {t.task_id for t in result2.train}
-        assert train_ids_1 != train_ids_2
+        expected_seed_1 = [f"t{i}" for i in range(50)]
+        expected_seed_2 = [f"t{i}" for i in range(50)]
+        random.Random(1).shuffle(expected_seed_1)
+        random.Random(2).shuffle(expected_seed_2)
+
+        expected_train_seed_1 = expected_seed_1[:40]
+        expected_train_seed_2 = expected_seed_2[:40]
+
+        assert [t.task_id for t in result1.train] == expected_train_seed_1
+        assert [t.task_id for t in result2.train] == expected_train_seed_2
+        assert expected_train_seed_1 != expected_train_seed_2
 
     def test_no_seed_works(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(20)]
@@ -411,14 +793,17 @@ class TestRandomSplit:
 
         assert [t.task_id for t in tasks] == original_order
 
-    def test_shuffles_tasks(self) -> None:
+    def test_shuffles_tasks_deterministically_for_seed(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(50)]
         result = random_split(tasks, train_ratio=0.8, seed=42)
 
-        # Check that train set isn't just the first N tasks
-        original_first_40_ids = {f"t{i}" for i in range(40)}
-        train_ids = {t.task_id for t in result.train}
-        assert train_ids != original_first_40_ids
+        expected_order = [f"t{i}" for i in range(50)]
+        random.Random(42).shuffle(expected_order)
+        expected_train = expected_order[:40]
+        expected_test = expected_order[40:]
+
+        assert [t.task_id for t in result.train] == expected_train
+        assert [t.task_id for t in result.test] == expected_test
 
     def test_in_place_shuffle_updates_input_order(self) -> None:
         tasks = [_make_task(f"t{i}", {"x": i}) for i in range(20)]

@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.models import Query, QueryTag
+from genfxn.core.models import Query, QueryTag, dedupe_queries_per_tag_input
 from genfxn.graph_queries.eval import eval_graph_queries, normalize_graph
 from genfxn.graph_queries.models import (
     GraphQueriesAxes,
@@ -149,4 +149,6 @@ def generate_graph_queries_queries(
             f"weighted={spec.weighted}."
         )
 
-    return queries
+    # Per-tag uniqueness is intentional for compact graph domains where global
+    # input uniqueness can make full tag coverage impossible (e.g., n_nodes=1).
+    return dedupe_queries_per_tag_input(queries)

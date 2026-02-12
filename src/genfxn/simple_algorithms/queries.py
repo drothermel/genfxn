@@ -1,5 +1,6 @@
 import random
 
+from genfxn.core.int32 import i32_add, wrap_i32
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import eval_predicate
 from genfxn.core.transforms import eval_transform
@@ -36,26 +37,43 @@ def _distinct_in_range(lo: int, hi: int, n: int) -> list[int]:
 
 
 def _preprocess_count_pairs_input(
-    spec: CountPairsSumSpec, xs: list[int]
+    spec: CountPairsSumSpec,
+    xs: list[int],
+    *,
+    int32_wrap: bool,
 ) -> list[int]:
-    ys = list(xs)
+    ys = [wrap_i32(x) for x in xs] if int32_wrap else list(xs)
     if spec.pre_filter is not None:
-        ys = [x for x in ys if eval_predicate(spec.pre_filter, x)]
+        ys = [
+            x
+            for x in ys
+            if eval_predicate(spec.pre_filter, x, int32_wrap=int32_wrap)
+        ]
     if spec.pre_transform is not None:
-        ys = [eval_transform(spec.pre_transform, x) for x in ys]
+        ys = [
+            eval_transform(spec.pre_transform, x, int32_wrap=int32_wrap)
+            for x in ys
+        ]
     return ys
 
 
-def _has_pair_sum(xs: list[int], target: int) -> bool:
+def _has_pair_sum(xs: list[int], target: int, *, int32_wrap: bool) -> bool:
+    if int32_wrap:
+        target = wrap_i32(target)
     for i in range(len(xs)):
         for j in range(i + 1, len(xs)):
-            if xs[i] + xs[j] == target:
+            pair_sum = i32_add(xs[i], xs[j]) if int32_wrap else xs[i] + xs[j]
+            if pair_sum == target:
                 return True
     return False
 
 
 def _find_no_pairs_input(
-    spec: CountPairsSumSpec, axes: SimpleAlgorithmsAxes, rng: random.Random
+    spec: CountPairsSumSpec,
+    axes: SimpleAlgorithmsAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[int] | None:
     lo, hi = axes.value_range
     len_lo, len_hi = axes.list_length_range
@@ -68,8 +86,16 @@ def _find_no_pairs_input(
         for _ in range(80):
             length = rng.randint(len_lo, max_len)
             candidate = _generate_random_list(length, (lo, hi), rng)
-            processed = _preprocess_count_pairs_input(spec, candidate)
-            if not _has_pair_sum(processed, spec.target):
+            processed = _preprocess_count_pairs_input(
+                spec,
+                candidate,
+                int32_wrap=int32_wrap,
+            )
+            if not _has_pair_sum(
+                processed,
+                spec.target,
+                int32_wrap=int32_wrap,
+            ):
                 return candidate
 
     # Deterministic fallback from non-complement values in range.
@@ -81,8 +107,12 @@ def _find_no_pairs_input(
         raw.append(value)
         if len(raw) >= max(1, len_lo):
             candidate = raw[: min(len(raw), max(1, len_hi))]
-            processed = _preprocess_count_pairs_input(spec, candidate)
-            if not _has_pair_sum(processed, target):
+            processed = _preprocess_count_pairs_input(
+                spec,
+                candidate,
+                int32_wrap=int32_wrap,
+            )
+            if not _has_pair_sum(processed, target, int32_wrap=int32_wrap):
                 return candidate
         if len(raw) >= max(1, min(len_hi, 5)):
             break
@@ -112,7 +142,11 @@ def _fit_length_bounds(
 
 
 def _generate_most_frequent_queries(
-    spec: MostFrequentSpec, axes: SimpleAlgorithmsAxes, rng: random.Random
+    spec: MostFrequentSpec,
+    axes: SimpleAlgorithmsAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[Query]:
     queries: list[Query] = []
     lo, hi = axes.value_range
@@ -124,7 +158,9 @@ def _generate_most_frequent_queries(
         queries.append(
             Query(
                 input=empty,
-                output=eval_simple_algorithms(spec, empty),
+                output=eval_simple_algorithms(
+                    spec, empty, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.COVERAGE,
             )
         )
@@ -135,7 +171,9 @@ def _generate_most_frequent_queries(
         queries.append(
             Query(
                 input=single,
-                output=eval_simple_algorithms(spec, single),
+                output=eval_simple_algorithms(
+                    spec, single, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.COVERAGE,
             )
         )
@@ -150,7 +188,9 @@ def _generate_most_frequent_queries(
         queries.append(
             Query(
                 input=unique_vals,
-                output=eval_simple_algorithms(spec, unique_vals),
+                output=eval_simple_algorithms(
+                    spec, unique_vals, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.BOUNDARY,
             )
         )
@@ -168,7 +208,9 @@ def _generate_most_frequent_queries(
             queries.append(
                 Query(
                     input=clear_winner,
-                    output=eval_simple_algorithms(spec, clear_winner),
+                    output=eval_simple_algorithms(
+                        spec, clear_winner, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.TYPICAL,
                 )
             )
@@ -184,7 +226,9 @@ def _generate_most_frequent_queries(
             queries.append(
                 Query(
                     input=tie_a,
-                    output=eval_simple_algorithms(spec, tie_a),
+                    output=eval_simple_algorithms(
+                        spec, tie_a, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.BOUNDARY,
                 )
             )
@@ -192,7 +236,9 @@ def _generate_most_frequent_queries(
             queries.append(
                 Query(
                     input=tie_b,
-                    output=eval_simple_algorithms(spec, tie_b),
+                    output=eval_simple_algorithms(
+                        spec, tie_b, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.BOUNDARY,
                 )
             )
@@ -210,7 +256,9 @@ def _generate_most_frequent_queries(
             queries.append(
                 Query(
                     input=multi_tie,
-                    output=eval_simple_algorithms(spec, multi_tie),
+                    output=eval_simple_algorithms(
+                        spec, multi_tie, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.ADVERSARIAL,
                 )
             )
@@ -226,7 +274,9 @@ def _generate_most_frequent_queries(
         queries.append(
             Query(
                 input=all_same,
-                output=eval_simple_algorithms(spec, all_same),
+                output=eval_simple_algorithms(
+                    spec, all_same, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -239,7 +289,7 @@ def _generate_most_frequent_queries(
         queries.append(
             Query(
                 input=xs,
-                output=eval_simple_algorithms(spec, xs),
+                output=eval_simple_algorithms(spec, xs, int32_wrap=int32_wrap),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -248,7 +298,11 @@ def _generate_most_frequent_queries(
 
 
 def _generate_count_pairs_queries(
-    spec: CountPairsSumSpec, axes: SimpleAlgorithmsAxes, rng: random.Random
+    spec: CountPairsSumSpec,
+    axes: SimpleAlgorithmsAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[Query]:
     queries: list[Query] = []
     target = spec.target
@@ -261,7 +315,9 @@ def _generate_count_pairs_queries(
         queries.append(
             Query(
                 input=empty,
-                output=eval_simple_algorithms(spec, empty),
+                output=eval_simple_algorithms(
+                    spec, empty, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.COVERAGE,
             )
         )
@@ -273,7 +329,9 @@ def _generate_count_pairs_queries(
         queries.append(
             Query(
                 input=single,
-                output=eval_simple_algorithms(spec, single),
+                output=eval_simple_algorithms(
+                    spec, single, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.COVERAGE,
             )
         )
@@ -293,7 +351,9 @@ def _generate_count_pairs_queries(
             queries.append(
                 Query(
                     input=pair_list,
-                    output=eval_simple_algorithms(spec, pair_list),
+                    output=eval_simple_algorithms(
+                        spec, pair_list, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.BOUNDARY,
                 )
             )
@@ -314,7 +374,9 @@ def _generate_count_pairs_queries(
                 queries.append(
                     Query(
                         input=no_pair,
-                        output=eval_simple_algorithms(spec, no_pair),
+                        output=eval_simple_algorithms(
+                            spec, no_pair, int32_wrap=int32_wrap
+                        ),
                         tag=QueryTag.BOUNDARY,
                     )
                 )
@@ -334,7 +396,9 @@ def _generate_count_pairs_queries(
             queries.append(
                 Query(
                     input=dups,
-                    output=eval_simple_algorithms(spec, dups),
+                    output=eval_simple_algorithms(
+                        spec, dups, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.ADVERSARIAL,
                 )
             )
@@ -352,7 +416,9 @@ def _generate_count_pairs_queries(
             queries.append(
                 Query(
                     input=more_dups,
-                    output=eval_simple_algorithms(spec, more_dups),
+                    output=eval_simple_algorithms(
+                        spec, more_dups, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.ADVERSARIAL,
                 )
             )
@@ -370,18 +436,27 @@ def _generate_count_pairs_queries(
                 queries.append(
                     Query(
                         input=self_pairs,
-                        output=eval_simple_algorithms(spec, self_pairs),
+                        output=eval_simple_algorithms(
+                            spec, self_pairs, int32_wrap=int32_wrap
+                        ),
                         tag=QueryTag.ADVERSARIAL,
                     )
                 )
 
     # No pairs: explicitly enforce zero valid pair sums after preprocessing.
-    no_pairs = _find_no_pairs_input(spec, axes, rng)
+    no_pairs = _find_no_pairs_input(
+        spec,
+        axes,
+        rng,
+        int32_wrap=int32_wrap,
+    )
     if no_pairs is not None:
         queries.append(
             Query(
                 input=no_pairs,
-                output=eval_simple_algorithms(spec, no_pairs),
+                output=eval_simple_algorithms(
+                    spec, no_pairs, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -394,7 +469,7 @@ def _generate_count_pairs_queries(
         queries.append(
             Query(
                 input=xs,
-                output=eval_simple_algorithms(spec, xs),
+                output=eval_simple_algorithms(spec, xs, int32_wrap=int32_wrap),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -403,32 +478,45 @@ def _generate_count_pairs_queries(
 
 
 def _generate_max_window_queries(
-    spec: MaxWindowSumSpec, axes: SimpleAlgorithmsAxes, rng: random.Random
+    spec: MaxWindowSumSpec,
+    axes: SimpleAlgorithmsAxes,
+    rng: random.Random,
+    *,
+    int32_wrap: bool,
 ) -> list[Query]:
     queries: list[Query] = []
     k = spec.k
     lo, hi = axes.value_range
     length_bounds = axes.list_length_range
 
-    # Empty list - k > len
-    queries.append(
-        Query(
-            input=[],
-            output=eval_simple_algorithms(spec, []),
-            tag=QueryTag.COVERAGE,
+    # Empty list - k > len (only when it fits configured length bounds).
+    empty = _fit_length_bounds([], length_bounds, min_len=0)
+    if empty is not None and len(empty) < k:
+        queries.append(
+            Query(
+                input=empty,
+                output=eval_simple_algorithms(
+                    spec, empty, int32_wrap=int32_wrap
+                ),
+                tag=QueryTag.COVERAGE,
+            )
         )
-    )
 
     # List shorter than k (values in [lo, hi]; length exactly k-1)
     if k - 1 > 0:
         short_base = _distinct_in_range(lo, hi, k - 1)
         # Repeat base values to fill length k-1, then truncate.
-        short = (short_base * ((k - 1) // max(1, len(short_base)) + 1))[: k - 1]
-        if len(short) == k - 1:
+        short_template = (
+            short_base * ((k - 1) // max(1, len(short_base)) + 1)
+        )[: k - 1]
+        short = _fit_length_bounds(short_template, length_bounds, min_len=0)
+        if short is not None and len(short) < k:
             queries.append(
                 Query(
                     input=short,
-                    output=eval_simple_algorithms(spec, short),
+                    output=eval_simple_algorithms(
+                        spec, short, int32_wrap=int32_wrap
+                    ),
                     tag=QueryTag.BOUNDARY,
                 )
             )
@@ -436,14 +524,21 @@ def _generate_max_window_queries(
     # Exactly k elements (distinct in [lo, hi])
     exact_k = _distinct_in_range(lo, hi, k)
     if len(exact_k) >= k:
-        exact_k = exact_k[:k]
-        queries.append(
-            Query(
-                input=exact_k,
-                output=eval_simple_algorithms(spec, exact_k),
-                tag=QueryTag.BOUNDARY,
-            )
+        exact_fit = _fit_length_bounds(
+            exact_k[:k],
+            length_bounds,
+            min_len=k,
         )
+        if exact_fit is not None and len(exact_fit) >= k:
+            queries.append(
+                Query(
+                    input=exact_fit,
+                    output=eval_simple_algorithms(
+                        spec, exact_fit, int32_wrap=int32_wrap
+                    ),
+                    tag=QueryTag.BOUNDARY,
+                )
+            )
 
     # k=1 edge case test (several values in [lo, hi], max is one of them)
     if k == 1 and hi >= lo:
@@ -466,7 +561,9 @@ def _generate_max_window_queries(
                 queries.append(
                     Query(
                         input=single_max,
-                        output=eval_simple_algorithms(spec, single_max),
+                        output=eval_simple_algorithms(
+                            spec, single_max, int32_wrap=int32_wrap
+                        ),
                         tag=QueryTag.BOUNDARY,
                     )
                 )
@@ -477,7 +574,9 @@ def _generate_max_window_queries(
         queries.append(
             Query(
                 input=low_vals,
-                output=eval_simple_algorithms(spec, low_vals),
+                output=eval_simple_algorithms(
+                    spec, low_vals, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.ADVERSARIAL,
             )
         )
@@ -490,7 +589,9 @@ def _generate_max_window_queries(
         queries.append(
             Query(
                 input=max_at_start,
-                output=eval_simple_algorithms(spec, max_at_start),
+                output=eval_simple_algorithms(
+                    spec, max_at_start, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -503,7 +604,9 @@ def _generate_max_window_queries(
         queries.append(
             Query(
                 input=max_at_end,
-                output=eval_simple_algorithms(spec, max_at_end),
+                output=eval_simple_algorithms(
+                    spec, max_at_end, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -515,7 +618,9 @@ def _generate_max_window_queries(
         queries.append(
             Query(
                 input=all_same,
-                output=eval_simple_algorithms(spec, all_same),
+                output=eval_simple_algorithms(
+                    spec, all_same, int32_wrap=int32_wrap
+                ),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -523,12 +628,12 @@ def _generate_max_window_queries(
     # Random typical
     len_lo, len_hi = axes.list_length_range
     for _ in range(2):
-        length = rng.randint(max(k, len_lo), len_hi)
+        length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
         queries.append(
             Query(
                 input=xs,
-                output=eval_simple_algorithms(spec, xs),
+                output=eval_simple_algorithms(spec, xs, int32_wrap=int32_wrap),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -540,17 +645,34 @@ def generate_simple_algorithms_queries(
     spec: SimpleAlgorithmsSpec,
     axes: SimpleAlgorithmsAxes,
     rng: random.Random | None = None,
+    *,
+    int32_wrap: bool = True,
 ) -> list[Query]:
     if rng is None:
         rng = random.Random()
 
     match spec:
         case MostFrequentSpec():
-            queries = _generate_most_frequent_queries(spec, axes, rng)
+            queries = _generate_most_frequent_queries(
+                spec,
+                axes,
+                rng,
+                int32_wrap=int32_wrap,
+            )
         case CountPairsSumSpec():
-            queries = _generate_count_pairs_queries(spec, axes, rng)
+            queries = _generate_count_pairs_queries(
+                spec,
+                axes,
+                rng,
+                int32_wrap=int32_wrap,
+            )
         case MaxWindowSumSpec():
-            queries = _generate_max_window_queries(spec, axes, rng)
+            queries = _generate_max_window_queries(
+                spec,
+                axes,
+                rng,
+                int32_wrap=int32_wrap,
+            )
         case _:
             raise ValueError(f"Unknown spec: {spec}")
 

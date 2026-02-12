@@ -145,6 +145,42 @@ class TestCodeCompilation:
         assert not any(i.code == CODE_CODE_EXEC_ERROR for i in issues)
         assert not any(i.code == CODE_CODE_MISSING_FUNC for i in issues)
 
+    def test_exec_function_is_closed_after_validation(
+        self,
+        baseline_task: Task,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        state = {"closed": False, "calls": 0}
+
+        def fake_fn(xs: list[int]) -> int:
+            del xs
+            state["calls"] += 1
+            return 0
+
+        def _close() -> None:
+            state["closed"] = True
+
+        setattr(fake_fn, "close", _close)
+
+        def _fake_exec(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            del args, kwargs
+            return {"f": fake_fn}
+
+        monkeypatch.setattr(
+            "genfxn.simple_algorithms.validate.execute_code_restricted",
+            _fake_exec,
+        )
+
+        validate_simple_algorithms_task(
+            baseline_task,
+            execute_untrusted_code=True,
+            max_semantic_issues=1,
+            rng=random.Random(123),
+        )
+
+        assert state["calls"] >= 1
+        assert state["closed"] is True
+
 
 class TestCodeRuntime:
     def test_runtime_error_caught(self, baseline_task) -> None:
@@ -167,6 +203,19 @@ class TestQueryTypeValidation:
         issues = validate_simple_algorithms_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
         assert len(type_issues) > 0
+        assert all(i.severity == Severity.ERROR for i in type_issues)
+
+    def test_non_list_input_is_warning_lenient(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={
+                "queries": [Query(input="text", output=0, tag=QueryTag.TYPICAL)]
+            }
+        )
+        issues = validate_simple_algorithms_task(corrupted, strict=False)
+        type_issues = [i for i in issues if i.code == CODE_QUERY_INPUT_TYPE]
+        assert len(type_issues) > 0
+        assert all(i.severity == Severity.WARNING for i in type_issues)
 
     def test_non_int_output_is_error_strict(self, baseline_task) -> None:
         task = baseline_task.model_copy(deep=True)
@@ -180,6 +229,21 @@ class TestQueryTypeValidation:
         issues = validate_simple_algorithms_task(corrupted, strict=True)
         type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
         assert len(type_issues) > 0
+        assert all(i.severity == Severity.ERROR for i in type_issues)
+
+    def test_non_int_output_is_warning_lenient(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={
+                "queries": [
+                    Query(input=[1, 2], output="text", tag=QueryTag.TYPICAL)
+                ]
+            }
+        )
+        issues = validate_simple_algorithms_task(corrupted, strict=False)
+        type_issues = [i for i in issues if i.code == CODE_QUERY_OUTPUT_TYPE]
+        assert len(type_issues) > 0
+        assert all(i.severity == Severity.WARNING for i in type_issues)
 
     def test_non_int_element_in_list_input_is_error(
         self, baseline_task
@@ -213,6 +277,19 @@ class TestQueryTypeValidation:
         assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
         assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
 
+    def test_bool_query_values_are_rejected(self, baseline_task) -> None:
+        task = baseline_task.model_copy(deep=True)
+        corrupted = task.model_copy(
+            update={
+                "queries": [
+                    Query(input=[True, 1], output=False, tag=QueryTag.TYPICAL)
+                ]
+            }
+        )
+        issues = validate_simple_algorithms_task(corrupted)
+        assert any(i.code == CODE_QUERY_INPUT_TYPE for i in issues)
+        assert any(i.code == CODE_QUERY_OUTPUT_TYPE for i in issues)
+
 
 class TestHelperLevelValidation:
     def test_query_types_helper_without_full_pipeline(
@@ -232,6 +309,13 @@ class TestHelperLevelValidation:
         issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
+    def test_ast_whitelist_allows_generated_int32_helpers(
+        self, baseline_task: Task
+    ) -> None:
+        assert isinstance(baseline_task.code, str)
+        issues, _ = _validate_ast_whitelist(baseline_task.code)
+        assert not any(i.code == CODE_UNSAFE_AST for i in issues)
+
     def test_ast_whitelist_allows_annotation_names(self) -> None:
         code = "def f(xs: list[int]) -> int:\n    return 0"
         issues, _ = _validate_ast_whitelist(code)
@@ -240,6 +324,10 @@ class TestHelperLevelValidation:
     def test_ast_whitelist_rejects_dunder_attribute_read(self) -> None:
         code = "def f(xs):\n    return xs.__class__"
         issues, _ = _validate_ast_whitelist(code)
+        assert any(i.code == CODE_UNSAFE_AST for i in issues)
+
+    def test_ast_whitelist_rejects_open_name(self) -> None:
+        issues, _ = _validate_ast_whitelist("def f(xs):\n    return open")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
 
