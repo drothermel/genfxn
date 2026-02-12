@@ -27,10 +27,10 @@ uv sync
 | **graph_queries** | `f(src: int, dst: int) -> int` | Deterministic graph-query evaluation (`reachable`, `min_hops`, `shortest_path_cost`) |
 | **temporal_logic** | `f(xs: list[int]) -> int` | Finite-trace temporal-logic evaluation with integer predicates and deterministic temporal semantics |
 
-### Family Roadmap
+### Current Coverage
 
-New family implementation is being done in the prioritized order documented in
-`docs/shared_rec_list.md`.
+All families listed above are implemented and integrated with generation,
+validation, rendering (Python/Java/Rust), splitting, and suite workflows.
 
 ### Piecewise
 
@@ -176,13 +176,13 @@ Generate tasks to JSONL files.
 genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 ```
 
-### Required Options
+### Core Options
 
 | Option | Description |
 |--------|-------------|
 | `-o, --output PATH` | Output JSONL file |
-| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, `sequence_dp`, `intervals`, `graph_queries`, `temporal_logic`, or `all` |
-| `-n, --count INT` | Number of tasks to generate |
+| `-f, --family` | `piecewise`, `stateful`, `simple_algorithms`, `stringrules`, `stack_bytecode`, `fsm`, `bitops`, `sequence_dp`, `intervals`, `graph_queries`, `temporal_logic`, or `all` (default: `all`) |
+| `-n, --count INT` | Number of tasks to generate (default: `100`) |
 
 ### General Options
 
@@ -190,6 +190,9 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 |--------|-------------|
 | `-s, --seed INT` | Random seed for reproducibility |
 | `-l, --language` | Single language output: `python`, `java`, or `rust` |
+| `--difficulty, -d` | Target difficulty level (family-dependent, typically 1-5) |
+| `--variant` | Preset variant (for example `3A`, `3B`); requires `--difficulty` |
+| `--no-i32-wrap` | Disable generated Python int32-wrap helpers for `piecewise`, `stateful`, and `simple_algorithms` |
 
 ### Piecewise Options
 
@@ -224,7 +227,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 
 | Option | Values | Description |
 |--------|--------|-------------|
-| `--n-rules INT` | 1-8 | Number of rules in the if/elif chain |
+| `--n-rules INT` | 1-10 | Number of rules in the if/elif chain |
 | `--string-predicate-types` | `starts_with`, `ends_with`, `contains`, `is_alpha`, `is_digit`, `is_upper`, `is_lower`, `length_cmp` | Predicate types (comma-separated) |
 | `--string-transform-types` | `identity`, `lowercase`, `uppercase`, `capitalize`, `swapcase`, `reverse`, `replace`, `strip`, `prepend`, `append` | Transform types (comma-separated) |
 | `--overlap-level` | `none`, `low`, `high` | How much rules can shadow each other |
@@ -236,7 +239,7 @@ These apply to multiple families:
 
 | Option | Families | Default | Description |
 |--------|----------|---------|-------------|
-| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-20,20` for intervals endpoints, `0,20` effective for graph_queries weights, `-20,20` for temporal_logic sequence values and predicate constants, `-1024,1024` for bitops) |
+| `--value-range LO,HI` | all | family-specific | Range for input/element values (`-100,100` for piecewise/stateful/simple_algorithms/stringrules, `-50,50` for stack_bytecode, `-20,20` for fsm/sequence_dp, `-20,20` for intervals endpoints, `0,20` effective for graph_queries weights, `-10,10` for temporal_logic sequence values (predicate constants default to `-8,8`), `-1024,1024` for bitops) |
 | `--threshold-range LO,HI` | piecewise, stateful, fsm | family-specific | Range for predicate thresholds (`-50,50` for piecewise/stateful, `-10,10` for fsm) |
 | `--divisor-range LO,HI` | piecewise, stateful, fsm, sequence_dp | family-specific | Range for mod divisors (`2,10` for piecewise/stateful/fsm, `1,10` for sequence_dp) |
 | `--list-length-range LO,HI` | stateful, simple_algorithms, stack_bytecode, sequence_dp, intervals, graph_queries, temporal_logic | family-specific | Range for test list lengths (`5,20` for stateful/simple_algorithms, `0,8` for stack_bytecode, `2,10` for sequence_dp, `0,10` for intervals query interval-counts, mapped to `n_nodes_range` for graph_queries, mapped to `sequence_length_range` for temporal_logic) |

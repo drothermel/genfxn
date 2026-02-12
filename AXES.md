@@ -176,7 +176,7 @@ Ordered pattern matching with first-match-wins: `f(s: str) -> str`
 
 | Axis | Type | Default | CLI Flag | Description |
 |------|------|---------|----------|-------------|
-| `n_rules` | int (1-8) | 3 | `--n-rules` | Number of rules |
+| `n_rules` | int (1-10) | 3 | `--n-rules` | Number of rules |
 | `predicate_types` | list | all | `--string-predicate-types` | String predicate types |
 | `transform_types` | list | all | `--string-transform-types` | String transform types |
 | `overlap_level` | enum | `low` | `--overlap-level` | How much rules can shadow each other |

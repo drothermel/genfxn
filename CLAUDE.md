@@ -6,12 +6,18 @@
 - `stateful` - Stateful list processing (longest_run, conditional_linear_sum, resetting_best_prefix_sum)
 - `simple_algorithms` - Simple algorithms (most_frequent, count_pairs_sum, max_window_sum)
 - `stringrules` - String transformation rules with predicates
+- `stack_bytecode` - Stack-machine bytecode programs over integer lists
+- `fsm` - Finite-state machine execution over integer sequences
+- `bitops` - Fixed-width bit operation pipelines
+- `sequence_dp` - Sequence dynamic-programming alignment variants
+- `intervals` - Interval normalization and coverage/overlap statistics
+- `graph_queries` - Graph reachability/hops/cost queries
+- `temporal_logic` - Finite-trace temporal-logic evaluation
 
-## Family Roadmap
+## Project State
 
-We are implementing new families in the order tracked by
-`docs/shared_rec_list.md`. Treat that file as the source-of-truth ordering
-unless a newer planning doc explicitly supersedes it.
+- All listed families are implemented and integrated in generation, validation,
+  language rendering, split tooling, and suite generation.
 
 ## Core Modules
 

@@ -3,6 +3,9 @@
 `genfxn` generates algorithmic task specs, renders runnable implementations in
 multiple languages, validates tasks, and builds dataset splits/suites.
 
+Current state: all 11 shipped families are implemented and integrated in the
+main generation/suite pipeline.
+
 ```mermaid
 flowchart TD
     A[Family Generators\nsrc/genfxn/<family>/task.py] --> B[Task Model\nsrc/genfxn/core/models.py]
