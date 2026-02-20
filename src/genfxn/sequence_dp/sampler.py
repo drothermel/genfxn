@@ -110,6 +110,7 @@ _TARGET_DIVISOR: dict[int, tuple[int, int]] = {
     5: (4, 12),
 }
 
+
 def _intersect_ranges(
     a: tuple[int, int], b: tuple[int, int]
 ) -> tuple[int, int] | None:

@@ -111,9 +111,7 @@ def _validate_formula_node(node: Any) -> int:
 
     if op in _BINARY_OPERATORS:
         if "left" not in node or "right" not in node:
-            raise ValueError(
-                f"{op.value} node must include 'left' and 'right'"
-            )
+            raise ValueError(f"{op.value} node must include 'left' and 'right'")
         left_depth = _validate_formula_node(node["left"])
         right_depth = _validate_formula_node(node["right"])
         return 1 + max(left_depth, right_depth)

@@ -319,8 +319,7 @@ def _validate_code_compile(
                 code=CODE_CODE_PARSE_ERROR,
                 severity=Severity.ERROR,
                 message=(
-                    "Code payload must be a string, got "
-                    f"{type(code).__name__}"
+                    f"Code payload must be a string, got {type(code).__name__}"
                 ),
                 location="code",
                 task_id=task.task_id,

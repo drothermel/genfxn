@@ -21,38 +21,8 @@ def _i64_expr(value: int) -> str:
 def render_transform_rust(
     t: Transform,
     var: str = "x",
-    *,
-    int32_wrap: bool = False,
 ) -> str:
     """Render a numeric transform as a Rust expression."""
-    if int32_wrap:
-        match t:
-            case TransformIdentity():
-                return f"i32_wrap({var})"
-            case TransformAbs():
-                return f"i32_abs({var})"
-            case TransformShift(offset=o):
-                return f"i32_add({var}, {_i64_expr(o)})"
-            case TransformClip(low=lo, high=hi):
-                low = _i64_expr(lo)
-                high = _i64_expr(hi)
-                return f"i32_clip({var}, {low}, {high})"
-            case TransformNegate():
-                return f"i32_neg({var})"
-            case TransformScale(factor=f):
-                return f"i32_mul({var}, {_i64_expr(f)})"
-            case TransformPipeline(steps=steps):
-                expr = var
-                for i, step in enumerate(steps):
-                    if i > 0:
-                        expr = f"({expr})"
-                    expr = render_transform_rust(
-                        step, expr, int32_wrap=True
-                    )
-                return expr
-            case _:
-                raise ValueError(f"Unknown transform: {t}")
-
     match t:
         case TransformIdentity():
             return var
@@ -76,7 +46,7 @@ def render_transform_rust(
             for i, step in enumerate(steps):
                 if i > 0:
                     expr = f"({expr})"
-                expr = render_transform_rust(step, expr, int32_wrap=False)
+                expr = render_transform_rust(step, expr)
             return expr
         case _:
             raise ValueError(f"Unknown transform: {t}")

@@ -416,9 +416,7 @@ def test_persistent_worker_startup_timeout_uses_floor(monkeypatch) -> None:
             timeout_sec=0.2,
         )
 
-    assert observed_timeouts == [
-        safe_exec._persistent_startup_timeout_sec(0.2)
-    ]
+    assert observed_timeouts == [safe_exec._persistent_startup_timeout_sec(0.2)]
 
 
 def test_persistent_worker_call_reports_crash_not_timeout() -> None:

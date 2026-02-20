@@ -49,9 +49,7 @@ def eval_fsm(spec: FsmSpec, xs: list[int]) -> int:
             transition_count += 1
             continue
 
-        raise ValueError(
-            "undefined transition encountered under error policy"
-        )
+        raise ValueError("undefined transition encountered under error policy")
 
     if spec.output_mode == OutputMode.FINAL_STATE_ID:
         return current_state_id

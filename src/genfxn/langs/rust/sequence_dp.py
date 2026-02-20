@@ -10,6 +10,7 @@ _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
     TieBreakOrder.LEFT_UP_DIAG: ("left", "up", "diag"),
 }
 
+
 def render_sequence_dp(
     spec: SequenceDpSpec,
     func_name: str = "f",
@@ -46,7 +47,7 @@ def render_sequence_dp(
         "    let zero: [i64; 3] = [0, 0, 0];",
         "    let mut dp = vec![vec![zero; m + 1]; n + 1];",
         "",
-        "    if template == \"global\" {",
+        '    if template == "global" {',
         "        for i in 1..=n {",
         "            let prev = dp[i - 1][0];",
         "            dp[i][0] = [",
@@ -71,16 +72,16 @@ def render_sequence_dp(
         "        for j in 1..=m {",
         f"            let ai = {a_var}[i - 1];",
         f"            let bj = {b_var}[j - 1];",
-            "            let is_match = if predicate_kind == \"eq\" {",
-            "                ai == bj",
-            "            } else if predicate_kind == \"abs_diff_le\" {",
-            "                ai.abs_diff(bj) <= (max_diff as u64)",
-            "            } else {",
-            (
-                "                ai.wrapping_sub(bj).rem_euclid(divisor) == "
-                "remainder"
-            ),
-            "            };",
+        '            let is_match = if predicate_kind == "eq" {',
+        "                ai == bj",
+        '            } else if predicate_kind == "abs_diff_le" {',
+        "                ai.abs_diff(bj) <= (max_diff as u64)",
+        "            } else {",
+        (
+            "                ai.wrapping_sub(bj).rem_euclid(divisor) == "
+            "remainder"
+        ),
+        "            };",
         "",
         "            let prev_diag = dp[i - 1][j - 1];",
         "            let delta = if is_match {",
@@ -111,9 +112,9 @@ def render_sequence_dp(
         "            let best_score = diag[0].max(up[0]).max(left[0]);",
         "            let mut chosen = diag;",
         "            for move_name in tie_order {",
-        "                let candidate = if move_name == \"diag\" {",
+        '                let candidate = if move_name == "diag" {',
         "                    diag",
-        "                } else if move_name == \"up\" {",
+        '                } else if move_name == "up" {',
         "                    up",
         "                } else {",
         "                    left",
@@ -124,25 +125,25 @@ def render_sequence_dp(
         "                }",
         "            }",
         "",
-        "            if template == \"local\" && chosen[0] <= 0 {",
+        '            if template == "local" && chosen[0] <= 0 {',
         "                dp[i][j] = zero;",
         "            } else {",
         "                dp[i][j] = chosen;",
         "            }",
         "",
-        "            if template == \"local\" && dp[i][j][0] > best[0] {",
+        '            if template == "local" && dp[i][j][0] > best[0] {',
         "                best = dp[i][j];",
         "            }",
         "        }",
         "    }",
         "",
         (
-            "    let result = if template == \"global\" { dp[n][m] } else { "
+            '    let result = if template == "global" { dp[n][m] } else { '
             "best };"
         ),
-        "    if output_mode == \"score\" {",
+        '    if output_mode == "score" {',
         "        result[0]",
-        "    } else if output_mode == \"alignment_len\" {",
+        '    } else if output_mode == "alignment_len" {',
         "        result[1]",
         "    } else {",
         "        result[2]",

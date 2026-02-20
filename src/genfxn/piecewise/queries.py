@@ -1,6 +1,5 @@
 import random
 
-from genfxn.core.int32 import wrap_i32
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import get_threshold
 from genfxn.piecewise.eval import eval_piecewise
@@ -11,11 +10,7 @@ from genfxn.piecewise.models import Branch, PiecewiseSpec
 SUPPORTED_CONDITION_KINDS: frozenset[str] = frozenset({"lt", "le"})
 
 
-def _get_branch_threshold(
-    branch: Branch,
-    *,
-    int32_wrap: bool,
-) -> int:
+def _get_branch_threshold(branch: Branch) -> int:
     """Extract threshold from a branch's predicate.
 
     Only supports condition kinds in SUPPORTED_CONDITION_KINDS.
@@ -26,8 +21,6 @@ def _get_branch_threshold(
         raise ValueError(
             f"Unsupported predicate for query generation: {branch.condition}"
         )
-    if int32_wrap:
-        return wrap_i32(info.value)
     return info.value
 
 
@@ -35,8 +28,6 @@ def generate_piecewise_queries(
     spec: PiecewiseSpec,
     value_range: tuple[int, int] = (-100, 100),
     rng: random.Random | None = None,
-    *,
-    int32_wrap: bool = True,
 ) -> list[Query]:
     if rng is None:
         rng = random.Random()
@@ -47,31 +38,26 @@ def generate_piecewise_queries(
         raise ValueError(f"value_range: low ({lo}) must be <= high ({hi})")
 
     # Coverage queries: one per region
-    coverage_points = _get_coverage_points(
-        spec,
-        lo,
-        hi,
-        int32_wrap=int32_wrap,
-    )
+    coverage_points = _get_coverage_points(spec, lo, hi)
     for x in coverage_points:
         queries.append(
             Query(
                 input=x,
-                output=eval_piecewise(spec, x, int32_wrap=int32_wrap),
+                output=eval_piecewise(spec, x),
                 tag=QueryTag.COVERAGE,
             )
         )
 
     # Boundary queries: at and around thresholds
     for branch in spec.branches:
-        t = _get_branch_threshold(branch, int32_wrap=int32_wrap)
+        t = _get_branch_threshold(branch)
         for offset in [-1, 0, 1]:
             x = t + offset
             if lo <= x <= hi:
                 queries.append(
                     Query(
                         input=x,
-                        output=eval_piecewise(spec, x, int32_wrap=int32_wrap),
+                        output=eval_piecewise(spec, x),
                         tag=QueryTag.BOUNDARY,
                     )
                 )
@@ -83,7 +69,7 @@ def generate_piecewise_queries(
         queries.append(
             Query(
                 input=x,
-                output=eval_piecewise(spec, x, int32_wrap=int32_wrap),
+                output=eval_piecewise(spec, x),
                 tag=QueryTag.TYPICAL,
             )
         )
@@ -95,7 +81,7 @@ def generate_piecewise_queries(
             queries.append(
                 Query(
                     input=x,
-                    output=eval_piecewise(spec, x, int32_wrap=int32_wrap),
+                    output=eval_piecewise(spec, x),
                     tag=QueryTag.ADVERSARIAL,
                 )
             )
@@ -107,43 +93,26 @@ def _get_coverage_points(
     spec: PiecewiseSpec,
     lo: int,
     hi: int,
-    *,
-    int32_wrap: bool,
 ) -> list[int]:
     if not spec.branches:
         return [(lo + hi) // 2]
 
     sorted_branches = sorted(
         spec.branches,
-        key=lambda branch: _get_branch_threshold(
-            branch,
-            int32_wrap=int32_wrap,
-        ),
+        key=lambda branch: _get_branch_threshold(branch),
     )
     points = []
 
-    first_thresh = _get_branch_threshold(
-        sorted_branches[0],
-        int32_wrap=int32_wrap,
-    )
+    first_thresh = _get_branch_threshold(sorted_branches[0])
     if lo < first_thresh:
         points.append((lo + first_thresh) // 2)
 
     for i in range(len(sorted_branches) - 1):
-        t1 = _get_branch_threshold(
-            sorted_branches[i],
-            int32_wrap=int32_wrap,
-        )
-        t2 = _get_branch_threshold(
-            sorted_branches[i + 1],
-            int32_wrap=int32_wrap,
-        )
+        t1 = _get_branch_threshold(sorted_branches[i])
+        t2 = _get_branch_threshold(sorted_branches[i + 1])
         points.append((t1 + t2) // 2)
 
-    last_thresh = _get_branch_threshold(
-        sorted_branches[-1],
-        int32_wrap=int32_wrap,
-    )
+    last_thresh = _get_branch_threshold(sorted_branches[-1])
     if last_thresh < hi:
         points.append((last_thresh + hi) // 2)
 

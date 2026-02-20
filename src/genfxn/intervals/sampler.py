@@ -62,6 +62,7 @@ _TARGET_ENDPOINT_CLIP_ABS_RANGES: dict[int, tuple[int, int]] = {
     5: (3, 6),
 }
 
+
 def _sample_int_in_range(
     value_range: tuple[int, int],
     rng: random.Random,

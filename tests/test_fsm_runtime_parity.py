@@ -30,9 +30,7 @@ def _assert_semantic_runtime_error(
     assert expected_message in combined_output
 
 
-def _run_java_f(
-    javac: str, java: str, code: str, xs: list[int]
-) -> int:
+def _run_java_f(javac: str, java: str, code: str, xs: list[int]) -> int:
     xs_lit = ", ".join(str(x) for x in xs)
     main_src = (
         "public class Main {\n"
@@ -64,7 +62,7 @@ def _run_rust_f(rustc: str, code: str, xs: list[int]) -> int:
         f"{code}\n"
         "fn main() {\n"
         f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
-        "    println!(\"{}\", f(&xs));\n"
+        '    println!("{}", f(&xs));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:

@@ -192,7 +192,6 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | `-l, --language` | Single language output: `python`, `java`, or `rust` |
 | `--difficulty, -d` | Target difficulty level (family-dependent, typically 1-5) |
 | `--variant` | Preset variant (for example `3A`, `3B`); requires `--difficulty` |
-| `--no-i32-wrap` | Disable generated Python int32-wrap helpers for `piecewise`, `stateful`, and `simple_algorithms` |
 
 ### Piecewise Options
 

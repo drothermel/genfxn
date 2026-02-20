@@ -73,10 +73,7 @@ def _run_rust_f(
     dst: int,
 ) -> int:
     main_src = (
-        f"{code}\n"
-        "fn main() {\n"
-        f"    println!(\"{{}}\", f({src}, {dst}));\n"
-        "}\n"
+        f'{code}\nfn main() {{\n    println!("{{}}", f({src}, {dst}));\n}}\n'
     )
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
@@ -295,8 +292,7 @@ def test_graph_queries_runtime_parity_i64_overflow_accumulation() -> None:
 
 
 @pytest.mark.full
-def test_graph_queries_runtime_parity_late_better_path(
-) -> None:
+def test_graph_queries_runtime_parity_late_better_path() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     render_graph_queries_java = get_render_fn(Language.JAVA, "graph_queries")

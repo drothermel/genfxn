@@ -10,6 +10,7 @@ _TIE_BREAK_MOVES: dict[TieBreakOrder, tuple[str, str, str]] = {
     TieBreakOrder.LEFT_UP_DIAG: ("left", "up", "diag"),
 }
 
+
 def render_sequence_dp(
     spec: SequenceDpSpec,
     func_name: str = "f",
@@ -26,10 +27,7 @@ def render_sequence_dp(
     remainder = int(predicate.get("remainder", 0))
 
     lines = [
-        (
-            f"public static long {func_name}(long[] {a_var}, "
-            f"long[] {b_var}) {{"
-        ),
+        (f"public static long {func_name}(long[] {a_var}, long[] {b_var}) {{"),
         f'    String template = "{spec.template.value}";',
         f'    String outputMode = "{spec.output_mode.value}";',
         f'    String predicateKind = "{kind}";',
@@ -45,7 +43,7 @@ def render_sequence_dp(
         f"    int m = {b_var}.length;",
         "    long[][][] dp = new long[n + 1][m + 1][3];",
         "",
-        "    if (template.equals(\"global\")) {",
+        '    if (template.equals("global")) {',
         "        for (int i = 1; i <= n; i++) {",
         "            long[] prev = dp[i - 1][0];",
         "            dp[i][0] = new long[] {",
@@ -72,9 +70,9 @@ def render_sequence_dp(
         f"            long ai = {a_var}[i - 1];",
         f"            long bj = {b_var}[j - 1];",
         "            boolean isMatch;",
-        "            if (predicateKind.equals(\"eq\")) {",
+        '            if (predicateKind.equals("eq")) {',
         "                isMatch = ai == bj;",
-        "            } else if (predicateKind.equals(\"abs_diff_le\")) {",
+        '            } else if (predicateKind.equals("abs_diff_le")) {',
         "                long absDiff = ai >= bj ? (ai - bj) : (bj - ai);",
         "                isMatch = Long.compareUnsigned(",
         "                    absDiff, maxDiff",
@@ -113,9 +111,9 @@ def render_sequence_dp(
         "            long[] chosen = diag;",
         "            for (String move : tieOrder) {",
         "                long[] candidate;",
-        "                if (move.equals(\"diag\")) {",
+        '                if (move.equals("diag")) {',
         "                    candidate = diag;",
-        "                } else if (move.equals(\"up\")) {",
+        '                } else if (move.equals("up")) {',
         "                    candidate = up;",
         "                } else {",
         "                    candidate = left;",
@@ -126,14 +124,14 @@ def render_sequence_dp(
         "                }",
         "            }",
         "",
-        "            if (template.equals(\"local\") && chosen[0] <= 0L) {",
+        '            if (template.equals("local") && chosen[0] <= 0L) {',
         "                dp[i][j] = zero;",
         "            } else {",
         "                dp[i][j] = chosen;",
         "            }",
         "",
         (
-            "            if (template.equals(\"local\") && "
+            '            if (template.equals("local") && '
             "dp[i][j][0] > best[0]) {"
         ),
         "                best = dp[i][j];",
@@ -142,16 +140,16 @@ def render_sequence_dp(
         "    }",
         "",
         "    long[] result;",
-        "    if (template.equals(\"global\")) {",
+        '    if (template.equals("global")) {',
         "        result = dp[n][m];",
         "    } else {",
         "        result = best;",
         "    }",
         "",
-        "    if (outputMode.equals(\"score\")) {",
+        '    if (outputMode.equals("score")) {',
         "        return result[0];",
         "    }",
-        "    if (outputMode.equals(\"alignment_len\")) {",
+        '    if (outputMode.equals("alignment_len")) {',
         "        return result[1];",
         "    }",
         "    return result[2];",

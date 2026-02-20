@@ -94,6 +94,7 @@ _TARGET_POLICY_PREFS: dict[int, list[UndefinedTransitionPolicy]] = {
     5: [UndefinedTransitionPolicy.ERROR],
 }
 
+
 def _intersect_ranges(
     a: tuple[int, int],
     b: tuple[int, int],

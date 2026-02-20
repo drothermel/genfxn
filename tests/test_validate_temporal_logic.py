@@ -24,9 +24,7 @@ from genfxn.temporal_logic.validate import (
 )
 
 
-def validate_temporal_logic_task(
-    *args: Any, **kwargs: Any
-) -> list[Issue]:
+def validate_temporal_logic_task(*args: Any, **kwargs: Any) -> list[Issue]:
     kwargs.setdefault("execute_untrusted_code", True)
     return _validate_temporal_logic_task(*args, **kwargs)
 
@@ -68,9 +66,7 @@ def test_query_input_output_type_mismatch_detected(
 ) -> None:
     corrupted = baseline_task.model_copy(
         update={
-            "queries": [
-                Query(input="bad", output="bad", tag=QueryTag.TYPICAL)
-            ]
+            "queries": [Query(input="bad", output="bad", tag=QueryTag.TYPICAL)]
         }
     )
     issues = validate_temporal_logic_task(corrupted)
@@ -124,9 +120,7 @@ def test_semantic_issue_capping(baseline_task: Task) -> None:
         issue for issue in issues if issue.code == CODE_SEMANTIC_MISMATCH
     ]
     capped = [
-        issue
-        for issue in issues
-        if issue.code == CODE_SEMANTIC_ISSUES_CAPPED
+        issue for issue in issues if issue.code == CODE_SEMANTIC_ISSUES_CAPPED
     ]
     assert len(mismatches) == 3
     assert len(capped) == 1
@@ -168,11 +162,7 @@ def test_non_python_code_map_skips_python_validation(
     baseline_task: Task,
 ) -> None:
     corrupted = baseline_task.model_copy(
-        update={
-            "code": {
-                "java": "public static int f(int[] xs) { return 0; }"
-            }
-        }
+        update={"code": {"java": "public static int f(int[] xs) { return 0; }"}}
     )
     issues = validate_temporal_logic_task(corrupted)
     assert not any(issue.code == CODE_CODE_PARSE_ERROR for issue in issues)

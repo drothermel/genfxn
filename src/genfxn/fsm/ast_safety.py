@@ -99,6 +99,4 @@ METHOD_ARITIES: dict[str, set[int]] = {
     "get": {1, 2},
 }
 
-ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset(
-    {"int", "list", "None"}
-)
+ALLOWED_ANNOTATION_NAMES: frozenset[str] = frozenset({"int", "list", "None"})

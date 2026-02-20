@@ -219,12 +219,7 @@ class TestCodeCompilationAndExecution:
         )
         corrupted = baseline_task.model_copy(
             update={
-                "code": (
-                    "while True:\n"
-                    "    pass\n"
-                    "def f(xs):\n"
-                    "    return (0, 0)"
-                )
+                "code": ("while True:\n    pass\ndef f(xs):\n    return (0, 0)")
             }
         )
         issues = _validate_stack_bytecode_task(
@@ -291,9 +286,7 @@ class TestQueryTypeValidation:
     def test_wrong_output_shape_detected(self, baseline_task: Task) -> None:
         corrupted = baseline_task.model_copy(
             update={
-                "queries": [
-                    Query(input=[1], output=1, tag=QueryTag.TYPICAL)
-                ]
+                "queries": [Query(input=[1], output=1, tag=QueryTag.TYPICAL)]
             }
         )
         issues = validate_stack_bytecode_task(corrupted, strict=True)

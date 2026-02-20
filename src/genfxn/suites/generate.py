@@ -1512,8 +1512,7 @@ def _bucket_supply_shortfall(
             if _bucket_applies(bucket, candidate.features):
                 supply[bi] += 1
     return any(
-        supply[bi] < bucket.target
-        for bi, bucket in enumerate(quota.buckets)
+        supply[bi] < bucket.target for bi, bucket in enumerate(quota.buckets)
     )
 
 
@@ -1577,9 +1576,7 @@ def _repair_selection_with_swaps(
         best_fill_rank = (-1, -1, -1, "")
         for ui, candidate in enumerate(unselected):
             bucket_indices = applicable_buckets.get(candidate.task_id, [])
-            deficit_hits = sum(
-                1 for bi in bucket_indices if deficits[bi] > 0
-            )
+            deficit_hits = sum(1 for bi in bucket_indices if deficits[bi] > 0)
             deficit_weight = sum(
                 deficits[bi] for bi in bucket_indices if deficits[bi] > 0
             )
@@ -2032,9 +2029,7 @@ def generate_suite(
 
     for attempt in range(max_retries + 1):
         current_pool_size = pool_size * (2**attempt)
-        pool_seed = _stable_seed(
-            seed, family, difficulty, 800000 + attempt
-        )
+        pool_seed = _stable_seed(seed, family, difficulty, 800000 + attempt)
         candidates, stats = generate_pool(
             family, difficulty, pool_seed, current_pool_size
         )

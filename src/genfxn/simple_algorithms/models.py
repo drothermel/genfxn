@@ -3,7 +3,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from genfxn.core.int32 import INT32_MAX
 from genfxn.core.predicates import Predicate, PredicateType
 from genfxn.core.transforms import Transform, TransformType
 
@@ -30,6 +29,7 @@ _INT_RANGE_FIELDS = (
 )
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
+INT32_MAX = (1 << 31) - 1
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -69,9 +69,7 @@ class MostFrequentSpec(BaseModel):
     empty_default: int = Field(default=0, ge=INT64_MIN, le=INT64_MAX)
     pre_filter: Predicate | None = None
     pre_transform: Transform | None = None
-    tie_default: int | None = Field(
-        default=None, ge=INT64_MIN, le=INT64_MAX
-    )
+    tie_default: int | None = Field(default=None, ge=INT64_MIN, le=INT64_MAX)
 
 
 class CountPairsSumSpec(BaseModel):
@@ -94,9 +92,7 @@ class MaxWindowSumSpec(BaseModel):
     invalid_k_default: int = Field(default=0, ge=INT64_MIN, le=INT64_MAX)
     pre_filter: Predicate | None = None
     pre_transform: Transform | None = None
-    empty_default: int | None = Field(
-        default=None, ge=INT64_MIN, le=INT64_MAX
-    )
+    empty_default: int | None = Field(default=None, ge=INT64_MIN, le=INT64_MAX)
 
 
 SimpleAlgorithmsSpec = Annotated[

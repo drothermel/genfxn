@@ -59,9 +59,7 @@ def _contains_type_sensitive(value: Any, holdout_value: Any) -> bool:
     if not isinstance(value, (list, tuple, set, frozenset)):
         return False
     holdout_key = _freeze_query_value(holdout_value)
-    return any(
-        _freeze_query_value(item) == holdout_key for item in value
-    )
+    return any(_freeze_query_value(item) == holdout_key for item in value)
 
 
 def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
@@ -74,9 +72,7 @@ def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
         case HoldoutType.EXACT:
             if _contains_non_finite_number(holdout.holdout_value):
                 return False
-            return _matches_exact_type_sensitive(
-                value, holdout.holdout_value
-            )
+            return _matches_exact_type_sensitive(value, holdout.holdout_value)
         case HoldoutType.RANGE:
             range_value = holdout.holdout_value
             if (
@@ -85,10 +81,9 @@ def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
             ):
                 return False
             lo, hi = range_value
-            if (
-                not _is_finite_non_bool_number(lo)
-                or not _is_finite_non_bool_number(hi)
-            ):
+            if not _is_finite_non_bool_number(
+                lo
+            ) or not _is_finite_non_bool_number(hi):
                 return False
             if not _is_finite_non_bool_number(value):
                 return False

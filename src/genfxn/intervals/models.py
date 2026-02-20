@@ -77,9 +77,7 @@ class IntervalsAxes(BaseModel):
     degenerate_interval_prob_range: tuple[float, float] = Field(
         default=(0.0, 0.3)
     )
-    nested_interval_prob_range: tuple[float, float] = Field(
-        default=(0.0, 0.3)
-    )
+    nested_interval_prob_range: tuple[float, float] = Field(default=(0.0, 0.3))
 
     @model_validator(mode="before")
     @classmethod
@@ -114,9 +112,7 @@ class IntervalsAxes(BaseModel):
         if self.endpoint_clip_abs_range[0] < 1:
             raise ValueError("endpoint_clip_abs_range: low must be >= 1")
         if self.endpoint_quantize_step_range[0] < 1:
-            raise ValueError(
-                "endpoint_quantize_step_range: low must be >= 1"
-            )
+            raise ValueError("endpoint_quantize_step_range: low must be >= 1")
         if self.endpoint_range[0] < INT64_MIN:
             raise ValueError(f"endpoint_range: low must be >= {INT64_MIN}")
         if self.endpoint_range[1] > INT64_MAX:
@@ -129,8 +125,7 @@ class IntervalsAxes(BaseModel):
             )
         if self.endpoint_quantize_step_range[1] > INT64_MAX:
             raise ValueError(
-                "endpoint_quantize_step_range: high must be <= "
-                f"{INT64_MAX}"
+                f"endpoint_quantize_step_range: high must be <= {INT64_MAX}"
             )
 
         for name in (

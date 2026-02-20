@@ -3,11 +3,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from genfxn.core.int32 import INT32_MAX
 from genfxn.core.predicates import Predicate
 
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
+INT32_MAX = (1 << 31) - 1
 
 
 class ExprType(str, Enum):
@@ -168,9 +168,7 @@ class PiecewiseAxes(BaseModel):
 
         div_lo, div_hi = self.divisor_range
         if div_lo < 1:
-            raise ValueError(
-                f"divisor_range: low ({div_lo}) must be >= 1"
-            )
+            raise ValueError(f"divisor_range: low ({div_lo}) must be >= 1")
         if div_hi > INT32_MAX:
             raise ValueError(
                 f"divisor_range: high ({div_hi}) must be <= {INT32_MAX}"

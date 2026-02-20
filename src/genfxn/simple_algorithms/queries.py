@@ -1,6 +1,5 @@
 import random
 
-from genfxn.core.int32 import i32_add, wrap_i32
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.core.predicates import eval_predicate
 from genfxn.core.transforms import eval_transform
@@ -15,7 +14,9 @@ from genfxn.simple_algorithms.models import (
 
 
 def _generate_random_list(
-    length: int, value_range: tuple[int, int], rng: random.Random
+    length: int,
+    value_range: tuple[int, int],
+    rng: random.Random,
 ) -> list[int]:
     return [rng.randint(*value_range) for _ in range(length)]
 
@@ -29,41 +30,43 @@ def _clamp(x: int, lo: int, hi: int) -> int:
 
 
 def _distinct_in_range(lo: int, hi: int, n: int) -> list[int]:
-    """Up to n distinct integers in [lo, hi]; fewer if range is too narrow."""
     span = hi - lo + 1
     if span <= 0:
         return [lo] * min(1, n)
     return list(range(lo, min(lo + n, hi + 1)))
 
 
+def _append_query(
+    queries: list[Query],
+    spec: SimpleAlgorithmsSpec,
+    xs: list[int],
+    tag: QueryTag,
+) -> None:
+    queries.append(
+        Query(
+            input=xs,
+            output=eval_simple_algorithms(spec, xs),
+            tag=tag,
+        )
+    )
+
+
 def _preprocess_count_pairs_input(
     spec: CountPairsSumSpec,
     xs: list[int],
-    *,
-    int32_wrap: bool,
 ) -> list[int]:
-    ys = [wrap_i32(x) for x in xs] if int32_wrap else list(xs)
+    ys = list(xs)
     if spec.pre_filter is not None:
-        ys = [
-            x
-            for x in ys
-            if eval_predicate(spec.pre_filter, x, int32_wrap=int32_wrap)
-        ]
+        ys = [x for x in ys if eval_predicate(spec.pre_filter, x)]
     if spec.pre_transform is not None:
-        ys = [
-            eval_transform(spec.pre_transform, x, int32_wrap=int32_wrap)
-            for x in ys
-        ]
+        ys = [eval_transform(spec.pre_transform, x) for x in ys]
     return ys
 
 
-def _has_pair_sum(xs: list[int], target: int, *, int32_wrap: bool) -> bool:
-    if int32_wrap:
-        target = wrap_i32(target)
+def _has_pair_sum(xs: list[int], target: int) -> bool:
     for i in range(len(xs)):
         for j in range(i + 1, len(xs)):
-            pair_sum = i32_add(xs[i], xs[j]) if int32_wrap else xs[i] + xs[j]
-            if pair_sum == target:
+            if xs[i] + xs[j] == target:
                 return True
     return False
 
@@ -72,49 +75,33 @@ def _find_no_pairs_input(
     spec: CountPairsSumSpec,
     axes: SimpleAlgorithmsAxes,
     rng: random.Random,
-    *,
-    int32_wrap: bool,
 ) -> list[int] | None:
     lo, hi = axes.value_range
     len_lo, len_hi = axes.list_length_range
     if len_hi < len_lo:
         return None
 
-    # Try random candidates first.
     max_len = min(len_hi, 5)
     if max_len >= len_lo:
         for _ in range(80):
-            length = rng.randint(len_lo, max_len)
+            length = rng.randint(max(2, len_lo), max(2, max_len))
             candidate = _generate_random_list(length, (lo, hi), rng)
-            processed = _preprocess_count_pairs_input(
-                spec,
-                candidate,
-                int32_wrap=int32_wrap,
-            )
-            if not _has_pair_sum(
-                processed,
-                spec.target,
-                int32_wrap=int32_wrap,
-            ):
+            processed = _preprocess_count_pairs_input(spec, candidate)
+            if not _has_pair_sum(processed, spec.target):
                 return candidate
 
-    # Deterministic fallback from non-complement values in range.
     target = spec.target
     raw: list[int] = []
     for value in range(lo, hi + 1):
         if (target - value) in raw:
             continue
         raw.append(value)
-        if len(raw) >= max(1, len_lo):
-            candidate = raw[: min(len(raw), max(1, len_hi))]
-            processed = _preprocess_count_pairs_input(
-                spec,
-                candidate,
-                int32_wrap=int32_wrap,
-            )
-            if not _has_pair_sum(processed, target, int32_wrap=int32_wrap):
+        if len(raw) >= max(2, len_lo):
+            candidate = raw[: min(len(raw), max(2, len_hi))]
+            processed = _preprocess_count_pairs_input(spec, candidate)
+            if not _has_pair_sum(processed, target):
                 return candidate
-        if len(raw) >= max(1, min(len_hi, 5)):
+        if len(raw) >= max(2, min(len_hi, 5)):
             break
 
     return None
@@ -145,57 +132,27 @@ def _generate_most_frequent_queries(
     spec: MostFrequentSpec,
     axes: SimpleAlgorithmsAxes,
     rng: random.Random,
-    *,
-    int32_wrap: bool,
 ) -> list[Query]:
     queries: list[Query] = []
     lo, hi = axes.value_range
     length_bounds = axes.list_length_range
 
-    # Empty list - edge case
     empty = _fit_length_bounds([], length_bounds, min_len=0)
     if empty is not None:
-        queries.append(
-            Query(
-                input=empty,
-                output=eval_simple_algorithms(
-                    spec, empty, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.COVERAGE,
-            )
-        )
+        _append_query(queries, spec, empty, QueryTag.COVERAGE)
 
-    # Single element
     single = _fit_length_bounds([rng.randint(lo, hi)], length_bounds, min_len=1)
     if single is not None:
-        queries.append(
-            Query(
-                input=single,
-                output=eval_simple_algorithms(
-                    spec, single, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.COVERAGE,
-            )
-        )
+        _append_query(queries, spec, single, QueryTag.COVERAGE)
 
-    # All unique - tests tie break
     unique_vals = _fit_length_bounds(
         list(range(lo, min(lo + 5, hi + 1))),
         length_bounds,
         min_len=1,
     )
     if unique_vals is not None:
-        queries.append(
-            Query(
-                input=unique_vals,
-                output=eval_simple_algorithms(
-                    spec, unique_vals, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.BOUNDARY,
-            )
-        )
+        _append_query(queries, spec, unique_vals, QueryTag.BOUNDARY)
 
-    # Clear winner - no tie (one value appears 3x, others once; all in [lo, hi])
     three_vals = _distinct_in_range(lo, hi, 3)
     if len(three_vals) >= 3:
         a, b, c = three_vals[0], three_vals[1], three_vals[2]
@@ -205,94 +162,23 @@ def _generate_most_frequent_queries(
             min_len=1,
         )
         if clear_winner is not None:
-            queries.append(
-                Query(
-                    input=clear_winner,
-                    output=eval_simple_algorithms(
-                        spec, clear_winner, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.TYPICAL,
-                )
-            )
+            _append_query(queries, spec, clear_winner, QueryTag.TYPICAL)
 
-    # Tie between values - tests tie_break semantics
-    # [b,a,b,a] vs [a,b,a,b] - first_seen differs; need 2 distinct in [lo, hi]
     two_vals = _distinct_in_range(lo, hi, 2)
     if len(two_vals) >= 2:
         a, b = two_vals[0], two_vals[1]
         tie_a = _fit_length_bounds([b, a, b, a], length_bounds, min_len=2)
         tie_b = _fit_length_bounds([a, b, a, b], length_bounds, min_len=2)
         if tie_a is not None:
-            queries.append(
-                Query(
-                    input=tie_a,
-                    output=eval_simple_algorithms(
-                        spec, tie_a, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.BOUNDARY,
-                )
-            )
+            _append_query(queries, spec, tie_a, QueryTag.BOUNDARY)
         if tie_b is not None:
-            queries.append(
-                Query(
-                    input=tie_b,
-                    output=eval_simple_algorithms(
-                        spec, tie_b, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.BOUNDARY,
-                )
-            )
+            _append_query(queries, spec, tie_b, QueryTag.BOUNDARY)
 
-    # Multi-way tie (3 distinct values, each 2x)
-    three_for_tie = _distinct_in_range(lo, hi, 3)
-    if len(three_for_tie) >= 3:
-        a, b, c = three_for_tie[0], three_for_tie[1], three_for_tie[2]
-        multi_tie = _fit_length_bounds(
-            [a, b, c, a, b, c],
-            length_bounds,
-            min_len=2,
-        )
-        if multi_tie is not None:
-            queries.append(
-                Query(
-                    input=multi_tie,
-                    output=eval_simple_algorithms(
-                        spec, multi_tie, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.ADVERSARIAL,
-                )
-            )
-
-    # All same value (within [lo, hi])
-    mid = _mid(lo, hi)
-    all_same = _fit_length_bounds(
-        [mid, mid, mid, mid],
-        length_bounds,
-        min_len=1,
-    )
-    if all_same is not None:
-        queries.append(
-            Query(
-                input=all_same,
-                output=eval_simple_algorithms(
-                    spec, all_same, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.TYPICAL,
-            )
-        )
-
-    # Typical random
     len_lo, len_hi = length_bounds
     for _ in range(2):
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
-        queries.append(
-            Query(
-                input=xs,
-                output=eval_simple_algorithms(spec, xs, int32_wrap=int32_wrap),
-                tag=QueryTag.TYPICAL,
-            )
-        )
+        _append_query(queries, spec, xs, QueryTag.TYPICAL)
 
     return queries
 
@@ -301,178 +187,39 @@ def _generate_count_pairs_queries(
     spec: CountPairsSumSpec,
     axes: SimpleAlgorithmsAxes,
     rng: random.Random,
-    *,
-    int32_wrap: bool,
 ) -> list[Query]:
     queries: list[Query] = []
     target = spec.target
     lo, hi = axes.value_range
     length_bounds = axes.list_length_range
 
-    # Empty list
     empty = _fit_length_bounds([], length_bounds, min_len=0)
     if empty is not None:
-        queries.append(
-            Query(
-                input=empty,
-                output=eval_simple_algorithms(
-                    spec, empty, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.COVERAGE,
-            )
-        )
+        _append_query(queries, spec, empty, QueryTag.COVERAGE)
 
-    # Single element - no pairs (value in [lo, hi])
     single_val = _clamp(target // 2, lo, hi)
     single = _fit_length_bounds([single_val], length_bounds, min_len=1)
     if single is not None:
-        queries.append(
-            Query(
-                input=single,
-                output=eval_simple_algorithms(
-                    spec, single, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.COVERAGE,
-            )
-        )
+        _append_query(queries, spec, single, QueryTag.COVERAGE)
 
-    # Two elements that sum to target (both in [lo, hi])
     pair_lo = max(lo, target - hi)
     pair_hi = min(hi, target - lo)
     if pair_lo <= pair_hi:
-        half = (pair_lo + pair_hi) // 2
-        other_half = target - half
-        pair_list = _fit_length_bounds(
-            [half, other_half],
-            length_bounds,
-            min_len=2,
-        )
-        if pair_list is not None:
-            queries.append(
-                Query(
-                    input=pair_list,
-                    output=eval_simple_algorithms(
-                        spec, pair_list, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.BOUNDARY,
-                )
-            )
-
-    # Two elements that don't sum to target (both in [lo, hi])
-    two_distinct = _distinct_in_range(lo, hi, 3)
-    if len(two_distinct) >= 2:
-        na, nb = two_distinct[0], two_distinct[1]
-        if na + nb == target and len(two_distinct) >= 3:
-            nb = two_distinct[2]
-        if na + nb != target:
-            no_pair = _fit_length_bounds(
-                [na, nb],
-                length_bounds,
-                min_len=2,
-            )
-            if no_pair is not None:
-                queries.append(
-                    Query(
-                        input=no_pair,
-                        output=eval_simple_algorithms(
-                            spec, no_pair, int32_wrap=int32_wrap
-                        ),
-                        tag=QueryTag.BOUNDARY,
-                    )
-                )
-
-    # Duplicates - distinguishes ALL_INDICES from UNIQUE_VALUES
-    # [v, v, target-v] -> ALL_INDICES=2 pairs, UNIQUE_VALUES=1
-    dup_v_lo = max(lo, target - hi)
-    dup_v_hi = min(hi, target - lo)
-    if dup_v_lo <= dup_v_hi:
-        v = (dup_v_lo + dup_v_hi) // 2
-        dups = _fit_length_bounds(
-            [v, v, target - v],
-            length_bounds,
-            min_len=3,
-        )
-        if dups is not None:
-            queries.append(
-                Query(
-                    input=dups,
-                    output=eval_simple_algorithms(
-                        spec, dups, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.ADVERSARIAL,
-                )
-            )
-
-    # More duplicates: [a, a, b, b] where a+b=target (a, b in [lo, hi])
-    if pair_lo <= pair_hi:
         a = (pair_lo + pair_hi) // 2
         b = target - a
-        more_dups = _fit_length_bounds(
-            [a, a, b, b],
-            length_bounds,
-            min_len=4,
-        )
-        if more_dups is not None:
-            queries.append(
-                Query(
-                    input=more_dups,
-                    output=eval_simple_algorithms(
-                        spec, more_dups, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.ADVERSARIAL,
-                )
-            )
+        pair_list = _fit_length_bounds([a, b], length_bounds, min_len=2)
+        if pair_list is not None:
+            _append_query(queries, spec, pair_list, QueryTag.BOUNDARY)
 
-    # Self-pairing: target=2v -> [v,v,v] (only when target//2 in [lo, hi])
-    if target % 2 == 0:
-        self_val = target // 2
-        if lo <= self_val <= hi:
-            self_pairs = _fit_length_bounds(
-                [self_val, self_val, self_val],
-                length_bounds,
-                min_len=3,
-            )
-            if self_pairs is not None:
-                queries.append(
-                    Query(
-                        input=self_pairs,
-                        output=eval_simple_algorithms(
-                            spec, self_pairs, int32_wrap=int32_wrap
-                        ),
-                        tag=QueryTag.ADVERSARIAL,
-                    )
-                )
-
-    # No pairs: explicitly enforce zero valid pair sums after preprocessing.
-    no_pairs = _find_no_pairs_input(
-        spec,
-        axes,
-        rng,
-        int32_wrap=int32_wrap,
-    )
+    no_pairs = _find_no_pairs_input(spec, axes, rng)
     if no_pairs is not None:
-        queries.append(
-            Query(
-                input=no_pairs,
-                output=eval_simple_algorithms(
-                    spec, no_pairs, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.TYPICAL,
-            )
-        )
+        _append_query(queries, spec, no_pairs, QueryTag.TYPICAL)
 
-    # Random typical
     len_lo, len_hi = axes.list_length_range
     for _ in range(2):
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
-        queries.append(
-            Query(
-                input=xs,
-                output=eval_simple_algorithms(spec, xs, int32_wrap=int32_wrap),
-                tag=QueryTag.TYPICAL,
-            )
-        )
+        _append_query(queries, spec, xs, QueryTag.TYPICAL)
 
     return queries
 
@@ -481,48 +228,25 @@ def _generate_max_window_queries(
     spec: MaxWindowSumSpec,
     axes: SimpleAlgorithmsAxes,
     rng: random.Random,
-    *,
-    int32_wrap: bool,
 ) -> list[Query]:
     queries: list[Query] = []
     k = spec.k
     lo, hi = axes.value_range
     length_bounds = axes.list_length_range
 
-    # Empty list - k > len (only when it fits configured length bounds).
     empty = _fit_length_bounds([], length_bounds, min_len=0)
     if empty is not None and len(empty) < k:
-        queries.append(
-            Query(
-                input=empty,
-                output=eval_simple_algorithms(
-                    spec, empty, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.COVERAGE,
-            )
-        )
+        _append_query(queries, spec, empty, QueryTag.COVERAGE)
 
-    # List shorter than k (values in [lo, hi]; length exactly k-1)
     if k - 1 > 0:
-        short_base = _distinct_in_range(lo, hi, k - 1)
-        # Repeat base values to fill length k-1, then truncate.
-        short_template = (
-            short_base * ((k - 1) // max(1, len(short_base)) + 1)
-        )[: k - 1]
+        short_base = _distinct_in_range(lo, hi, max(1, k - 1))
+        repeats = ((k - 1) // max(1, len(short_base))) + 1
+        short_template = (short_base * repeats)[: k - 1]
         short = _fit_length_bounds(short_template, length_bounds, min_len=0)
-        if short is not None and len(short) < k:
-            queries.append(
-                Query(
-                    input=short,
-                    output=eval_simple_algorithms(
-                        spec, short, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.BOUNDARY,
-                )
-            )
+        if short is not None and len(short) == (k - 1):
+            _append_query(queries, spec, short, QueryTag.BOUNDARY)
 
-    # Exactly k elements (distinct in [lo, hi])
-    exact_k = _distinct_in_range(lo, hi, k)
+    exact_k = _distinct_in_range(lo, hi, max(1, k))
     if len(exact_k) >= k:
         exact_fit = _fit_length_bounds(
             exact_k[:k],
@@ -530,113 +254,39 @@ def _generate_max_window_queries(
             min_len=k,
         )
         if exact_fit is not None and len(exact_fit) >= k:
-            queries.append(
-                Query(
-                    input=exact_fit,
-                    output=eval_simple_algorithms(
-                        spec, exact_fit, int32_wrap=int32_wrap
-                    ),
-                    tag=QueryTag.BOUNDARY,
-                )
-            )
+            _append_query(queries, spec, exact_fit, QueryTag.BOUNDARY)
 
-    # k=1 edge case test (several values in [lo, hi], max is one of them)
-    if k == 1 and hi >= lo:
-        single_vals = _distinct_in_range(lo, hi, 8)
-        if len(single_vals) >= 8:
-            single_max_template = [
-                single_vals[2],
-                single_vals[0],
-                single_vals[3],
-                single_vals[0],
-                single_vals[4],
-                single_vals[7],
-                single_vals[1],
-                single_vals[5],
-            ]
-            single_max = _fit_length_bounds(
-                single_max_template, length_bounds, min_len=k
-            )
-            if single_max is not None:
-                queries.append(
-                    Query(
-                        input=single_max,
-                        output=eval_simple_algorithms(
-                            spec, single_max, int32_wrap=int32_wrap
-                        ),
-                        tag=QueryTag.BOUNDARY,
-                    )
-                )
-
-    # All at low end of range (adversarial: small window sums)
-    low_vals = _fit_length_bounds([lo] * 8, length_bounds, min_len=k)
-    if low_vals is not None and len(low_vals) >= k:
-        queries.append(
-            Query(
-                input=low_vals,
-                output=eval_simple_algorithms(
-                    spec, low_vals, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.ADVERSARIAL,
-            )
-        )
-
-    # Max at start (hi repeated then lo repeated; all in [lo, hi])
+    min_len = min(k, max(1, length_bounds[0]))
     max_at_start = _fit_length_bounds(
-        [hi, hi, hi] + [lo] * 5, length_bounds, min_len=k
+        [hi, hi, hi] + [lo] * 5,
+        length_bounds,
+        min_len=min_len,
     )
-    if max_at_start is not None and len(max_at_start) >= k:
-        queries.append(
-            Query(
-                input=max_at_start,
-                output=eval_simple_algorithms(
-                    spec, max_at_start, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.TYPICAL,
-            )
-        )
+    if max_at_start is not None:
+        _append_query(queries, spec, max_at_start, QueryTag.TYPICAL)
 
-    # Max at end (lo repeated then hi repeated)
     max_at_end = _fit_length_bounds(
-        [lo] * 5 + [hi, hi, hi], length_bounds, min_len=k
+        [lo] * 5 + [hi, hi, hi],
+        length_bounds,
+        min_len=min_len,
     )
-    if max_at_end is not None and len(max_at_end) >= k:
-        queries.append(
-            Query(
-                input=max_at_end,
-                output=eval_simple_algorithms(
-                    spec, max_at_end, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.TYPICAL,
-            )
-        )
+    if max_at_end is not None:
+        _append_query(queries, spec, max_at_end, QueryTag.TYPICAL)
 
     mid = _mid(lo, hi)
-    # All same values (mid in [lo, hi])
-    all_same = _fit_length_bounds([mid] * 10, length_bounds, min_len=k)
-    if all_same is not None and len(all_same) >= k:
-        queries.append(
-            Query(
-                input=all_same,
-                output=eval_simple_algorithms(
-                    spec, all_same, int32_wrap=int32_wrap
-                ),
-                tag=QueryTag.TYPICAL,
-            )
-        )
+    all_same = _fit_length_bounds(
+        [mid] * 10,
+        length_bounds,
+        min_len=min_len,
+    )
+    if all_same is not None:
+        _append_query(queries, spec, all_same, QueryTag.TYPICAL)
 
-    # Random typical
     len_lo, len_hi = axes.list_length_range
     for _ in range(2):
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
-        queries.append(
-            Query(
-                input=xs,
-                output=eval_simple_algorithms(spec, xs, int32_wrap=int32_wrap),
-                tag=QueryTag.TYPICAL,
-            )
-        )
+        _append_query(queries, spec, xs, QueryTag.TYPICAL)
 
     return queries
 
@@ -645,35 +295,33 @@ def generate_simple_algorithms_queries(
     spec: SimpleAlgorithmsSpec,
     axes: SimpleAlgorithmsAxes,
     rng: random.Random | None = None,
-    *,
-    int32_wrap: bool = True,
 ) -> list[Query]:
     if rng is None:
         rng = random.Random()
 
     match spec:
         case MostFrequentSpec():
-            queries = _generate_most_frequent_queries(
-                spec,
-                axes,
-                rng,
-                int32_wrap=int32_wrap,
-            )
+            queries = _generate_most_frequent_queries(spec, axes, rng)
         case CountPairsSumSpec():
-            queries = _generate_count_pairs_queries(
-                spec,
-                axes,
-                rng,
-                int32_wrap=int32_wrap,
-            )
+            queries = _generate_count_pairs_queries(spec, axes, rng)
         case MaxWindowSumSpec():
-            queries = _generate_max_window_queries(
-                spec,
-                axes,
-                rng,
-                int32_wrap=int32_wrap,
-            )
+            queries = _generate_max_window_queries(spec, axes, rng)
         case _:
             raise ValueError(f"Unknown spec: {spec}")
+
+    queries = dedupe_queries(queries)
+
+    # Guardrail: keep at least 5 distinct inputs per task.
+    seen_inputs = {tuple(q.input) for q in queries}
+    attempts = 0
+    while len(queries) < 5 and attempts < 200:
+        attempts += 1
+        length = rng.randint(*axes.list_length_range)
+        candidate = _generate_random_list(length, axes.value_range, rng)
+        key = tuple(candidate)
+        if key in seen_inputs:
+            continue
+        seen_inputs.add(key)
+        _append_query(queries, spec, candidate, QueryTag.TYPICAL)
 
     return dedupe_queries(queries)

@@ -284,9 +284,7 @@ def _validate_execution_limits(
         or not isinstance(max_result_bytes, int)
         or max_result_bytes <= 0
     ):
-        raise ValueError(
-            "max_result_bytes must be a positive integer or None"
-        )
+        raise ValueError("max_result_bytes must be a positive integer or None")
 
 
 def _is_spawn_bootstrap_error(exc: BaseException) -> bool:
@@ -417,14 +415,12 @@ def _sanitize_worker_result_value(value: Any, depth: int = 0) -> Any:
 
     if isinstance(value, list):
         return [
-            _sanitize_worker_result_value(item, depth + 1)
-            for item in value
+            _sanitize_worker_result_value(item, depth + 1) for item in value
         ]
 
     if isinstance(value, tuple):
         return tuple(
-            _sanitize_worker_result_value(item, depth + 1)
-            for item in value
+            _sanitize_worker_result_value(item, depth + 1) for item in value
         )
 
     if isinstance(value, dict):

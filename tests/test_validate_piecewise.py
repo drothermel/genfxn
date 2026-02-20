@@ -196,9 +196,7 @@ class TestCodeCompilation:
         task = baseline_task.model_copy(deep=True)
         corrupted = task.model_copy(
             update={
-                "code": {
-                    "java": "public static int f(int x) { return x; }"
-                }
+                "code": {"java": "public static int f(int x) { return x; }"}
             }
         )
         issues = validate_piecewise_task(corrupted)

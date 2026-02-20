@@ -34,6 +34,7 @@ _TARGET_OP_PREFS: dict[int, list[BitOp]] = {
     ],
 }
 
+
 def _intersect_ranges(
     a: tuple[int, int],
     b: tuple[int, int],

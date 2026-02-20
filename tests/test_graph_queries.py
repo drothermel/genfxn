@@ -126,9 +126,7 @@ def test_graph_edge_rejects_bool_int_fields() -> None:
 
 def test_graph_edge_rejects_weight_above_i64_max() -> None:
     with pytest.raises(ValidationError, match=r"w"):
-        GraphEdge.model_validate(
-            {"u": 0, "v": 1, "w": (1 << 63)}
-        )
+        GraphEdge.model_validate({"u": 0, "v": 1, "w": (1 << 63)})
 
 
 def test_graph_spec_rejects_bool_n_nodes() -> None:
@@ -231,8 +229,9 @@ def test_shortest_path_cost_prefers_lower_non_saturated_path() -> None:
     assert eval_graph_queries(spec, 0, 1) == 5
 
 
-def test_shortest_path_cost_overflow_cycle_unreachable_returns_minus_one(
-) -> None:
+def test_shortest_path_cost_overflow_cycle_unreachable_returns_minus_one() -> (
+    None
+):
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.SHORTEST_PATH_COST,
         directed=True,

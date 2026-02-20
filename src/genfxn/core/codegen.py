@@ -62,18 +62,12 @@ def _canonicalize_for_hash(value: Any) -> Any:
         if all(isinstance(key, str) for key, _ in canonical_items):
             return {key: item for key, item in canonical_items}
         return {
-            "__dict_items__": [
-                [key, item] for key, item in canonical_items
-            ]
+            "__dict_items__": [[key, item] for key, item in canonical_items]
         }
     if isinstance(value, list):
-        return {
-            "__list__": [_canonicalize_for_hash(v) for v in value]
-        }
+        return {"__list__": [_canonicalize_for_hash(v) for v in value]}
     if isinstance(value, tuple):
-        return {
-            "__tuple__": [_canonicalize_for_hash(v) for v in value]
-        }
+        return {"__tuple__": [_canonicalize_for_hash(v) for v in value]}
     if isinstance(value, set):
         items = [_canonicalize_for_hash(v) for v in value]
         return {
@@ -124,8 +118,7 @@ def render_tests(func_name: str, queries: list[Query]) -> str:
                 value.items(), key=lambda item: _stable_value_sort_key(item[0])
             )
             parts = [
-                f"{_render_python_literal(key)}: "
-                f"{_render_python_literal(item)}"
+                f"{_render_python_literal(key)}: {_render_python_literal(item)}"
                 for key, item in ordered_items
             ]
             return "{" + ", ".join(parts) + "}"

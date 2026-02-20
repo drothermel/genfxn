@@ -514,8 +514,7 @@ class TestSamplerAndQueries:
             lo, hi = axes.list_length_range
             assert lo <= len(q.input) <= hi
             assert all(
-                axes.value_range[0] <= x <= axes.value_range[1]
-                for x in q.input
+                axes.value_range[0] <= x <= axes.value_range[1] for x in q.input
             )
 
     def test_sampler_respects_target_difficulty_axis(self) -> None:

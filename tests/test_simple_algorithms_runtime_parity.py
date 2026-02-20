@@ -75,7 +75,7 @@ def _run_rust_f(rustc: str, code: str, xs: list[int]) -> int:
         f"{code}\n"
         "fn main() {\n"
         f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
-        "    println!(\"{}\", f(&xs));\n"
+        '    println!("{}", f(&xs));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:

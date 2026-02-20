@@ -226,9 +226,7 @@ def _inject_control_flow_for_target(
         return
 
     candidate_indices = [
-        idx
-        for idx in range(first_idx + 1, len(program) - 1)
-        if idx > 1
+        idx for idx in range(first_idx + 1, len(program) - 1) if idx > 1
     ]
     if not candidate_indices:
         return

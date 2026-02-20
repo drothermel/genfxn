@@ -836,9 +836,7 @@ def _describe_sequence_dp(spec: dict[str, Any]) -> str:
             )
         elif kind == "mod_eq":
             divisor = _format_number(_read_int(predicate.get("divisor"), 2))
-            remainder = _format_number(
-                _read_int(predicate.get("remainder"), 0)
-            )
+            remainder = _format_number(_read_int(predicate.get("remainder"), 0))
             predicate_text = (
                 "paired elements satisfy modular match "
                 f"(a-b) % {divisor} == {remainder}"
@@ -881,10 +879,7 @@ def _describe_intervals(spec: dict[str, Any]) -> str:
             f"Clamp each endpoint into [-{clip_value}, {clip_value}] "
             "before further processing."
         ),
-        (
-            "Quantize endpoints toward zero to multiples of "
-            f"{quantize_step}."
-        ),
+        (f"Quantize endpoints toward zero to multiples of {quantize_step}."),
         "Normalize each interval so lo <= hi.",
         (
             f"Apply boundary mode '{boundary_mode}' to map intervals onto "
@@ -1053,7 +1048,5 @@ def _describe_fsm(spec: dict[str, Any]) -> str:
             "order and take the first predicate that matches."
         ),
         policy_text,
-        (
-            f"Use output_mode '{output_mode}': {output_text}."
-        ),
+        (f"Use output_mode '{output_mode}': {output_text}."),
     )

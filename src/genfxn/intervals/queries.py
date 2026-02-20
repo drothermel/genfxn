@@ -162,10 +162,7 @@ def generate_intervals_queries(
         [(lo, lo + 3), (lo + 2, lo + 5)],
     ]
     for case in coverage_cases:
-        adjusted = [
-            (_clamp(a, lo, hi), _clamp(b, lo, hi))
-            for a, b in case
-        ]
+        adjusted = [(_clamp(a, lo, hi), _clamp(b, lo, hi)) for a, b in case]
         _append(adjusted, QueryTag.COVERAGE)
 
     boundary_cases = [
@@ -176,10 +173,7 @@ def generate_intervals_queries(
         [(lo, lo + 1)],
     ]
     for case in boundary_cases:
-        adjusted = [
-            (_clamp(a, lo, hi), _clamp(b, lo, hi))
-            for a, b in case
-        ]
+        adjusted = [(_clamp(a, lo, hi), _clamp(b, lo, hi)) for a, b in case]
         _append(adjusted, QueryTag.BOUNDARY)
 
     for _ in range(n_typical):
@@ -206,10 +200,7 @@ def generate_intervals_queries(
         [(hi, lo), (lo, hi), (mid + 1, mid - 1)],
     ]
     for case in adversarial_cases:
-        adjusted = [
-            (_clamp(a, lo, hi), _clamp(b, lo, hi))
-            for a, b in case
-        ]
+        adjusted = [(_clamp(a, lo, hi), _clamp(b, lo, hi)) for a, b in case]
         _append(adjusted, QueryTag.ADVERSARIAL)
 
     for tag in QueryTag:

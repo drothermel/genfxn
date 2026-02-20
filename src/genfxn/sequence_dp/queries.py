@@ -84,14 +84,8 @@ def generate_sequence_dp_queries(
     typical_a_len = max(1, a_lo)
     typical_b_len = max(1, b_lo)
     _append_query(
-        [
-            _clamp(v_mid + idx, axes.value_range)
-            for idx in range(typical_a_len)
-        ],
-        [
-            _clamp(v_mid - idx, axes.value_range)
-            for idx in range(typical_b_len)
-        ],
+        [_clamp(v_mid + idx, axes.value_range) for idx in range(typical_a_len)],
+        [_clamp(v_mid - idx, axes.value_range) for idx in range(typical_b_len)],
         QueryTag.TYPICAL,
     )
 

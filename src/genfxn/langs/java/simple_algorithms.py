@@ -16,7 +16,7 @@ def _render_preprocess_java(
 ) -> list[str]:
     lines: list[str] = []
     if spec.pre_filter is not None:
-        cond = render_predicate_java(spec.pre_filter, "x", int32_wrap=True)
+        cond = render_predicate_java(spec.pre_filter, "x")
         lines.extend(
             [
                 f"    int[] _filtered = java.util.Arrays.stream({var})"
@@ -227,8 +227,7 @@ def _render_max_window_sum(
             "    }",
             "    int max_sum = window_sum;",
             f"    for (int i = {k}; i < {var}.length; i++) {{",
-            "        window_sum = window_sum "
-            f"- {var}[i - {k}] + {var}[i];",
+            f"        window_sum = window_sum - {var}[i - {k}] + {var}[i];",
             "        max_sum = Math.max(max_sum, window_sum);",
             "    }",
             "    return max_sum;",

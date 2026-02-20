@@ -3,8 +3,6 @@ import random
 import pytest
 from pydantic import ValidationError
 
-from genfxn.core.int32 import INT32_MAX, INT32_MIN
-from genfxn.core.models import QueryTag
 from genfxn.core.predicates import PredicateLe, PredicateLt
 from genfxn.piecewise.eval import eval_expression, eval_piecewise
 from genfxn.piecewise.models import (
@@ -23,6 +21,7 @@ from genfxn.piecewise.sampler import sample_piecewise_spec
 from genfxn.piecewise.task import generate_piecewise_task
 
 INT64_MAX = (1 << 63) - 1
+INT32_MAX = (1 << 31) - 1
 
 
 class TestExpressionEval:
@@ -149,27 +148,6 @@ class TestQueryGeneration:
         for q in queries:
             assert q.output == eval_piecewise(spec, q.input)
 
-    def test_boundary_queries_use_wrapped_thresholds(self) -> None:
-        spec = PiecewiseSpec(
-            branches=[
-                Branch(
-                    condition=PredicateLt(value=INT32_MAX + 1),
-                    expr=ExprAffine(a=1, b=0),
-                )
-            ],
-            default_expr=ExprAffine(a=0, b=7),
-        )
-        queries = generate_piecewise_queries(
-            spec, (INT32_MIN - 2, INT32_MIN + 2), random.Random(0)
-        )
-
-        wrapped_boundary = [
-            q
-            for q in queries
-            if q.input == INT32_MIN and q.tag == QueryTag.BOUNDARY
-        ]
-        assert wrapped_boundary
-
 
 class TestRender:
     def test_render_affine(self) -> None:
@@ -241,28 +219,6 @@ class TestRender:
         f = namespace["f"]
         for x in (0, 50_000, 2_000_000_000):
             assert f(x) == eval_piecewise(spec, x), f"Mismatch at x={x}"
-
-    def test_render_roundtrip_without_i32_wrap(self) -> None:
-        spec = PiecewiseSpec(
-            branches=[
-                Branch(
-                    condition=PredicateLt(value=0),
-                    expr=ExprAffine(a=2, b=1),
-                ),
-                Branch(
-                    condition=PredicateLt(value=10),
-                    expr=ExprQuadratic(a=1, b=0, c=0),
-                ),
-            ],
-            default_expr=ExprAffine(a=0, b=50),
-        )
-        code = render_piecewise(spec, func_name="f", int32_wrap=False)
-        assert "__i32_" not in code
-        namespace: dict = {}
-        exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        for x in range(-20, 30):
-            assert f(x) == eval_piecewise(spec, x, int32_wrap=False)
 
 
 class TestSampler:

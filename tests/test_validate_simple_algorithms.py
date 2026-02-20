@@ -135,9 +135,7 @@ class TestCodeCompilation:
         task = baseline_task.model_copy(deep=True)
         mapped = task.model_copy(
             update={
-                "code": {
-                    "java": "public static int f(int[] xs) { return 0; }"
-                }
+                "code": {"java": "public static int f(int[] xs) { return 0; }"}
             }
         )
         issues = validate_simple_algorithms_task(mapped)

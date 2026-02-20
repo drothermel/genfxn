@@ -15,8 +15,7 @@ def _render_state_transitions(spec: FsmSpec) -> list[str]:
             if_kw = "if" if t_idx == 0 else "else if"
             lines.append(f"                {if_kw} {pred} {{")
             lines.append(
-                "                    state = "
-                f"{transition.target_state_id};"
+                f"                    state = {transition.target_state_id};"
             )
             lines.append("                    transition_count += 1;")
             lines.append("                    matched = true;")

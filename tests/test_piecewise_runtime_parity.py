@@ -60,7 +60,7 @@ def _run_rust_f(rustc: str, code: str, x: int) -> int:
         f"{code}\n"
         "fn main() {\n"
         f"    let x: i64 = {x}i64;\n"
-        "    println!(\"{}\", f(x));\n"
+        '    println!("{}", f(x));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:

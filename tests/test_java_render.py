@@ -237,26 +237,13 @@ class TestPredicateJava:
     def test_custom_var(self) -> None:
         assert render_predicate_java(PredicateEven(), var="n") == "n % 2 == 0"
 
-    def test_lt_out_of_int32_unwrapped_preserves_int_input_semantics(
-        self,
-    ) -> None:
-        result = render_predicate_java(
-            PredicateLt(value=1 << 31),
-            int32_wrap=False,
-        )
+    def test_lt_out_of_int32_preserves_int_input_semantics(self) -> None:
+        result = render_predicate_java(PredicateLt(value=1 << 31))
         assert result == "true"
 
-    def test_lt_out_of_int32_wrapped_narrows_constant(self) -> None:
-        result = render_predicate_java(
-            PredicateLt(value=1 << 31),
-            int32_wrap=True,
-        )
-        assert result == "x < ((int) 2147483648L)"
-
-    def test_in_set_unwrapped_ignores_out_of_int32_values(self) -> None:
+    def test_in_set_ignores_out_of_int32_values(self) -> None:
         result = render_predicate_java(
             PredicateInSet(values=frozenset({1, 1 << 31})),
-            int32_wrap=False,
         )
         assert result == "(x == 1)"
 
@@ -399,9 +386,7 @@ class TestStringPredicateJava:
         result = render_string_predicate_java(
             StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == (
-            f"s.codePointCount(0, s.length()) {expected_op} 5"
-        )
+        assert result == (f"s.codePointCount(0, s.length()) {expected_op} 5")
 
     def test_not(self) -> None:
         result = render_string_predicate_java(
@@ -585,7 +570,7 @@ class TestPiecewiseJava:
         code = render_piecewise(spec)
         assert "(x == 1 || x == 2)" in code
 
-    def test_expression_constants_use_int32_wrap_literals(self) -> None:
+    def test_expression_constants_use_java_int_narrowing_literals(self) -> None:
         from genfxn.langs.java.piecewise import render_piecewise
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 
@@ -1003,9 +988,7 @@ class TestMultiLanguageGeneration:
 
     def test_simple_algorithms_rejects_empty_languages(self) -> None:
         with pytest.raises(ValueError, match="languages list is empty"):
-            generate_simple_algorithms_task(
-                rng=random.Random(42), languages=[]
-            )
+            generate_simple_algorithms_task(rng=random.Random(42), languages=[])
 
     def test_sequence_dp_rejects_empty_languages(self) -> None:
         with pytest.raises(ValueError, match="languages list is empty"):

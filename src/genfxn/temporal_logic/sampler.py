@@ -76,9 +76,7 @@ def _sample_operator_candidates(
 ) -> tuple[list[TemporalOperator], list[TemporalOperator]]:
     available = list(dict.fromkeys(operator_mix))
     if not include_since:
-        available = [
-            op for op in available if op != TemporalOperator.SINCE
-        ]
+        available = [op for op in available if op != TemporalOperator.SINCE]
     if not available:
         available = [TemporalOperator.ATOM]
 

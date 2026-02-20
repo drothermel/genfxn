@@ -218,8 +218,7 @@ def _validate_ast_whitelist(
                         code=CODE_UNSAFE_AST,
                         severity=Severity.ERROR,
                         message=(
-                            f"Disallowed name '{node.id}' at line "
-                            f"{node.lineno}"
+                            f"Disallowed name '{node.id}' at line {node.lineno}"
                         ),
                         location="code",
                     )
@@ -296,8 +295,7 @@ def _validate_code_compile(
                 code=CODE_CODE_PARSE_ERROR,
                 severity=Severity.ERROR,
                 message=(
-                    "Code payload must be a string, got "
-                    f"{type(code).__name__}"
+                    f"Code payload must be a string, got {type(code).__name__}"
                 ),
                 location="code",
                 task_id=task.task_id,
@@ -576,8 +574,7 @@ def validate_temporal_logic_task(
                         code=CODE_AXES_DESERIALIZE_ERROR,
                         severity=severity,
                         message=(
-                            "Failed to deserialize axes; using defaults: "
-                            f"{exc}"
+                            f"Failed to deserialize axes; using defaults: {exc}"
                         ),
                         location="axes",
                         task_id=task.task_id,

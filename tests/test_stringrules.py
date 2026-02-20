@@ -503,8 +503,7 @@ class TestQueryGeneration:
         queries = generate_stringrules_queries(spec, axes, random.Random(42))
         coverage = [q for q in queries if q.tag == QueryTag.COVERAGE]
         assert any(
-            q.input.startswith("x") and "ab" in q.input
-            for q in coverage
+            q.input.startswith("x") and "ab" in q.input for q in coverage
         )
 
     def test_replace_coverage_hits_old_for_pipeline_replaces(self) -> None:
@@ -679,9 +678,7 @@ class TestTaskGeneration:
             call_count["n"] += 1
             if call_count["n"] < 3:
                 raise StringRulesQueryGenerationError("retry")
-            return [
-                Query(input="x1", output="X1", tag=QueryTag.COVERAGE)
-            ]
+            return [Query(input="x1", output="X1", tag=QueryTag.COVERAGE)]
 
         monkeypatch.setattr(
             stringrules_task_module, "sample_stringrules_spec", _fake_sample

@@ -71,7 +71,7 @@ def _run_rust_f(rustc: str, code: str, s: str) -> str:
         f"{code}\n"
         "fn main() {\n"
         f"    let s = {rust_string_literal(s)};\n"
-        "    print!(\"{}\", f(s));\n"
+        '    print!("{}", f(s));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -249,8 +249,9 @@ def test_stringrules_runtime_parity_unicode_is_digit() -> None:
 
 
 @pytest.mark.full
-def test_stringrules_runtime_parity_uncased_scripts_for_case_predicates(
-) -> None:
+def test_stringrules_runtime_parity_uncased_scripts_for_case_predicates() -> (
+    None
+):
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
 

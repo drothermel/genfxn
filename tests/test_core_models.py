@@ -463,8 +463,9 @@ def test_dedupe_queries_per_tag_input_nan_outputs_do_not_conflict() -> None:
     assert deduped[0].output != deduped[0].output
 
 
-def test_dedupe_queries_per_tag_input_nested_nan_outputs_do_not_conflict(
-) -> None:
+def test_dedupe_queries_per_tag_input_nested_nan_outputs_do_not_conflict() -> (
+    None
+):
     queries = [
         Query(
             input=[(0, 0)],
