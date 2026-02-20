@@ -31,6 +31,7 @@ from genfxn.core.transforms import (
     render_transform,
 )
 from genfxn.stateful.models import (
+    SAMPLED_INIT_RANGE,
     ConditionalLinearSumSpec,
     LongestRunSpec,
     ResettingBestPrefixSumSpec,
@@ -238,7 +239,7 @@ def sample_stateful_spec(
                 false_transform.model_dump(),
             )
 
-            init_value = rng.randint(-10, 10)
+            init_value = rng.randint(*SAMPLED_INIT_RANGE)
             trace_step(
                 trace,
                 "sample_init_value",
@@ -276,7 +277,7 @@ def sample_stateful_spec(
                 reset_predicate.model_dump(),
             )
 
-            init_value = rng.randint(-10, 10)
+            init_value = rng.randint(*SAMPLED_INIT_RANGE)
             trace_step(
                 trace,
                 "sample_init_value",
@@ -373,7 +374,7 @@ def sample_stateful_spec(
                 off_transform.model_dump(),
             )
 
-            init_value = rng.randint(-10, 10)
+            init_value = rng.randint(*SAMPLED_INIT_RANGE)
             trace_step(
                 trace,
                 "sample_init_value",

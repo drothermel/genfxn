@@ -251,6 +251,10 @@ class TestAxesValidation:
         ):
             PiecewiseAxes(coeff_range=(0, INT64_MAX + 1))
 
+    def test_coeff_range_rejects_int64_min_for_safe_rendering(self) -> None:
+        with pytest.raises(ValueError, match="coeff_range: low must be >"):
+            PiecewiseAxes(coeff_range=(-(1 << 63), 0))
+
     def test_invalid_threshold_range(self) -> None:
         with pytest.raises(ValueError, match="threshold_range"):
             PiecewiseAxes(threshold_range=(50, -50))
@@ -279,6 +283,21 @@ class TestAxesValidation:
     def test_empty_expr_types(self) -> None:
         with pytest.raises(ValueError, match="expr_types must not be empty"):
             PiecewiseAxes(expr_types=[])
+
+    def test_abs_expr_rejects_value_range_including_int64_min(self) -> None:
+        with pytest.raises(ValueError, match="expr_types includes 'abs'"):
+            PiecewiseAxes(
+                expr_types=[ExprType.ABS],
+                value_range=(-(1 << 63), 10),
+            )
+
+    def test_quadratic_expr_rejects_overflowing_ranges(self) -> None:
+        with pytest.raises(ValueError, match="Numeric contract violation"):
+            PiecewiseAxes(
+                expr_types=[ExprType.QUADRATIC],
+                value_range=(2_000_000_000, 2_000_000_000),
+                coeff_range=(2_000_000_000, 2_000_000_000),
+            )
 
     @pytest.mark.parametrize(
         ("field_name", "range_value"),

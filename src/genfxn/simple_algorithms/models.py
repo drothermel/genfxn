@@ -3,6 +3,16 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from genfxn.core.int64_safety import (
+    INT64_MAX as I64_MAX,
+)
+from genfxn.core.int64_safety import (
+    abs_range,
+    add_ranges,
+    fits_signed_i64,
+    mul_ranges,
+    neg_range,
+)
 from genfxn.core.predicates import Predicate, PredicateType
 from genfxn.core.transforms import Transform, TransformType
 
@@ -12,9 +22,13 @@ _SUPPORTED_PRE_FILTER_TYPES = frozenset(
     if pred_type != PredicateType.IN_SET
 )
 _SUPPORTED_PRE_TRANSFORM_TYPES = frozenset(
-    trans_type
-    for trans_type in TransformType
-    if trans_type != TransformType.CLIP
+    {
+        TransformType.IDENTITY,
+        TransformType.ABS,
+        TransformType.SHIFT,
+        TransformType.NEGATE,
+        TransformType.SCALE,
+    }
 )
 _INT_RANGE_FIELDS = (
     "value_range",
@@ -30,6 +44,8 @@ _INT_RANGE_FIELDS = (
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
 INT32_MAX = (1 << 31) - 1
+PREPROCESS_SHIFT_RANGE = (-10, 10)
+PREPROCESS_SCALE_RANGE = (-5, 5)
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -241,6 +257,80 @@ class SimpleAlgorithmsAxes(BaseModel):
                     "pre_transform_types contains unsupported transform "
                     f"types for simple_algorithms: {unsupported}. "
                     f"Supported values: {supported}"
+                )
+
+        processed_range = self.value_range
+        if self.pre_transform_types is not None:
+            transformed_ranges: list[tuple[int, int]] = []
+            for transform_type in self.pre_transform_types:
+                if transform_type == TransformType.IDENTITY:
+                    output_range = self.value_range
+                elif transform_type == TransformType.ABS:
+                    if self.value_range[0] == INT64_MIN:
+                        raise ValueError(
+                            "value_range: low must be > INT64_MIN when "
+                            "pre_transform_types includes 'abs'"
+                        )
+                    output_range = abs_range(self.value_range)
+                elif transform_type == TransformType.SHIFT:
+                    output_range = add_ranges(
+                        self.value_range,
+                        PREPROCESS_SHIFT_RANGE,
+                    )
+                elif transform_type == TransformType.NEGATE:
+                    if self.value_range[0] == INT64_MIN:
+                        raise ValueError(
+                            "value_range: low must be > INT64_MIN when "
+                            "pre_transform_types includes 'negate'"
+                        )
+                    output_range = neg_range(self.value_range)
+                elif transform_type == TransformType.SCALE:
+                    output_range = mul_ranges(
+                        self.value_range,
+                        PREPROCESS_SCALE_RANGE,
+                    )
+                else:  # pragma: no cover - guarded above
+                    continue
+
+                if not fits_signed_i64(output_range):
+                    raise ValueError(
+                        "Numeric contract violation: value_range and "
+                        "preprocess transform ranges can overflow signed "
+                        "64-bit arithmetic"
+                    )
+                transformed_ranges.append(output_range)
+
+            if transformed_ranges:
+                processed_range = (
+                    min(r[0] for r in transformed_ranges),
+                    max(r[1] for r in transformed_ranges),
+                )
+
+        if TemplateType.COUNT_PAIRS_SUM in self.templates:
+            pair_sum_range = add_ranges(processed_range, processed_range)
+            if not fits_signed_i64(pair_sum_range):
+                raise ValueError(
+                    "Numeric contract violation: pair-sum arithmetic can "
+                    "overflow signed 64-bit bounds. Tighten value_range."
+                )
+            list_hi = self.list_length_range[1]
+            max_pair_count = list_hi * max(0, list_hi - 1) // 2
+            if max_pair_count > I64_MAX:
+                raise ValueError(
+                    "Numeric contract violation: list_length_range high can "
+                    "overflow pair-count outputs. Tighten list_length_range."
+                )
+
+        if TemplateType.MAX_WINDOW_SUM in self.templates:
+            window_hi = self.window_size_range[1]
+            window_sum_range = (
+                window_hi * processed_range[0],
+                window_hi * processed_range[1],
+            )
+            if not fits_signed_i64(window_sum_range):
+                raise ValueError(
+                    "Numeric contract violation: window-sum arithmetic can "
+                    "overflow signed 64-bit bounds. Tighten ranges."
                 )
 
         return self

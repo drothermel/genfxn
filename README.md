@@ -171,6 +171,9 @@ Java long-based contract (`piecewise`, `stateful`, `simple_algorithms`):
 - Rendered entry points are `public static long f(long x)` and
   `public static long f(long[] xs)` depending on family input shape.
 - This hard-removes prior int32-wrapper behavior from generated Java code.
+- Axes validation now rejects range combinations that could overflow signed
+  64-bit arithmetic (including `abs/negate` on `INT64_MIN`) so generated
+  outputs stay parity-safe across Python/Java/Rust without wrapper code.
 
 Task-id hashing semantics:
 - `task_id_from_spec(...)` canonicalization is type-sensitive for container

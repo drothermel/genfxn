@@ -3,6 +3,13 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from genfxn.core.int64_safety import (
+    abs_range,
+    add_ranges,
+    fits_signed_i64,
+    mul_ranges,
+    neg_range,
+)
 from genfxn.core.predicates import Predicate, PredicateType
 from genfxn.core.transforms import Transform, TransformType
 
@@ -17,6 +24,16 @@ _INT_RANGE_FIELDS = (
 INT32_MAX = (1 << 31) - 1
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
+SAMPLED_INIT_RANGE = (-10, 10)
+_SUPPORTED_STATEFUL_TRANSFORM_TYPES = frozenset(
+    {
+        TransformType.IDENTITY,
+        TransformType.ABS,
+        TransformType.SHIFT,
+        TransformType.NEGATE,
+        TransformType.SCALE,
+    }
+)
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -39,6 +56,15 @@ class TemplateType(str, Enum):
     RESETTING_BEST_PREFIX_SUM = "resetting_best_prefix_sum"
     LONGEST_RUN = "longest_run"
     TOGGLE_SUM = "toggle_sum"
+
+
+_TRANSFORMED_TEMPLATES = frozenset(
+    {
+        TemplateType.CONDITIONAL_LINEAR_SUM,
+        TemplateType.RESETTING_BEST_PREFIX_SUM,
+        TemplateType.TOGGLE_SUM,
+    }
+)
 
 
 # --- Template Specs ---
@@ -171,6 +197,99 @@ class StatefulAxes(BaseModel):
             raise ValueError(
                 "min_composed_operands must be <= 3 when AND/OR predicates "
                 "are enabled"
+            )
+
+        uses_transforms = any(
+            template in _TRANSFORMED_TEMPLATES for template in self.templates
+        )
+        if not uses_transforms:
+            return self
+
+        unsupported_transform_types = sorted(
+            set(self.transform_types) - _SUPPORTED_STATEFUL_TRANSFORM_TYPES,
+            key=lambda transform_type: transform_type.value,
+        )
+        if unsupported_transform_types:
+            unsupported = ", ".join(
+                transform_type.value
+                for transform_type in unsupported_transform_types
+            )
+            supported = ", ".join(
+                transform_type.value
+                for transform_type in sorted(
+                    _SUPPORTED_STATEFUL_TRANSFORM_TYPES,
+                    key=lambda transform_type: transform_type.value,
+                )
+            )
+            raise ValueError(
+                "transform_types contains unsupported values for "
+                f"stateful generation: {unsupported}. "
+                f"Supported values: {supported}"
+            )
+
+        if (
+            TransformType.SHIFT in self.transform_types
+            and self.shift_range[0] == INT64_MIN
+        ):
+            raise ValueError(
+                "shift_range: low must be > INT64_MIN when SHIFT transforms "
+                "are enabled"
+            )
+
+        value_range = self.value_range
+        transform_output_ranges: list[tuple[int, int]] = []
+        for transform_type in self.transform_types:
+            if transform_type == TransformType.IDENTITY:
+                output_range = value_range
+            elif transform_type == TransformType.ABS:
+                if value_range[0] == INT64_MIN:
+                    raise ValueError(
+                        "value_range: low must be > INT64_MIN when ABS "
+                        "transforms are enabled"
+                    )
+                output_range = abs_range(value_range)
+            elif transform_type == TransformType.SHIFT:
+                output_range = add_ranges(value_range, self.shift_range)
+            elif transform_type == TransformType.NEGATE:
+                if value_range[0] == INT64_MIN:
+                    raise ValueError(
+                        "value_range: low must be > INT64_MIN when NEGATE "
+                        "transforms are enabled"
+                    )
+                output_range = neg_range(value_range)
+            elif transform_type == TransformType.SCALE:
+                output_range = mul_ranges(value_range, self.scale_range)
+            else:  # pragma: no cover - guarded above
+                continue
+
+            if not fits_signed_i64(output_range):
+                raise ValueError(
+                    "Numeric contract violation: value_range, shift_range, "
+                    "and scale_range must keep transform outputs within "
+                    "signed 64-bit bounds"
+                )
+            transform_output_ranges.append(output_range)
+
+        if not transform_output_ranges:
+            return self
+
+        merged_transform_range = (
+            min(bounds[0] for bounds in transform_output_ranges),
+            max(bounds[1] for bounds in transform_output_ranges),
+        )
+        step_count = self.list_length_range[1]
+        acc_range = add_ranges(
+            SAMPLED_INIT_RANGE,
+            (
+                step_count * merged_transform_range[0],
+                step_count * merged_transform_range[1],
+            ),
+        )
+        if not fits_signed_i64(acc_range):
+            raise ValueError(
+                "Numeric contract violation: list_length_range and transform "
+                "ranges can overflow signed 64-bit accumulator math. "
+                "Tighten ranges."
             )
 
         return self

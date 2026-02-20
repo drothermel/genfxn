@@ -383,6 +383,14 @@ class TestAxesValidation:
         ):
             StatefulAxes(transform_types=[])
 
+    def test_transform_types_reject_pipeline_for_stateful_generation(
+        self,
+    ) -> None:
+        with pytest.raises(
+            ValueError, match="transform_types contains unsupported values"
+        ):
+            StatefulAxes(transform_types=[TransformType.PIPELINE])
+
     def test_zero_divisor(self) -> None:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(0, 5))
@@ -404,6 +412,32 @@ class TestAxesValidation:
             match=rf"threshold_range: high .* must be <= {INT64_MAX}",
         ):
             StatefulAxes(threshold_range=(0, INT64_MAX + 1))
+
+    def test_abs_transform_rejects_value_range_including_int64_min(
+        self,
+    ) -> None:
+        with pytest.raises(ValueError, match="ABS transforms are enabled"):
+            StatefulAxes(
+                transform_types=[TransformType.ABS],
+                value_range=(-(1 << 63), 0),
+            )
+
+    def test_shift_transform_rejects_shift_range_including_int64_min(
+        self,
+    ) -> None:
+        with pytest.raises(ValueError, match="shift_range: low must be >"):
+            StatefulAxes(
+                transform_types=[TransformType.SHIFT],
+                shift_range=(-(1 << 63), 0),
+            )
+
+    def test_rejects_accumulator_ranges_that_can_overflow_i64(self) -> None:
+        with pytest.raises(ValueError, match="Numeric contract violation"):
+            StatefulAxes(
+                transform_types=[TransformType.IDENTITY],
+                value_range=(1_000_000_000_000, 1_000_000_000_000),
+                list_length_range=(1, 10_000_000_000),
+            )
 
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
