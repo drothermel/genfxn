@@ -174,6 +174,9 @@ Java long-based contract (`piecewise`, `stateful`, `simple_algorithms`):
 - Axes validation now rejects range combinations that could overflow signed
   64-bit arithmetic (including `abs/negate` on `INT64_MIN`) so generated
   outputs stay parity-safe across Python/Java/Rust without wrapper code.
+- Cross-language parity guarantees in this section apply to generated tasks
+  and specs under validated axes constraints; hand-authored specs outside
+  those constraints are not contract-covered.
 
 Task-id hashing semantics:
 - `task_id_from_spec(...)` canonicalization is type-sensitive for container

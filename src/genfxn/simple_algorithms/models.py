@@ -118,6 +118,12 @@ SimpleAlgorithmsSpec = Annotated[
 
 
 class SimpleAlgorithmsAxes(BaseModel):
+    """Sampling constraints for generated-spec parity across runtimes.
+
+    Contract scope: generated specs/tasks under validated axes only.
+    Hand-authored specs outside these constraints are not parity-covered.
+    """
+
     templates: list[TemplateType] = Field(
         default_factory=lambda: list(TemplateType)
     )

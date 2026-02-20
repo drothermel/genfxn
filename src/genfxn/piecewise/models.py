@@ -139,6 +139,12 @@ class PiecewiseSpec(BaseModel):
 
 
 class PiecewiseAxes(BaseModel):
+    """Sampling constraints for generated-spec parity across runtimes.
+
+    Contract scope: generated specs/tasks under validated axes only.
+    Hand-authored specs outside these constraints are not parity-covered.
+    """
+
     n_branches: int = Field(default=2, ge=1, le=5)
     expr_types: list[ExprType] = Field(
         default_factory=lambda: [ExprType.AFFINE]
