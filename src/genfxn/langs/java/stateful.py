@@ -1,4 +1,4 @@
-from genfxn.langs.java._helpers import java_int_literal
+from genfxn.langs.java._helpers import java_long_literal
 from genfxn.langs.java.predicates import render_predicate_java
 from genfxn.langs.java.transforms import render_transform_java
 from genfxn.stateful.models import (
@@ -16,12 +16,12 @@ def _render_conditional_linear_sum(
     cond = render_predicate_java(spec.predicate, "x")
     true_expr = render_transform_java(spec.true_transform, "x")
     false_expr = render_transform_java(spec.false_transform, "x")
-    init_value = java_int_literal(spec.init_value)
+    init_value = java_long_literal(spec.init_value)
 
     lines = [
-        f"public static int {func_name}(int[] {var}) {{",
-        f"    int acc = {init_value};",
-        f"    for (int x : {var}) {{",
+        f"public static long {func_name}(long[] {var}) {{",
+        f"    long acc = {init_value};",
+        f"    for (long x : {var}) {{",
         f"        if ({cond}) {{",
         f"            acc += {true_expr};",
         "        } else {",
@@ -43,13 +43,13 @@ def _render_resetting_best_prefix_sum(
         if spec.value_transform is not None
         else "x"
     )
-    init_value = java_int_literal(spec.init_value)
+    init_value = java_long_literal(spec.init_value)
 
     lines = [
-        f"public static int {func_name}(int[] {var}) {{",
-        f"    int current_sum = {init_value};",
-        f"    int best_sum = {init_value};",
-        f"    for (int x : {var}) {{",
+        f"public static long {func_name}(long[] {var}) {{",
+        f"    long current_sum = {init_value};",
+        f"    long best_sum = {init_value};",
+        f"    for (long x : {var}) {{",
         f"        if ({cond}) {{",
         f"            current_sum = {init_value};",
         "        } else {",
@@ -69,10 +69,10 @@ def _render_longest_run(
     cond = render_predicate_java(spec.match_predicate, "x")
 
     lines = [
-        f"public static int {func_name}(int[] {var}) {{",
-        "    int current_run = 0;",
-        "    int longest_run = 0;",
-        f"    for (int x : {var}) {{",
+        f"public static long {func_name}(long[] {var}) {{",
+        "    long current_run = 0L;",
+        "    long longest_run = 0L;",
+        f"    for (long x : {var}) {{",
         f"        if ({cond}) {{",
         "            current_run += 1;",
         "            longest_run = Math.max(longest_run, current_run);",
@@ -92,13 +92,13 @@ def _render_toggle_sum(
     cond = render_predicate_java(spec.toggle_predicate, "x")
     on_expr = render_transform_java(spec.on_transform, "x")
     off_expr = render_transform_java(spec.off_transform, "x")
-    init_value = java_int_literal(spec.init_value)
+    init_value = java_long_literal(spec.init_value)
 
     lines = [
-        f"public static int {func_name}(int[] {var}) {{",
+        f"public static long {func_name}(long[] {var}) {{",
         "    boolean on = false;",
-        f"    int acc = {init_value};",
-        f"    for (int x : {var}) {{",
+        f"    long acc = {init_value};",
+        f"    for (long x : {var}) {{",
         f"        if ({cond}) {{",
         "            on = !on;",
         "        }",

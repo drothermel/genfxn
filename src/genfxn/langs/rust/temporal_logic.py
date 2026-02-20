@@ -175,17 +175,18 @@ def render_temporal_logic(
     root_name = _emit_rust_node(spec.formula, helper_blocks, [0])
 
     mode = spec.output_mode.value
-    indented_helpers: list[str] = []
+    indented_blocks: list[str] = []
     for block in helper_blocks:
-        for line in block.splitlines():
-            indented_helpers.append(f"    {line}")
-        indented_helpers.append("")
-    if indented_helpers and indented_helpers[-1] == "":
-        indented_helpers.pop()
+        indented_block = "\n".join(f"    {line}" for line in block.splitlines())
+        indented_blocks.append(indented_block)
+    helpers_section = "\n\n".join(indented_blocks) if indented_blocks else ""
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
-        *indented_helpers,
+    ]
+    if helpers_section:
+        lines.extend(["", helpers_section])
+    lines += [
         "",
         f'    let output_mode = "{mode}";',
         "",
@@ -217,4 +218,4 @@ def render_temporal_logic(
         "    -1",
         "}",
     ]
-    return "\n\n".join(lines)
+    return "\n".join(lines)

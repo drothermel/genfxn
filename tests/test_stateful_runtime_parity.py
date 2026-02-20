@@ -51,12 +51,12 @@ def _parse_query_input(input_value: Any) -> list[int]:
 
 
 def _run_java_f(javac: str, java: str, code: str, xs: list[int]) -> int:
-    xs_lit = ", ".join(f"{x}" for x in xs)
+    xs_lit = ", ".join(f"{x}L" for x in xs)
     main_src = (
         "public class Main {\n"
         f"{code}\n"
         "  public static void main(String[] args) {\n"
-        f"    int[] xs = new int[]{{{xs_lit}}};\n"
+        f"    long[] xs = new long[]{{{xs_lit}}};\n"
         "    System.out.print(f(xs));\n"
         "  }\n"
         "}\n"
@@ -211,7 +211,7 @@ def test_stateful_runtime_parity_forced_templates() -> None:
 
 
 @pytest.mark.full
-def test_stateful_runtime_parity_overflow_int32_contract() -> None:
+def test_stateful_runtime_parity_overflow_large_value_contract() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     spec = ConditionalLinearSumSpec(
@@ -226,7 +226,7 @@ def test_stateful_runtime_parity_overflow_int32_contract() -> None:
     rust_code = render_stateful_rust(spec, func_name="f")
     expected = eval_stateful(spec, xs)
 
-    assert expected == -294_967_296
+    assert expected == 4_000_000_000
     assert _run_java_f(javac, java, java_code, xs) == expected
     assert _run_rust_f(rustc, rust_code, xs) == expected
 
@@ -276,7 +276,7 @@ def test_stateful_runtime_parity_int32_boundary_cases() -> None:
 
 
 @pytest.mark.full
-def test_stateful_runtime_parity_predicate_int32_constant_wrap() -> None:
+def test_stateful_runtime_parity_predicate_large_constant() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     spec = ConditionalLinearSumSpec(
@@ -291,13 +291,13 @@ def test_stateful_runtime_parity_predicate_int32_constant_wrap() -> None:
     rust_code = render_stateful_rust(spec, func_name="f")
     expected = eval_stateful(spec, xs)
 
-    assert expected == 0
+    assert expected == -9
     assert _run_java_f(javac, java, java_code, xs) == expected
     assert _run_rust_f(rustc, rust_code, xs) == expected
 
 
 @pytest.mark.full
-def test_stateful_runtime_parity_clip_wrapped_bounds() -> None:
+def test_stateful_runtime_parity_clip_large_bounds() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     spec = ConditionalLinearSumSpec(
@@ -315,7 +315,7 @@ def test_stateful_runtime_parity_clip_wrapped_bounds() -> None:
     rust_code = render_stateful_rust(spec, func_name="f")
     expected = eval_stateful(spec, xs)
 
-    assert expected == -1_294_967_196
+    assert expected == 3_000_000_000
     assert _run_java_f(javac, java, java_code, xs) == expected
     assert _run_rust_f(rustc, rust_code, xs) == expected
 

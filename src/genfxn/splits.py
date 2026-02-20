@@ -17,9 +17,7 @@ class HoldoutType(str, Enum):
 
 class AxisHoldout(BaseModel):
     axis_path: str = Field(description="Dot-separated path to spec value")
-    holdout_type: HoldoutType = Field(
-        description="How to match the holdout value"
-    )
+    holdout_type: HoldoutType = Field(description="How to match the holdout value")
     holdout_value: Any = Field(description="Value to match against")
 
 
@@ -44,8 +42,7 @@ def _contains_non_finite_number(value: Any) -> bool:
         return any(_contains_non_finite_number(item) for item in value)
     if isinstance(value, dict):
         return any(
-            _contains_non_finite_number(key)
-            or _contains_non_finite_number(item)
+            _contains_non_finite_number(key) or _contains_non_finite_number(item)
             for key, item in value.items()
         )
     return False
@@ -75,15 +72,10 @@ def matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
             return _matches_exact_type_sensitive(value, holdout.holdout_value)
         case HoldoutType.RANGE:
             range_value = holdout.holdout_value
-            if (
-                not isinstance(range_value, tuple | list)
-                or len(range_value) != 2
-            ):
+            if not isinstance(range_value, tuple | list) or len(range_value) != 2:
                 return False
             lo, hi = range_value
-            if not _is_finite_non_bool_number(
-                lo
-            ) or not _is_finite_non_bool_number(hi):
+            if not _is_finite_non_bool_number(lo) or not _is_finite_non_bool_number(hi):
                 return False
             if not _is_finite_non_bool_number(value):
                 return False
@@ -125,9 +117,7 @@ def random_split(
     If in_place is True, the input list is shuffled in place.
     """
     if not (0.0 <= train_ratio <= 1.0):
-        raise ValueError(
-            f"train_ratio must be in [0.0, 1.0], got {train_ratio!r}"
-        )
+        raise ValueError(f"train_ratio must be in [0.0, 1.0], got {train_ratio!r}")
     rng = random.Random(seed)
     shuffled = tasks if in_place else tasks.copy()
     rng.shuffle(shuffled)

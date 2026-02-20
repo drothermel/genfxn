@@ -80,11 +80,15 @@ def _find_no_pairs_input(
     len_lo, len_hi = axes.list_length_range
     if len_hi < len_lo:
         return None
+    # "No pairs" requires at least 2 elements; axes must allow that.
+    if len_hi < 2:
+        return None
 
     max_len = min(len_hi, 5)
-    if max_len >= len_lo:
+    effective_min_len = max(2, len_lo)
+    if effective_min_len <= max_len:
         for _ in range(80):
-            length = rng.randint(max(2, len_lo), max(2, max_len))
+            length = rng.randint(effective_min_len, max_len)
             candidate = _generate_random_list(length, (lo, hi), rng)
             processed = _preprocess_count_pairs_input(spec, candidate)
             if not _has_pair_sum(processed, spec.target):
@@ -309,12 +313,11 @@ def generate_simple_algorithms_queries(
         case _:
             raise ValueError(f"Unknown spec: {spec}")
 
-    queries = dedupe_queries(queries)
-
-    # Guardrail: keep at least 5 distinct inputs per task.
+    # Guardrail: keep at least 5 distinct inputs per task. seen_inputs drives
+    # the loop; final dedupe_queries produces the unique list.
     seen_inputs = {tuple(q.input) for q in queries}
     attempts = 0
-    while len(queries) < 5 and attempts < 200:
+    while len(seen_inputs) < 5 and attempts < 200:
         attempts += 1
         length = rng.randint(*axes.list_length_range)
         candidate = _generate_random_list(length, axes.value_range, rng)

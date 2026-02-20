@@ -7,7 +7,7 @@ def render_piecewise(
     spec: PiecewiseSpec, func_name: str = "f", var: str = "x"
 ) -> str:
     """Render a piecewise spec as a Java static method."""
-    lines = [f"public static int {func_name}(int {var}) {{"]
+    lines = [f"public static long {func_name}(long {var}) {{"]
 
     for i, branch in enumerate(spec.branches):
         keyword = "if" if i == 0 else "} else if"

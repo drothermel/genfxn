@@ -61,8 +61,8 @@ def render_most_frequent(
             "        counts[x] = counts.get(x, 0) + 1",
             "    max_count = max(counts.values())",
             (
-                "    candidates = set(val for val, cnt in counts.items() "
-                "if cnt == max_count)"
+                "    candidates = [val for val, cnt in counts.items() "
+                "if cnt == max_count]"
             ),
         ]
         if spec.tie_default is not None:
@@ -73,7 +73,7 @@ def render_most_frequent(
                 f"    for x in {var}:",
                 "        if x in candidates:",
                 "            return x",
-                f"    return {spec.empty_default}",
+                "    return candidates[0]",
             ]
         )
     return "\n".join(lines)

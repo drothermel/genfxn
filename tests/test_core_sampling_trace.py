@@ -2,8 +2,41 @@ import random
 
 import pytest
 
-from genfxn.core.sampling import pick_from_preferred
+from genfxn.core.sampling import intersect_ranges, pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
+
+
+def test_intersect_ranges_overlap() -> None:
+    assert intersect_ranges((1, 5), (3, 7)) == (3, 5)
+    assert intersect_ranges((3, 7), (1, 5)) == (3, 5)
+
+
+def test_intersect_ranges_disjoint() -> None:
+    assert intersect_ranges((1, 3), (5, 7)) is None
+    assert intersect_ranges((5, 7), (1, 3)) is None
+
+
+def test_intersect_ranges_touching() -> None:
+    assert intersect_ranges((1, 4), (4, 6)) == (4, 4)
+    assert intersect_ranges((4, 6), (1, 4)) == (4, 4)
+
+
+def test_intersect_ranges_contained() -> None:
+    assert intersect_ranges((1, 10), (3, 5)) == (3, 5)
+    assert intersect_ranges((3, 5), (1, 10)) == (3, 5)
+
+
+def test_intersect_ranges_identical() -> None:
+    assert intersect_ranges((3, 5), (3, 5)) == (3, 5)
+
+
+def test_intersect_ranges_single_point() -> None:
+    assert intersect_ranges((5, 5), (5, 5)) == (5, 5)
+
+
+def test_intersect_ranges_negative() -> None:
+    assert intersect_ranges((-5, -1), (-3, 2)) == (-3, -1)
+    assert intersect_ranges((-3, 2), (-5, -1)) == (-3, -1)
 
 
 def test_pick_from_preferred_uses_overlap() -> None:

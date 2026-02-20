@@ -401,6 +401,28 @@ class TestQueryGeneration:
                 for j in range(i + 1, len(q.input))
             )
 
+    def test_count_pairs_queries_respect_list_length_when_max_len_under_two(
+        self,
+    ) -> None:
+        """When axes allow only length 0–1, no 'no pairs' list is possible; no error."""
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
+        axes = SimpleAlgorithmsAxes(
+            value_range=(0, 15),
+            list_length_range=(0, 1),
+            window_size_range=(1, 1),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(99)
+        )
+        len_hi = axes.list_length_range[1]
+        for q in queries:
+            assert len(q.input) <= len_hi, (
+                f"query input length {len(q.input)} exceeds list_length_range high {len_hi}"
+            )
+
 
 class TestAxesValidation:
     def test_invalid_value_range(self) -> None:

@@ -1,4 +1,4 @@
-from genfxn.langs.java._helpers import java_int_literal
+from genfxn.langs.java._helpers import INT32_MAX, INT32_MIN, java_long_literal
 from genfxn.piecewise.models import (
     ExprAbs,
     ExprAffine,
@@ -9,7 +9,9 @@ from genfxn.piecewise.models import (
 
 
 def _java_literal(value: int) -> str:
-    return java_int_literal(value)
+    if INT32_MIN <= value <= INT32_MAX:
+        return str(value)
+    return java_long_literal(value)
 
 
 def render_expression_java(

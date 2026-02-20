@@ -45,7 +45,7 @@ def eval_most_frequent(
     for x in xs:
         if x in candidates:
             return x
-    return candidates[0]
+    raise AssertionError("unreachable: xs non-empty and candidates derived from xs")
 
 
 def eval_count_pairs_sum(

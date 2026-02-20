@@ -1,6 +1,6 @@
 import random
 
-from genfxn.core.sampling import pick_from_preferred
+from genfxn.core.sampling import intersect_ranges, pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.sequence_dp.models import (
     OutputMode,
@@ -111,22 +111,12 @@ _TARGET_DIVISOR: dict[int, tuple[int, int]] = {
 }
 
 
-def _intersect_ranges(
-    a: tuple[int, int], b: tuple[int, int]
-) -> tuple[int, int] | None:
-    lo = max(a[0], b[0])
-    hi = min(a[1], b[1])
-    if lo > hi:
-        return None
-    return (lo, hi)
-
-
 def _pick_targeted_int(
     base_range: tuple[int, int],
     target_range: tuple[int, int],
     rng: random.Random,
 ) -> int:
-    bounded = _intersect_ranges(base_range, target_range)
+    bounded = intersect_ranges(base_range, target_range)
     if bounded is None:
         return rng.randint(*base_range)
     return rng.randint(*bounded)
