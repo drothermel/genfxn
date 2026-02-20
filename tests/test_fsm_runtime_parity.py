@@ -235,37 +235,29 @@ def test_fsm_runtime_parity_forced_output_modes_and_policies() -> None:
 
 
 @pytest.mark.full
-def test_fsm_runtime_parity_lt_out_of_int32_threshold() -> None:
-    javac, java = require_java_runtime()
-    rustc = require_rust_runtime()
-    spec = FsmSpec.model_validate(
-        {
-            "machine_type": "moore",
-            "output_mode": "accept_bool",
-            "undefined_transition_policy": "stay",
-            "start_state_id": 0,
-            "states": [
-                {
-                    "id": 0,
-                    "is_accept": False,
-                    "transitions": [
-                        {
-                            "predicate": {
-                                "kind": "lt",
-                                "value": 2_147_483_648,
-                            },
-                            "target_state_id": 1,
-                        }
-                    ],
-                },
-                {"id": 1, "is_accept": True, "transitions": []},
-            ],
-        }
-    )
-    java_code = render_fsm_java(spec, func_name="f")
-    rust_code = render_fsm_rust(spec, func_name="f")
-
-    for xs in ([2_147_483_647], [0], [-2_147_483_648], []):
-        expected = eval_fsm(spec, xs)
-        assert _run_java_f(javac, java, java_code, xs) == expected
-        assert _run_rust_f(rustc, rust_code, xs) == expected
+def test_fsm_runtime_parity_rejects_lt_out_of_int32_threshold() -> None:
+    with pytest.raises(Exception, match="signed 32-bit range"):
+        FsmSpec.model_validate(
+            {
+                "machine_type": "moore",
+                "output_mode": "accept_bool",
+                "undefined_transition_policy": "stay",
+                "start_state_id": 0,
+                "states": [
+                    {
+                        "id": 0,
+                        "is_accept": False,
+                        "transitions": [
+                            {
+                                "predicate": {
+                                    "kind": "lt",
+                                    "value": 2_147_483_648,
+                                },
+                                "target_state_id": 1,
+                            }
+                        ],
+                    },
+                    {"id": 1, "is_accept": True, "transitions": []},
+                ],
+            }
+        )
