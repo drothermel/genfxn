@@ -27,6 +27,10 @@ uv sync
 | **graph_queries** | `f(src: int, dst: int) -> int` | Deterministic graph-query evaluation (`reachable`, `min_hops`, `shortest_path_cost`) |
 | **temporal_logic** | `f(xs: list[int]) -> int` | Finite-trace temporal-logic evaluation with integer predicates and deterministic temporal semantics |
 
+Signatures in this table describe the logical task contract. Java/Rust renderers
+use signed 64-bit numeric types (`long`/`i64`) for numeric families that were
+migrated to the long-based runtime contract.
+
 ### Current Coverage
 
 All families listed above are implemented and integrated with generation,
@@ -162,6 +166,11 @@ Overflow semantics (`stack_bytecode` and `sequence_dp`):
 - Java/Rust runtimes execute with signed 64-bit (`long`/`i64`) behavior; in
   overflow-adjacent parity tests, evaluator expectations are normalized to
   signed 64-bit representation before asserting Java/Rust parity.
+
+Java long-based contract (`piecewise`, `stateful`, `simple_algorithms`):
+- Rendered entry points are `public static long f(long x)` and
+  `public static long f(long[] xs)` depending on family input shape.
+- This hard-removes prior int32-wrapper behavior from generated Java code.
 
 Task-id hashing semantics:
 - `task_id_from_spec(...)` canonicalization is type-sensitive for container

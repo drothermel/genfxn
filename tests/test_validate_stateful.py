@@ -148,7 +148,7 @@ class TestCodeCompilation:
             update={
                 "code": {
                     "python": task.code,
-                    "java": "public static int f(int[] xs) { return 0; }",
+                    "java": "public static long f(long[] xs) { return 0; }",
                 }
             }
         )
@@ -161,7 +161,9 @@ class TestCodeCompilation:
         task = baseline_task.model_copy(deep=True)
         mapped = task.model_copy(
             update={
-                "code": {"java": "public static int f(int[] xs) { return 0; }"}
+                "code": {
+                    "java": "public static long f(long[] xs) { return 0; }"
+                }
             }
         )
         issues = validate_stateful_task(mapped)

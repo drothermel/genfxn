@@ -1198,7 +1198,7 @@ class TestGenerate:
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 1
-        assert "public static int f(int x)" in tasks[0]["code"]
+        assert "public static long f(long x)" in tasks[0]["code"]
         assert "def f(" not in tasks[0]["code"]
 
     def test_generate_python_language(self, tmp_path) -> None:
