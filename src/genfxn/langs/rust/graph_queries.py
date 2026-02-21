@@ -13,15 +13,17 @@ def render_graph_queries(
         f"    let directed = {str(spec.directed).lower()};",
         f"    let weighted = {str(spec.weighted).lower()};",
         f'    let query_type = "{spec.query_type.value}";',
-        "    let edges: Vec<(i64, i64, i64)> = vec![",
+        "    let edges: Vec<(i64, i64, i64)> = {",
+        "        let mut edges = Vec::new();",
     ]
 
     for edge in spec.edges:
-        lines.append(f"        ({edge.u}, {edge.v}, {edge.w}),")
+        lines.append(f"        edges.push(({edge.u}, {edge.v}, {edge.w}));")
 
     lines.extend(
         [
-            "    ];",
+            "        edges",
+            "    };",
             "",
             f"    if {src_var} < 0 || {src_var} >= n_nodes as i64 {{",
             f'        panic!("src out of range: {{}}", {src_var});',
@@ -43,8 +45,11 @@ def render_graph_queries(
             "    let mut best = "
             "std::collections::HashMap::<(usize, usize), i64>::new();",
             "    for &(raw_u_i64, raw_v_i64, raw_w) in &edges {",
-            "        if raw_u_i64 < 0 || raw_u_i64 >= n_nodes as i64 || "
-            "raw_v_i64 < 0 || raw_v_i64 >= n_nodes as i64 {",
+            "        if raw_u_i64 < 0",
+            "            || raw_u_i64 >= n_nodes as i64",
+            "            || raw_v_i64 < 0",
+            "            || raw_v_i64 >= n_nodes as i64",
+            "        {",
             '            panic!("edge endpoint out of range for '
             'n_nodes={}", n_nodes);',
             "        }",

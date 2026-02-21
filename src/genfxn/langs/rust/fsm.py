@@ -2,25 +2,25 @@ from genfxn.fsm.models import FsmSpec, OutputMode, UndefinedTransitionPolicy
 from genfxn.langs.rust.predicates import render_predicate_rust
 
 
-def _render_state_transitions(spec: FsmSpec) -> list[str]:
+def _render_state_transitions(spec: FsmSpec, counter_var: str) -> list[str]:
     lines: list[str] = []
     states = sorted(spec.states, key=lambda s: s.id)
     for idx, state in enumerate(states):
         prefix = "if" if idx == 0 else "else if"
-        lines.append(f"            {prefix} state == {state.id} {{")
+        lines.append(f"        {prefix} state == {state.id} {{")
         if not state.transitions:
-            lines.append("                // no transitions")
+            lines.append("            // no transitions")
         for t_idx, transition in enumerate(state.transitions):
             pred = render_predicate_rust(transition.predicate, "x")
             if_kw = "if" if t_idx == 0 else "else if"
-            lines.append(f"                {if_kw} {pred} {{")
+            lines.append(f"            {if_kw} {pred} {{")
             lines.append(
-                f"                    state = {transition.target_state_id};"
+                f"                state = {transition.target_state_id};"
             )
-            lines.append("                    transition_count += 1;")
-            lines.append("                    matched = true;")
-            lines.append("                }")
-        lines.append("            }")
+            lines.append(f"                {counter_var} += 1;")
+            lines.append("                matched = true;")
+            lines.append("            }")
+        lines.append("        }")
     return lines
 
 
@@ -35,16 +35,20 @@ def _render_accept_expr(spec: FsmSpec) -> str:
 
 def render_fsm(spec: FsmSpec, func_name: str = "f", var: str = "xs") -> str:
     sink_state_id = max(state.id for state in spec.states) + 1
+    counter_var = (
+        "transition_count"
+        if spec.output_mode == OutputMode.TRANSITION_COUNT
+        else "_transition_count"
+    )
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
         f"    let mut state: i64 = {spec.start_state_id};",
-        "    let mut transition_count: i64 = 0;",
-        f"    let sink_state_id: i64 = {sink_state_id};",
+        f"    let mut {counter_var}: i64 = 0;",
         "",
         f"    for &x in {var} {{",
         "        let mut matched = false;",
     ]
-    lines.extend(_render_state_transitions(spec))
+    lines.extend(_render_state_transitions(spec, counter_var))
     lines.extend(
         [
             "",
@@ -59,8 +63,9 @@ def render_fsm(spec: FsmSpec, func_name: str = "f", var: str = "xs") -> str:
     elif spec.undefined_transition_policy == UndefinedTransitionPolicy.SINK:
         lines.extend(
             [
+                f"        let sink_state_id: i64 = {sink_state_id};",
                 "        state = sink_state_id;",
-                "        transition_count += 1;",
+                f"        {counter_var} += 1;",
                 "        continue;",
             ]
         )
@@ -75,8 +80,16 @@ def render_fsm(spec: FsmSpec, func_name: str = "f", var: str = "xs") -> str:
     if spec.output_mode == OutputMode.FINAL_STATE_ID:
         lines.append("    state")
     elif spec.output_mode == OutputMode.TRANSITION_COUNT:
-        lines.append("    transition_count")
+        lines.append(f"    {counter_var}")
     else:
-        lines.append(f"    if {_render_accept_expr(spec)} {{ 1 }} else {{ 0 }}")
+        lines.extend(
+            [
+                f"    if {_render_accept_expr(spec)} {{",
+                "        1",
+                "    } else {",
+                "        0",
+                "    }",
+            ]
+        )
     lines.append("}")
     return "\n".join(lines)

@@ -45,16 +45,20 @@ def render_bitops(
         "            if amt == 0 {",
         "                value = value & mask;",
         "            } else {",
-        "                value = ((value << amt) |",
-        "                    (value >> (width_bits - amt))) & mask;",
+        (
+            "                value = "
+            "((value << amt) | (value >> (width_bits - amt))) & mask;"
+        ),
         "            }",
         '        } else if op == "rotr" {',
         "            let amt = arg.rem_euclid(width_bits as i64) as usize;",
         "            if amt == 0 {",
         "                value = value & mask;",
         "            } else {",
-        "                value = ((value >> amt) |",
-        "                    (value << (width_bits - amt))) & mask;",
+        (
+            "                value = "
+            "((value >> amt) | (value << (width_bits - amt))) & mask;"
+        ),
         "            }",
         '        } else if op == "not" {',
         "            value = (!value) & mask;",

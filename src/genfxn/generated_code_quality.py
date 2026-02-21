@@ -91,7 +91,8 @@ def _indent_java_block(code: str) -> str:
     lines = code.splitlines()
     if not lines:
         return ""
-    return "\n".join(f"    {line}" if line else "" for line in lines)
+    # google-java-format expects class members indented by two spaces.
+    return "\n".join(f"  {line}" if line else "" for line in lines)
 
 
 def _java_source(code: str) -> str:
