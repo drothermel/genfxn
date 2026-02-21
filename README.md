@@ -205,6 +205,7 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 |--------|-------------|
 | `-s, --seed INT` | Random seed for reproducibility |
 | `-l, --language` | Single language output: `python`, `java`, or `rust` |
+| `--skip-generated-style-checks` | Skip Java/Rust generated-code formatter/lint checks |
 
 ### Piecewise Options
 
@@ -268,6 +269,10 @@ genfxn generate -o tasks.jsonl -f stateful -n 50 -s 42
 # Generate Java output
 genfxn generate -o tasks_java.jsonl -f piecewise -n 25 --language java
 
+# Skip Java/Rust generated-code style checks (local fallback)
+genfxn generate -o tasks.jsonl -f piecewise -n 25 \
+    --skip-generated-style-checks
+
 # Only longest_run with small lists
 genfxn generate -o tasks.jsonl -f stateful -n 50 \
     --templates longest_run --list-length-range 3,10
@@ -298,6 +303,27 @@ genfxn generate -o tasks.jsonl -f graph_queries -n 50 --list-length-range 3,6
 
 # Temporal logic tasks with bounded sequence lengths
 genfxn generate -o tasks.jsonl -f temporal_logic -n 50 --list-length-range 0,6
+```
+
+### Generated Code Quality Checks
+
+By default, `genfxn generate` and `scripts/generate_balanced_suites.py` run
+Java/Rust generated-code checks after sampling tasks:
+
+- Java formatting: `google-java-format --dry-run --set-exit-if-changed`
+- Java compile lint: `javac -Xlint:all -Werror`
+- Rust formatting: `rustfmt --check`
+- Rust compile lint: `rustc --edition=2021 -D warnings`
+
+Local skip flags are available:
+- `genfxn generate ... --skip-generated-style-checks`
+- `python scripts/generate_balanced_suites.py --skip-generated-style-checks`
+
+Deterministic smoke check command used in CI:
+
+```bash
+uv run python scripts/check_generated_code_quality.py \
+  --families all --seed 42 --count-per-family 2 --pool-size 24
 ```
 
 See [AXES.md](AXES.md) for complete axis documentation.
@@ -440,6 +466,7 @@ via `.github/workflows/ci.yml`:
 uv sync
 uv run ruff check .
 uv run ty check
+uv run python scripts/check_generated_code_quality.py --families all --seed 42 --count-per-family 2 --pool-size 24
 uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal
 ```
 

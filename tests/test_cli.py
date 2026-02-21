@@ -44,6 +44,15 @@ from genfxn.temporal_logic.validate import validate_temporal_logic_task
 runner = CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def _stub_generated_style_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "check_generated_code_quality",
+        lambda tasks: None,
+    )
+
+
 def _supports_bitops_family() -> bool:
     return importlib.util.find_spec("genfxn.bitops.task") is not None
 
@@ -100,6 +109,55 @@ class TestGenerate:
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 5
         assert all(t["family"] == "piecewise" for t in tasks)
+
+    def test_generate_runs_generated_style_checks_by_default(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        seen_task_counts: list[int] = []
+
+        def _fake_check(tasks: list[Task]) -> None:
+            seen_task_counts.append(len(tasks))
+
+        monkeypatch.setattr(
+            cli_module, "check_generated_code_quality", _fake_check
+        )
+
+        result = runner.invoke(
+            app,
+            ["generate", "-o", str(output), "-f", "piecewise", "-n", "3"],
+        )
+
+        assert result.exit_code == 0
+        assert seen_task_counts == [3]
+
+    def test_generate_skip_generated_style_checks(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+
+        def _fail_if_called(tasks: list[Task]) -> None:  # noqa: ARG001
+            raise AssertionError("generated style checks should be skipped")
+
+        monkeypatch.setattr(
+            cli_module, "check_generated_code_quality", _fail_if_called
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "2",
+                "--skip-generated-style-checks",
+            ],
+        )
+
+        assert result.exit_code == 0
 
     def test_generate_rejects_negative_count(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"

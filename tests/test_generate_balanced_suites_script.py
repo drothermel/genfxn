@@ -2,8 +2,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
 import srsly
 from helpers import load_script_module
+from typer import Exit
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -27,6 +29,7 @@ class _FakeTask:
 
 def test_main_parses_filters_and_writes_output(tmp_path, monkeypatch) -> None:
     calls: list[tuple[str, int, int]] = []
+    checked: list[int] = []
 
     def _fake_generate_suite(
         family: str, seed: int, pool_size: int
@@ -51,20 +54,88 @@ def test_main_parses_filters_and_writes_output(tmp_path, monkeypatch) -> None:
         "quota_report",
         _fake_quota_report,
     )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "check_generated_code_quality",
+        lambda tasks: checked.append(len(tasks)),
+    )
 
     generate_balanced_suites_main(
         output_dir=tmp_path,
         seed=7,
         pool_size=11,
         families="stateful,stringrules",
+        skip_generated_style_checks=False,
     )
 
     assert calls == [
         ("stateful", 7, 11),
         ("stringrules", 7, 11),
     ]
+    assert checked == [1, 1]
 
     for family in ("stateful", "stringrules"):
         output = tmp_path / family / "all.jsonl"
         records = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert records == [{"task_id": family}]
+
+
+def test_main_skips_generated_style_checks_when_flag_set(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "generate_suite",
+        lambda family, seed, pool_size: [
+            _FakeTask(f"{family}-{seed}-{pool_size}")
+        ],
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE, "quota_report", lambda tasks, family: []
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "check_generated_code_quality",
+        lambda tasks: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+
+    generate_balanced_suites_main(
+        output_dir=tmp_path,
+        seed=3,
+        pool_size=9,
+        families="stateful",
+        skip_generated_style_checks=True,
+    )
+
+
+def test_main_exits_when_generated_style_checks_fail(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "generate_suite",
+        lambda family, seed, pool_size: [
+            _FakeTask(f"{family}-{seed}-{pool_size}")
+        ],
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE, "quota_report", lambda tasks, family: []
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "check_generated_code_quality",
+        lambda tasks: (_ for _ in ()).throw(
+            _SCRIPT_MODULE.GeneratedCodeQualityError("bad generated code")
+        ),
+    )
+
+    with pytest.raises(Exit) as exc_info:
+        generate_balanced_suites_main(
+            output_dir=tmp_path,
+            seed=3,
+            pool_size=9,
+            families="stateful",
+            skip_generated_style_checks=False,
+        )
+
+    assert exc_info.value.exit_code == 1

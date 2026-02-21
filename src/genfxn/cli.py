@@ -24,6 +24,10 @@ from genfxn.core.string_transforms import StringTransformType
 from genfxn.core.transforms import TransformType
 from genfxn.fsm.models import FsmAxes, FsmSpec
 from genfxn.fsm.task import generate_fsm_task
+from genfxn.generated_code_quality import (
+    GeneratedCodeQualityError,
+    check_generated_code_quality,
+)
 from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
 from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
@@ -806,6 +810,13 @@ def generate(
             help="Single language to render: python, java, or rust.",
         ),
     ] = "python",
+    skip_generated_style_checks: Annotated[
+        bool,
+        typer.Option(
+            "--skip-generated-style-checks",
+            help="Skip Java/Rust generated-code style/lint checks.",
+        ),
+    ] = False,
     # Type filters - stateful
     templates: Annotated[
         str | None,
@@ -1045,9 +1056,11 @@ def generate(
         raise typer.Exit(1) from err
 
     with _atomic_output_file_or_exit(output) as output_handle:
+        generated_tasks: list[Task] = []
 
         def emit(task: Task) -> None:
             nonlocal generated_count
+            generated_tasks.append(task)
             rendered_task = _render_task_for_language(task, selected_language)
             _write_task_line(output_handle, rendered_task)
             generated_count += 1
@@ -1194,6 +1207,13 @@ def generate(
         else:
             typer.echo(f"Unknown family: {family}", err=True)
             raise typer.Exit(1)
+
+    if not skip_generated_style_checks:
+        try:
+            check_generated_code_quality(generated_tasks)
+        except GeneratedCodeQualityError as err:
+            typer.echo(str(err), err=True)
+            raise typer.Exit(1) from err
 
     typer.echo(f"Generated {generated_count} tasks to {output}")
 
