@@ -107,7 +107,7 @@ def _python_isdigit_condition_rust(cp_var: str = "cp") -> str:
         if low == high:
             parts.append(f"{cp_var} == {low}")
         else:
-            parts.append(f"({cp_var} >= {low} && {cp_var} <= {high})")
+            parts.append(f"({low}..={high}).contains(&{cp_var})")
     return " || ".join(parts)
 
 

@@ -5,6 +5,10 @@ from pathlib import Path
 import srsly
 import typer
 
+from genfxn.generated_code_quality import (
+    GeneratedCodeQualityError,
+    check_generated_code_quality,
+)
 from genfxn.suites.generate import generate_suite, quota_report
 from genfxn.suites.quotas import QUOTAS
 
@@ -43,6 +47,10 @@ def main(
         "all",
         help="Comma-separated families or 'all'",
     ),
+    skip_generated_style_checks: bool = typer.Option(
+        False,
+        help="Skip Java/Rust generated-code style/lint checks.",
+    ),
 ) -> None:
     """Generate balanced 50-task suites per family."""
     family_list = _parse_families(families)
@@ -57,6 +65,13 @@ def main(
             seed=seed,
             pool_size=pool_size,
         )
+
+        if not skip_generated_style_checks:
+            try:
+                check_generated_code_quality(tasks)
+            except GeneratedCodeQualityError as err:
+                typer.echo(str(err), err=True)
+                raise typer.Exit(1) from err
 
         typer.echo(f"Selected {len(tasks)} tasks")
 

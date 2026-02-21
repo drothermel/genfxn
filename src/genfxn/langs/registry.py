@@ -4,6 +4,7 @@ import importlib
 from types import ModuleType
 from typing import Any
 
+from genfxn.langs.formatting import format_rendered_code
 from genfxn.langs.types import Language
 
 # Maps Language -> dict of family -> module path.
@@ -80,7 +81,17 @@ def get_render_fn(language: Language, family: str) -> Any:
     if fn_name is None:
         raise ValueError(f"Unknown family: {family}")
     module: ModuleType = importlib.import_module(module_path)
-    return getattr(module, fn_name)
+    raw_render_fn = getattr(module, fn_name)
+
+    if language in {Language.JAVA, Language.RUST}:
+
+        def _render_formatted(*args, **kwargs) -> str:
+            rendered = raw_render_fn(*args, **kwargs)
+            return format_rendered_code(language, rendered)
+
+        return _render_formatted
+
+    return raw_render_fn
 
 
 def is_known_family(family: str) -> bool:

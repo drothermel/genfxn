@@ -45,9 +45,11 @@ Required:
   under validated axes constraints; hand-authored specs outside those
   constraints are not contract-covered.
 
-## TODO (Next PR)
+## Generated Code Quality Gate
 
-- Add generated-code style/lint checks for Java and Rust:
-  materialize generated snippets to temp sources, then run formatter/linter
-  checks in CI (`google-java-format --dry-run --set-exit-if-changed`,
-  `checkstyle` or equivalent, `cargo fmt --check`, `cargo clippy -- -D warnings`).
+- Generated Java/Rust code quality checks are now part of the workflow:
+  `google-java-format --dry-run --set-exit-if-changed`,
+  `javac -Xlint:all -Werror`, `rustfmt --check`, and
+  `rustc --edition=2021 -D warnings`.
+- CI runs deterministic smoke coverage via
+  `scripts/check_generated_code_quality.py`.

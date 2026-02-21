@@ -241,8 +241,10 @@ class TestGraphQueriesRust:
         spec.edges[0].v = 99
 
         code = render_graph_queries(spec)
-        assert "if raw_u_i64 < 0 || raw_u_i64 >= n_nodes as i64 || " in code
-        assert "raw_v_i64 < 0 || raw_v_i64 >= n_nodes as i64 {" in code
+        assert "if raw_u_i64 < 0" in code
+        assert "|| raw_u_i64 >= n_nodes as i64" in code
+        assert "|| raw_v_i64 < 0" in code
+        assert "|| raw_v_i64 >= n_nodes as i64" in code
         assert (
             'panic!("edge endpoint out of range for '
             'n_nodes={}", n_nodes);' in code
