@@ -2,7 +2,6 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
@@ -42,7 +41,6 @@ def generate_intervals_task(
     trace_steps: list[TraceStep] = []
     spec = sample_intervals_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
-    difficulty = compute_difficulty("intervals", spec_dict)
     description = describe_task("intervals", spec_dict)
 
     return Task(
@@ -53,6 +51,5 @@ def generate_intervals_task(
         queries=generate_intervals_queries(spec, axes, rng),
         trace=GenerationTrace(family="intervals", steps=trace_steps),
         axes=axes.model_dump(),
-        difficulty=difficulty,
         description=description,
     )

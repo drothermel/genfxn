@@ -27,7 +27,7 @@ while keeping generation, validation, splitting, and suites stable.
 2. Keep CLI docs and help output aligned when options/defaults change.
 3. Treat split/holdout behavior as contract-critical and add regressions for any
    parser/matcher edits.
-4. Run strict calibration and quota checks when suite/difficulty logic changes.
+4. Run strict quota checks when suite logic changes.
 
 ## Exit Criteria
 - No unresolved correctness regressions for shipped families.

@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Any, TextIO, cast
+from typing import Annotated, Any, TextIO
 
 import srsly
 import typer
@@ -16,18 +16,11 @@ from pydantic import TypeAdapter, ValidationError
 
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
-from genfxn.core.codegen import (
-    get_spec_value,
-    task_id_from_spec,
-)
-from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
+from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
-from genfxn.core.presets import get_difficulty_axes, get_valid_difficulties
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
-from genfxn.core.trace import GenerationTrace
 from genfxn.core.transforms import TransformType
 from genfxn.fsm.models import FsmAxes, FsmSpec
 from genfxn.fsm.task import generate_fsm_task
@@ -56,9 +49,7 @@ from genfxn.stack_bytecode.models import (
     StackBytecodeAxes,
     StackBytecodeSpec,
 )
-from genfxn.stack_bytecode.queries import generate_stack_bytecode_queries
-from genfxn.stack_bytecode.render import render_stack_bytecode
-from genfxn.stack_bytecode.templates import stack_template_program
+from genfxn.stack_bytecode.task import generate_stack_bytecode_task
 from genfxn.stateful.models import StatefulAxes, StatefulSpec, TemplateType
 from genfxn.stateful.task import generate_stateful_task
 from genfxn.stringrules.models import (
@@ -784,40 +775,6 @@ def _build_temporal_logic_axes(
     return TemporalLogicAxes(**kwargs)
 
 
-def _render_stack_bytecode(spec: StackBytecodeSpec) -> str:
-    return render_stack_bytecode(spec)
-
-
-def _build_stack_bytecode_task(
-    axes: StackBytecodeAxes,
-    rng: random.Random,
-) -> Task:
-    target = axes.target_difficulty or rng.randint(1, 5)
-    program = stack_template_program(target, rng)
-    max_steps = rng.randint(*axes.max_step_count_range)
-    jump_mode = rng.choice(axes.jump_target_modes)
-    input_mode = rng.choice(axes.input_modes)
-    spec = StackBytecodeSpec(
-        program=program,
-        max_step_count=max_steps,
-        jump_target_mode=jump_mode,
-        input_mode=input_mode,
-    )
-    spec_dict = spec.model_dump()
-    queries = generate_stack_bytecode_queries(spec, axes, rng)
-    return Task(
-        task_id=task_id_from_spec("stack_bytecode", spec_dict),
-        family="stack_bytecode",
-        spec=spec_dict,
-        code=_render_stack_bytecode(spec),
-        queries=queries,
-        trace=GenerationTrace(family="stack_bytecode", steps=[]),
-        axes=axes.model_dump(),
-        difficulty=compute_difficulty("stack_bytecode", spec_dict),
-        description=describe_task("stack_bytecode", spec_dict),
-    )
-
-
 @app.command()
 def generate(
     output: Annotated[
@@ -849,22 +806,6 @@ def generate(
             help="Single language to render: python, java, or rust.",
         ),
     ] = "python",
-    # Difficulty presets
-    difficulty: Annotated[
-        int | None,
-        typer.Option(
-            "--difficulty",
-            "-d",
-            help="Target difficulty level (1-5, depends on family)",
-        ),
-    ] = None,
-    variant: Annotated[
-        str | None,
-        typer.Option(
-            "--variant",
-            help="Preset variant (e.g. '3A', '3B'). Random if omitted.",
-        ),
-    ] = None,
     # Type filters - stateful
     templates: Annotated[
         str | None,
@@ -985,138 +926,69 @@ def generate(
         typer.echo("Error: --count must be >= 0", err=True)
         raise typer.Exit(1)
 
-    # Validate difficulty/variant options
-    if difficulty is not None:
-        if family == "all":
-            typer.echo(
-                "Error: --difficulty requires a specific family, not 'all'",
-                err=True,
-            )
-            raise typer.Exit(1)
-        try:
-            valid = get_valid_difficulties(family)
-        except ValueError as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1) from e
-        if difficulty not in valid:
-            typer.echo(
-                f"Error: Invalid difficulty {difficulty} for {family}. "
-                f"Valid: {valid}",
-                err=True,
-            )
-            raise typer.Exit(1)
-
-    if variant is not None and difficulty is None:
-        typer.echo(
-            "Error: --variant requires --difficulty to be specified",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    # Reject combining --difficulty presets with manual axes options
-    if difficulty is not None:
-        manual_axes = {
-            "templates": templates,
-            "predicate-types": predicate_types,
-            "transform-types": transform_types,
-            "value-range": value_range,
-            "threshold-range": threshold_range,
-            "divisor-range": divisor_range,
-            "list-length-range": list_length_range,
-            "shift-range": shift_range,
-            "scale-range": scale_range,
-            "expr-types": expr_types,
-            "coeff-range": coeff_range,
-            "n-branches": n_branches,
-            "target-range": target_range,
-            "window-size-range": window_size_range,
-            "n-rules": n_rules,
-            "string-predicate-types": string_predicate_types,
-            "string-transform-types": string_transform_types,
-            "overlap-level": overlap_level,
-            "string-length-range": string_length_range,
-            "algorithm-types": algorithm_types,
-            "tie-break-modes": tie_break_modes,
-            "counting-modes": counting_modes,
-        }
-        provided = [f"--{k}" for k, v in manual_axes.items() if v is not None]
-        if provided:
-            typer.echo(
-                f"Error: --difficulty uses presets and cannot be combined "
-                f"with manual axes options: {', '.join(provided)}",
-                err=True,
-            )
-            raise typer.Exit(1)
-
     try:
-        # Build axes for all families (or use preset if difficulty specified)
-        if difficulty is not None:
-            # Use difficulty preset - generate axes per task for variety
-            pass  # Will build axes in the generation loop
-        else:
-            # Build static axes from CLI options
-            stateful_axes = _build_stateful_axes(
-                templates=templates,
-                predicate_types=predicate_types,
-                transform_types=transform_types,
-                value_range=value_range,
-                threshold_range=threshold_range,
-                divisor_range=divisor_range,
-                list_length_range=list_length_range,
-                shift_range=shift_range,
-                scale_range=scale_range,
-            )
-            piecewise_axes = _build_piecewise_axes(
-                n_branches=n_branches,
-                expr_types=expr_types,
-                value_range=value_range,
-                threshold_range=threshold_range,
-                divisor_range=divisor_range,
-                coeff_range=coeff_range,
-            )
-            simple_algo_axes = _build_simple_algorithms_axes(
-                algorithm_types=algorithm_types,
-                tie_break_modes=tie_break_modes,
-                counting_modes=counting_modes,
-                window_size_range=window_size_range,
-                target_range=target_range,
-                value_range=value_range,
-                list_length_range=list_length_range,
-            )
-            stringrules_axes = _build_stringrules_axes(
-                n_rules=n_rules,
-                string_predicate_types=string_predicate_types,
-                string_transform_types=string_transform_types,
-                overlap_level=overlap_level,
-                string_length_range=string_length_range,
-            )
-            stack_bytecode_axes = _build_stack_bytecode_axes(
-                value_range=value_range,
-                list_length_range=list_length_range,
-            )
-            fsm_axes = _build_fsm_axes(
-                value_range=value_range,
-                threshold_range=threshold_range,
-                divisor_range=divisor_range,
-            )
-            bitops_axes = _build_bitops_axes(value_range=value_range)
-            sequence_dp_axes = _build_sequence_dp_axes(
-                value_range=value_range,
-                divisor_range=divisor_range,
-                list_length_range=list_length_range,
-            )
-            intervals_axes = _build_intervals_axes(
-                value_range=value_range,
-                list_length_range=list_length_range,
-            )
-            graph_queries_axes = _build_graph_queries_axes(
-                value_range=value_range,
-                list_length_range=list_length_range,
-            )
-            temporal_logic_axes = _build_temporal_logic_axes(
-                value_range=value_range,
-                list_length_range=list_length_range,
-            )
+        stateful_axes = _build_stateful_axes(
+            templates=templates,
+            predicate_types=predicate_types,
+            transform_types=transform_types,
+            value_range=value_range,
+            threshold_range=threshold_range,
+            divisor_range=divisor_range,
+            list_length_range=list_length_range,
+            shift_range=shift_range,
+            scale_range=scale_range,
+        )
+        piecewise_axes = _build_piecewise_axes(
+            n_branches=n_branches,
+            expr_types=expr_types,
+            value_range=value_range,
+            threshold_range=threshold_range,
+            divisor_range=divisor_range,
+            coeff_range=coeff_range,
+        )
+        simple_algo_axes = _build_simple_algorithms_axes(
+            algorithm_types=algorithm_types,
+            tie_break_modes=tie_break_modes,
+            counting_modes=counting_modes,
+            window_size_range=window_size_range,
+            target_range=target_range,
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
+        stringrules_axes = _build_stringrules_axes(
+            n_rules=n_rules,
+            string_predicate_types=string_predicate_types,
+            string_transform_types=string_transform_types,
+            overlap_level=overlap_level,
+            string_length_range=string_length_range,
+        )
+        stack_bytecode_axes = _build_stack_bytecode_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
+        fsm_axes = _build_fsm_axes(
+            value_range=value_range,
+            threshold_range=threshold_range,
+            divisor_range=divisor_range,
+        )
+        bitops_axes = _build_bitops_axes(value_range=value_range)
+        sequence_dp_axes = _build_sequence_dp_axes(
+            value_range=value_range,
+            divisor_range=divisor_range,
+            list_length_range=list_length_range,
+        )
+        intervals_axes = _build_intervals_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
+        graph_queries_axes = _build_graph_queries_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
+        temporal_logic_axes = _build_temporal_logic_axes(
+            value_range=value_range,
+            list_length_range=list_length_range,
+        )
     except ValueError as err:
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1) from err
@@ -1195,131 +1067,92 @@ def generate(
                     )
                 )
             for _ in range(family_counts["stack_bytecode"]):
-                emit(_build_stack_bytecode_task(stack_bytecode_axes, rng))
+                emit(
+                    generate_stack_bytecode_task(
+                        axes=stack_bytecode_axes,
+                        rng=rng,
+                    )
+                )
             for _ in range(family_counts["fsm"]):
                 emit(generate_fsm_task(axes=fsm_axes, rng=rng))
         elif family == "bitops":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = bitops_axes
-                emit(generate_bitops_task(axes=cast(BitopsAxes, axes), rng=rng))
+                emit(generate_bitops_task(axes=bitops_axes, rng=rng))
         elif family == "sequence_dp":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = sequence_dp_axes
                 emit(
                     generate_sequence_dp_task(
-                        axes=cast(SequenceDpAxes, axes),
+                        axes=sequence_dp_axes,
                         rng=rng,
                     )
                 )
         elif family == "intervals":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = intervals_axes
                 emit(
                     generate_intervals_task(
-                        axes=cast(IntervalsAxes, axes),
+                        axes=intervals_axes,
                         rng=rng,
                     )
                 )
         elif family == "graph_queries":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = graph_queries_axes
                 emit(
                     generate_graph_queries_task(
-                        axes=cast(GraphQueriesAxes, axes),
+                        axes=graph_queries_axes,
                         rng=rng,
                     )
                 )
         elif family == "temporal_logic":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = temporal_logic_axes
                 emit(
                     generate_temporal_logic_task(
-                        axes=cast(TemporalLogicAxes, axes),
+                        axes=temporal_logic_axes,
                         rng=rng,
                     )
                 )
         elif family == "piecewise":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = piecewise_axes
                 emit(
                     generate_piecewise_task(
-                        axes=cast(PiecewiseAxes, axes),
+                        axes=piecewise_axes,
                         rng=rng,
                     )
                 )
         elif family == "stateful":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = stateful_axes
                 emit(
                     generate_stateful_task(
-                        axes=cast(StatefulAxes, axes),
+                        axes=stateful_axes,
                         rng=rng,
                     )
                 )
         elif family == "simple_algorithms":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = simple_algo_axes
                 emit(
                     generate_simple_algorithms_task(
-                        axes=cast(SimpleAlgorithmsAxes, axes),
+                        axes=simple_algo_axes,
                         rng=rng,
                     )
                 )
         elif family == "stringrules":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = stringrules_axes
                 emit(
                     generate_stringrules_task(
-                        axes=cast(StringRulesAxes, axes),
+                        axes=stringrules_axes,
                         rng=rng,
                     )
                 )
         elif family == "stack_bytecode":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = stack_bytecode_axes
                 emit(
-                    _build_stack_bytecode_task(
-                        cast(StackBytecodeAxes, axes),
-                        rng,
+                    generate_stack_bytecode_task(
+                        axes=stack_bytecode_axes,
+                        rng=rng,
                     )
                 )
         elif family == "fsm":
             for _ in range(count):
-                if difficulty is not None:
-                    axes = get_difficulty_axes(family, difficulty, variant, rng)
-                else:
-                    axes = fsm_axes
-                emit(generate_fsm_task(axes=cast(FsmAxes, axes), rng=rng))
+                emit(generate_fsm_task(axes=fsm_axes, rng=rng))
         else:
             typer.echo(f"Unknown family: {family}", err=True)
             raise typer.Exit(1)

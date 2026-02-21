@@ -20,7 +20,7 @@ contracts, strong validation, and cross-language parity.
 - Overflow-adjacent arithmetic and i64 normalization paths.
 - Unicode predicate semantics across Python/Java/Rust.
 - Validator strictness drift from emitted renderer structure.
-- Suite quota/calibration regressions when adding or retuning difficulty logic.
+- Suite quota and pool-selection regressions when retuning suite logic.
 
 ## Operating Rules
 - Use `uv run ...` for Python tooling.

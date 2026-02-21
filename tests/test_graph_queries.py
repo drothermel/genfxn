@@ -7,7 +7,6 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.graph_queries.eval import eval_graph_queries, normalize_graph
 from genfxn.graph_queries.models import (
@@ -76,7 +75,9 @@ def test_eval_semantics_for_v1_query_types() -> None:
 
 
 def test_shortest_path_cost_requires_weighted_true_in_spec() -> None:
-    with pytest.raises(ValueError, match="shortest_path_cost requires weighted=True"):
+    with pytest.raises(
+        ValueError, match="shortest_path_cost requires weighted=True"
+    ):
         GraphQueriesSpec(
             query_type=GraphQueryType.SHORTEST_PATH_COST,
             directed=True,
@@ -87,7 +88,9 @@ def test_shortest_path_cost_requires_weighted_true_in_spec() -> None:
 
 
 def test_axes_reject_shortest_path_cost_without_weighted_true() -> None:
-    with pytest.raises(ValueError, match="shortest_path_cost requires weighted=True"):
+    with pytest.raises(
+        ValueError, match="shortest_path_cost requires weighted=True"
+    ):
         GraphQueriesAxes(
             query_types=[GraphQueryType.SHORTEST_PATH_COST],
             weighted_choices=[False],
@@ -225,7 +228,9 @@ def test_shortest_path_cost_prefers_lower_non_saturated_path() -> None:
     assert eval_graph_queries(spec, 0, 1) == 5
 
 
-def test_shortest_path_cost_overflow_cycle_unreachable_returns_minus_one() -> None:
+def test_shortest_path_cost_overflow_cycle_unreachable_returns_minus_one() -> (
+    None
+):
     spec = GraphQueriesSpec(
         query_type=GraphQueryType.SHORTEST_PATH_COST,
         directed=True,
@@ -294,7 +299,9 @@ def test_eval_invalid_nodes_raise_value_error(
             (False, True),
             (False, True),
         )
-        if not (query_type == GraphQueryType.SHORTEST_PATH_COST and not weighted)
+        if not (
+            query_type == GraphQueryType.SHORTEST_PATH_COST and not weighted
+        )
     ],
     ids=[
         f"{query_type.value}-directed-{directed}-weighted-{weighted}"
@@ -303,7 +310,9 @@ def test_eval_invalid_nodes_raise_value_error(
             (False, True),
             (False, True),
         )
-        if not (query_type == GraphQueryType.SHORTEST_PATH_COST and not weighted)
+        if not (
+            query_type == GraphQueryType.SHORTEST_PATH_COST and not weighted
+        )
     ],
 )
 def test_rendered_python_matches_evaluator_across_v1_matrix(
@@ -439,7 +448,6 @@ def test_rendered_python_rejects_invalid_edge_endpoints() -> None:
 
 def test_sampler_is_deterministic_for_seed() -> None:
     axes = GraphQueriesAxes(
-        target_difficulty=3,
         query_types=[GraphQueryType.MIN_HOPS],
         directed_choices=[True],
         weighted_choices=[True],
@@ -453,15 +461,6 @@ def test_sampler_is_deterministic_for_seed() -> None:
     spec1 = sample_graph_queries_spec(axes, random.Random(42))
     spec2 = sample_graph_queries_spec(axes, random.Random(42))
     assert spec1.model_dump() == spec2.model_dump()
-
-
-def _compute_graph_queries_difficulty(spec: GraphQueriesSpec) -> int:
-    try:
-        return compute_difficulty("graph_queries", spec.model_dump())
-    except ValueError as exc:
-        if "Unknown family: graph_queries" in str(exc):
-            pytest.skip("compute_difficulty('graph_queries', ...) is not available")
-        raise
 
 
 def test_queries_cover_all_tags_and_match_eval_across_multiple_seeds() -> None:
@@ -515,7 +514,9 @@ def test_query_input_uniqueness_contract_is_per_tag() -> None:
     )
     queries = generate_graph_queries_queries(spec, axes, random.Random(0))
 
-    seen_by_tag: dict[QueryTag, set[tuple[int, int]]] = {tag: set() for tag in QueryTag}
+    seen_by_tag: dict[QueryTag, set[tuple[int, int]]] = {
+        tag: set() for tag in QueryTag
+    }
     tags_by_pair: dict[tuple[int, int], set[QueryTag]] = defaultdict(set)
     for query in queries:
         pair = (query.input["src"], query.input["dst"])
@@ -555,28 +556,20 @@ def test_queries_inputs_stay_within_node_bounds_across_multiple_seeds() -> None:
             assert 0 <= dst < spec.n_nodes
 
 
-def test_sampler_respects_target_difficulty_axis_when_available() -> None:
-    samples_per_target = 120
-
-    def _sample_difficulty_average(target: int) -> float:
-        axes = GraphQueriesAxes(target_difficulty=target)
-        rng = random.Random(8100 + target)
-        scores = []
-        for _ in range(samples_per_target):
-            spec = sample_graph_queries_spec(axes, rng)
-            scores.append(_compute_graph_queries_difficulty(spec))
-        return sum(scores) / len(scores)
-
-    averages = {target: _sample_difficulty_average(target) for target in range(1, 6)}
-
-    for target in range(1, 5):
-        assert averages[target + 1] >= averages[target] - 0.05
-    assert averages[5] >= averages[1] + 0.7
+def test_sampler_produces_varied_graph_shapes() -> None:
+    axes = GraphQueriesAxes()
+    specs = [
+        sample_graph_queries_spec(axes, random.Random(8100 + i))
+        for i in range(24)
+    ]
+    signatures = {
+        (spec.n_nodes, spec.query_type.value, len(spec.edges)) for spec in specs
+    }
+    assert len(signatures) >= 8
 
 
 def test_generate_task_deterministic_and_consistent() -> None:
     axes = GraphQueriesAxes(
-        target_difficulty=2,
         query_types=[GraphQueryType.REACHABLE],
         directed_choices=[False],
         weighted_choices=[False],

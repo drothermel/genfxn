@@ -2,7 +2,6 @@ import random
 
 import pytest
 
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.core.predicates import (
     PredicateEven,
@@ -275,32 +274,24 @@ class TestSampler:
         spec2 = sample_fsm_spec(axes, random.Random(42))
         assert spec1.model_dump() == spec2.model_dump()
 
-    def test_sampler_respects_target_difficulty_axis(self) -> None:
-        def _sample_difficulty_average(target: int) -> float:
-            axes = FsmAxes(target_difficulty=target)
-            rng = random.Random(1000 + target)
-            scores = [
-                compute_difficulty(
-                    "fsm",
-                    sample_fsm_spec(axes, rng).model_dump(),
-                )
-                for _ in range(120)
-            ]
-            return sum(scores) / len(scores)
-
-        averages = {
-            target: _sample_difficulty_average(target) for target in range(1, 6)
+    def test_sampler_varies_state_and_transition_shapes(self) -> None:
+        axes = FsmAxes()
+        specs = [
+            sample_fsm_spec(axes, random.Random(1000 + i)) for i in range(24)
+        ]
+        signatures = {
+            (
+                len(spec.states),
+                sum(len(state.transitions) for state in spec.states),
+            )
+            for spec in specs
         }
-
-        for target in range(1, 5):
-            assert averages[target + 1] >= averages[target] + 0.15
-        assert averages[5] >= averages[1] + 0.8
+        assert len(signatures) >= 6
 
 
 class TestQueries:
     def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
         axes = FsmAxes(
-            target_difficulty=3,
             value_range=(-7, 7),
             n_states_range=(3, 4),
             transitions_per_state_range=(1, 2),
@@ -334,8 +325,6 @@ class TestTaskGeneration:
 
         assert task.task_id
         assert task.family == "fsm"
-        assert task.difficulty is not None
-        assert 1 <= task.difficulty <= 5
         assert task.description
 
         spec = FsmSpec.model_validate(task.spec)

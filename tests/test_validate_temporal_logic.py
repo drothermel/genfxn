@@ -32,7 +32,6 @@ def validate_temporal_logic_task(*args: Any, **kwargs: Any) -> list[Issue]:
 @pytest.fixture
 def baseline_task() -> Task:
     axes = TemporalLogicAxes(
-        target_difficulty=3,
         formula_depth_range=(2, 4),
         sequence_length_range=(0, 8),
         value_range=(-6, 6),

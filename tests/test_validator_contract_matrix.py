@@ -63,7 +63,6 @@ def _simple_algorithms_lifecycle_kwargs() -> dict[str, Any]:
 
 def _temporal_task_kwargs() -> dict[str, Any]:
     axes = TemporalLogicAxes(
-        target_difficulty=3,
         formula_depth_range=(2, 3),
         sequence_length_range=(0, 4),
         value_range=(-3, 3),

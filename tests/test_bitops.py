@@ -9,7 +9,6 @@ import genfxn.bitops.models as bitops_models
 import genfxn.bitops.queries as bitops_queries
 import genfxn.bitops.sampler as bitops_sampler
 import genfxn.bitops.task as bitops_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 
 
@@ -251,27 +250,17 @@ class TestSampler:
         spec2 = _call_sample(sample_bitops_spec, axes, seed=99)
         assert spec1.model_dump() == spec2.model_dump()
 
-    def test_sampler_respects_target_difficulty_axis(self) -> None:
-        def _sample_difficulty_average(target: int) -> float:
-            axes = AxesCls(target_difficulty=target)
-            rng = random.Random(2000 + target)
-            scores = []
-            for _ in range(120):
-                spec = _call_sample(
-                    sample_bitops_spec,
-                    axes,
-                    seed=rng.randint(0, 10**9),
-                )
-                scores.append(compute_difficulty("bitops", spec.model_dump()))
-            return sum(scores) / len(scores)
-
-        averages = {
-            target: _sample_difficulty_average(target) for target in range(1, 6)
+    def test_sampler_produces_varied_program_shapes(self) -> None:
+        axes = AxesCls()
+        specs = [
+            _call_sample(sample_bitops_spec, axes, seed=1000 + i).model_dump()
+            for i in range(24)
+        ]
+        unique = {
+            (spec["width_bits"], tuple(op["op"] for op in spec["operations"]))
+            for spec in specs
         }
-
-        for target in range(1, 5):
-            assert averages[target + 1] >= averages[target] + 0.1
-        assert averages[5] >= averages[1] + 0.7
+        assert len(unique) >= 8
 
 
 class TestQueries:

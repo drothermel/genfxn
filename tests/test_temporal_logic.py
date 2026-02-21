@@ -4,7 +4,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.langs.types import Language
 from genfxn.temporal_logic.eval import eval_temporal_logic
@@ -286,8 +285,6 @@ class TestTemporalLogicSemantics:
         assert isinstance(task.code, str)
         assert task.spec["output_mode"] in task.description
         assert task.description
-        assert task.difficulty is not None
-        assert 1 <= task.difficulty <= 5
         assert len(task.queries) > 0
         tags = {query.tag for query in task.queries}
         assert tags == set(QueryTag)
@@ -438,36 +435,27 @@ class TestTemporalLogicSemantics:
             spec = sample_temporal_logic_spec(axes, random.Random(seed))
             assert _formula_depth(spec.formula) == 5
 
-    def test_target_difficulty_sampling_is_monotonic(self) -> None:
-        means: list[float] = []
-        for target in range(1, 6):
-            axes = TemporalLogicAxes(
-                target_difficulty=target,
-                formula_depth_range=(1, 5),
-                operator_mix=list(TemporalOperator),
-                include_since_choices=[False, True],
-                sequence_length_range=(0, 8),
-                value_range=(-5, 5),
-                predicate_constant_range=(-5, 5),
-                output_modes=list(TemporalOutputMode),
+    def test_sampler_varies_structure_for_default_axes(self) -> None:
+        axes = TemporalLogicAxes(
+            formula_depth_range=(1, 5),
+            operator_mix=list(TemporalOperator),
+            include_since_choices=[False, True],
+            sequence_length_range=(0, 8),
+            value_range=(-5, 5),
+            predicate_constant_range=(-5, 5),
+            output_modes=list(TemporalOutputMode),
+        )
+
+        specs = [
+            sample_temporal_logic_spec(axes, random.Random(1000 + i))
+            for i in range(60)
+        ]
+        signatures = {
+            (
+                spec.output_mode.value,
+                _formula_depth(spec.formula),
+                spec.formula["op"],
             )
-            scores: list[int] = []
-            for seed in range(1000 + target * 120, 1000 + target * 120 + 120):
-                spec = sample_temporal_logic_spec(axes, random.Random(seed))
-                score = compute_difficulty("temporal_logic", spec.model_dump())
-                scores.append(score)
-
-            mean = sum(scores) / len(scores)
-            means.append(mean)
-            exact_rate = sum(1 for score in scores if score == target) / len(
-                scores
-            )
-            within_one_rate = sum(
-                1 for score in scores if abs(score - target) <= 1
-            ) / len(scores)
-
-            assert abs(mean - target) <= 1.2
-            assert exact_rate >= 0.2
-            assert within_one_rate >= 0.8
-
-        assert means == sorted(means)
+            for spec in specs
+        }
+        assert len(signatures) >= 10

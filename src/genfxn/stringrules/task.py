@@ -2,7 +2,6 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
@@ -67,7 +66,6 @@ def generate_stringrules_task(
             queries=queries,
             trace=trace,
             axes=axes.model_dump(),
-            difficulty=compute_difficulty("stringrules", spec_dict),
             description=describe_task("stringrules", spec_dict),
         )
 

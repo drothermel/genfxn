@@ -2,7 +2,6 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.fsm.models import FsmAxes, FsmSpec
@@ -51,6 +50,5 @@ def generate_fsm_task(
         queries=generate_fsm_queries(spec, axes, rng),
         trace=GenerationTrace(family="fsm", steps=trace_steps),
         axes=axes.model_dump(),
-        difficulty=compute_difficulty("fsm", spec_dict),
         description=describe_task("fsm", spec_dict),
     )

@@ -1,155 +1,27 @@
 import random
 
-from genfxn.core.sampling import intersect_ranges, pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.sequence_dp.models import (
-    OutputMode,
     PredicateAbsDiffLe,
     PredicateEq,
     PredicateModEq,
     PredicateType,
     SequenceDpAxes,
     SequenceDpSpec,
-    TemplateType,
-    TieBreakOrder,
 )
-
-_TARGET_TEMPLATE_PREFS: dict[int, list[TemplateType]] = {
-    1: [TemplateType.GLOBAL],
-    2: [TemplateType.GLOBAL],
-    3: [TemplateType.GLOBAL, TemplateType.LOCAL],
-    4: [TemplateType.LOCAL, TemplateType.GLOBAL],
-    5: [TemplateType.LOCAL],
-}
-
-_TARGET_OUTPUT_PREFS: dict[int, list[OutputMode]] = {
-    1: [OutputMode.SCORE],
-    2: [OutputMode.SCORE, OutputMode.ALIGNMENT_LEN],
-    3: [OutputMode.ALIGNMENT_LEN, OutputMode.SCORE, OutputMode.GAP_COUNT],
-    4: [OutputMode.GAP_COUNT, OutputMode.ALIGNMENT_LEN, OutputMode.SCORE],
-    5: [OutputMode.GAP_COUNT, OutputMode.ALIGNMENT_LEN],
-}
-
-_TARGET_PREDICATE_PREFS: dict[int, list[PredicateType]] = {
-    1: [PredicateType.EQ],
-    2: [PredicateType.EQ, PredicateType.ABS_DIFF_LE],
-    3: [PredicateType.ABS_DIFF_LE, PredicateType.EQ, PredicateType.MOD_EQ],
-    4: [PredicateType.MOD_EQ, PredicateType.ABS_DIFF_LE, PredicateType.EQ],
-    5: [PredicateType.MOD_EQ, PredicateType.ABS_DIFF_LE],
-}
-
-_TARGET_TIE_BREAK_PREFS: dict[int, list[TieBreakOrder]] = {
-    1: [TieBreakOrder.DIAG_UP_LEFT],
-    2: [TieBreakOrder.DIAG_LEFT_UP, TieBreakOrder.DIAG_UP_LEFT],
-    3: [
-        TieBreakOrder.UP_DIAG_LEFT,
-        TieBreakOrder.LEFT_DIAG_UP,
-        TieBreakOrder.DIAG_UP_LEFT,
-    ],
-    4: [
-        TieBreakOrder.UP_LEFT_DIAG,
-        TieBreakOrder.LEFT_UP_DIAG,
-        TieBreakOrder.UP_DIAG_LEFT,
-    ],
-    5: [TieBreakOrder.LEFT_UP_DIAG, TieBreakOrder.UP_LEFT_DIAG],
-}
-
-_TARGET_LEN_A: dict[int, tuple[int, int]] = {
-    1: (1, 4),
-    2: (2, 6),
-    3: (4, 9),
-    4: (6, 12),
-    5: (8, 15),
-}
-
-_TARGET_LEN_B: dict[int, tuple[int, int]] = {
-    1: (1, 4),
-    2: (2, 6),
-    3: (4, 9),
-    4: (6, 12),
-    5: (8, 15),
-}
-
-_TARGET_MATCH_SCORE: dict[int, tuple[int, int]] = {
-    1: (2, 5),
-    2: (2, 6),
-    3: (1, 6),
-    4: (1, 7),
-    5: (1, 8),
-}
-
-_TARGET_MISMATCH_SCORE: dict[int, tuple[int, int]] = {
-    1: (-2, 0),
-    2: (-3, 0),
-    3: (-4, 1),
-    4: (-5, 1),
-    5: (-6, 2),
-}
-
-_TARGET_GAP_SCORE: dict[int, tuple[int, int]] = {
-    1: (-2, -1),
-    2: (-3, -1),
-    3: (-4, 0),
-    4: (-5, 0),
-    5: (-6, 1),
-}
-
-_TARGET_ABS_DIFF: dict[int, tuple[int, int]] = {
-    1: (0, 1),
-    2: (0, 2),
-    3: (1, 3),
-    4: (1, 4),
-    5: (2, 6),
-}
-
-_TARGET_DIVISOR: dict[int, tuple[int, int]] = {
-    1: (2, 4),
-    2: (2, 6),
-    3: (2, 8),
-    4: (3, 10),
-    5: (4, 12),
-}
-
-
-def _pick_targeted_int(
-    base_range: tuple[int, int],
-    target_range: tuple[int, int],
-    rng: random.Random,
-) -> int:
-    bounded = intersect_ranges(base_range, target_range)
-    if bounded is None:
-        return rng.randint(*base_range)
-    return rng.randint(*bounded)
 
 
 def _sample_match_predicate(
     predicate_type: PredicateType,
     axes: SequenceDpAxes,
-    target_difficulty: int | None,
     rng: random.Random,
 ) -> PredicateEq | PredicateAbsDiffLe | PredicateModEq:
     if predicate_type == PredicateType.EQ:
         return PredicateEq()
-
     if predicate_type == PredicateType.ABS_DIFF_LE:
-        if target_difficulty is None:
-            max_diff = rng.randint(*axes.abs_diff_range)
-        else:
-            max_diff = _pick_targeted_int(
-                axes.abs_diff_range,
-                _TARGET_ABS_DIFF[target_difficulty],
-                rng,
-            )
-        return PredicateAbsDiffLe(max_diff=max_diff)
+        return PredicateAbsDiffLe(max_diff=rng.randint(*axes.abs_diff_range))
 
-    if target_difficulty is None:
-        divisor = rng.randint(*axes.divisor_range)
-    else:
-        divisor = _pick_targeted_int(
-            axes.divisor_range,
-            _TARGET_DIVISOR[target_difficulty],
-            rng,
-        )
+    divisor = rng.randint(*axes.divisor_range)
     remainder = rng.randint(0, divisor - 1)
     return PredicateModEq(divisor=divisor, remainder=remainder)
 
@@ -162,60 +34,15 @@ def sample_sequence_dp_spec(
     if rng is None:
         rng = random.Random()
 
-    target_difficulty = axes.target_difficulty
-
-    if target_difficulty is None:
-        template = rng.choice(axes.templates)
-        output_mode = rng.choice(axes.output_modes)
-        predicate_type = rng.choice(axes.predicate_types)
-        len_a = rng.randint(*axes.len_a_range)
-        len_b = rng.randint(*axes.len_b_range)
-        tie_break = rng.choice(axes.tie_break_orders)
-        match_score = rng.randint(*axes.match_score_range)
-        mismatch_score = rng.randint(*axes.mismatch_score_range)
-        gap_score = rng.randint(*axes.gap_score_range)
-    else:
-        template = pick_from_preferred(
-            axes.templates,
-            _TARGET_TEMPLATE_PREFS[target_difficulty],
-            rng,
-        )
-        output_mode = pick_from_preferred(
-            axes.output_modes,
-            _TARGET_OUTPUT_PREFS[target_difficulty],
-            rng,
-        )
-        predicate_type = pick_from_preferred(
-            axes.predicate_types,
-            _TARGET_PREDICATE_PREFS[target_difficulty],
-            rng,
-        )
-        tie_break = pick_from_preferred(
-            axes.tie_break_orders,
-            _TARGET_TIE_BREAK_PREFS[target_difficulty],
-            rng,
-        )
-        len_a = _pick_targeted_int(
-            axes.len_a_range, _TARGET_LEN_A[target_difficulty], rng
-        )
-        len_b = _pick_targeted_int(
-            axes.len_b_range, _TARGET_LEN_B[target_difficulty], rng
-        )
-        match_score = _pick_targeted_int(
-            axes.match_score_range,
-            _TARGET_MATCH_SCORE[target_difficulty],
-            rng,
-        )
-        mismatch_score = _pick_targeted_int(
-            axes.mismatch_score_range,
-            _TARGET_MISMATCH_SCORE[target_difficulty],
-            rng,
-        )
-        gap_score = _pick_targeted_int(
-            axes.gap_score_range,
-            _TARGET_GAP_SCORE[target_difficulty],
-            rng,
-        )
+    template = rng.choice(axes.templates)
+    output_mode = rng.choice(axes.output_modes)
+    predicate_type = rng.choice(axes.predicate_types)
+    len_a = rng.randint(*axes.len_a_range)
+    len_b = rng.randint(*axes.len_b_range)
+    tie_break = rng.choice(axes.tie_break_orders)
+    match_score = rng.randint(*axes.match_score_range)
+    mismatch_score = rng.randint(*axes.mismatch_score_range)
+    gap_score = rng.randint(*axes.gap_score_range)
 
     trace_step(
         trace,
@@ -262,12 +89,7 @@ def sample_sequence_dp_spec(
         gap_score,
     )
 
-    match_predicate = _sample_match_predicate(
-        predicate_type,
-        axes,
-        target_difficulty,
-        rng,
-    )
+    match_predicate = _sample_match_predicate(predicate_type, axes, rng)
     trace_step(
         trace,
         "sample_match_predicate",

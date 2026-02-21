@@ -96,7 +96,6 @@ class SequenceDpSpec(BaseModel):
 
 
 class SequenceDpAxes(BaseModel):
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     templates: list[TemplateType] = Field(
         default_factory=lambda: list(TemplateType)
     )

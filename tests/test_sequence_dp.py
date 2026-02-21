@@ -5,7 +5,6 @@ from typing import Any, cast
 
 import pytest
 
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.sequence_dp.eval import eval_sequence_dp
 from genfxn.sequence_dp.models import (
@@ -95,17 +94,6 @@ def _sample_spec_and_axes(seed: int = 42) -> tuple[Any, Any]:
     )
     spec = _call_sample(sample_sequence_dp_spec, axes, seed=seed)
     return spec, axes
-
-
-def _compute_sequence_dp_difficulty(spec: Any) -> int:
-    try:
-        return compute_difficulty("sequence_dp", spec.model_dump())
-    except ValueError as exc:
-        if "Unknown family: sequence_dp" in str(exc):
-            pytest.fail(
-                "compute_difficulty('sequence_dp', ...) is not available"
-            )
-        raise
 
 
 def _enum_member(enum_cls: Any, *tokens: str) -> Any:
@@ -535,29 +523,23 @@ class TestSampler:
 
         assert spec1.model_dump() == spec2.model_dump()
 
-    def test_sampler_respects_target_difficulty_axis(self) -> None:
-        samples_per_target = 100
-
-        def _sample_difficulty_average(target: int) -> float:
-            axes = SequenceDpAxes(target_difficulty=target)
-            rng = random.Random(5000 + target)
-            scores = []
-            for _ in range(samples_per_target):
-                spec = _call_sample(
-                    sample_sequence_dp_spec,
-                    axes,
-                    seed=rng.randint(0, 10**9),
-                )
-                scores.append(_compute_sequence_dp_difficulty(spec))
-            return sum(scores) / len(scores)
-
-        averages = {
-            target: _sample_difficulty_average(target) for target in range(1, 6)
+    def test_sampler_produces_varied_templates_and_modes(self) -> None:
+        axes = SequenceDpAxes()
+        specs = [
+            _call_sample(
+                sample_sequence_dp_spec, axes, seed=5000 + i
+            ).model_dump()
+            for i in range(24)
+        ]
+        signatures = {
+            (
+                spec["template"],
+                spec["output_mode"],
+                spec["match_predicate"]["kind"],
+            )
+            for spec in specs
         }
-
-        for target in range(1, 5):
-            assert averages[target + 1] >= averages[target] + 0.08
-        assert averages[5] >= averages[1] + 0.8
+        assert len(signatures) >= 6
 
 
 class TestQueries:
@@ -641,7 +623,6 @@ class TestTaskGeneration:
         assert task.queries
 
         spec = SequenceDpSpec.model_validate(task.spec)
-        assert task.difficulty == _compute_sequence_dp_difficulty(spec)
         for q in task.queries:
             a, b = _pair_from_input(q.input)
             assert q.output == eval_sequence_dp(spec, a, b)

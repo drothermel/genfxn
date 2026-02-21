@@ -4,7 +4,6 @@ from typing import cast
 
 import pytest
 
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.stack_bytecode.eval import eval_stack_bytecode
 from genfxn.stack_bytecode.models import (
@@ -20,7 +19,6 @@ from genfxn.stack_bytecode.queries import generate_stack_bytecode_queries
 from genfxn.stack_bytecode.render import render_stack_bytecode
 from genfxn.stack_bytecode.sampler import sample_stack_bytecode_spec
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
-from genfxn.stack_bytecode.templates import stack_template_program
 
 RenderedStackFn = Callable[[list[int]], tuple[int, int]]
 
@@ -470,18 +468,18 @@ class TestInputModes:
 
 class TestSamplerAndQueries:
     def test_sampler_reproducible(self) -> None:
-        axes = StackBytecodeAxes(target_difficulty=3)
+        axes = StackBytecodeAxes()
         spec1 = sample_stack_bytecode_spec(axes, random.Random(42))
         spec2 = sample_stack_bytecode_spec(axes, random.Random(42))
         assert spec1 == spec2
 
     def test_sampler_always_emits_halt(self) -> None:
-        axes = StackBytecodeAxes(target_difficulty=3)
+        axes = StackBytecodeAxes()
         spec = sample_stack_bytecode_spec(axes, random.Random(42))
         assert any(instr.op == InstructionOp.HALT for instr in spec.program)
 
     def test_queries_match_evaluator_outputs(self) -> None:
-        axes = StackBytecodeAxes(target_difficulty=2, list_length_range=(0, 5))
+        axes = StackBytecodeAxes(list_length_range=(0, 5))
         spec = sample_stack_bytecode_spec(axes, random.Random(42))
         queries = generate_stack_bytecode_queries(spec, axes, random.Random(42))
 
@@ -492,7 +490,6 @@ class TestSamplerAndQueries:
 
     def test_queries_cover_all_tags_when_inputs_can_vary(self) -> None:
         axes = StackBytecodeAxes(
-            target_difficulty=3,
             value_range=(-2, 2),
             list_length_range=(0, 4),
         )
@@ -502,7 +499,6 @@ class TestSamplerAndQueries:
 
     def test_queries_respect_value_and_length_ranges(self) -> None:
         axes = StackBytecodeAxes(
-            target_difficulty=3,
             value_range=(3, 7),
             list_length_range=(2, 4),
         )
@@ -517,36 +513,21 @@ class TestSamplerAndQueries:
                 axes.value_range[0] <= x <= axes.value_range[1] for x in q.input
             )
 
-    def test_sampler_respects_target_difficulty_axis(self) -> None:
-        def _sample_difficulty_average(target: int) -> float:
-            rng = random.Random(1000 + target)
-            axes = StackBytecodeAxes(target_difficulty=target)
-            scores = [
-                compute_difficulty(
-                    "stack_bytecode",
-                    sample_stack_bytecode_spec(axes, rng).model_dump(),
-                )
-                for _ in range(80)
-            ]
-            return sum(scores) / len(scores)
-
-        avg_low = _sample_difficulty_average(1)
-        avg_high = _sample_difficulty_average(5)
-        assert avg_high >= avg_low + 1.0
-
-    def test_template_program_d4_has_expected_jump_target(self) -> None:
-        program = stack_template_program(4, random.Random(42))
-        assert len(program) == 8
-        assert program[1].op == InstructionOp.JUMP_IF_ZERO
-        assert program[1].target == 6
-
-    def test_template_program_d5_has_expected_layout(self) -> None:
-        program = stack_template_program(5, random.Random(42))
-        assert len(program) == 11
-        assert program[2].op == InstructionOp.JUMP_IF_ZERO
-        assert program[2].target == 10
-        assert program[8].op == InstructionOp.JUMP
-        assert program[8].target == 10
+    def test_sampler_produces_varied_program_shapes(self) -> None:
+        axes = StackBytecodeAxes()
+        specs = [
+            sample_stack_bytecode_spec(axes, random.Random(1000 + i))
+            for i in range(24)
+        ]
+        signatures = {
+            (
+                len(spec.program),
+                spec.jump_target_mode.value,
+                spec.input_mode.value,
+            )
+            for spec in specs
+        }
+        assert len(signatures) >= 8
 
 
 class TestRenderRoundtrip:
@@ -601,21 +582,19 @@ class TestTaskGeneration:
         assert task1.spec == task2.spec
         assert task1.queries == task2.queries
 
-    def test_generate_task_has_description_and_difficulty(self) -> None:
+    def test_generate_task_has_description(self) -> None:
         task = generate_stack_bytecode_task(rng=random.Random(42))
         assert isinstance(task.description, str)
         assert task.description
-        assert task.difficulty in {1, 2, 3, 4, 5}
 
 
 class TestDifferentialProperty:
-    @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
+    @pytest.mark.parametrize("seed_offset", [0, 1, 2, 3, 4])
     def test_rendered_python_matches_evaluator_across_random_specs(
-        self, difficulty: int
+        self, seed_offset: int
     ) -> None:
-        rng = random.Random(1000 + difficulty)
+        rng = random.Random(1000 + seed_offset)
         axes = StackBytecodeAxes(
-            target_difficulty=difficulty,
             list_length_range=(0, 8),
             value_range=(-20, 20),
         )

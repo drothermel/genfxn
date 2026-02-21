@@ -7,7 +7,7 @@ flat dict[str, str] of categorical features.
 from collections import Counter
 from typing import Any
 
-# ── String predicate / transform scoring (inlined from difficulty.py) ──────
+# ── String predicate / transform scoring ─────────────────────────────────
 
 
 def _string_predicate_score(pred: dict[str, Any]) -> int:

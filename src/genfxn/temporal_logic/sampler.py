@@ -1,14 +1,12 @@
 import random
 from typing import Any
 
-from genfxn.core.sampling import pick_from_preferred
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.temporal_logic.models import (
     PredicateKind,
     TemporalLogicAxes,
     TemporalLogicSpec,
     TemporalOperator,
-    TemporalOutputMode,
 )
 
 _UNARY_OPERATORS = frozenset(
@@ -27,27 +25,6 @@ _BINARY_OPERATORS = frozenset(
         TemporalOperator.SINCE,
     }
 )
-_TARGET_DEPTH_PREFS: dict[int, tuple[int, int]] = {
-    1: (1, 1),
-    2: (1, 2),
-    3: (2, 3),
-    4: (3, 4),
-    5: (4, 5),
-}
-_TARGET_OUTPUT_PREFS: dict[int, list[TemporalOutputMode]] = {
-    1: [TemporalOutputMode.SAT_AT_START, TemporalOutputMode.SAT_COUNT],
-    2: [TemporalOutputMode.SAT_COUNT, TemporalOutputMode.SAT_AT_START],
-    3: [TemporalOutputMode.SAT_COUNT, TemporalOutputMode.FIRST_SAT_INDEX],
-    4: [TemporalOutputMode.FIRST_SAT_INDEX, TemporalOutputMode.SAT_COUNT],
-    5: [TemporalOutputMode.FIRST_SAT_INDEX],
-}
-_TARGET_INCLUDE_SINCE_PREFS: dict[int, list[bool]] = {
-    1: [False],
-    2: [False],
-    3: [False, True],
-    4: [True, False],
-    5: [True],
-}
 
 
 def _sample_int_in_range(
@@ -55,19 +32,6 @@ def _sample_int_in_range(
     rng: random.Random,
 ) -> int:
     return rng.randint(value_range[0], value_range[1])
-
-
-def _sample_int_with_preferred_overlap(
-    *,
-    available: tuple[int, int],
-    preferred: tuple[int, int],
-    rng: random.Random,
-) -> int:
-    lo = max(available[0], preferred[0])
-    hi = min(available[1], preferred[1])
-    if lo <= hi:
-        return rng.randint(lo, hi)
-    return rng.randint(available[0], available[1])
 
 
 def _sample_operator_candidates(
@@ -151,27 +115,9 @@ def sample_temporal_logic_spec(
     if rng is None:
         rng = random.Random()  # noqa: S311
 
-    target_difficulty = axes.target_difficulty
-    if target_difficulty is None:
-        output_mode = rng.choice(axes.output_modes)
-        include_since = rng.choice(axes.include_since_choices)
-        depth = _sample_int_in_range(axes.formula_depth_range, rng)
-    else:
-        output_mode = pick_from_preferred(
-            axes.output_modes,
-            _TARGET_OUTPUT_PREFS[target_difficulty],
-            rng,
-        )
-        include_since = pick_from_preferred(
-            axes.include_since_choices,
-            _TARGET_INCLUDE_SINCE_PREFS[target_difficulty],
-            rng,
-        )
-        depth = _sample_int_with_preferred_overlap(
-            available=axes.formula_depth_range,
-            preferred=_TARGET_DEPTH_PREFS[target_difficulty],
-            rng=rng,
-        )
+    output_mode = rng.choice(axes.output_modes)
+    include_since = rng.choice(axes.include_since_choices)
+    depth = _sample_int_in_range(axes.formula_depth_range, rng)
 
     formula = _sample_formula(
         depth=depth,

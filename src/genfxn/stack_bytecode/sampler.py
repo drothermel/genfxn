@@ -1,6 +1,5 @@
 import random
 
-from genfxn.core.sampling import intersect_ranges
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.stack_bytecode.models import (
     InputMode,
@@ -11,23 +10,10 @@ from genfxn.stack_bytecode.models import (
     StackBytecodeSpec,
 )
 
-_TARGET_PROGRAM_LENGTH: dict[int, tuple[int, int]] = {
-    1: (2, 3),
-    2: (4, 5),
-    3: (6, 7),
-    4: (8, 10),
-    5: (11, 12),
-}
-
-_TARGET_MAX_STEPS: dict[int, tuple[int, int]] = {
-    1: (20, 32),
-    2: (32, 64),
-    3: (64, 96),
-    4: (96, 128),
-    5: (128, 160),
-}
-
-_NULLARY_OPS = [
+_PROGRAM_LENGTH_RANGE = (2, 12)
+_OP_CHOICES = [
+    InstructionOp.PUSH_CONST,
+    InstructionOp.LOAD_INPUT,
     InstructionOp.DUP,
     InstructionOp.SWAP,
     InstructionOp.POP,
@@ -42,129 +28,22 @@ _NULLARY_OPS = [
     InstructionOp.GT,
     InstructionOp.LT,
     InstructionOp.IS_ZERO,
+    InstructionOp.JUMP,
+    InstructionOp.JUMP_IF_ZERO,
+    InstructionOp.JUMP_IF_NONZERO,
+    InstructionOp.HALT,
 ]
-
-
-def _ops_for_target(target_difficulty: int | None) -> list[InstructionOp]:
-    if target_difficulty is None:
-        return [
-            InstructionOp.PUSH_CONST,
-            InstructionOp.LOAD_INPUT,
-            InstructionOp.JUMP,
-            InstructionOp.JUMP_IF_ZERO,
-            InstructionOp.JUMP_IF_NONZERO,
-            *_NULLARY_OPS,
-        ]
-    if target_difficulty <= 1:
-        return [
-            InstructionOp.PUSH_CONST,
-            InstructionOp.LOAD_INPUT,
-            InstructionOp.ADD,
-            InstructionOp.SUB,
-            InstructionOp.NEG,
-            InstructionOp.HALT,
-        ]
-    if target_difficulty == 2:
-        return [
-            InstructionOp.PUSH_CONST,
-            InstructionOp.LOAD_INPUT,
-            InstructionOp.DUP,
-            InstructionOp.POP,
-            InstructionOp.ADD,
-            InstructionOp.SUB,
-            InstructionOp.MUL,
-            InstructionOp.NEG,
-            InstructionOp.ABS,
-            InstructionOp.IS_ZERO,
-            InstructionOp.HALT,
-        ]
-    if target_difficulty == 3:
-        return [
-            InstructionOp.PUSH_CONST,
-            InstructionOp.LOAD_INPUT,
-            InstructionOp.DUP,
-            InstructionOp.SWAP,
-            InstructionOp.POP,
-            InstructionOp.ADD,
-            InstructionOp.SUB,
-            InstructionOp.MUL,
-            InstructionOp.DIV,
-            InstructionOp.MOD,
-            InstructionOp.NEG,
-            InstructionOp.ABS,
-            InstructionOp.EQ,
-            InstructionOp.GT,
-            InstructionOp.LT,
-            InstructionOp.IS_ZERO,
-            InstructionOp.JUMP,
-            InstructionOp.HALT,
-        ]
-    if target_difficulty == 4:
-        return [
-            InstructionOp.PUSH_CONST,
-            InstructionOp.LOAD_INPUT,
-            *_NULLARY_OPS,
-            InstructionOp.HALT,
-        ]
-    return [
-        InstructionOp.PUSH_CONST,
-        InstructionOp.LOAD_INPUT,
-        InstructionOp.JUMP,
-        InstructionOp.JUMP_IF_ZERO,
-        InstructionOp.JUMP_IF_NONZERO,
-        *_NULLARY_OPS,
-        InstructionOp.HALT,
-    ]
-
-
-def _sample_program_length(
-    target_difficulty: int | None,
-    rng: random.Random,
-) -> int:
-    if target_difficulty is None:
-        return rng.randint(2, 12)
-    lo, hi = _TARGET_PROGRAM_LENGTH[target_difficulty]
-    return rng.randint(lo, hi)
-
-
-def _pick_max_steps(
-    target_difficulty: int | None,
-    axes_range: tuple[int, int],
-    rng: random.Random,
-) -> int:
-    if target_difficulty is None:
-        return rng.randint(*axes_range)
-    desired = _TARGET_MAX_STEPS[target_difficulty]
-    bounded = intersect_ranges(desired, axes_range)
-    if bounded is None:
-        return rng.randint(*axes_range)
-    return rng.randint(*bounded)
-
-
-def _pick_mode_with_preference[T](
-    available: list[T],
-    preferred: list[T],
-    rng: random.Random,
-) -> T:
-    preferred_available = [mode for mode in preferred if mode in available]
-    if preferred_available:
-        return rng.choice(preferred_available)
-    return rng.choice(available)
 
 
 def _sample_instruction(
     axes: StackBytecodeAxes,
     program_len: int,
-    op_choices: list[InstructionOp],
     instruction_index: int,
-    target_difficulty: int | None,
     rng: random.Random,
 ) -> Instruction:
-    op = rng.choice(op_choices)
-    # Keep HALT in the weighted choice pool so low-complexity programs
-    # remain common; remap interior HALTs to PUSH_CONST and append the
-    # true terminating HALT explicitly at the end of the program.
+    op = rng.choice(_OP_CHOICES)
     if op == InstructionOp.HALT:
+        # Keep halts in the weighted pool, but reserve terminal halt position.
         op = InstructionOp.PUSH_CONST
 
     if op == InstructionOp.PUSH_CONST:
@@ -173,51 +52,36 @@ def _sample_instruction(
     if op == InstructionOp.LOAD_INPUT:
         _, idx_hi = axes.list_length_range
         span = max(1, idx_hi + 2)
-        # Include negatives and slightly out-of-range indices.
         return Instruction(op=op, index=rng.randint(-span, span))
     if op in (
         InstructionOp.JUMP,
         InstructionOp.JUMP_IF_ZERO,
         InstructionOp.JUMP_IF_NONZERO,
     ):
-        if (
-            target_difficulty is not None
-            and target_difficulty >= 4
-            and instruction_index > 0
-            and rng.random() < 0.7
-        ):
+        if instruction_index > 0 and rng.random() < 0.4:
             return Instruction(
-                op=op,
-                target=rng.randint(0, instruction_index - 1),
+                op=op, target=rng.randint(0, instruction_index - 1)
             )
         return Instruction(op=op, target=rng.randint(-program_len, program_len))
     return Instruction(op=op)
 
 
-def _inject_control_flow_for_target(
-    program: list[Instruction],
-    target_difficulty: int | None,
-    rng: random.Random,
+def _inject_control_flow(
+    program: list[Instruction], rng: random.Random
 ) -> None:
-    if target_difficulty is None or target_difficulty < 4:
-        return
     if len(program) <= 3:
         return
-
-    first_idx = rng.randint(1, len(program) - 2)
-    program[first_idx] = Instruction(
-        op=rng.choice(
-            [InstructionOp.JUMP_IF_ZERO, InstructionOp.JUMP_IF_NONZERO]
-        ),
-        target=rng.randint(0, first_idx - 1),
-    )
-
-    if target_difficulty < 5 or len(program) <= 5:
+    if rng.random() < 0.5:
+        first_idx = rng.randint(1, len(program) - 2)
+        program[first_idx] = Instruction(
+            op=rng.choice(
+                [InstructionOp.JUMP_IF_ZERO, InstructionOp.JUMP_IF_NONZERO]
+            ),
+            target=rng.randint(0, first_idx - 1),
+        )
+    if len(program) <= 5 or rng.random() < 0.65:
         return
-
-    candidate_indices = [
-        idx for idx in range(first_idx + 1, len(program) - 1) if idx > 1
-    ]
+    candidate_indices = [idx for idx in range(2, len(program) - 1)]
     if not candidate_indices:
         return
     second_idx = rng.choice(candidate_indices)
@@ -247,8 +111,7 @@ def sample_stack_bytecode_spec(
             f"max_step_count_range: low ({step_lo}) must be <= high ({step_hi})"
         )
 
-    target_difficulty = axes.target_difficulty
-    n_program = _sample_program_length(target_difficulty, rng)
+    n_program = rng.randint(*_PROGRAM_LENGTH_RANGE)
     trace_step(
         trace,
         "sample_program_length",
@@ -256,74 +119,21 @@ def sample_stack_bytecode_spec(
         n_program,
     )
 
-    op_choices = _ops_for_target(target_difficulty)
     program = [
         _sample_instruction(
             axes=axes,
             program_len=n_program,
-            op_choices=op_choices,
             instruction_index=idx,
-            target_difficulty=target_difficulty,
             rng=rng,
         )
         for idx in range(n_program - 1)
     ]
     program.append(Instruction(op=InstructionOp.HALT))
-    _inject_control_flow_for_target(program, target_difficulty, rng)
+    _inject_control_flow(program, rng)
 
-    if target_difficulty in {1, 2}:
-        jump_mode = _pick_mode_with_preference(
-            axes.jump_target_modes,
-            [JumpTargetMode.ERROR],
-            rng,
-        )
-        input_mode = _pick_mode_with_preference(
-            axes.input_modes,
-            [InputMode.DIRECT],
-            rng,
-        )
-    elif target_difficulty == 3:
-        jump_mode = _pick_mode_with_preference(
-            axes.jump_target_modes,
-            [JumpTargetMode.ERROR, JumpTargetMode.CLAMP],
-            rng,
-        )
-        input_mode = _pick_mode_with_preference(
-            axes.input_modes,
-            [InputMode.DIRECT, InputMode.CYCLIC],
-            rng,
-        )
-    elif target_difficulty == 4:
-        jump_mode = _pick_mode_with_preference(
-            axes.jump_target_modes,
-            [JumpTargetMode.CLAMP, JumpTargetMode.WRAP],
-            rng,
-        )
-        input_mode = _pick_mode_with_preference(
-            axes.input_modes,
-            [InputMode.CYCLIC, InputMode.DIRECT],
-            rng,
-        )
-    elif target_difficulty == 5:
-        jump_mode = _pick_mode_with_preference(
-            axes.jump_target_modes,
-            [JumpTargetMode.WRAP],
-            rng,
-        )
-        input_mode = _pick_mode_with_preference(
-            axes.input_modes,
-            [InputMode.CYCLIC],
-            rng,
-        )
-    else:
-        jump_mode = rng.choice(axes.jump_target_modes)
-        input_mode = rng.choice(axes.input_modes)
-
-    max_steps = _pick_max_steps(
-        target_difficulty=target_difficulty,
-        axes_range=(step_lo, step_hi),
-        rng=rng,
-    )
+    jump_mode = rng.choice(axes.jump_target_modes)
+    input_mode = rng.choice(axes.input_modes)
+    max_steps = rng.randint(step_lo, step_hi)
 
     trace_step(
         trace,
@@ -339,7 +149,6 @@ def sample_stack_bytecode_spec(
             "max_step_count": max_steps,
         },
     )
-
     trace_step(
         trace,
         "sample_program",

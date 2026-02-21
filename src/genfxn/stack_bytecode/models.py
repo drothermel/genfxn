@@ -113,7 +113,6 @@ class StackBytecodeSpec(BaseModel):
 
 
 class StackBytecodeAxes(BaseModel):
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     value_range: tuple[int, int] = Field(default=(-50, 50))
     list_length_range: tuple[int, int] = Field(default=(0, 8))
     const_range: tuple[int, int] = Field(default=(-10, 10))

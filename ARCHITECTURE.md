@@ -10,7 +10,7 @@ main generation/suite pipeline.
 flowchart TD
     A[Family Generators\nsrc/genfxn/<family>/task.py] --> B[Task Model\nsrc/genfxn/core/models.py]
     B --> C[Validation\nsrc/genfxn/<family>/validate.py]
-    B --> D[Difficulty/Description\nsrc/genfxn/core/difficulty.py + describe.py]
+    B --> D[Descriptions\nsrc/genfxn/core/describe.py]
     B --> E[Language Renderers\nsrc/genfxn/langs/python|java|rust]
     E --> F[Runtime Parity Tests\ntests/test_*_runtime_parity.py]
     B --> G[Suite Generation\nsrc/genfxn/suites/generate.py]
@@ -34,7 +34,6 @@ flowchart TD
 - Unit and schema validation: `tests/test_validate_*.py`
 - Family integration generation checks: `tests/test_<family>.py`
 - Cross-language runtime parity: `tests/test_*_runtime_parity.py`
-- Suite composition/regression: `tests/test_suites.py`
 - Split/CLI behavior: `tests/test_splits.py`, `tests/test_cli.py`
 
 ## Verification Modes
