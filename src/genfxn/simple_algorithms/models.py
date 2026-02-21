@@ -28,6 +28,7 @@ _SUPPORTED_PRE_TRANSFORM_TYPES = frozenset(
         TransformType.SHIFT,
         TransformType.NEGATE,
         TransformType.SCALE,
+        TransformType.PIPELINE,
     }
 )
 _INT_RANGE_FIELDS = (
@@ -61,6 +62,103 @@ def _validate_no_bool_int_range_bounds(data: Any) -> None:
             raise ValueError(
                 f"{field_name}: bool is not allowed for int range bounds"
             )
+
+
+def _range_includes_int64_min(value_range: tuple[int, int]) -> bool:
+    lo, hi = value_range
+    return lo <= INT64_MIN <= hi
+
+
+def _apply_transform_range(
+    input_range: tuple[int, int],
+    transform_type: TransformType,
+    *,
+    shift_range: tuple[int, int],
+    scale_range: tuple[int, int],
+) -> tuple[int, int]:
+    if transform_type == TransformType.IDENTITY:
+        output_range = input_range
+    elif transform_type == TransformType.ABS:
+        if _range_includes_int64_min(input_range):
+            raise ValueError(
+                "Numeric contract violation: transform composition can route "
+                "INT64_MIN into ABS, which is overflow-unsafe across runtimes. "
+                "Tighten ranges."
+            )
+        output_range = abs_range(input_range)
+    elif transform_type == TransformType.SHIFT:
+        output_range = add_ranges(input_range, shift_range)
+    elif transform_type == TransformType.NEGATE:
+        if _range_includes_int64_min(input_range):
+            raise ValueError(
+                "Numeric contract violation: transform composition can route "
+                "INT64_MIN into NEGATE, which is overflow-unsafe across "
+                "runtimes. Tighten ranges."
+            )
+        output_range = neg_range(input_range)
+    elif transform_type == TransformType.SCALE:
+        output_range = mul_ranges(input_range, scale_range)
+    else:  # pragma: no cover - guarded by caller
+        output_range = input_range
+
+    if not fits_signed_i64(output_range):
+        raise ValueError(
+            "Numeric contract violation: value_range and preprocess transform "
+            "ranges can overflow signed 64-bit arithmetic"
+        )
+    return output_range
+
+
+def _pipeline_output_ranges(
+    base_range: tuple[int, int],
+    *,
+    shift_range: tuple[int, int],
+    scale_range: tuple[int, int],
+) -> list[tuple[int, int]]:
+    """Compute all output ranges for sampled numeric pipelines.
+
+    Pipeline sampling for these families is fixed to:
+    - first step in {SHIFT, SCALE}
+    - total length in {2, 3}
+    - remaining steps in {SHIFT, SCALE, ABS, NEGATE}
+    """
+    first_step_types = (TransformType.SHIFT, TransformType.SCALE)
+    rest_step_types = (
+        TransformType.SHIFT,
+        TransformType.SCALE,
+        TransformType.ABS,
+        TransformType.NEGATE,
+    )
+
+    def _expand(
+        input_range: tuple[int, int], steps_remaining: int
+    ) -> list[tuple[int, int]]:
+        if steps_remaining == 0:
+            return [input_range]
+
+        outputs: list[tuple[int, int]] = []
+        for step_type in rest_step_types:
+            next_range = _apply_transform_range(
+                input_range,
+                step_type,
+                shift_range=shift_range,
+                scale_range=scale_range,
+            )
+            outputs.extend(_expand(next_range, steps_remaining - 1))
+        return outputs
+
+    output_ranges: list[tuple[int, int]] = []
+    for first_step in first_step_types:
+        first_range = _apply_transform_range(
+            base_range,
+            first_step,
+            shift_range=shift_range,
+            scale_range=scale_range,
+        )
+        # Total pipeline lengths are 2 and 3; first step already applied.
+        output_ranges.extend(_expand(first_range, 1))
+        output_ranges.extend(_expand(first_range, 2))
+    return output_ranges
 
 
 class TemplateType(str, Enum):
@@ -270,41 +368,65 @@ class SimpleAlgorithmsAxes(BaseModel):
             transformed_ranges: list[tuple[int, int]] = []
             for transform_type in self.pre_transform_types:
                 if transform_type == TransformType.IDENTITY:
-                    output_range = self.value_range
+                    output_range = _apply_transform_range(
+                        self.value_range,
+                        transform_type,
+                        shift_range=PREPROCESS_SHIFT_RANGE,
+                        scale_range=PREPROCESS_SCALE_RANGE,
+                    )
+                    transformed_ranges.append(output_range)
                 elif transform_type == TransformType.ABS:
                     if self.value_range[0] == INT64_MIN:
                         raise ValueError(
                             "value_range: low must be > INT64_MIN when "
                             "pre_transform_types includes 'abs'"
                         )
-                    output_range = abs_range(self.value_range)
-                elif transform_type == TransformType.SHIFT:
-                    output_range = add_ranges(
+                    output_range = _apply_transform_range(
                         self.value_range,
-                        PREPROCESS_SHIFT_RANGE,
+                        transform_type,
+                        shift_range=PREPROCESS_SHIFT_RANGE,
+                        scale_range=PREPROCESS_SCALE_RANGE,
                     )
+                    transformed_ranges.append(output_range)
+                elif transform_type == TransformType.SHIFT:
+                    output_range = _apply_transform_range(
+                        self.value_range,
+                        transform_type,
+                        shift_range=PREPROCESS_SHIFT_RANGE,
+                        scale_range=PREPROCESS_SCALE_RANGE,
+                    )
+                    transformed_ranges.append(output_range)
                 elif transform_type == TransformType.NEGATE:
                     if self.value_range[0] == INT64_MIN:
                         raise ValueError(
                             "value_range: low must be > INT64_MIN when "
                             "pre_transform_types includes 'negate'"
                         )
-                    output_range = neg_range(self.value_range)
-                elif transform_type == TransformType.SCALE:
-                    output_range = mul_ranges(
+                    output_range = _apply_transform_range(
                         self.value_range,
-                        PREPROCESS_SCALE_RANGE,
+                        transform_type,
+                        shift_range=PREPROCESS_SHIFT_RANGE,
+                        scale_range=PREPROCESS_SCALE_RANGE,
+                    )
+                    transformed_ranges.append(output_range)
+                elif transform_type == TransformType.SCALE:
+                    output_range = _apply_transform_range(
+                        self.value_range,
+                        transform_type,
+                        shift_range=PREPROCESS_SHIFT_RANGE,
+                        scale_range=PREPROCESS_SCALE_RANGE,
+                    )
+                    transformed_ranges.append(output_range)
+                elif transform_type == TransformType.PIPELINE:
+                    transformed_ranges.extend(
+                        _pipeline_output_ranges(
+                            self.value_range,
+                            shift_range=PREPROCESS_SHIFT_RANGE,
+                            scale_range=PREPROCESS_SCALE_RANGE,
+                        )
                     )
                 else:  # pragma: no cover - guarded above
                     continue
-
-                if not fits_signed_i64(output_range):
-                    raise ValueError(
-                        "Numeric contract violation: value_range and "
-                        "preprocess transform ranges can overflow signed "
-                        "64-bit arithmetic"
-                    )
-                transformed_ranges.append(output_range)
 
             if transformed_ranges:
                 processed_range = (

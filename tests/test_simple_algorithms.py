@@ -502,11 +502,21 @@ class TestAxesValidation:
         ):
             SimpleAlgorithmsAxes(pre_transform_types=[TransformType.CLIP])
 
-    def test_pipeline_pre_transform_type_is_rejected(self) -> None:
-        with pytest.raises(
-            ValueError, match="pre_transform_types contains unsupported"
-        ):
-            SimpleAlgorithmsAxes(pre_transform_types=[TransformType.PIPELINE])
+    def test_pipeline_pre_transform_type_is_supported(self) -> None:
+        axes = SimpleAlgorithmsAxes(
+            pre_transform_types=[TransformType.PIPELINE]
+        )
+        assert axes.pre_transform_types == [TransformType.PIPELINE]
+
+    def test_pipeline_pre_transform_rejects_overflowing_ranges(self) -> None:
+        with pytest.raises(ValueError, match="Numeric contract violation"):
+            SimpleAlgorithmsAxes(
+                pre_transform_types=[TransformType.PIPELINE],
+                value_range=(
+                    2_000_000_000_000_000_000,
+                    2_000_000_000_000_000_000,
+                ),
+            )
 
     def test_abs_pre_transform_rejects_int64_min_value_range(self) -> None:
         with pytest.raises(

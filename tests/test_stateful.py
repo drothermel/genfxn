@@ -383,13 +383,21 @@ class TestAxesValidation:
         ):
             StatefulAxes(transform_types=[])
 
-    def test_transform_types_reject_pipeline_for_stateful_generation(
+    def test_transform_types_support_pipeline_for_stateful_generation(
         self,
     ) -> None:
-        with pytest.raises(
-            ValueError, match="transform_types contains unsupported values"
-        ):
-            StatefulAxes(transform_types=[TransformType.PIPELINE])
+        axes = StatefulAxes(transform_types=[TransformType.PIPELINE])
+        assert axes.transform_types == [TransformType.PIPELINE]
+
+    def test_pipeline_transform_rejects_overflowing_ranges(self) -> None:
+        with pytest.raises(ValueError, match="Numeric contract violation"):
+            StatefulAxes(
+                transform_types=[TransformType.PIPELINE],
+                value_range=(
+                    2_000_000_000_000_000_000,
+                    2_000_000_000_000_000_000,
+                ),
+            )
 
     def test_zero_divisor(self) -> None:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
