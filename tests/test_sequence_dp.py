@@ -19,7 +19,10 @@ from genfxn.sequence_dp.models import (
 )
 from genfxn.sequence_dp.queries import generate_sequence_dp_queries
 from genfxn.sequence_dp.render import render_sequence_dp
-from genfxn.sequence_dp.sampler import sample_sequence_dp_spec
+from genfxn.sequence_dp.sampler import (
+    _sample_match_predicate,
+    sample_sequence_dp_spec,
+)
 from genfxn.sequence_dp.task import generate_sequence_dp_task
 
 
@@ -540,6 +543,30 @@ class TestSampler:
             for spec in specs
         }
         assert len(signatures) >= 6
+
+    def test_sampler_mod_eq_predicates_respect_divisor_range(self) -> None:
+        axes = SequenceDpAxes(
+            predicate_types=[PredicateType.MOD_EQ],
+            divisor_range=(3, 3),
+            len_a_range=(2, 2),
+            len_b_range=(2, 2),
+        )
+        spec = _call_sample(sample_sequence_dp_spec, axes, seed=41)
+        predicate = spec.match_predicate
+        assert isinstance(predicate, PredicateModEq)
+        assert predicate.divisor == 3
+        assert 0 <= predicate.remainder < predicate.divisor
+
+    def test_sample_match_predicate_unknown_type_raises(self) -> None:
+        class _UnknownPredicateType:
+            value = "unknown_new_pred"
+
+        with pytest.raises(ValueError, match="unknown_new_pred"):
+            _sample_match_predicate(
+                _UnknownPredicateType(),  # type: ignore[arg-type]
+                SequenceDpAxes(),
+                random.Random(1),
+            )
 
 
 class TestQueries:

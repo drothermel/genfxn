@@ -20,10 +20,11 @@ def _sample_match_predicate(
         return PredicateEq()
     if predicate_type == PredicateType.ABS_DIFF_LE:
         return PredicateAbsDiffLe(max_diff=rng.randint(*axes.abs_diff_range))
-
-    divisor = rng.randint(*axes.divisor_range)
-    remainder = rng.randint(0, divisor - 1)
-    return PredicateModEq(divisor=divisor, remainder=remainder)
+    if predicate_type == PredicateType.MOD_EQ:
+        divisor = rng.randint(*axes.divisor_range)
+        remainder = rng.randint(0, divisor - 1)
+        return PredicateModEq(divisor=divisor, remainder=remainder)
+    raise ValueError(f"Unknown predicate type: {predicate_type.value}")
 
 
 def sample_sequence_dp_spec(

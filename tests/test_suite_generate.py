@@ -1,5 +1,6 @@
 import pytest
 
+import genfxn.suites.generate as suites_generate
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.suites.generate import generate_pool, generate_suite
 from genfxn.suites.quotas import QUOTAS
@@ -46,3 +47,25 @@ def test_generate_suite_passes_custom_axes_to_task_generator(
     assert all(
         task.axes is not None and task.axes["n_branches"] == 1 for task in tasks
     )
+
+
+def test_generate_pool_missing_task_generator_mapping_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(
+        suites_generate._TASK_GENERATORS, "piecewise", raising=False
+    )
+    with pytest.raises(ValueError, match="piecewise.*_TASK_GENERATORS mapping"):
+        suites_generate.generate_pool(family="piecewise", pool_size=1)
+
+
+def test_generate_pool_missing_feature_extractor_mapping_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(
+        suites_generate._FEATURE_EXTRACTORS, "piecewise", raising=False
+    )
+    with pytest.raises(
+        ValueError, match="piecewise.*_FEATURE_EXTRACTORS mapping"
+    ):
+        suites_generate.generate_pool(family="piecewise", pool_size=1)

@@ -1,5 +1,6 @@
 import random
 
+from genfxn.core.sampling import sample_probability
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.graph_queries.models import (
     GraphEdge,
@@ -7,12 +8,6 @@ from genfxn.graph_queries.models import (
     GraphQueriesSpec,
     GraphQueryType,
 )
-
-
-def _sample_probability(
-    prob_range: tuple[float, float], rng: random.Random
-) -> float:
-    return rng.uniform(prob_range[0], prob_range[1])
 
 
 def _max_unique_edges(n_nodes: int, directed: bool) -> int:
@@ -87,9 +82,9 @@ def sample_graph_queries_spec(
         weighted = rng.choice(axes.weighted_choices)
     n_nodes = rng.randint(axes.n_nodes_range[0], axes.n_nodes_range[1])
 
-    disconnected_prob = _sample_probability(axes.disconnected_prob_range, rng)
-    multi_edge_prob = _sample_probability(axes.multi_edge_prob_range, rng)
-    hub_bias_prob = _sample_probability(axes.hub_bias_prob_range, rng)
+    disconnected_prob = sample_probability(axes.disconnected_prob_range, rng)
+    multi_edge_prob = sample_probability(axes.multi_edge_prob_range, rng)
+    hub_bias_prob = sample_probability(axes.hub_bias_prob_range, rng)
 
     max_edges = _max_unique_edges(n_nodes, directed)
     edge_count_hi = min(axes.edge_count_range[1], max_edges)

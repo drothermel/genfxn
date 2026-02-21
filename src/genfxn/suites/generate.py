@@ -102,6 +102,14 @@ def _validate_family(family: str) -> None:
     if family not in QUOTAS:
         valid = ", ".join(sorted(QUOTAS))
         raise ValueError(f"Unknown family '{family}'. Valid: {valid}")
+    if family not in _TASK_GENERATORS:
+        raise ValueError(
+            f"Family '{family}' is missing _TASK_GENERATORS mapping"
+        )
+    if family not in _FEATURE_EXTRACTORS:
+        raise ValueError(
+            f"Family '{family}' is missing _FEATURE_EXTRACTORS mapping"
+        )
 
 
 def _matches_hard_constraints(

@@ -1,5 +1,6 @@
 import random
 
+from genfxn.core.sampling import sample_probability
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.intervals.models import (
     IntervalsAxes,
@@ -12,12 +13,6 @@ def _sample_int_in_range(
     rng: random.Random,
 ) -> int:
     return rng.randint(value_range[0], value_range[1])
-
-
-def _sample_probability(
-    prob_range: tuple[float, float], rng: random.Random
-) -> float:
-    return rng.uniform(prob_range[0], prob_range[1])
 
 
 def sample_intervals_spec(
@@ -36,15 +31,15 @@ def sample_intervals_spec(
         axes.endpoint_quantize_step_range,
         rng,
     )
-    allow_reversed_interval_prob = _sample_probability(
+    allow_reversed_interval_prob = sample_probability(
         axes.allow_reversed_interval_prob_range,
         rng,
     )
-    degenerate_interval_prob = _sample_probability(
+    degenerate_interval_prob = sample_probability(
         axes.degenerate_interval_prob_range,
         rng,
     )
-    nested_interval_prob = _sample_probability(
+    nested_interval_prob = sample_probability(
         axes.nested_interval_prob_range,
         rng,
     )

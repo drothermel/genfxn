@@ -453,6 +453,33 @@ class TestGenerate:
             ]
             assert all(17 <= x <= 19 for x in typical)
 
+    def test_generate_bitops_ignores_unrelated_range_options(
+        self, tmp_path
+    ) -> None:
+        if not _supports_bitops_family():
+            pytest.skip("bitops family is not available in this build")
+
+        output = tmp_path / "tasks.jsonl"
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "bitops",
+                "-n",
+                "2",
+                "--threshold-range",
+                "9,1",
+            ],
+        )
+
+        assert result.exit_code == 0
+        tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert tasks
+        assert all(task["family"] == "bitops" for task in tasks)
+
     def test_generate_all(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(

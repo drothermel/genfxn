@@ -37,3 +37,11 @@ def pick_from_preferred(
     if preferred_available:
         return rng.choice(preferred_available)
     return rng.choice(available)
+
+
+def sample_probability(
+    prob_range: tuple[float, float],
+    rng: random.Random,
+) -> float:
+    """Sample uniformly from an inclusive probability range."""
+    return rng.uniform(prob_range[0], prob_range[1])
