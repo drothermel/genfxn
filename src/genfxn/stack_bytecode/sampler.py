@@ -10,7 +10,6 @@ from genfxn.stack_bytecode.models import (
     StackBytecodeSpec,
 )
 
-_PROGRAM_LENGTH_RANGE = (2, 12)
 _OP_CHOICES = [
     InstructionOp.PUSH_CONST,
     InstructionOp.LOAD_INPUT,
@@ -43,7 +42,10 @@ def _sample_instruction(
 ) -> Instruction:
     op = rng.choice(_OP_CHOICES)
     if op == InstructionOp.HALT:
-        # Keep halts in the weighted pool, but reserve terminal halt position.
+        # Keep HALT in the weighted pool, but avoid non-terminal halts by
+        # remapping mid-program samples to PUSH_CONST.
+        # sample_stack_bytecode_spec later enforces a terminal HALT by
+        # appending HALT as the final opcode.
         op = InstructionOp.PUSH_CONST
 
     if op == InstructionOp.PUSH_CONST:
@@ -111,7 +113,13 @@ def sample_stack_bytecode_spec(
             f"max_step_count_range: low ({step_lo}) must be <= high ({step_hi})"
         )
 
-    n_program = rng.randint(*_PROGRAM_LENGTH_RANGE)
+    prog_lo, prog_hi = axes.program_length_range
+    if prog_lo > prog_hi:
+        raise ValueError(
+            f"program_length_range: low ({prog_lo}) must be <= high ({prog_hi})"
+        )
+
+    n_program = rng.randint(prog_lo, prog_hi)
     trace_step(
         trace,
         "sample_program_length",

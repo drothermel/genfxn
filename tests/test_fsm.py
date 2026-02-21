@@ -6,6 +6,7 @@ from genfxn.core.models import QueryTag
 from genfxn.core.predicates import (
     PredicateEven,
     PredicateLt,
+    PredicateModEq,
     PredicateOdd,
 )
 from genfxn.fsm.eval import eval_fsm
@@ -21,7 +22,7 @@ from genfxn.fsm.models import (
 )
 from genfxn.fsm.queries import generate_fsm_queries
 from genfxn.fsm.render import render_fsm
-from genfxn.fsm.sampler import sample_fsm_spec
+from genfxn.fsm.sampler import _sample_predicate, sample_fsm_spec
 from genfxn.fsm.task import generate_fsm_task
 
 
@@ -287,6 +288,34 @@ class TestSampler:
             for spec in specs
         }
         assert len(signatures) >= 6
+
+    def test_sampler_mod_eq_predicates_respect_divisor_range(self) -> None:
+        axes = FsmAxes(
+            predicate_types=[PredicateType.MOD_EQ],
+            divisor_range=(2, 2),
+            n_states_range=(2, 2),
+            transitions_per_state_range=(1, 1),
+        )
+        spec = sample_fsm_spec(axes, random.Random(77))
+
+        for state in spec.states:
+            for transition in state.transitions:
+                predicate = transition.predicate
+                assert isinstance(predicate, PredicateModEq)
+                assert predicate.divisor == 2
+                assert 0 <= predicate.remainder < predicate.divisor
+
+    def test_sample_predicate_unknown_type_raises(self) -> None:
+        class _UnknownPredicateType:
+            value = "unknown_new_pred"
+
+        with pytest.raises(ValueError, match="unknown_new_pred"):
+            _sample_predicate(
+                _UnknownPredicateType(),  # type: ignore[arg-type]
+                threshold_range=(-1, 1),
+                divisor_range=(2, 3),
+                rng=random.Random(1),
+            )
 
 
 class TestQueries:

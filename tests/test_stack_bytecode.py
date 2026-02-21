@@ -74,6 +74,7 @@ class TestModels:
         [
             ("value_range", (False, 5)),
             ("list_length_range", (0, True)),
+            ("program_length_range", (False, 3)),
             ("const_range", (False, 3)),
             ("max_step_count_range", (1, True)),
         ],
@@ -90,6 +91,10 @@ class TestModels:
     def test_axes_reject_max_step_count_range_above_i64_max(self) -> None:
         with pytest.raises(ValueError, match="max_step_count_range: high"):
             StackBytecodeAxes(max_step_count_range=(20, 1 << 63))
+
+    def test_axes_reject_program_length_range_below_one(self) -> None:
+        with pytest.raises(ValueError, match="program_length_range: low"):
+            StackBytecodeAxes(program_length_range=(0, 4))
 
 
 class TestEvaluatorArithmeticAndComparison:
@@ -477,6 +482,11 @@ class TestSamplerAndQueries:
         axes = StackBytecodeAxes()
         spec = sample_stack_bytecode_spec(axes, random.Random(42))
         assert any(instr.op == InstructionOp.HALT for instr in spec.program)
+
+    def test_sampler_respects_program_length_range(self) -> None:
+        axes = StackBytecodeAxes(program_length_range=(4, 4))
+        spec = sample_stack_bytecode_spec(axes, random.Random(42))
+        assert len(spec.program) == 4
 
     def test_queries_match_evaluator_outputs(self) -> None:
         axes = StackBytecodeAxes(list_length_range=(0, 5))

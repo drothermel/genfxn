@@ -12,34 +12,39 @@ from genfxn.core.predicates import (
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.fsm.models import (
     FsmAxes,
+    FsmPredicate,
     FsmSpec,
+    PredicateType,
     State,
     Transition,
 )
 
 
 def _sample_predicate(
-    pred_type,
+    pred_type: PredicateType,
     threshold_range: tuple[int, int],
     divisor_range: tuple[int, int],
     rng: random.Random,
-):
-    if pred_type.value == "even":
-        return PredicateEven()
-    if pred_type.value == "odd":
-        return PredicateOdd()
-    if pred_type.value == "lt":
-        return PredicateLt(value=rng.randint(*threshold_range))
-    if pred_type.value == "le":
-        return PredicateLe(value=rng.randint(*threshold_range))
-    if pred_type.value == "gt":
-        return PredicateGt(value=rng.randint(*threshold_range))
-    if pred_type.value == "ge":
-        return PredicateGe(value=rng.randint(*threshold_range))
-
-    divisor = rng.randint(*divisor_range)
-    remainder = rng.randint(0, divisor - 1)
-    return PredicateModEq(divisor=divisor, remainder=remainder)
+) -> FsmPredicate:
+    match pred_type:
+        case PredicateType.EVEN:
+            return PredicateEven()
+        case PredicateType.ODD:
+            return PredicateOdd()
+        case PredicateType.LT:
+            return PredicateLt(value=rng.randint(*threshold_range))
+        case PredicateType.LE:
+            return PredicateLe(value=rng.randint(*threshold_range))
+        case PredicateType.GT:
+            return PredicateGt(value=rng.randint(*threshold_range))
+        case PredicateType.GE:
+            return PredicateGe(value=rng.randint(*threshold_range))
+        case PredicateType.MOD_EQ:
+            divisor = rng.randint(*divisor_range)
+            remainder = rng.randint(0, divisor - 1)
+            return PredicateModEq(divisor=divisor, remainder=remainder)
+        case _:
+            raise ValueError(f"Unknown predicate type: {pred_type.value}")
 
 
 def _sample_state(

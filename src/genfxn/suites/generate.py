@@ -38,7 +38,6 @@ class Candidate(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     task: Task
-    spec_dict: dict[str, Any]
     task_id: str
     features: dict[str, str]
 
@@ -50,26 +49,38 @@ class PoolStats(BaseModel):
     candidates: int = 0
 
 
-_TaskGenerator = Callable[[random.Random], Task]
-_FeatureExtractor = Callable[[dict[str, Any]], dict[str, str]]
-
-
 def _stable_seed(seed: int, family: str, index: int) -> int:
     return zlib.crc32(f"{seed}:{family}:{index}".encode()) & 0xFFFFFFFF
 
 
+_TaskGenerator = Callable[[random.Random, Any | None], Task]
+_FeatureExtractor = Callable[[dict[str, Any]], dict[str, str]]
+
+
 _TASK_GENERATORS: dict[str, _TaskGenerator] = {
-    "piecewise": lambda rng: generate_piecewise_task(rng=rng),
-    "stateful": lambda rng: generate_stateful_task(rng=rng),
-    "simple_algorithms": lambda rng: generate_simple_algorithms_task(rng=rng),
-    "stringrules": lambda rng: generate_stringrules_task(rng=rng),
-    "stack_bytecode": lambda rng: generate_stack_bytecode_task(rng=rng),
-    "fsm": lambda rng: generate_fsm_task(rng=rng),
-    "bitops": lambda rng: generate_bitops_task(rng=rng),
-    "sequence_dp": lambda rng: generate_sequence_dp_task(rng=rng),
-    "intervals": lambda rng: generate_intervals_task(rng=rng),
-    "graph_queries": lambda rng: generate_graph_queries_task(rng=rng),
-    "temporal_logic": lambda rng: generate_temporal_logic_task(rng=rng),
+    "piecewise": lambda rng, axes: generate_piecewise_task(rng=rng, axes=axes),
+    "stateful": lambda rng, axes: generate_stateful_task(rng=rng, axes=axes),
+    "simple_algorithms": lambda rng, axes: generate_simple_algorithms_task(
+        rng=rng, axes=axes
+    ),
+    "stringrules": lambda rng, axes: generate_stringrules_task(
+        rng=rng, axes=axes
+    ),
+    "stack_bytecode": lambda rng, axes: generate_stack_bytecode_task(
+        rng=rng, axes=axes
+    ),
+    "fsm": lambda rng, axes: generate_fsm_task(rng=rng, axes=axes),
+    "bitops": lambda rng, axes: generate_bitops_task(rng=rng, axes=axes),
+    "sequence_dp": lambda rng, axes: generate_sequence_dp_task(
+        rng=rng, axes=axes
+    ),
+    "intervals": lambda rng, axes: generate_intervals_task(rng=rng, axes=axes),
+    "graph_queries": lambda rng, axes: generate_graph_queries_task(
+        rng=rng, axes=axes
+    ),
+    "temporal_logic": lambda rng, axes: generate_temporal_logic_task(
+        rng=rng, axes=axes
+    ),
 }
 
 _FEATURE_EXTRACTORS: dict[str, _FeatureExtractor] = {
@@ -106,8 +117,12 @@ def generate_pool(
     family: str,
     seed: int = 42,
     pool_size: int = 3000,
+    axes: Any | None = None,
 ) -> tuple[list[Candidate], PoolStats]:
-    """Generate a candidate pool for a family."""
+    """Generate a candidate pool for a family.
+
+    When provided, ``axes`` is passed directly to the family's task generator.
+    """
     _validate_family(family)
     if pool_size <= 0:
         raise ValueError("pool_size must be > 0")
@@ -123,7 +138,7 @@ def generate_pool(
         stats.total_sampled += 1
         sub_rng = random.Random(_stable_seed(seed, family, i))
         try:
-            task = generate_task(sub_rng)
+            task = generate_task(sub_rng, axes)
         except Exception:
             stats.errors += 1
             continue
@@ -133,13 +148,11 @@ def generate_pool(
             continue
         seen_ids.add(task.task_id)
 
-        spec_dict = task.spec
         candidates.append(
             Candidate(
                 task=task,
-                spec_dict=spec_dict,
                 task_id=task.task_id,
-                features=extract_features(spec_dict),
+                features=extract_features(task.spec),
             )
         )
 
@@ -152,6 +165,7 @@ def generate_suite(
     seed: int = 42,
     pool_size: int = 3000,
     max_retries: int = 3,
+    axes: Any | None = None,
 ) -> list[Task]:
     """Generate a balanced suite for a family."""
     _validate_family(family)
@@ -169,6 +183,7 @@ def generate_suite(
             family=family,
             seed=attempt_seed,
             pool_size=pool_size,
+            axes=axes,
         )
         filtered = [
             candidate

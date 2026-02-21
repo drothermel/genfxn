@@ -23,6 +23,12 @@ def _empty_quota(total: int = 50) -> QuotaSpec:
 
 
 QUOTAS: dict[str, QuotaSpec] = {
+    # Deliberate placeholder mapping: all families currently use empty quota
+    # specs (no hard_constraints and no bucket targets). As a result,
+    # generate_suite(...) selects the first `total` tasks from the sampled
+    # candidate pool after deduplication and any hard-constraint filtering.
+    # Replace entries with non-empty QuotaSpec values when family-level
+    # balancing rules are defined.
     "piecewise": _empty_quota(),
     "stateful": _empty_quota(),
     "simple_algorithms": _empty_quota(),

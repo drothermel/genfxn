@@ -242,6 +242,7 @@ Stack-machine programs over integer lists: `f(xs: list[int]) -> int`
 |------|------|---------|----------|-------------|
 | `value_range` | (lo, hi) | (-50, 50) | `--value-range` | Range used for sampled list values in queries |
 | `list_length_range` | (lo, hi) | (0, 8) | `--list-length-range` | Range for sampled input lengths |
+| `program_length_range` | (lo, hi) | (2, 12) | — | Range for sampled instruction count (includes terminal `halt`) |
 | `const_range` | (lo, hi) | (-10, 10) | — | Range for sampled constants in instructions |
 | `max_step_count_range` | (lo, hi) | (20, 160) | — | Execution step budget range |
 | `jump_target_modes` | list | all | — | Behavior for out-of-range jump targets |
