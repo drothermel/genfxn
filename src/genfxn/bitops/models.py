@@ -67,7 +67,6 @@ class BitopsSpec(BaseModel):
 
 
 class BitopsAxes(BaseModel):
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     width_choices: list[int] = Field(default_factory=lambda: [8, 16, 32])
     n_ops_range: tuple[int, int] = Field(default=(2, 6))
     value_range: tuple[int, int] = Field(default=(-1024, 1024))

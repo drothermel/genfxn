@@ -80,7 +80,7 @@ Iteration functions with accumulator state: `f(xs: list[int]) -> int`
 | `RESETTING_BEST_PREFIX_SUM` | `resetting_best_prefix_sum` | Tracks best sum with reset conditions |
 | `LONGEST_RUN` | `longest_run` | Counts longest consecutive matching run |
 
-**Difficulty ranking**: `longest_run` < `conditional_linear_sum` < `resetting_best_prefix_sum`
+**Relative complexity**: `longest_run` < `conditional_linear_sum` < `resetting_best_prefix_sum`
 
 ### Predicate Types
 
@@ -240,9 +240,9 @@ Stack-machine programs over integer lists: `f(xs: list[int]) -> int`
 
 | Axis | Type | Default | CLI Flag | Description |
 |------|------|---------|----------|-------------|
-| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band for stack templates |
 | `value_range` | (lo, hi) | (-50, 50) | `--value-range` | Range used for sampled list values in queries |
 | `list_length_range` | (lo, hi) | (0, 8) | `--list-length-range` | Range for sampled input lengths |
+| `program_length_range` | (lo, hi) | (2, 12) | — | Range for sampled instruction count (includes terminal `halt`) |
 | `const_range` | (lo, hi) | (-10, 10) | — | Range for sampled constants in instructions |
 | `max_step_count_range` | (lo, hi) | (20, 160) | — | Execution step budget range |
 | `jump_target_modes` | list | all | — | Behavior for out-of-range jump targets |
@@ -274,7 +274,6 @@ Finite-state machines over integer sequences: `f(xs: list[int]) -> int`
 | `predicate_types` | list | all | — | Predicate types used for transitions |
 | `n_states_range` | (lo, hi) | (2, 6) | — | Range for number of states |
 | `transitions_per_state_range` | (lo, hi) | (1, 4) | — | Range for transitions sampled per state |
-| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
 | `value_range` | (lo, hi) | (-20, 20) | `--value-range` | Range used for query input values |
 | `threshold_range` | (lo, hi) | (-10, 10) | `--threshold-range` | Range for threshold predicates |
 | `divisor_range` | (lo, hi) | (2, 10) | `--divisor-range` | Range for modular predicates |
@@ -312,7 +311,6 @@ Fixed-width bit-operation pipelines over integer inputs: `f(x: int) -> int`
 
 | Axis | Type | Default | CLI Flag | Description |
 |------|------|---------|----------|-------------|
-| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
 | `width_choices` | list[int] | `[8, 16, 32]` | — | Allowed output bit widths |
 | `n_ops_range` | (lo, hi) | (2, 6) | — | Range for sampled operation count |
 | `value_range` | (lo, hi) | (-1024, 1024) | `--value-range` | Range for sampled integer inputs in queries |
@@ -354,7 +352,6 @@ Sequence dynamic-programming alignment tasks:
 
 | Axis | Type | Default | CLI Flag | Description |
 |------|------|---------|----------|-------------|
-| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
 | `templates` | list | all | — | DP template (`global`, `local`) |
 | `output_modes` | list | all | — | Output selection (`score`, `alignment_len`, `gap_count`) |
 | `predicate_types` | list | all | — | Matching predicate family |
@@ -402,7 +399,6 @@ Interval-statistics tasks over integer endpoints:
 
 | Axis | Type | Default | CLI Flag | Description |
 |------|------|---------|----------|-------------|
-| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
 | `operation_types` | list | all | — | Allowed operation outputs |
 | `boundary_modes` | list | all | — | Boundary interpretation mode |
 | `merge_touching_choices` | list[bool] | `[False, True]` | — | Whether touching spans can merge |
@@ -454,7 +450,6 @@ Deterministic graph-query tasks over a fixed spec graph:
 
 | Axis | Type | Default | CLI Flag | Description |
 |------|------|---------|----------|-------------|
-| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
 | `query_types` | list | all | — | Allowed query outputs |
 | `directed_choices` | list[bool] | `[False, True]` | — | Directed/undirected graph sampling |
 | `weighted_choices` | list[bool] | `[False, True]` | — | Weighted/unweighted sampling |
@@ -497,7 +492,6 @@ Finite-trace temporal-logic tasks over integer sequences:
 
 | Axis | Type | Default | CLI Flag | Description |
 |------|------|---------|----------|-------------|
-| `target_difficulty` | int (1-5) | `None` | — | Optional target difficulty band |
 | `output_modes` | list | all | — | Output projection (`sat_at_start`, `sat_count`, `first_sat_index`) |
 | `formula_depth_range` | (lo, hi) | (1, 3) | — | Range for sampled formula AST depth |
 | `operator_mix` | list | all | — | Operators allowed during formula sampling |

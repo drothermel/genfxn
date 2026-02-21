@@ -2,7 +2,6 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
@@ -47,7 +46,6 @@ def generate_stateful_task(
     queries = generate_stateful_queries(spec, axes, rng)
 
     trace = GenerationTrace(family="stateful", steps=trace_steps)
-    difficulty = compute_difficulty("stateful", spec_dict)
     description = describe_task("stateful", spec_dict)
 
     return Task(
@@ -58,6 +56,5 @@ def generate_stateful_task(
         queries=queries,
         trace=trace,
         axes=axes.model_dump(),
-        difficulty=difficulty,
         description=description,
     )

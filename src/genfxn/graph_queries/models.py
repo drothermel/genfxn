@@ -91,7 +91,6 @@ class GraphQueriesSpec(BaseModel):
 
 
 class GraphQueriesAxes(BaseModel):
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     query_types: list[GraphQueryType] = Field(
         default_factory=lambda: list(GraphQueryType)
     )

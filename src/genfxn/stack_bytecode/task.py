@@ -2,7 +2,6 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
@@ -45,7 +44,6 @@ def generate_stack_bytecode_task(
     task_id = task_id_from_spec("stack_bytecode", spec_dict)
     code = _render_stack_bytecode_for_languages(spec, languages)
     queries = generate_stack_bytecode_queries(spec, axes, rng)
-    difficulty = compute_difficulty("stack_bytecode", spec_dict)
     description = describe_task("stack_bytecode", spec_dict)
 
     return Task(
@@ -56,6 +54,5 @@ def generate_stack_bytecode_task(
         queries=queries,
         trace=GenerationTrace(family="stack_bytecode", steps=trace_steps),
         axes=axes.model_dump(),
-        difficulty=difficulty,
         description=description,
     )

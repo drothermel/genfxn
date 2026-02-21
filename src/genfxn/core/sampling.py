@@ -37,3 +37,21 @@ def pick_from_preferred(
     if preferred_available:
         return rng.choice(preferred_available)
     return rng.choice(available)
+
+
+def sample_probability(
+    prob_range: tuple[float, float],
+    rng: random.Random,
+) -> float:
+    """Sample uniformly from an inclusive probability range."""
+    lo, hi = prob_range
+    if lo > hi:
+        raise ValueError(
+            f"prob_range is malformed: low ({lo}) must be <= high ({hi})"
+        )
+    if lo < 0.0 or hi > 1.0:
+        raise ValueError(
+            "prob_range bounds must be within [0.0, 1.0], "
+            f"got ({lo}, {hi})"
+        )
+    return rng.uniform(lo, hi)

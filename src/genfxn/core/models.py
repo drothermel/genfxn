@@ -3,7 +3,7 @@ import math
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from genfxn.core.trace import GenerationTrace
 
@@ -220,6 +220,8 @@ def dedupe_queries_per_tag_input(queries: list[Query]) -> list[Query]:
 
 
 class Task(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     task_id: str = Field(description="Deterministic hash of spec")
     family: str = Field(description="Function family (piecewise, stateful)")
     spec: dict[str, Any] = Field(description="Full specification as dict")
@@ -232,12 +234,6 @@ class Task(BaseModel):
     )
     axes: dict[str, Any] | None = Field(
         default=None, description="Axes/ranges used for sampling"
-    )
-    difficulty: int | None = Field(
-        default=None,
-        ge=1,
-        le=5,
-        description="Difficulty score (1-5)",
     )
     description: str = Field(
         description="Natural language description of the task"

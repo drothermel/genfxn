@@ -160,7 +160,6 @@ class FsmAxes(BaseModel):
     )
     n_states_range: tuple[int, int] = Field(default=(2, 6))
     transitions_per_state_range: tuple[int, int] = Field(default=(1, 4))
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     value_range: tuple[int, int] = Field(default=(-20, 20))
     threshold_range: tuple[int, int] = Field(default=(-10, 10))
     divisor_range: tuple[int, int] = Field(default=(2, 10))

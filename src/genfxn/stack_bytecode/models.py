@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 _INT_RANGE_FIELDS = (
     "value_range",
     "list_length_range",
+    "program_length_range",
     "const_range",
     "max_step_count_range",
 )
@@ -113,9 +114,9 @@ class StackBytecodeSpec(BaseModel):
 
 
 class StackBytecodeAxes(BaseModel):
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     value_range: tuple[int, int] = Field(default=(-50, 50))
     list_length_range: tuple[int, int] = Field(default=(0, 8))
+    program_length_range: tuple[int, int] = Field(default=(2, 12))
     const_range: tuple[int, int] = Field(default=(-10, 10))
     max_step_count_range: tuple[int, int] = Field(default=(20, 160))
     jump_target_modes: list[JumpTargetMode] = Field(
@@ -136,6 +137,7 @@ class StackBytecodeAxes(BaseModel):
         for name in (
             "value_range",
             "list_length_range",
+            "program_length_range",
             "const_range",
             "max_step_count_range",
         ):
@@ -145,6 +147,8 @@ class StackBytecodeAxes(BaseModel):
 
         if self.list_length_range[0] < 0:
             raise ValueError("list_length_range: low must be >= 0")
+        if self.program_length_range[0] < 1:
+            raise ValueError("program_length_range: low must be >= 1")
         if self.max_step_count_range[0] < 1:
             raise ValueError("max_step_count_range: low must be >= 1")
         if self.max_step_count_range[1] > INT64_MAX:

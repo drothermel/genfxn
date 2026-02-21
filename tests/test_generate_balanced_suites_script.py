@@ -26,18 +26,17 @@ class _FakeTask:
 
 
 def test_main_parses_filters_and_writes_output(tmp_path, monkeypatch) -> None:
-    calls: list[tuple[str, int, int, int]] = []
+    calls: list[tuple[str, int, int]] = []
 
     def _fake_generate_suite(
-        family: str, difficulty: int, seed: int, pool_size: int
+        family: str, seed: int, pool_size: int
     ) -> list[_FakeTask]:
-        calls.append((family, difficulty, seed, pool_size))
-        return [_FakeTask(f"{family}_{difficulty}")]
+        calls.append((family, seed, pool_size))
+        return [_FakeTask(family)]
 
     def _fake_quota_report(
         tasks: list[_FakeTask],
         family: str,  # noqa: ARG001
-        difficulty: int,  # noqa: ARG001
     ) -> list[tuple[str, str, int, int, str]]:
         assert tasks
         return [("axis", "value", 1, 1, "OK")]
@@ -58,18 +57,14 @@ def test_main_parses_filters_and_writes_output(tmp_path, monkeypatch) -> None:
         seed=7,
         pool_size=11,
         families="stateful,stringrules",
-        difficulties="3,5",
     )
 
     assert calls == [
-        ("stateful", 3, 7, 11),
-        ("stateful", 5, 7, 11),
-        ("stringrules", 3, 7, 11),
-        ("stringrules", 5, 7, 11),
+        ("stateful", 7, 11),
+        ("stringrules", 7, 11),
     ]
 
     for family in ("stateful", "stringrules"):
-        for difficulty in (3, 5):
-            output = tmp_path / family / f"level_{difficulty}" / "all.jsonl"
-            records = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
-            assert records == [{"task_id": f"{family}_{difficulty}"}]
+        output = tmp_path / family / "all.jsonl"
+        records = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
+        assert records == [{"task_id": family}]

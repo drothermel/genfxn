@@ -205,8 +205,6 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 |--------|-------------|
 | `-s, --seed INT` | Random seed for reproducibility |
 | `-l, --language` | Single language output: `python`, `java`, or `rust` |
-| `--difficulty, -d` | Target difficulty level (family-dependent, typically 1-5) |
-| `--variant` | Preset variant (for example `3A`, `3B`); requires `--difficulty` |
 
 ### Piecewise Options
 
@@ -286,20 +284,20 @@ genfxn generate -o tasks.jsonl -f simple_algorithms -n 50 \
 genfxn generate -o tasks.jsonl -f stringrules -n 50 \
     --n-rules 4 --overlap-level high
 
-# Bitops tasks at target difficulty 4
-genfxn generate -o tasks.jsonl -f bitops -n 50 --difficulty 4
+# Bitops tasks with a narrower value range
+genfxn generate -o tasks.jsonl -f bitops -n 50 --value-range -256,256
 
-# Sequence DP tasks at target difficulty 5
-genfxn generate -o tasks.jsonl -f sequence_dp -n 50 --difficulty 5
+# Sequence DP tasks with shorter sequence lengths
+genfxn generate -o tasks.jsonl -f sequence_dp -n 50 --list-length-range 2,6
 
-# Intervals tasks at target difficulty 4
-genfxn generate -o tasks.jsonl -f intervals -n 50 --difficulty 4
+# Intervals tasks with smaller endpoint range
+genfxn generate -o tasks.jsonl -f intervals -n 50 --value-range -10,10
 
-# Graph query tasks at target difficulty 4
-genfxn generate -o tasks.jsonl -f graph_queries -n 50 --difficulty 4
+# Graph query tasks with smaller graph sizes
+genfxn generate -o tasks.jsonl -f graph_queries -n 50 --list-length-range 3,6
 
-# Temporal logic tasks at target difficulty 5
-genfxn generate -o tasks.jsonl -f temporal_logic -n 50 --difficulty 5
+# Temporal logic tasks with bounded sequence lengths
+genfxn generate -o tasks.jsonl -f temporal_logic -n 50 --list-length-range 0,6
 ```
 
 See [AXES.md](AXES.md) for complete axis documentation.

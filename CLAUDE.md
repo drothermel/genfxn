@@ -21,7 +21,6 @@
 
 ## Core Modules
 
-- `src/genfxn/core/difficulty.py` - Difficulty scoring (1-5) per family
 - `src/genfxn/core/describe.py` - Natural language task descriptions
 - `src/genfxn/{family}/task.py` - Task generation entry points
 

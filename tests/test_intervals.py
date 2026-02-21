@@ -5,7 +5,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.intervals.eval import eval_intervals
 from genfxn.intervals.models import (
@@ -348,27 +347,24 @@ class TestSampler:
         spec2 = _call_sample(sample_intervals_spec, axes, seed=99)
         assert spec1.model_dump() == spec2.model_dump()
 
-    def test_sampler_respects_target_difficulty_axis(self) -> None:
-        def _sample_difficulty_average(target: int) -> float:
-            axes = IntervalsAxes(target_difficulty=target)
-            rng = random.Random(3000 + target)
-            scores: list[int] = []
-            for _ in range(120):
-                spec = _call_sample(
-                    sample_intervals_spec,
-                    axes,
-                    seed=rng.randint(0, 10**9),
-                )
-                scores.append(
-                    compute_difficulty("intervals", spec.model_dump())
-                )
-            return sum(scores) / len(scores)
-
-        averages = {
-            target: _sample_difficulty_average(target) for target in range(1, 6)
+    def test_sampler_produces_varied_interval_shapes(self) -> None:
+        axes = IntervalsAxes()
+        specs = [
+            _call_sample(
+                sample_intervals_spec, axes, seed=3000 + i
+            ).model_dump()
+            for i in range(24)
+        ]
+        signatures = {
+            (
+                spec["operation"],
+                spec["boundary_mode"],
+                bool(spec["merge_touching"]),
+                int(spec["endpoint_clip_abs"]),
+            )
+            for spec in specs
         }
-
-        assert averages[5] >= averages[1] + 1.0
+        assert len(signatures) >= 8
 
     def test_sampler_persists_interval_probability_samples(self) -> None:
         axes = IntervalsAxes(
@@ -592,7 +588,6 @@ class TestTaskGeneration:
         assert {q.tag for q in task.queries} == set(QueryTag)
 
         spec = IntervalsSpec.model_validate(task.spec)
-        assert task.difficulty == compute_difficulty("intervals", task.spec)
         for query in task.queries:
             assert query.output == eval_intervals(spec, query.input)
 

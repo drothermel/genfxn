@@ -132,7 +132,6 @@ class TemporalLogicSpec(BaseModel):
 
 
 class TemporalLogicAxes(BaseModel):
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     output_modes: list[TemporalOutputMode] = Field(
         default_factory=lambda: list(TemporalOutputMode)
     )

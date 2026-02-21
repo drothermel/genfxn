@@ -6,7 +6,6 @@ from genfxn.bitops.render import render_bitops
 from genfxn.bitops.sampler import sample_bitops_spec
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
@@ -43,11 +42,6 @@ def generate_bitops_task(
     spec = sample_bitops_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
 
-    try:
-        difficulty = compute_difficulty("bitops", spec_dict)
-    except ValueError:
-        difficulty = None
-
     description = describe_task("bitops", spec_dict)
 
     return Task(
@@ -58,6 +52,5 @@ def generate_bitops_task(
         queries=generate_bitops_queries(spec, axes, rng),
         trace=GenerationTrace(family="bitops", steps=trace_steps),
         axes=axes.model_dump(),
-        difficulty=difficulty,
         description=description,
     )

@@ -2,11 +2,11 @@ import random
 
 import pytest
 
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import QueryTag
 from genfxn.core.predicates import (
     PredicateEven,
     PredicateLt,
+    PredicateModEq,
     PredicateOdd,
 )
 from genfxn.fsm.eval import eval_fsm
@@ -22,7 +22,7 @@ from genfxn.fsm.models import (
 )
 from genfxn.fsm.queries import generate_fsm_queries
 from genfxn.fsm.render import render_fsm
-from genfxn.fsm.sampler import sample_fsm_spec
+from genfxn.fsm.sampler import _sample_predicate, sample_fsm_spec
 from genfxn.fsm.task import generate_fsm_task
 
 
@@ -275,32 +275,63 @@ class TestSampler:
         spec2 = sample_fsm_spec(axes, random.Random(42))
         assert spec1.model_dump() == spec2.model_dump()
 
-    def test_sampler_respects_target_difficulty_axis(self) -> None:
-        def _sample_difficulty_average(target: int) -> float:
-            axes = FsmAxes(target_difficulty=target)
-            rng = random.Random(1000 + target)
-            scores = [
-                compute_difficulty(
-                    "fsm",
-                    sample_fsm_spec(axes, rng).model_dump(),
-                )
-                for _ in range(120)
-            ]
-            return sum(scores) / len(scores)
-
-        averages = {
-            target: _sample_difficulty_average(target) for target in range(1, 6)
+    def test_sampler_varies_state_and_transition_shapes(self) -> None:
+        axes = FsmAxes()
+        specs = [
+            sample_fsm_spec(axes, random.Random(1000 + i)) for i in range(24)
+        ]
+        signatures = {
+            (
+                len(spec.states),
+                sum(len(state.transitions) for state in spec.states),
+            )
+            for spec in specs
         }
+        assert len(signatures) >= 6
 
-        for target in range(1, 5):
-            assert averages[target + 1] >= averages[target] + 0.15
-        assert averages[5] >= averages[1] + 0.8
+    def test_sampler_mod_eq_predicates_respect_divisor_range(self) -> None:
+        axes = FsmAxes(
+            predicate_types=[PredicateType.MOD_EQ],
+            divisor_range=(2, 2),
+            n_states_range=(2, 2),
+            transitions_per_state_range=(1, 1),
+        )
+        spec = sample_fsm_spec(axes, random.Random(77))
+
+        for state in spec.states:
+            for transition in state.transitions:
+                predicate = transition.predicate
+                assert isinstance(predicate, PredicateModEq)
+                assert predicate.divisor == 2
+                assert 0 <= predicate.remainder < predicate.divisor
+
+    def test_sample_predicate_unknown_type_raises(self) -> None:
+        class _UnknownPredicateType:
+            value = "unknown_new_pred"
+
+        with pytest.raises(ValueError, match="unknown_new_pred"):
+            _sample_predicate(
+                _UnknownPredicateType(),  # type: ignore[arg-type]
+                threshold_range=(-1, 1),
+                divisor_range=(2, 3),
+                rng=random.Random(1),
+            )
+
+    def test_sample_predicate_mod_eq_rejects_non_positive_divisor_range(
+        self,
+    ) -> None:
+        with pytest.raises(ValueError, match="divisor_range must include"):
+            _sample_predicate(
+                PredicateType.MOD_EQ,
+                threshold_range=(-1, 1),
+                divisor_range=(0, 0),
+                rng=random.Random(1),
+            )
 
 
 class TestQueries:
     def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
         axes = FsmAxes(
-            target_difficulty=3,
             value_range=(-7, 7),
             n_states_range=(3, 4),
             transitions_per_state_range=(1, 2),
@@ -334,8 +365,6 @@ class TestTaskGeneration:
 
         assert task.task_id
         assert task.family == "fsm"
-        assert task.difficulty is not None
-        assert 1 <= task.difficulty <= 5
         assert task.description
 
         spec = FsmSpec.model_validate(task.spec)

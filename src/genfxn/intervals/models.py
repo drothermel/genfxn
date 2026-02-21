@@ -56,7 +56,6 @@ class IntervalsSpec(BaseModel):
 
 
 class IntervalsAxes(BaseModel):
-    target_difficulty: int | None = Field(default=None, ge=1, le=5)
     operation_types: list[OperationType] = Field(
         default_factory=lambda: list(OperationType)
     )

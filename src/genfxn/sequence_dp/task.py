@@ -2,7 +2,6 @@ import random
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
-from genfxn.core.difficulty import compute_difficulty
 from genfxn.core.models import Task
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
@@ -45,7 +44,6 @@ def generate_sequence_dp_task(
     trace_steps: list[TraceStep] = []
     spec = sample_sequence_dp_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
-    difficulty = compute_difficulty("sequence_dp", spec_dict)
 
     return Task(
         task_id=task_id_from_spec("sequence_dp", spec_dict),
@@ -55,6 +53,5 @@ def generate_sequence_dp_task(
         queries=generate_sequence_dp_queries(spec, axes, rng),
         trace=GenerationTrace(family="sequence_dp", steps=trace_steps),
         axes=axes.model_dump(),
-        difficulty=difficulty,
         description=describe_task("sequence_dp", spec_dict),
     )
