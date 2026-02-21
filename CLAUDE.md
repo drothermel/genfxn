@@ -42,3 +42,13 @@ Required:
   behavior.
 - `task_id_from_spec(...)` hashing must preserve container value types
   (`list`, `tuple`, `set`, `frozenset`) to avoid cross-type collisions.
+- Cross-language numeric parity guarantees apply to generated specs/tasks
+  under validated axes constraints; hand-authored specs outside those
+  constraints are not contract-covered.
+
+## TODO (Next PR)
+
+- Add generated-code style/lint checks for Java and Rust:
+  materialize generated snippets to temp sources, then run formatter/linter
+  checks in CI (`google-java-format --dry-run --set-exit-if-changed`,
+  `checkstyle` or equivalent, `cargo fmt --check`, `cargo clippy -- -D warnings`).

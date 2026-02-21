@@ -4,6 +4,8 @@ from genfxn.core.predicates import Predicate
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.core.transforms import Transform
 from genfxn.simple_algorithms.models import (
+    PREPROCESS_SCALE_RANGE,
+    PREPROCESS_SHIFT_RANGE,
     CountPairsSumSpec,
     MaxWindowSumSpec,
     MostFrequentSpec,
@@ -32,8 +34,8 @@ def _sample_preprocess(
         trans_type = rng.choice(axes.pre_transform_types)
         pre_transform = sample_transform(
             trans_type,
-            shift_range=(-10, 10),
-            scale_range=(-5, 5),
+            shift_range=PREPROCESS_SHIFT_RANGE,
+            scale_range=PREPROCESS_SCALE_RANGE,
             rng=rng,
         )
 

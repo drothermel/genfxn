@@ -114,9 +114,7 @@ class TestSpecAndCodeValidation:
     ) -> None:
         corrupted = baseline_task.model_copy(
             update={
-                "code": {
-                    "java": "public static int f(int[] xs){return 0;}"
-                }
+                "code": {"java": "public static int f(int[] xs){return 0;}"}
             }
         )
         issues = validate_fsm_task(corrupted)
@@ -162,9 +160,7 @@ class TestQueryAndSemantics:
     def test_query_input_type_detected(self, baseline_task: Task) -> None:
         corrupted = baseline_task.model_copy(
             update={
-                "queries": [
-                    Query(input="bad", output=0, tag=QueryTag.TYPICAL)
-                ]
+                "queries": [Query(input="bad", output=0, tag=QueryTag.TYPICAL)]
             }
         )
         issues = validate_fsm_task(corrupted)
@@ -260,12 +256,8 @@ class TestQueryAndSemantics:
             max_semantic_issues=3,
             random_seed=17,
         )
-        mismatches = [
-            i for i in issues if i.code == CODE_SEMANTIC_MISMATCH
-        ]
-        capped = [
-            i for i in issues if i.code == CODE_SEMANTIC_ISSUES_CAPPED
-        ]
+        mismatches = [i for i in issues if i.code == CODE_SEMANTIC_MISMATCH]
+        capped = [i for i in issues if i.code == CODE_SEMANTIC_ISSUES_CAPPED]
         assert len(mismatches) == 3
         assert len(capped) == 1
 

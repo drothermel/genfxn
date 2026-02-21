@@ -27,6 +27,10 @@ uv sync
 | **graph_queries** | `f(src: int, dst: int) -> int` | Deterministic graph-query evaluation (`reachable`, `min_hops`, `shortest_path_cost`) |
 | **temporal_logic** | `f(xs: list[int]) -> int` | Finite-trace temporal-logic evaluation with integer predicates and deterministic temporal semantics |
 
+Signatures in this table describe the logical task contract. Java/Rust renderers
+use signed 64-bit numeric types (`long`/`i64`) for numeric families that were
+migrated to the long-based runtime contract.
+
 ### Current Coverage
 
 All families listed above are implemented and integrated with generation,
@@ -163,6 +167,17 @@ Overflow semantics (`stack_bytecode` and `sequence_dp`):
   overflow-adjacent parity tests, evaluator expectations are normalized to
   signed 64-bit representation before asserting Java/Rust parity.
 
+Java long-based contract (`piecewise`, `stateful`, `simple_algorithms`):
+- Rendered entry points are `public static long f(long x)` and
+  `public static long f(long[] xs)` depending on family input shape.
+- This hard-removes prior int32-wrapper behavior from generated Java code.
+- Axes validation now rejects range combinations that could overflow signed
+  64-bit arithmetic (including `abs/negate` on `INT64_MIN`) so generated
+  outputs stay parity-safe across Python/Java/Rust without wrapper code.
+- Cross-language parity guarantees in this section apply to generated tasks
+  and specs under validated axes constraints; hand-authored specs outside
+  those constraints are not contract-covered.
+
 Task-id hashing semantics:
 - `task_id_from_spec(...)` canonicalization is type-sensitive for container
   values (`list`, `tuple`, `set`, `frozenset`) and does not intentionally
@@ -192,7 +207,6 @@ genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 | `-l, --language` | Single language output: `python`, `java`, or `rust` |
 | `--difficulty, -d` | Target difficulty level (family-dependent, typically 1-5) |
 | `--variant` | Preset variant (for example `3A`, `3B`); requires `--difficulty` |
-| `--no-i32-wrap` | Disable generated Python int32-wrap helpers for `piecewise`, `stateful`, and `simple_algorithms` |
 
 ### Piecewise Options
 

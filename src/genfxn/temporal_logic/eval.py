@@ -52,9 +52,7 @@ def _eval_formula(node: dict[str, Any], xs: list[int], index: int) -> bool:
         right = node["right"]
         if not isinstance(left, dict) or not isinstance(right, dict):
             raise ValueError("or node children must be dicts")
-        return _eval_formula(left, xs, index) or _eval_formula(
-            right, xs, index
-        )
+        return _eval_formula(left, xs, index) or _eval_formula(right, xs, index)
 
     n = len(xs)
     if op == TemporalOperator.NEXT:

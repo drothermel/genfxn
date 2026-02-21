@@ -8,9 +8,7 @@ from click.exceptions import Exit
 from helpers import load_script_module
 
 _SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "calibrate_sequence_dp.py"
+    Path(__file__).resolve().parents[1] / "scripts" / "calibrate_sequence_dp.py"
 )
 
 _SCRIPT_MODULE = load_script_module(

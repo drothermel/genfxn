@@ -5,7 +5,6 @@ from typing import cast
 from pydantic import ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
-from genfxn.core.int32 import i32_abs, i32_add, i32_mod, i32_mul, wrap_i32
 from genfxn.core.models import Task
 from genfxn.core.predicates import get_threshold
 from genfxn.core.safe_exec import (
@@ -44,11 +43,6 @@ _ALLOWED_BUILTINS = {
     "abs": abs,
     "int": int,
     "ValueError": ValueError,
-    "__i32_wrap": wrap_i32,
-    "__i32_add": i32_add,
-    "__i32_mul": i32_mul,
-    "__i32_abs": i32_abs,
-    "__i32_mod": i32_mod,
 }
 SEMANTIC_SAMPLE_MAX_POINTS = 1000
 PYTHON_CODE_KEY = "python"
@@ -246,8 +240,7 @@ def _validate_code_compile(
                 code=CODE_CODE_PARSE_ERROR,
                 severity=Severity.ERROR,
                 message=(
-                    "Code payload must be a string, got "
-                    f"{type(code).__name__}"
+                    f"Code payload must be a string, got {type(code).__name__}"
                 ),
                 location="code",
                 task_id=task.task_id,

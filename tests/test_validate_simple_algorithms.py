@@ -122,7 +122,7 @@ class TestCodeCompilation:
             update={
                 "code": {
                     "python": task.code,
-                    "java": "public static int f(int[] xs) { return 0; }",
+                    "java": "public static long f(long[] xs) { return 0L; }",
                 }
             }
         )
@@ -136,7 +136,7 @@ class TestCodeCompilation:
         mapped = task.model_copy(
             update={
                 "code": {
-                    "java": "public static int f(int[] xs) { return 0; }"
+                    "java": "public static long f(long[] xs) { return 0L; }"
                 }
             }
         )
@@ -309,7 +309,7 @@ class TestHelperLevelValidation:
         issues, _ = _validate_ast_whitelist("import os\ndef f(xs): return 0")
         assert any(i.code == CODE_UNSAFE_AST for i in issues)
 
-    def test_ast_whitelist_allows_generated_int32_helpers(
+    def test_ast_whitelist_allows_generated_helpers(
         self, baseline_task: Task
     ) -> None:
         assert isinstance(baseline_task.code, str)

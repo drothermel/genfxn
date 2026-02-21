@@ -6,16 +6,6 @@ from typing import cast
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.core.codegen import task_id_from_spec
-from genfxn.core.int32 import (
-    i32_abs,
-    i32_add,
-    i32_clip,
-    i32_mod,
-    i32_mul,
-    i32_neg,
-    i32_sub,
-    wrap_i32,
-)
 from genfxn.core.models import Task
 from genfxn.core.safe_exec import (
     SafeExecMissingFunctionError,
@@ -73,14 +63,6 @@ _ALLOWED_BUILTINS = {
     "sum": sum,
     "tuple": tuple,
     "ValueError": ValueError,
-    "__i32_wrap": wrap_i32,
-    "__i32_add": i32_add,
-    "__i32_sub": i32_sub,
-    "__i32_mul": i32_mul,
-    "__i32_neg": i32_neg,
-    "__i32_abs": i32_abs,
-    "__i32_clip": i32_clip,
-    "__i32_mod": i32_mod,
 }
 
 
@@ -142,9 +124,7 @@ def _validate_ast_whitelist(
                     for n in ast.walk(arg.annotation):
                         if hasattr(n, "lineno") and hasattr(n, "col_offset"):
                             annotation_positions.add(
-                                cast(
-                                    tuple[int, int], (n.lineno, n.col_offset)
-                                )
+                                cast(tuple[int, int], (n.lineno, n.col_offset))
                             )
             if node.returns is not None:
                 for n in ast.walk(node.returns):

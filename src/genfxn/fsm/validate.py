@@ -93,13 +93,9 @@ def _validate_ast_whitelist(
             for arg in node.args.args:
                 if arg.annotation is not None:
                     for n in ast.walk(arg.annotation):
-                        if hasattr(n, "lineno") and hasattr(
-                            n, "col_offset"
-                        ):
+                        if hasattr(n, "lineno") and hasattr(n, "col_offset"):
                             annotation_positions.add(
-                                cast(
-                                    tuple[int, int], (n.lineno, n.col_offset)
-                                )
+                                cast(tuple[int, int], (n.lineno, n.col_offset))
                             )
             if node.returns is not None:
                 for n in ast.walk(node.returns):
@@ -278,8 +274,7 @@ def _validate_code_compile(
                 code=CODE_CODE_PARSE_ERROR,
                 severity=Severity.ERROR,
                 message=(
-                    "Code payload must be a string, got "
-                    f"{type(code).__name__}"
+                    f"Code payload must be a string, got {type(code).__name__}"
                 ),
                 location="code",
                 task_id=task.task_id,

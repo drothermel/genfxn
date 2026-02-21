@@ -114,7 +114,7 @@ def _run_rust_f(
         f"{code}\n"
         "fn main() {\n"
         f"    let intervals: Vec<(i64, i64)> = {intervals_lit};\n"
-        "    println!(\"{}\", f(&intervals));\n"
+        '    println!("{}", f(&intervals));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:

@@ -366,9 +366,7 @@ class TestPresetAccuracy:
 
     @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
     def test_intervals_preset_accuracy(self, difficulty: int) -> None:
-        difficulties = self._generate_tasks_for_preset(
-            "intervals", difficulty
-        )
+        difficulties = self._generate_tasks_for_preset("intervals", difficulty)
         self._verify_accuracy(difficulties, difficulty, "intervals")
 
     @pytest.mark.parametrize("difficulty", [1, 2, 3, 4, 5])
@@ -733,9 +731,7 @@ class TestStackBytecodePresets:
                     ),
                 )
                 task = generate_stack_bytecode_task(axes=axes, rng=rng)
-                observed.append(
-                    compute_difficulty("stack_bytecode", task.spec)
-                )
+                observed.append(compute_difficulty("stack_bytecode", task.spec))
             means[difficulty] = sum(observed) / len(observed)
 
         ordered_means = [means[d] for d in [1, 2, 3, 4, 5]]

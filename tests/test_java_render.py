@@ -237,28 +237,15 @@ class TestPredicateJava:
     def test_custom_var(self) -> None:
         assert render_predicate_java(PredicateEven(), var="n") == "n % 2 == 0"
 
-    def test_lt_out_of_int32_unwrapped_preserves_int_input_semantics(
-        self,
-    ) -> None:
-        result = render_predicate_java(
-            PredicateLt(value=1 << 31),
-            int32_wrap=False,
-        )
-        assert result == "true"
+    def test_lt_out_of_int32_renders_long_literal(self) -> None:
+        result = render_predicate_java(PredicateLt(value=1 << 31))
+        assert result == "x < 2147483648L"
 
-    def test_lt_out_of_int32_wrapped_narrows_constant(self) -> None:
-        result = render_predicate_java(
-            PredicateLt(value=1 << 31),
-            int32_wrap=True,
-        )
-        assert result == "x < ((int) 2147483648L)"
-
-    def test_in_set_unwrapped_ignores_out_of_int32_values(self) -> None:
+    def test_in_set_renders_out_of_int32_values_as_long(self) -> None:
         result = render_predicate_java(
             PredicateInSet(values=frozenset({1, 1 << 31})),
-            int32_wrap=False,
         )
-        assert result == "(x == 1)"
+        assert result == "(x == 1 || x == 2147483648L)"
 
 
 # ── Transforms ─────────────────────────────────────────────────────────
@@ -399,9 +386,7 @@ class TestStringPredicateJava:
         result = render_string_predicate_java(
             StringPredicateLengthCmp(op=op, value=5)
         )
-        assert result == (
-            f"s.codePointCount(0, s.length()) {expected_op} 5"
-        )
+        assert result == (f"s.codePointCount(0, s.length()) {expected_op} 5")
 
     def test_not(self) -> None:
         result = render_string_predicate_java(
@@ -533,7 +518,7 @@ class TestPiecewiseJava:
             default_expr=ExprAffine(a=0, b=-1),
         )
         code = render_piecewise(spec)
-        assert "public static int f(int x)" in code
+        assert "public static long f(long x)" in code
         assert "if (x > 0)" in code
         assert "return 2 * x;" in code
         assert "return -1;" in code
@@ -585,7 +570,9 @@ class TestPiecewiseJava:
         code = render_piecewise(spec)
         assert "(x == 1 || x == 2)" in code
 
-    def test_expression_constants_use_int32_wrap_literals(self) -> None:
+    def test_expression_constants_use_long_literals_for_oversized_values(
+        self,
+    ) -> None:
         from genfxn.langs.java.piecewise import render_piecewise
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 
@@ -600,8 +587,8 @@ class TestPiecewiseJava:
             default_expr=ExprAffine(a=0, b=oversized),
         )
         code = render_piecewise(spec)
-        assert "return ((int) 2147483648L) * x;" in code
-        assert "return ((int) 2147483648L);" in code
+        assert "return 2147483648L * x;" in code
+        assert "return 2147483648L;" in code
 
 
 class TestBitopsJava:
@@ -649,8 +636,8 @@ class TestStatefulJava:
             init_value=0,
         )
         code = render_stateful(spec)
-        assert "public static int f(int[] xs)" in code
-        assert "for (int x : xs)" in code
+        assert "public static long f(long[] xs)" in code
+        assert "for (long x : xs)" in code
         assert "x % 2 == 0" in code
         assert "-x" in code
 
@@ -738,8 +725,8 @@ class TestSimpleAlgorithmsJava:
             empty_default=0,
         )
         code = render_simple_algorithms(spec)
-        assert "public static int f(int[] xs)" in code
-        assert "HashMap<Integer, Integer>" in code
+        assert "public static long f(long[] xs)" in code
+        assert "HashMap<Long, Long>" in code
         assert "getOrDefault" in code
         assert "Collections.min" in code
 
@@ -755,7 +742,7 @@ class TestSimpleAlgorithmsJava:
             empty_default=0,
         )
         code = render_simple_algorithms(spec)
-        assert "HashSet<Integer>" in code
+        assert "HashSet<Long>" in code
         assert "candidates.contains(x)" in code
 
     def test_count_pairs_all_indices(self) -> None:
@@ -844,8 +831,8 @@ class TestSimpleAlgorithmsJava:
             tie_default=99,
         )
         code = render_simple_algorithms(spec)
-        assert "return -1;" in code
-        assert "return 99;" in code
+        assert "return -1L;" in code
+        assert "return 99L;" in code
         assert "candidates.size() > 1" in code
 
 
@@ -864,7 +851,7 @@ class TestMultiLanguageGeneration:
         assert "python" in code
         assert "java" in code
         assert "def f(" in code["python"]
-        assert "public static int f(int x)" in code["java"]
+        assert "public static long f(long x)" in code["java"]
 
     def test_stateful_generates_java(self) -> None:
         task = generate_stateful_task(
@@ -875,7 +862,7 @@ class TestMultiLanguageGeneration:
         assert "python" in code
         assert "java" in code
         assert "def f(" in code["python"]
-        assert "public static int f(int[] xs)" in code["java"]
+        assert "public static long f(long[] xs)" in code["java"]
 
     def test_stringrules_generates_java(self) -> None:
         task = generate_stringrules_task(
@@ -897,7 +884,7 @@ class TestMultiLanguageGeneration:
         assert "python" in code
         assert "java" in code
         assert "def f(" in code["python"]
-        assert "public static int f(int[] xs)" in code["java"]
+        assert "public static long f(long[] xs)" in code["java"]
 
     def test_fsm_generates_java(self) -> None:
         task = generate_fsm_task(
@@ -1003,9 +990,7 @@ class TestMultiLanguageGeneration:
 
     def test_simple_algorithms_rejects_empty_languages(self) -> None:
         with pytest.raises(ValueError, match="languages list is empty"):
-            generate_simple_algorithms_task(
-                rng=random.Random(42), languages=[]
-            )
+            generate_simple_algorithms_task(rng=random.Random(42), languages=[])
 
     def test_sequence_dp_rejects_empty_languages(self) -> None:
         with pytest.raises(ValueError, match="languages list is empty"):
@@ -1276,7 +1261,7 @@ class TestLangsInfra:
             func_name="g",
         )
         assert list(result.keys()) == ["java"]
-        assert "public static int g(int x)" in result["java"]
+        assert "public static long g(long x)" in result["java"]
 
     def test_render_all_languages_stack_bytecode_when_available(self) -> None:
         if not _supports_stack_bytecode_java():

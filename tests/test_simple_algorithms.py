@@ -177,8 +177,7 @@ class TestRender:
             target=10, counting_mode=CountingMode.ALL_INDICES
         )
         code = render_simple_algorithms(spec)
-        assert "count = __i32_add(count, 1)" in code
-        assert "__i32_add(" in code
+        assert "count += 1" in code
 
     def test_count_pairs_unique_values(self) -> None:
         spec = CountPairsSumSpec(
@@ -193,15 +192,6 @@ class TestRender:
         code = render_simple_algorithms(spec)
         assert "window_sum" in code
         assert "max_sum" in code
-
-    def test_render_without_i32_wrap(self) -> None:
-        spec = CountPairsSumSpec(
-            target=10,
-            counting_mode=CountingMode.ALL_INDICES,
-        )
-        code = render_simple_algorithms(spec, int32_wrap=False)
-        assert "__i32_" not in code
-        assert "count += 1" in code
 
 
 class TestRenderRoundtrip:
@@ -250,25 +240,7 @@ class TestRenderRoundtrip:
                     f"k={k}, xs={xs}"
                 )
 
-    def test_count_pairs_roundtrip_without_i32_wrap(self) -> None:
-        spec = CountPairsSumSpec(
-            target=-46,
-            counting_mode=CountingMode.UNIQUE_VALUES,
-            no_result_default=5,
-            pre_filter=PredicateModEq(divisor=8, remainder=2),
-        )
-        code = render_simple_algorithms(spec, int32_wrap=False)
-        namespace: dict = {}
-        exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        for xs in ([2, 10, 18], [-46, 2, -48, 6], [1, 2, 3, 4]):
-            assert f(xs) == eval_simple_algorithms(
-                spec,
-                list(xs),
-                int32_wrap=False,
-            )
-
-    def test_count_pairs_roundtrip_int32_wrapped_sum_comparison(self) -> None:
+    def test_count_pairs_roundtrip_large_value_sum_comparison(self) -> None:
         spec = CountPairsSumSpec(
             target=-294_967_296,
             counting_mode=CountingMode.ALL_INDICES,
@@ -429,6 +401,31 @@ class TestQueryGeneration:
                 for j in range(i + 1, len(q.input))
             )
 
+    def test_count_pairs_queries_respect_list_length_when_max_len_under_two(
+        self,
+    ) -> None:
+        """
+        When axes allow only length 0-1, no "no pairs" list is possible.
+        """
+        spec = CountPairsSumSpec(
+            target=10,
+            counting_mode=CountingMode.ALL_INDICES,
+        )
+        axes = SimpleAlgorithmsAxes(
+            value_range=(0, 15),
+            list_length_range=(0, 1),
+            window_size_range=(1, 1),
+        )
+        queries = generate_simple_algorithms_queries(
+            spec, axes, random.Random(99)
+        )
+        len_hi = axes.list_length_range[1]
+        for q in queries:
+            assert len(q.input) <= len_hi, (
+                "query input length "
+                f"{len(q.input)} exceeds list_length_range high {len_hi}"
+            )
+
 
 class TestAxesValidation:
     def test_invalid_value_range(self) -> None:
@@ -504,6 +501,64 @@ class TestAxesValidation:
             ValueError, match="pre_transform_types contains unsupported"
         ):
             SimpleAlgorithmsAxes(pre_transform_types=[TransformType.CLIP])
+
+    def test_pipeline_pre_transform_type_is_supported(self) -> None:
+        axes = SimpleAlgorithmsAxes(
+            pre_transform_types=[TransformType.PIPELINE]
+        )
+        assert axes.pre_transform_types == [TransformType.PIPELINE]
+
+    def test_pipeline_pre_transform_rejects_overflowing_ranges(self) -> None:
+        with pytest.raises(ValueError, match="Numeric contract violation"):
+            SimpleAlgorithmsAxes(
+                pre_transform_types=[TransformType.PIPELINE],
+                value_range=(
+                    2_000_000_000_000_000_000,
+                    2_000_000_000_000_000_000,
+                ),
+            )
+
+    def test_abs_pre_transform_rejects_int64_min_value_range(self) -> None:
+        with pytest.raises(
+            ValueError, match="pre_transform_types includes 'abs'"
+        ):
+            SimpleAlgorithmsAxes(
+                pre_transform_types=[TransformType.ABS],
+                value_range=(-(1 << 63), 10),
+            )
+
+    def test_count_pairs_rejects_pair_sum_i64_overflow_ranges(self) -> None:
+        with pytest.raises(
+            ValueError, match="pair-sum arithmetic can overflow"
+        ):
+            SimpleAlgorithmsAxes(
+                templates=[TemplateType.COUNT_PAIRS_SUM],
+                value_range=(
+                    6_000_000_000_000_000_000,
+                    6_000_000_000_000_000_000,
+                ),
+            )
+
+    def test_count_pairs_rejects_pair_count_i64_overflow(self) -> None:
+        with pytest.raises(ValueError, match="pair-count outputs"):
+            SimpleAlgorithmsAxes(
+                templates=[TemplateType.COUNT_PAIRS_SUM],
+                list_length_range=(2, 4_300_000_000),
+            )
+
+    def test_max_window_rejects_sum_i64_overflow_ranges(self) -> None:
+        with pytest.raises(
+            ValueError, match="window-sum arithmetic can overflow"
+        ):
+            SimpleAlgorithmsAxes(
+                templates=[TemplateType.MAX_WINDOW_SUM],
+                value_range=(
+                    5_000_000_000_000_000_000,
+                    5_000_000_000_000_000_000,
+                ),
+                list_length_range=(2, 2),
+                window_size_range=(2, 2),
+            )
 
     @pytest.mark.parametrize(
         ("field_name", "range_value"),

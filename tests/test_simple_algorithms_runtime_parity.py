@@ -44,12 +44,12 @@ def _parse_query_input(input_value: Any) -> list[int]:
 
 
 def _run_java_f(javac: str, java: str, code: str, xs: list[int]) -> int:
-    xs_lit = ", ".join(f"{x}" for x in xs)
+    xs_lit = ", ".join(f"{x}L" for x in xs)
     main_src = (
         "public class Main {\n"
         f"{code}\n"
         "  public static void main(String[] args) {\n"
-        f"    int[] xs = new int[]{{{xs_lit}}};\n"
+        f"    long[] xs = new long[]{{{xs_lit}}};\n"
         "    System.out.print(f(xs));\n"
         "  }\n"
         "}\n"
@@ -75,7 +75,7 @@ def _run_rust_f(rustc: str, code: str, xs: list[int]) -> int:
         f"{code}\n"
         "fn main() {\n"
         f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
-        "    println!(\"{}\", f(&xs));\n"
+        '    println!("{}", f(&xs));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -212,7 +212,7 @@ def test_simple_algorithms_runtime_parity_forced_templates_and_modes() -> None:
 
 
 @pytest.mark.full
-def test_simple_algorithms_runtime_parity_overflow_int32_contract() -> None:
+def test_simple_algorithms_runtime_parity_overflow_large_values() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     spec = MaxWindowSumSpec(k=2, invalid_k_default=-1)
@@ -222,7 +222,7 @@ def test_simple_algorithms_runtime_parity_overflow_int32_contract() -> None:
     rust_code = render_simple_algorithms_rust(spec, func_name="f")
     expected = eval_simple_algorithms(spec, xs)
 
-    assert expected == -294_967_296
+    assert expected == 4_000_000_000
     assert _run_java_f(javac, java, java_code, xs) == expected
     assert _run_rust_f(rustc, rust_code, xs) == expected
 
@@ -234,7 +234,7 @@ def test_simple_algorithms_runtime_parity_int32_boundary_cases() -> None:
 
     int32_max = (1 << 31) - 1
     int32_min = -(1 << 31)
-    wrapped_50k_square = -1_794_967_296
+    square_50k = 2_500_000_000
 
     cases: tuple[tuple[SimpleAlgorithmsSpec, list[int]], ...] = (
         (
@@ -253,7 +253,7 @@ def test_simple_algorithms_runtime_parity_int32_boundary_cases() -> None:
         ),
         (
             CountPairsSumSpec(
-                target=wrapped_50k_square,
+                target=square_50k,
                 counting_mode=CountingMode.ALL_INDICES,
             ),
             [2_000_000_000, 500_000_000],
@@ -269,7 +269,7 @@ def test_simple_algorithms_runtime_parity_int32_boundary_cases() -> None:
 
 
 @pytest.mark.full
-def test_simple_algorithms_runtime_parity_predicate_i32_wrap() -> None:
+def test_simple_algorithms_runtime_parity_predicate_large_constant() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     spec = MostFrequentSpec(
@@ -283,7 +283,7 @@ def test_simple_algorithms_runtime_parity_predicate_i32_wrap() -> None:
     rust_code = render_simple_algorithms_rust(spec, func_name="f")
     expected = eval_simple_algorithms(spec, xs)
 
-    assert expected == 0
+    assert expected == -1
     assert _run_java_f(javac, java, java_code, xs) == expected
     assert _run_rust_f(rustc, rust_code, xs) == expected
 

@@ -108,12 +108,8 @@ class BitopsAxes(BaseModel):
         for name in ("value_range", "mask_range", "shift_range"):
             lo, hi = getattr(self, name)
             if lo < INT64_MIN:
-                raise ValueError(
-                    f"{name}: low must be >= {INT64_MIN}"
-                )
+                raise ValueError(f"{name}: low must be >= {INT64_MIN}")
             if hi > INT64_MAX:
-                raise ValueError(
-                    f"{name}: high must be <= {INT64_MAX}"
-                )
+                raise ValueError(f"{name}: high must be <= {INT64_MAX}")
 
         return self

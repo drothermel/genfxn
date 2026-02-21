@@ -17,7 +17,7 @@ contracts, strong validation, and cross-language parity.
 - Full verification is required before merge for behavior-affecting changes.
 
 ## Known Risk Areas
-- Overflow-adjacent arithmetic and int32/i64 normalization paths.
+- Overflow-adjacent arithmetic and i64 normalization paths.
 - Unicode predicate semantics across Python/Java/Rust.
 - Validator strictness drift from emitted renderer structure.
 - Suite quota/calibration regressions when adding or retuning difficulty logic.
@@ -32,4 +32,4 @@ contracts, strong validation, and cross-language parity.
 - None currently. Add only unresolved, decision-relevant questions here.
 
 ## Last Updated
-- 2026-02-12
+- 2026-02-20

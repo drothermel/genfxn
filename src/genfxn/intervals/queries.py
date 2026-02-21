@@ -4,6 +4,7 @@ from typing import Any
 from genfxn.core.models import Query, QueryTag, dedupe_queries_per_tag_input
 from genfxn.intervals.eval import eval_intervals
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.utils import _clamp
 
 
 def _ordered_pair(value: Any, fallback: tuple[int, int]) -> tuple[int, int]:
@@ -30,10 +31,6 @@ def _get_axis_range(
         if hasattr(axes, name):
             return _ordered_pair(getattr(axes, name), fallback)
     return fallback
-
-
-def _clamp(value: int, lo: int, hi: int) -> int:
-    return min(max(value, lo), hi)
 
 
 def _sample_non_degenerate_interval(
@@ -162,10 +159,7 @@ def generate_intervals_queries(
         [(lo, lo + 3), (lo + 2, lo + 5)],
     ]
     for case in coverage_cases:
-        adjusted = [
-            (_clamp(a, lo, hi), _clamp(b, lo, hi))
-            for a, b in case
-        ]
+        adjusted = [(_clamp(a, lo, hi), _clamp(b, lo, hi)) for a, b in case]
         _append(adjusted, QueryTag.COVERAGE)
 
     boundary_cases = [
@@ -176,10 +170,7 @@ def generate_intervals_queries(
         [(lo, lo + 1)],
     ]
     for case in boundary_cases:
-        adjusted = [
-            (_clamp(a, lo, hi), _clamp(b, lo, hi))
-            for a, b in case
-        ]
+        adjusted = [(_clamp(a, lo, hi), _clamp(b, lo, hi)) for a, b in case]
         _append(adjusted, QueryTag.BOUNDARY)
 
     for _ in range(n_typical):
@@ -206,10 +197,7 @@ def generate_intervals_queries(
         [(hi, lo), (lo, hi), (mid + 1, mid - 1)],
     ]
     for case in adversarial_cases:
-        adjusted = [
-            (_clamp(a, lo, hi), _clamp(b, lo, hi))
-            for a, b in case
-        ]
+        adjusted = [(_clamp(a, lo, hi), _clamp(b, lo, hi)) for a, b in case]
         _append(adjusted, QueryTag.ADVERSARIAL)
 
     for tag in QueryTag:

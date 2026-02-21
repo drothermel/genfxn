@@ -3,11 +3,18 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from genfxn.core.int32 import INT32_MAX
+from genfxn.core.int64_safety import (
+    abs_range,
+    add_ranges,
+    fits_signed_i64,
+    mul_ranges,
+    square_range,
+)
 from genfxn.core.predicates import Predicate
 
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
+INT32_MAX = (1 << 31) - 1
 
 
 class ExprType(str, Enum):
@@ -132,6 +139,12 @@ class PiecewiseSpec(BaseModel):
 
 
 class PiecewiseAxes(BaseModel):
+    """Sampling constraints for generated-spec parity across runtimes.
+
+    Contract scope: generated specs/tasks under validated axes only.
+    Hand-authored specs outside these constraints are not parity-covered.
+    """
+
     n_branches: int = Field(default=2, ge=1, le=5)
     expr_types: list[ExprType] = Field(
         default_factory=lambda: [ExprType.AFFINE]
@@ -168,9 +181,7 @@ class PiecewiseAxes(BaseModel):
 
         div_lo, div_hi = self.divisor_range
         if div_lo < 1:
-            raise ValueError(
-                f"divisor_range: low ({div_lo}) must be >= 1"
-            )
+            raise ValueError(f"divisor_range: low ({div_lo}) must be >= 1")
         if div_hi > INT32_MAX:
             raise ValueError(
                 f"divisor_range: high ({div_hi}) must be <= {INT32_MAX}"
@@ -183,4 +194,65 @@ class PiecewiseAxes(BaseModel):
                 f"n_branches ({self.n_branches}) exceeds available thresholds "
                 f"in threshold_range ({available})"
             )
+
+        if self.coeff_range[0] == INT64_MIN:
+            raise ValueError(
+                "coeff_range: low must be > INT64_MIN to keep Java/Rust "
+                "literal rendering overflow-safe"
+            )
+
+        value_range = self.value_range
+        coeff_range = self.coeff_range
+
+        def _raise_overflow(expr_type: ExprType) -> None:
+            raise ValueError(
+                "Numeric contract violation: expr_types includes "
+                f"'{expr_type.value}' but value_range={value_range} and "
+                f"coeff_range={coeff_range} can overflow signed 64-bit "
+                "arithmetic. Tighten ranges."
+            )
+
+        def _ensure_i64(
+            expr_type: ExprType, output_range: tuple[int, int]
+        ) -> None:
+            if not fits_signed_i64(output_range):
+                _raise_overflow(expr_type)
+
+        for expr_type in self.expr_types:
+            if expr_type == ExprType.AFFINE:
+                output_range = add_ranges(
+                    mul_ranges(coeff_range, value_range),
+                    coeff_range,
+                )
+                _ensure_i64(expr_type, output_range)
+                continue
+
+            if expr_type == ExprType.QUADRATIC:
+                x_sq = square_range(value_range)
+                ax2 = mul_ranges(coeff_range, x_sq)
+                bx = mul_ranges(coeff_range, value_range)
+                output_range = add_ranges(add_ranges(ax2, bx), coeff_range)
+                _ensure_i64(expr_type, output_range)
+                continue
+
+            if expr_type == ExprType.ABS:
+                if value_range[0] == INT64_MIN:
+                    raise ValueError(
+                        "value_range: low must be > INT64_MIN when "
+                        "expr_types includes 'abs'"
+                    )
+                output_range = add_ranges(
+                    mul_ranges(coeff_range, abs_range(value_range)),
+                    coeff_range,
+                )
+                _ensure_i64(expr_type, output_range)
+                continue
+
+            if expr_type == ExprType.MOD:
+                mod_term = (0, self.divisor_range[1] - 1)
+                output_range = add_ranges(
+                    mul_ranges(coeff_range, mod_term),
+                    coeff_range,
+                )
+                _ensure_i64(expr_type, output_range)
         return self

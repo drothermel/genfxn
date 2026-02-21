@@ -539,9 +539,7 @@ def _fsm_predicate_score(pred: dict[str, Any]) -> int:
 def _sequence_dp_difficulty(spec: dict[str, Any]) -> int:
     """Compute difficulty for sequence dynamic programming tasks."""
     template_score = _sequence_dp_template_score(spec.get("template"))
-    output_mode_score = _sequence_dp_output_mode_score(
-        spec.get("output_mode")
-    )
+    output_mode_score = _sequence_dp_output_mode_score(spec.get("output_mode"))
     predicate_score = _sequence_dp_match_predicate_score(
         spec.get("match_predicate")
     )
@@ -550,9 +548,7 @@ def _sequence_dp_difficulty(spec: dict[str, Any]) -> int:
         spec.get("mismatch_score"),
         spec.get("gap_score"),
     )
-    tie_break_score = _sequence_dp_tie_break_score(
-        spec.get("step_tie_break")
-    )
+    tie_break_score = _sequence_dp_tie_break_score(spec.get("step_tie_break"))
 
     w = SEQUENCE_DP_WEIGHTS
     raw = (
@@ -1249,9 +1245,7 @@ def _stack_bytecode_difficulty(spec: dict[str, Any]) -> int:
         and instr.get("op") in {"jump", "jump_if_zero", "jump_if_nonzero"}
     ]
     has_jump = any(op == "jump" for op in ops)
-    has_cond_jump = any(
-        op in {"jump_if_zero", "jump_if_nonzero"} for op in ops
-    )
+    has_cond_jump = any(op in {"jump_if_zero", "jump_if_nonzero"} for op in ops)
     has_backward_jump = any(
         isinstance(target, int) and target < idx
         for idx, target in jump_instructions

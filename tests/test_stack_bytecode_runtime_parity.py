@@ -63,7 +63,7 @@ def _run_java_f(
         "  public static void main(String[] args) {\n"
         f"    long[] xs = new long[]{{{xs_lit}}};\n"
         "    long[] out = f(xs);\n"
-        "    System.out.print(out[0] + \",\" + out[1]);\n"
+        '    System.out.print(out[0] + "," + out[1]);\n'
         "  }\n"
         "}\n"
     )
@@ -96,7 +96,7 @@ def _run_rust_f(
         "fn main() {\n"
         f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
         "    let out = f(&xs);\n"
-        "    println!(\"{},{}\", out.0, out.1);\n"
+        '    println!("{},{}", out.0, out.1);\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:

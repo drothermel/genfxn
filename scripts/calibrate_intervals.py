@@ -45,8 +45,7 @@ def _compute_reachability(
             task = generate_intervals_task(axes=axes, rng=rng)
             if task.difficulty is None:
                 raise RuntimeError(
-                    "intervals task produced None difficulty "
-                    "during calibration"
+                    "intervals task produced None difficulty during calibration"
                 )
             observed.append(task.difficulty)
 
@@ -68,8 +67,7 @@ def _compute_reachability(
             "exact": exact,
             "within_one": within_one,
             "distribution": {
-                str(score): count
-                for score, count in sorted(counts.items())
+                str(score): count for score, count in sorted(counts.items())
             },
         }
 

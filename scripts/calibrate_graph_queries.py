@@ -95,8 +95,7 @@ def _compute_reachability(
             "exact": exact,
             "within_one": within_one,
             "distribution": {
-                str(score): count
-                for score, count in sorted(counts.items())
+                str(score): count for score, count in sorted(counts.items())
             },
         }
 
@@ -296,8 +295,7 @@ def main(
             f"within_one={stats['within_one']:.3f}"
         )
     typer.echo(
-        "  monotonic means: "
-        + ("yes" if monotonic["is_monotonic"] else "no")
+        "  monotonic means: " + ("yes" if monotonic["is_monotonic"] else "no")
     )
     if strict:
         typer.echo(

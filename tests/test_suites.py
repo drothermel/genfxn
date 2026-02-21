@@ -86,6 +86,7 @@ def _temporal_logic_suite_available() -> bool:
     _require_family_suite_module("temporal_logic", "genfxn.temporal_logic.task")
     return True
 
+
 # ── Feature extraction tests ─────────────────────────────────────────────
 
 
@@ -1446,8 +1447,7 @@ class TestPoolGeneration:
             assert stats.candidates == len(candidates)
             for cand in candidates:
                 assert (
-                    compute_difficulty("bitops", cand.spec_dict)
-                    == difficulty
+                    compute_difficulty("bitops", cand.spec_dict) == difficulty
                 )
 
     def test_bitops_pool_features_cover_quota_axes_when_available(
@@ -1756,9 +1756,7 @@ class TestDeterminism:
                 PoolStats(candidates=len(fake_selected)),
             )
 
-        monkeypatch.setattr(
-            suite_generate, "generate_pool", fake_generate_pool
-        )
+        monkeypatch.setattr(suite_generate, "generate_pool", fake_generate_pool)
         monkeypatch.setattr(
             suite_generate,
             "_bucket_supply_shortfall",
@@ -1908,6 +1906,7 @@ class TestDeterminism:
             pytest.skip("stack_bytecode suite generation is not available")
         from genfxn.stack_bytecode.eval import eval_stack_bytecode
         from genfxn.stack_bytecode.models import StackBytecodeSpec
+
         difficulty = sorted(QUOTAS["stack_bytecode"].keys())[0]
         tasks = generate_suite(
             "stack_bytecode",

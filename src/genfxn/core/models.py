@@ -71,9 +71,7 @@ def _freeze_query_value(value: Any) -> Any:
         ]
         return (
             "__dict__",
-            tuple(
-                sorted(frozen_items, key=lambda pair: _sort_key(pair[0]))
-            ),
+            tuple(sorted(frozen_items, key=lambda pair: _sort_key(pair[0]))),
         )
     if isinstance(value, list):
         return (

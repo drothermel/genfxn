@@ -576,8 +576,7 @@ def stack_bytecode_features(spec: dict[str, Any]) -> dict[str, str]:
     elif any(op in ("dup", "swap", "pop", "eq", "gt", "lt") for op in ops):
         op_complexity = "stack_logic"
     elif any(
-        op in ("add", "sub", "mul", "div", "mod", "neg", "abs")
-        for op in ops
+        op in ("add", "sub", "mul", "div", "mod", "neg", "abs") for op in ops
     ):
         op_complexity = "arithmetic"
     else:
@@ -665,9 +664,7 @@ def sequence_dp_features(spec: dict[str, Any]) -> dict[str, str]:
 
     template = _enum_or_str(spec.get("template"), "global")
     output_mode = _enum_or_str(spec.get("output_mode"), "score")
-    tie_break_order = _enum_or_str(
-        spec.get("step_tie_break"), "diag_up_left"
-    )
+    tie_break_order = _enum_or_str(spec.get("step_tie_break"), "diag_up_left")
 
     if tie_break_order.startswith("diag_"):
         tie_break_bucket = "diag_first"

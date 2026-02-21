@@ -3,15 +3,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from genfxn.core.int32 import (
-    i32_abs,
-    i32_add,
-    i32_clip,
-    i32_mul,
-    i32_neg,
-    wrap_i32,
-)
-
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
 
@@ -96,40 +87,24 @@ Transform = Annotated[
 ]
 
 
-def eval_transform(t: Transform, x: int, *, int32_wrap: bool = False) -> int:
-    if int32_wrap:
-        x = wrap_i32(x)
-
+def eval_transform(t: Transform, x: int) -> int:
     match t:
         case TransformIdentity():
             return x
         case TransformAbs():
-            if int32_wrap:
-                return i32_abs(x)
             return abs(x)
         case TransformShift(offset=o):
-            if int32_wrap:
-                return i32_add(x, o)
             return x + o
         case TransformClip(low=lo, high=hi):
-            if int32_wrap:
-                return i32_clip(x, lo, hi)
-            clipped = max(lo, min(hi, x))
-            return clipped
+            return max(lo, min(hi, x))
         case TransformNegate():
-            if int32_wrap:
-                return i32_neg(x)
             return -x
         case TransformScale(factor=f):
-            if int32_wrap:
-                return i32_mul(x, f)
             return x * f
         case TransformPipeline(steps=steps):
             result = x
             for step in steps:
-                result = eval_transform(
-                    step, result, int32_wrap=int32_wrap
-                )
+                result = eval_transform(step, result)
             return result
         case _:
             raise ValueError(f"Unknown transform: {t}")
@@ -138,35 +113,7 @@ def eval_transform(t: Transform, x: int, *, int32_wrap: bool = False) -> int:
 def render_transform(
     t: Transform,
     var: str = "x",
-    *,
-    int32_wrap: bool = False,
 ) -> str:
-    if int32_wrap:
-        match t:
-            case TransformIdentity():
-                return f"__i32_wrap({var})"
-            case TransformAbs():
-                return f"__i32_abs({var})"
-            case TransformShift(offset=o):
-                return f"__i32_add({var}, {o})"
-            case TransformClip(low=lo, high=hi):
-                return f"__i32_clip({var}, {lo}, {hi})"
-            case TransformNegate():
-                return f"__i32_neg({var})"
-            case TransformScale(factor=f):
-                return f"__i32_mul({var}, {f})"
-            case TransformPipeline(steps=steps):
-                expr = var
-                for i, step in enumerate(steps):
-                    if i > 0:
-                        expr = f"({expr})"
-                    expr = render_transform(
-                        step, expr, int32_wrap=True
-                    )
-                return expr
-            case _:
-                raise ValueError(f"Unknown transform: {t}")
-
     match t:
         case TransformIdentity():
             return var
@@ -187,7 +134,7 @@ def render_transform(
             for i, step in enumerate(steps):
                 if i > 0:
                     expr = f"({expr})"
-                expr = render_transform(step, expr, int32_wrap=False)
+                expr = render_transform(step, expr)
             return expr
         case _:
             raise ValueError(f"Unknown transform: {t}")

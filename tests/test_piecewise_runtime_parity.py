@@ -35,7 +35,7 @@ def _run_java_f(javac: str, java: str, code: str, x: int) -> int:
         "public class Main {\n"
         f"{code}\n"
         "  public static void main(String[] args) {\n"
-        f"    int x = {x};\n"
+        f"    long x = {x}L;\n"
         "    System.out.print(f(x));\n"
         "  }\n"
         "}\n"
@@ -60,7 +60,7 @@ def _run_rust_f(rustc: str, code: str, x: int) -> int:
         f"{code}\n"
         "fn main() {\n"
         f"    let x: i64 = {x}i64;\n"
-        "    println!(\"{}\", f(x));\n"
+        '    println!("{}", f(x));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -175,7 +175,7 @@ def test_piecewise_runtime_parity_forced_expression_coverage() -> None:
 
 
 @pytest.mark.full
-def test_piecewise_runtime_parity_overflow_int32_contract() -> None:
+def test_piecewise_runtime_parity_overflow_large_value_contract() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     always_true = PredicateGe(value=-2_147_483_648)
@@ -193,7 +193,7 @@ def test_piecewise_runtime_parity_overflow_int32_contract() -> None:
 
     x = 50_000
     expected = eval_piecewise(spec, x)
-    assert expected == -1_794_967_296
+    assert expected == 2_500_000_000
     assert _run_java_f(javac, java, java_code, x) == expected
     assert _run_rust_f(rustc, rust_code, x) == expected
 
@@ -250,7 +250,7 @@ def test_piecewise_runtime_parity_int32_boundary_cases() -> None:
 
 
 @pytest.mark.full
-def test_piecewise_runtime_parity_predicate_int32_constant_wrap() -> None:
+def test_piecewise_runtime_parity_predicate_large_constant() -> None:
     javac, java = require_java_runtime()
     rustc = require_rust_runtime()
     spec = PiecewiseSpec(
@@ -267,7 +267,7 @@ def test_piecewise_runtime_parity_predicate_int32_constant_wrap() -> None:
 
     x = 0
     expected = eval_piecewise(spec, x)
-    assert expected == 0
+    assert expected == 1
     assert _run_java_f(javac, java, java_code, x) == expected
     assert _run_rust_f(rustc, rust_code, x) == expected
 

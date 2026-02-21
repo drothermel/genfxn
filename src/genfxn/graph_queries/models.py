@@ -136,9 +136,7 @@ class GraphQueriesAxes(BaseModel):
         if self.n_nodes_range[0] < 1:
             raise ValueError("n_nodes_range: low must be >= 1")
         if self.n_nodes_range[1] > INT32_MAX:
-            raise ValueError(
-                f"n_nodes_range: high must be <= {INT32_MAX}"
-            )
+            raise ValueError(f"n_nodes_range: high must be <= {INT32_MAX}")
         if self.edge_count_range[0] < 0:
             raise ValueError("edge_count_range: low must be >= 0")
         if self.weight_range[0] < 0:

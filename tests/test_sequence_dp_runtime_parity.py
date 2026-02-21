@@ -102,7 +102,7 @@ def _run_rust_f(
         "fn main() {\n"
         f"    let a: Vec<i64> = vec![{a_lit}];\n"
         f"    let b: Vec<i64> = vec![{b_lit}];\n"
-        "    println!(\"{}\", f(&a, &b));\n"
+        '    println!("{}", f(&a, &b));\n'
         "}\n"
     )
     with tempfile.TemporaryDirectory() as tmp_dir:

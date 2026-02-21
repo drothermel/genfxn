@@ -23,6 +23,7 @@ from genfxn.intervals.ast_safety import (
 )
 from genfxn.intervals.eval import eval_intervals
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.utils import _clamp
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -217,8 +218,7 @@ def _validate_ast_whitelist(
                         code=CODE_UNSAFE_AST,
                         severity=Severity.ERROR,
                         message=(
-                            f"Disallowed name '{node.id}' at line "
-                            f"{node.lineno}"
+                            f"Disallowed name '{node.id}' at line {node.lineno}"
                         ),
                         location="code",
                     )
@@ -295,8 +295,7 @@ def _validate_code_compile(
                 code=CODE_CODE_PARSE_ERROR,
                 severity=Severity.ERROR,
                 message=(
-                    "Code payload must be a string, got "
-                    f"{type(code).__name__}"
+                    f"Code payload must be a string, got {type(code).__name__}"
                 ),
                 location="code",
                 task_id=task.task_id,
@@ -497,10 +496,6 @@ def _validate_query_outputs(
     return issues
 
 
-def _clamp(value: int, lo: int, hi: int) -> int:
-    return min(max(value, lo), hi)
-
-
 def _sample_intervals_from_axes(
     axes: IntervalsAxes,
     rng: random.Random,
@@ -571,8 +566,7 @@ def _validate_semantics(
                     code=CODE_CODE_RUNTIME_ERROR,
                     severity=severity,
                     message=(
-                        "Code raised runtime error for input "
-                        f"{intervals}: {e}"
+                        f"Code raised runtime error for input {intervals}: {e}"
                     ),
                     location="code",
                     task_id=task.task_id,

@@ -9,54 +9,7 @@ from genfxn.piecewise.models import (
 )
 
 
-def _render_i32_helpers() -> list[str]:
-    return [
-        "def __i32_wrap(value: int) -> int:",
-        "    return ((value + 2147483648) & 0xFFFFFFFF) - 2147483648",
-        "",
-        "def __i32_add(lhs: int, rhs: int) -> int:",
-        "    return __i32_wrap(__i32_wrap(lhs) + __i32_wrap(rhs))",
-        "",
-        "def __i32_mul(lhs: int, rhs: int) -> int:",
-        "    return __i32_wrap(__i32_wrap(lhs) * __i32_wrap(rhs))",
-        "",
-        "def __i32_abs(value: int) -> int:",
-        "    value_i32 = __i32_wrap(value)",
-        "    if value_i32 == -2147483648:",
-        "        return -2147483648",
-        "    return abs(value_i32)",
-        "",
-        "def __i32_mod(value: int, divisor: int) -> int:",
-        "    divisor_i32 = __i32_wrap(divisor)",
-        "    if divisor_i32 <= 0:",
-        (
-            "        raise ValueError('divisor must be in [1, 2147483647] "
-            "for int32 semantics')"
-        ),
-        "    return __i32_wrap(value) % divisor_i32",
-        "",
-    ]
-
-
-def render_expression(
-    expr: Expression,
-    var: str = "x",
-    *,
-    int32_wrap: bool = False,
-) -> str:
-    if int32_wrap:
-        match expr:
-            case ExprAffine(a=a, b=b):
-                return _render_linear_i32(a, var, b)
-            case ExprQuadratic(a=a, b=b, c=c):
-                return _render_quadratic_i32(a, b, c, var)
-            case ExprAbs(a=a, b=b):
-                return _render_linear_i32(a, f"__i32_abs({var})", b)
-            case ExprMod(divisor=d, a=a, b=b):
-                return _render_linear_i32(a, f"__i32_mod({var}, {d})", b)
-            case _:
-                raise ValueError(f"Unknown expression: {expr}")
-
+def render_expression(expr: Expression, var: str = "x") -> str:
     match expr:
         case ExprAffine(a=a, b=b):
             return _render_linear(a, var, b)
@@ -68,13 +21,6 @@ def render_expression(
             return _render_linear(a, f"({var} % {d})", b)
         case _:
             raise ValueError(f"Unknown expression: {expr}")
-
-
-def _render_linear_i32(a: int, x_term: str, b: int) -> str:
-    ax = "0" if a == 0 else f"__i32_mul({a}, {x_term})"
-    if b == 0:
-        return ax
-    return f"__i32_add({ax}, {b})"
 
 
 def _render_linear(a: int, x_term: str, b: int) -> str:
@@ -129,60 +75,21 @@ def _render_quadratic(a: int, b: int, c: int, var: str) -> str:
     return "".join(parts)
 
 
-def _render_quadratic_i32(a: int, b: int, c: int, var: str) -> str:
-    acc = "0"
-
-    if a != 0:
-        acc = f"__i32_mul(__i32_mul({a}, {var}), {var})"
-
-    if b != 0:
-        bx = f"__i32_mul({b}, {var})"
-        if acc == "0":
-            acc = bx
-        else:
-            acc = f"__i32_add({acc}, {bx})"
-
-    if c != 0:
-        if acc == "0":
-            acc = f"__i32_wrap({c})"
-        else:
-            acc = f"__i32_add({acc}, {c})"
-
-    return acc
-
-
 def render_piecewise(
     spec: PiecewiseSpec,
     func_name: str = "f",
     var: str = "x",
-    *,
-    int32_wrap: bool = True,
 ) -> str:
-    lines: list[str] = []
-    if int32_wrap:
-        lines.extend(_render_i32_helpers())
-    lines.append(f"def {func_name}({var}: int) -> int:")
+    lines = [f"def {func_name}({var}: int) -> int:"]
 
     for i, branch in enumerate(spec.branches):
         keyword = "if" if i == 0 else "elif"
-        cond = render_predicate(
-            branch.condition,
-            var,
-            int32_wrap=int32_wrap,
-        )
-        expr = render_expression(
-            branch.expr,
-            var,
-            int32_wrap=int32_wrap,
-        )
+        cond = render_predicate(branch.condition, var)
+        expr = render_expression(branch.expr, var)
         lines.append(f"    {keyword} {cond}:")
         lines.append(f"        return {expr}")
 
-    default_expr = render_expression(
-        spec.default_expr,
-        var,
-        int32_wrap=int32_wrap,
-    )
+    default_expr = render_expression(spec.default_expr, var)
     if spec.branches:
         lines.append("    else:")
         lines.append(f"        return {default_expr}")

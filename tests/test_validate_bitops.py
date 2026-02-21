@@ -52,9 +52,7 @@ def test_unsafe_ast_is_rejected(baseline_task: Task) -> None:
 def test_query_type_mismatch_detected(baseline_task: Task) -> None:
     corrupted = baseline_task.model_copy(
         update={
-            "queries": [
-                Query(input="bad", output="bad", tag=QueryTag.TYPICAL)
-            ]
+            "queries": [Query(input="bad", output="bad", tag=QueryTag.TYPICAL)]
         }
     )
     issues = validate_bitops_task(corrupted)
@@ -65,9 +63,7 @@ def test_query_type_mismatch_detected(baseline_task: Task) -> None:
 def test_bool_query_values_are_rejected(baseline_task: Task) -> None:
     corrupted = baseline_task.model_copy(
         update={
-            "queries": [
-                Query(input=True, output=False, tag=QueryTag.TYPICAL)
-            ]
+            "queries": [Query(input=True, output=False, tag=QueryTag.TYPICAL)]
         }
     )
     issues = validate_bitops_task(corrupted)

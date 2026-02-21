@@ -3,7 +3,6 @@ import random
 import pytest
 
 from genfxn.core.codegen import render_tests, task_id_from_spec
-from genfxn.core.int32 import INT32_MAX
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
     PredicateAnd,
@@ -35,6 +34,7 @@ from genfxn.core.transforms import (
 )
 
 INT64_MAX = (1 << 63) - 1
+INT32_MAX = (1 << 31) - 1
 
 
 class TestPredicates:
@@ -114,17 +114,6 @@ class TestPredicates:
             match=rf"divisor must be <= {INT32_MAX}",
         ):
             PredicateModEq(divisor=INT32_MAX + 1, remainder=0)
-
-    def test_int32_wrap_mode_wraps_comparison_constants(self) -> None:
-        p = PredicateGe(value=3_000_000_005)
-        assert eval_predicate(p, 0, int32_wrap=False) is False
-        assert eval_predicate(p, 0, int32_wrap=True) is True
-
-    def test_int32_wrap_mode_wraps_input_before_mod_eq(self) -> None:
-        p = PredicateModEq(divisor=3, remainder=1)
-        x = (1 << 32) + 1
-        assert eval_predicate(p, x, int32_wrap=False) is False
-        assert eval_predicate(p, x, int32_wrap=True) is True
 
     def test_lt_rejects_values_above_signed_i64(self) -> None:
         with pytest.raises(ValueError, match="9223372036854775807"):
@@ -337,10 +326,6 @@ class TestTransforms:
         with pytest.raises(ValueError, match="9223372036854775807"):
             TransformClip(low=0, high=INT64_MAX + 1)
 
-    def test_clip_int32_wrap_uses_wrapped_bounds(self) -> None:
-        t = TransformClip(low=3_000_000_000, high=3_000_000_100)
-        assert eval_transform(t, 0, int32_wrap=True) == -1_294_967_196
-
     def test_negate(self) -> None:
         t = TransformNegate()
         assert eval_transform(t, 5) == -5
@@ -484,10 +469,7 @@ class TestRenderTests:
         result = render_tests("my_func", queries)
         assert "__genfxn_query_outputs_equal" in result
         assert "assert __genfxn_query_outputs_equal(my_func(5), 10)" in result
-        assert (
-            "assert __genfxn_query_outputs_equal(my_func(-3), 3)"
-            in result
-        )
+        assert "assert __genfxn_query_outputs_equal(my_func(-3), 3)" in result
         assert "query 0 (typical)" in result
         assert "query 1 (boundary)" in result
 
@@ -567,8 +549,7 @@ class TestRenderTests:
         ]
         rendered_asserts = render_tests("f", queries)
         assert (
-            rendered_asserts
-            == "from genfxn.core.models import (\n"
+            rendered_asserts == "from genfxn.core.models import (\n"
             "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
             ")\n"
             "\n"
@@ -588,8 +569,7 @@ class TestRenderTests:
         ]
         rendered_asserts = render_tests("f", queries)
         assert (
-            rendered_asserts
-            == "from genfxn.core.models import (\n"
+            rendered_asserts == "from genfxn.core.models import (\n"
             "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
             ")\n"
             "\n"
@@ -614,8 +594,7 @@ class TestRenderTests:
         ]
         rendered_asserts = render_tests("f", queries)
         assert (
-            rendered_asserts
-            == "from genfxn.core.models import (\n"
+            rendered_asserts == "from genfxn.core.models import (\n"
             "    _query_outputs_equal as __genfxn_query_outputs_equal,\n"
             ")\n"
             "\n"

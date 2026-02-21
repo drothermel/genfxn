@@ -50,7 +50,7 @@ def test_slow_marked():
 def test_unmarked():
     assert True
 """
-        )
+    )
 
 
 def _make_family_full_probe_tests(pytester) -> None:

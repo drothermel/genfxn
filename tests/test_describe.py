@@ -798,8 +798,7 @@ class TestDescribeTask:
         }
         result = describe_task("bitops", spec)
         assert (
-            "apply operations in order: xor_mask(255), then rotl(3)"
-            in result
+            "apply operations in order: xor_mask(255), then rotl(3)" in result
         )
         assert (
             "after each operation mask the intermediate result to 8 bits"

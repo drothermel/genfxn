@@ -49,9 +49,7 @@ def _supports_bitops_family() -> bool:
 
 
 def _supports_stack_bytecode_family() -> bool:
-    return (
-        importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
-    )
+    return importlib.util.find_spec("genfxn.stack_bytecode.task") is not None
 
 
 def _expected_all_families() -> set[str]:
@@ -359,9 +357,7 @@ class TestGenerate:
                 i.code == TEMPORAL_LOGIC_CODE_UNSAFE_AST for i in issues
             )
 
-    def test_generate_sequence_dp_honors_shared_ranges(
-        self, tmp_path
-    ) -> None:
+    def test_generate_sequence_dp_honors_shared_ranges(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -602,9 +598,7 @@ class TestGenerate:
         assert tasks[0]["code"].startswith("fn f(")
         assert "def f(" not in tasks[0]["code"]
 
-    def test_generate_simple_algorithms_rust_language(
-        self, tmp_path
-    ) -> None:
+    def test_generate_simple_algorithms_rust_language(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -628,7 +622,7 @@ class TestGenerate:
         assert tasks[0]["code"].startswith("fn f(")
         assert "def f(" not in tasks[0]["code"]
 
-    def test_generate_simple_algorithms_no_i32_wrap(self, tmp_path) -> None:
+    def test_generate_simple_algorithms_python_output(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -644,7 +638,6 @@ class TestGenerate:
                 "5",
                 "-s",
                 "42",
-                "--no-i32-wrap",
             ],
         )
 
@@ -952,9 +945,7 @@ class TestGenerate:
         assert len(tasks) == 2
         assert all(t["family"] == "sequence_dp" for t in tasks)
 
-    def test_generate_sequence_dp_invalid_difficulty(
-        self, tmp_path
-    ) -> None:
+    def test_generate_sequence_dp_invalid_difficulty(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -1022,9 +1013,7 @@ class TestGenerate:
         assert len(tasks) == 2
         assert all(t["family"] == "graph_queries" for t in tasks)
 
-    def test_generate_graph_queries_invalid_difficulty(
-        self, tmp_path
-    ) -> None:
+    def test_generate_graph_queries_invalid_difficulty(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -1092,9 +1081,7 @@ class TestGenerate:
         assert len(tasks) == 2
         assert all(t["family"] == "temporal_logic" for t in tasks)
 
-    def test_generate_temporal_logic_invalid_difficulty(
-        self, tmp_path
-    ) -> None:
+    def test_generate_temporal_logic_invalid_difficulty(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(
             app,
@@ -1211,7 +1198,7 @@ class TestGenerate:
         assert result.exit_code == 0
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 1
-        assert "public static int f(int x)" in tasks[0]["code"]
+        assert "public static long f(long x)" in tasks[0]["code"]
         assert "def f(" not in tasks[0]["code"]
 
     def test_generate_python_language(self, tmp_path) -> None:
@@ -1447,8 +1434,7 @@ class TestSplit:
 
         assert result.exit_code != 0
         assert (
-            "--train and --test must be different output paths"
-            in result.output
+            "--train and --test must be different output paths" in result.output
         )
         assert not same_output.exists()
 
@@ -1752,7 +1738,7 @@ class TestSplit:
             "description": "valid row",
         }
         input_file.write_text(
-            f"{srsly.json_dumps(first_row)}\n" '{"broken":\n',
+            f'{srsly.json_dumps(first_row)}\n{{"broken":\n',
             encoding="utf-8",
         )
 
@@ -3328,9 +3314,7 @@ class TestSplit:
                     "family": "stateful",
                     "spec": {"n": i},
                     "code": "def f(x):\n    return x\n",
-                    "queries": [
-                        {"input": i, "output": i, "tag": "typical"}
-                    ],
+                    "queries": [{"input": i, "output": i, "tag": "typical"}],
                     "description": f"task {i}",
                 }
             )
@@ -3408,9 +3392,7 @@ class TestSplit:
                     "family": "stateful",
                     "spec": {"n": i},
                     "code": "def f(x):\n    return x\n",
-                    "queries": [
-                        {"input": i, "output": i, "tag": "typical"}
-                    ],
+                    "queries": [{"input": i, "output": i, "tag": "typical"}],
                     "description": f"task {i}",
                 }
             )
@@ -3511,7 +3493,7 @@ class TestInfo:
             "description": "valid row",
         }
         input_file.write_text(
-            f"{srsly.json_dumps(first_row)}\n" '{"broken":\n',
+            f'{srsly.json_dumps(first_row)}\n{{"broken":\n',
             encoding="utf-8",
         )
 

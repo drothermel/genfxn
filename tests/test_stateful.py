@@ -8,10 +8,8 @@ from genfxn.core.predicates import (
     PredicateEven,
     PredicateGt,
     PredicateLt,
-    PredicateModEq,
     PredicateOdd,
     PredicateType,
-    eval_predicate,
 )
 from genfxn.core.transforms import (
     TransformAbs,
@@ -252,26 +250,6 @@ class TestQueryGeneration:
         assert constrained
         assert all(lo <= len(q.input) <= hi for q in constrained)
 
-    def test_mod_eq_boundary_uses_wrapped_predicate_truth(self) -> None:
-        pred = PredicateModEq(divisor=5, remainder=3)
-        spec = LongestRunSpec(match_predicate=pred)
-        axes = StatefulAxes(
-            value_range=(2_147_483_648, 2_147_483_660),
-            list_length_range=(5, 5),
-        )
-
-        queries = generate_stateful_queries(spec, axes, random.Random(0))
-        boundary_values = [
-            x for q in queries if q.tag == QueryTag.BOUNDARY for x in q.input
-        ]
-        assert boundary_values
-
-        truths = [
-            eval_predicate(pred, x, int32_wrap=True) for x in boundary_values
-        ]
-        assert any(truths)
-        assert not all(truths)
-
 
 class TestRender:
     def test_render_conditional_linear_sum(self) -> None:
@@ -283,8 +261,8 @@ class TestRender:
         )
         code = render_stateful(spec)
         assert "def f(xs: list[int]) -> int:" in code
-        assert "__i32_wrap(x) % 2 == 0" in code
-        assert "__i32_add(" in code
+        assert "x % 2 == 0" in code
+        assert "acc = acc + (" in code
 
     def test_render_resetting_best_prefix_sum(self) -> None:
         spec = ResettingBestPrefixSumSpec(
@@ -294,25 +272,14 @@ class TestRender:
         code = render_stateful(spec)
         assert "current_sum" in code
         assert "best_sum" in code
-        assert "__i32_wrap(x) < __i32_wrap(0)" in code
+        assert "x < 0" in code
 
     def test_render_longest_run(self) -> None:
         spec = LongestRunSpec(match_predicate=PredicateGt(value=0))
         code = render_stateful(spec)
         assert "current_run" in code
         assert "longest_run" in code
-        assert "__i32_wrap(x) > __i32_wrap(0)" in code
-
-    def test_render_without_i32_wrap(self) -> None:
-        spec = ConditionalLinearSumSpec(
-            predicate=PredicateEven(),
-            true_transform=TransformShift(offset=1),
-            false_transform=TransformScale(factor=2),
-            init_value=5,
-        )
-        code = render_stateful(spec, int32_wrap=False)
-        assert "__i32_" not in code
-        assert "acc = acc + (" in code
+        assert "x > 0" in code
 
     def test_render_roundtrip_conditional_linear_sum(self) -> None:
         spec = ConditionalLinearSumSpec(
@@ -372,21 +339,6 @@ class TestRender:
         xs = [2_000_000_000, 2_000_000_000]
         assert f(xs) == eval_stateful(spec, xs)
 
-    def test_render_roundtrip_without_i32_wrap(self) -> None:
-        spec = ConditionalLinearSumSpec(
-            predicate=PredicateLt(value=0),
-            true_transform=TransformIdentity(),
-            false_transform=TransformIdentity(),
-            init_value=0,
-        )
-        code = render_stateful(spec, int32_wrap=False)
-        namespace: dict = {}
-        exec(code, namespace)  # noqa: S102
-        f = namespace["f"]
-        test_inputs = [[], [1], [2], [1, -2, 3], [2_000_000_000, 2_000_000_000]]
-        for xs in test_inputs:
-            assert f(xs) == eval_stateful(spec, xs, int32_wrap=False)
-
 
 class TestSampler:
     def test_reproducible(self) -> None:
@@ -431,6 +383,22 @@ class TestAxesValidation:
         ):
             StatefulAxes(transform_types=[])
 
+    def test_transform_types_support_pipeline_for_stateful_generation(
+        self,
+    ) -> None:
+        axes = StatefulAxes(transform_types=[TransformType.PIPELINE])
+        assert axes.transform_types == [TransformType.PIPELINE]
+
+    def test_pipeline_transform_rejects_overflowing_ranges(self) -> None:
+        with pytest.raises(ValueError, match="Numeric contract violation"):
+            StatefulAxes(
+                transform_types=[TransformType.PIPELINE],
+                value_range=(
+                    2_000_000_000_000_000_000,
+                    2_000_000_000_000_000_000,
+                ),
+            )
+
     def test_zero_divisor(self) -> None:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
             StatefulAxes(divisor_range=(0, 5))
@@ -452,6 +420,32 @@ class TestAxesValidation:
             match=rf"threshold_range: high .* must be <= {INT64_MAX}",
         ):
             StatefulAxes(threshold_range=(0, INT64_MAX + 1))
+
+    def test_abs_transform_rejects_value_range_including_int64_min(
+        self,
+    ) -> None:
+        with pytest.raises(ValueError, match="ABS transforms are enabled"):
+            StatefulAxes(
+                transform_types=[TransformType.ABS],
+                value_range=(-(1 << 63), 0),
+            )
+
+    def test_shift_transform_rejects_shift_range_including_int64_min(
+        self,
+    ) -> None:
+        with pytest.raises(ValueError, match="shift_range: low must be >"):
+            StatefulAxes(
+                transform_types=[TransformType.SHIFT],
+                shift_range=(-(1 << 63), 0),
+            )
+
+    def test_rejects_accumulator_ranges_that_can_overflow_i64(self) -> None:
+        with pytest.raises(ValueError, match="Numeric contract violation"):
+            StatefulAxes(
+                transform_types=[TransformType.IDENTITY],
+                value_range=(1_000_000_000_000, 1_000_000_000_000),
+                list_length_range=(1, 10_000_000_000),
+            )
 
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
@@ -681,7 +675,7 @@ class TestResettingValueTransformRender:
             value_transform=TransformScale(factor=2),
         )
         code = render_stateful(spec)
-        assert "__i32_mul(x, 2)" in code or "__i32_mul(2, x)" in code
+        assert "x * 2" in code
 
     def test_render_roundtrip(self) -> None:
         spec = ResettingBestPrefixSumSpec(

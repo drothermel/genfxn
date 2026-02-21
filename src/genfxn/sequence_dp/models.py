@@ -166,13 +166,9 @@ class SequenceDpAxes(BaseModel):
         ):
             lo, hi = getattr(self, name)
             if lo < INT64_MIN:
-                raise ValueError(
-                    f"{name}: low must be >= {INT64_MIN}"
-                )
+                raise ValueError(f"{name}: low must be >= {INT64_MIN}")
             if hi > INT64_MAX:
-                raise ValueError(
-                    f"{name}: high must be <= {INT64_MAX}"
-                )
+                raise ValueError(f"{name}: high must be <= {INT64_MAX}")
 
         if self.abs_diff_range[1] > INT64_MAX:
             raise ValueError(f"abs_diff_range: high must be <= {INT64_MAX}")

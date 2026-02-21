@@ -25,9 +25,7 @@ from genfxn.intervals.validate import (
 )
 
 
-def validate_intervals_task(
-    *args: Any, **kwargs: Any
-) -> list[Issue]:
+def validate_intervals_task(*args: Any, **kwargs: Any) -> list[Issue]:
     kwargs.setdefault("execute_untrusted_code", True)
     return _validate_intervals_task(*args, **kwargs)
 
@@ -56,9 +54,7 @@ def test_query_input_output_type_mismatch_detected(
 ) -> None:
     corrupted = baseline_task.model_copy(
         update={
-            "queries": [
-                Query(input="bad", output="bad", tag=QueryTag.TYPICAL)
-            ]
+            "queries": [Query(input="bad", output="bad", tag=QueryTag.TYPICAL)]
         }
     )
     issues = validate_intervals_task(corrupted)
@@ -104,9 +100,7 @@ def test_duplicate_query_input_within_tag_is_rejected(
         output=query.output,
         tag=query.tag,
     )
-    corrupted = baseline_task.model_copy(
-        update={"queries": [query, duplicate]}
-    )
+    corrupted = baseline_task.model_copy(update={"queries": [query, duplicate]})
     issues = validate_intervals_task(corrupted)
     assert any(issue.code == CODE_QUERY_INPUT_DUPLICATE for issue in issues)
 
@@ -125,9 +119,7 @@ def test_duplicate_query_input_across_tags_is_allowed(
         output=query.output,
         tag=alternate_tag,
     )
-    corrupted = baseline_task.model_copy(
-        update={"queries": [query, duplicate]}
-    )
+    corrupted = baseline_task.model_copy(update={"queries": [query, duplicate]})
     issues = validate_intervals_task(corrupted)
     assert not any(issue.code == CODE_QUERY_INPUT_DUPLICATE for issue in issues)
 
@@ -175,9 +167,7 @@ def test_semantic_mismatch_issue_capping(baseline_task: Task) -> None:
 def test_execute_untrusted_code_false_skips_exec_errors(
     baseline_task: Task,
 ) -> None:
-    corrupted = baseline_task.model_copy(
-        update={"code": "raise ValueError(1)"}
-    )
+    corrupted = baseline_task.model_copy(update={"code": "raise ValueError(1)"})
     issues = _validate_intervals_task(corrupted, execute_untrusted_code=False)
     assert not any(issue.code == CODE_CODE_EXEC_ERROR for issue in issues)
 
@@ -195,9 +185,7 @@ def test_execute_untrusted_code_true_reports_exec_error(
 def test_non_string_python_code_payload_reports_parse_error(
     baseline_task: Task,
 ) -> None:
-    corrupted = baseline_task.model_copy(
-        update={"code": {"python": 123}}
-    )
+    corrupted = baseline_task.model_copy(update={"code": {"python": 123}})
     issues = validate_intervals_task(corrupted)
     assert any(issue.code == CODE_CODE_PARSE_ERROR for issue in issues)
 

@@ -57,9 +57,7 @@ class TaskQualityReport:
     @property
     def failed_checks(self) -> list[QualityCheckResult]:
         return [
-            check
-            for check in self.checks
-            if check.applies and not check.passed
+            check for check in self.checks if check.applies and not check.passed
         ]
 
 
@@ -83,9 +81,7 @@ class AggregateQualityReport:
     @property
     def failed_checks(self) -> list[QualityCheckResult]:
         return [
-            check
-            for check in self.checks
-            if check.applies and not check.passed
+            check for check in self.checks if check.applies and not check.passed
         ]
 
 
@@ -112,8 +108,7 @@ def _stable_key(value: Any) -> Any:
             "dict",
             tuple(
                 sorted(
-                    (_stable_key(k), _stable_key(v))
-                    for k, v in value.items()
+                    (_stable_key(k), _stable_key(v)) for k, v in value.items()
                 )
             ),
         )
@@ -225,16 +220,14 @@ def _base_checks(
         checks.append(
             _pass(
                 "base.tag_kinds_min",
-                f"tag kinds present={present_tag_kinds} >= "
-                f"{_MIN_TAG_KINDS}",
+                f"tag kinds present={present_tag_kinds} >= {_MIN_TAG_KINDS}",
             )
         )
     else:
         checks.append(
             _fail(
                 "base.tag_kinds_min",
-                f"tag kinds present={present_tag_kinds} < "
-                f"{_MIN_TAG_KINDS}",
+                f"tag kinds present={present_tag_kinds} < {_MIN_TAG_KINDS}",
             )
         )
 
@@ -463,8 +456,7 @@ def _fsm_non_empty_inputs(task: Task) -> list[QualityCheckResult]:
 
 def _bitops_non_zero_input(task: Task) -> list[QualityCheckResult]:
     has_non_zero = any(
-        type(query.input) is int and query.input != 0
-        for query in task.queries
+        type(query.input) is int and query.input != 0 for query in task.queries
     )
     if has_non_zero:
         return [
@@ -623,9 +615,7 @@ def evaluate_aggregate_quality(
     if total_reachable_old_values == 0:
         replace_hit_ratio = None
     else:
-        replace_hit_ratio = (
-            total_hit_old_values / total_reachable_old_values
-        )
+        replace_hit_ratio = total_hit_old_values / total_reachable_old_values
 
     metrics = AggregateQualityMetrics(
         task_count=len(tasks),

@@ -122,6 +122,20 @@ class FsmSpec(BaseModel):
                         "transition target_state_id must reference an existing "
                         "state"
                     )
+                match transition.predicate:
+                    case (
+                        PredicateLt(value=threshold)
+                        | PredicateLe(value=threshold)
+                        | PredicateGt(value=threshold)
+                        | PredicateGe(value=threshold)
+                    ):
+                        if not INT32_MIN <= threshold <= INT32_MAX:
+                            raise ValueError(
+                                "transition predicate comparison values must "
+                                "be within signed 32-bit range "
+                                f"[{INT32_MIN}, {INT32_MAX}] for fsm parity "
+                                f"contract; got {threshold}"
+                            )
 
         return self
 
@@ -192,5 +206,25 @@ class FsmAxes(BaseModel):
             raise ValueError("divisor_range: low must be >= 1")
         if self.n_states_range[1] > INT32_MAX:
             raise ValueError(f"n_states_range: high must be <= {INT32_MAX}")
+        if self.value_range[0] < INT32_MIN:
+            raise ValueError(
+                "value_range: low must be >= "
+                f"{INT32_MIN} for fsm parity contract"
+            )
+        if self.value_range[1] > INT32_MAX:
+            raise ValueError(
+                "value_range: high must be <= "
+                f"{INT32_MAX} for fsm parity contract"
+            )
+        if self.threshold_range[0] < INT32_MIN:
+            raise ValueError(
+                "threshold_range: low must be >= "
+                f"{INT32_MIN} for fsm parity contract"
+            )
+        if self.threshold_range[1] > INT32_MAX:
+            raise ValueError(
+                "threshold_range: high must be <= "
+                f"{INT32_MAX} for fsm parity contract"
+            )
 
         return self

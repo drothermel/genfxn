@@ -134,6 +134,49 @@ class TestModels:
         with pytest.raises(Exception, match="n_states_range: high"):
             FsmAxes.model_validate({"n_states_range": (2, 2_147_483_648)})
 
+    @pytest.mark.parametrize(
+        ("field_name", "range_value"),
+        [
+            ("value_range", (-(1 << 31) - 1, 0)),
+            ("value_range", (0, (1 << 31))),
+            ("threshold_range", (-(1 << 31) - 1, 0)),
+            ("threshold_range", (0, (1 << 31))),
+        ],
+    )
+    def test_axes_reject_ranges_outside_int32_contract(
+        self, field_name: str, range_value: tuple[int, int]
+    ) -> None:
+        with pytest.raises(Exception, match=rf"{field_name}: .*fsm parity"):
+            FsmAxes.model_validate({field_name: range_value})
+
+    def test_spec_rejects_comparison_threshold_outside_int32_contract(
+        self,
+    ) -> None:
+        with pytest.raises(Exception, match="signed 32-bit range"):
+            FsmSpec.model_validate(
+                {
+                    "machine_type": "moore",
+                    "output_mode": "final_state_id",
+                    "undefined_transition_policy": "stay",
+                    "start_state_id": 0,
+                    "states": [
+                        {
+                            "id": 0,
+                            "is_accept": False,
+                            "transitions": [
+                                {
+                                    "predicate": {
+                                        "kind": "lt",
+                                        "value": 2_147_483_648,
+                                    },
+                                    "target_state_id": 0,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
+
 
 class TestEvaluatorSemantics:
     def test_ordered_transitions_first_match_wins(self) -> None:

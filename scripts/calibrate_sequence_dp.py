@@ -68,8 +68,7 @@ def _compute_reachability(
             "exact": exact,
             "within_one": within_one,
             "distribution": {
-                str(score): count
-                for score, count in sorted(counts.items())
+                str(score): count for score, count in sorted(counts.items())
             },
         }
 
