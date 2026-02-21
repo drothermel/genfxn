@@ -10,10 +10,9 @@ def _render_state_transitions(spec: FsmSpec, counter_var: str) -> list[str]:
         lines.append(f"        {prefix} state == {state.id} {{")
         if not state.transitions:
             lines.append("            // no transitions")
-        for t_idx, transition in enumerate(state.transitions):
+        for transition in state.transitions:
             pred = render_predicate_rust(transition.predicate, "x")
-            if_kw = "if" if t_idx == 0 else "else if"
-            lines.append(f"            {if_kw} {pred} {{")
+            lines.append(f"            if !matched && ({pred}) {{")
             lines.append(
                 f"                state = {transition.target_state_id};"
             )
