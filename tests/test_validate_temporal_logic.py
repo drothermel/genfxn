@@ -162,7 +162,9 @@ def test_non_python_code_map_skips_python_validation(
     baseline_task: Task,
 ) -> None:
     corrupted = baseline_task.model_copy(
-        update={"code": {"java": "public static int f(int[] xs) { return 0; }"}}
+        update={
+            "code": {"java": "public static long f(long[] xs) { return 0L; }"}
+        }
     )
     issues = validate_temporal_logic_task(corrupted)
     assert not any(issue.code == CODE_CODE_PARSE_ERROR for issue in issues)

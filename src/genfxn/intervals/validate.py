@@ -23,6 +23,7 @@ from genfxn.intervals.ast_safety import (
 )
 from genfxn.intervals.eval import eval_intervals
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.utils import _clamp
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -493,10 +494,6 @@ def _validate_query_outputs(
             )
 
     return issues
-
-
-def _clamp(value: int, lo: int, hi: int) -> int:
-    return min(max(value, lo), hi)
 
 
 def _sample_intervals_from_axes(

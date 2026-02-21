@@ -8,13 +8,7 @@ from genfxn.core.transforms import (
     TransformScale,
     TransformShift,
 )
-from genfxn.langs.java._helpers import INT32_MAX, INT32_MIN, java_long_literal
-
-
-def _java_literal(value: int) -> str:
-    if INT32_MIN <= value <= INT32_MAX:
-        return str(value)
-    return java_long_literal(value)
+from genfxn.langs.java._helpers import _java_literal
 
 
 def render_transform_java(t: Transform, var: str = "x") -> str:

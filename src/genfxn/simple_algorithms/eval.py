@@ -42,10 +42,13 @@ def eval_most_frequent(
     if spec.tie_break == TieBreakMode.SMALLEST:
         return min(candidates)
 
+    candidates_set = set(candidates)
     for x in xs:
-        if x in candidates:
+        if x in candidates_set:
             return x
-    raise AssertionError("unreachable: xs non-empty and candidates derived from xs")
+    raise AssertionError(
+        "unreachable: xs non-empty and candidates derived from xs"
+    )
 
 
 def eval_count_pairs_sum(

@@ -148,7 +148,7 @@ class TestCodeCompilation:
             update={
                 "code": {
                     "python": task.code,
-                    "java": "public static long f(long[] xs) { return 0; }",
+                    "java": "public static long f(long[] xs) { return 0L; }",
                 }
             }
         )
@@ -162,7 +162,7 @@ class TestCodeCompilation:
         mapped = task.model_copy(
             update={
                 "code": {
-                    "java": "public static long f(long[] xs) { return 0; }"
+                    "java": "public static long f(long[] xs) { return 0L; }"
                 }
             }
         )

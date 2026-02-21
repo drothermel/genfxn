@@ -133,8 +133,8 @@ class TestCodeCompilationAndExecution:
             update={
                 "code": {
                     "java": (
-                        "public static int[] f(int[] xs){"
-                        "return new int[]{0,0};}"
+                        "public static long[] f(long[] xs){"
+                        "return new long[]{0L,0L};}"
                     )
                 }
             }

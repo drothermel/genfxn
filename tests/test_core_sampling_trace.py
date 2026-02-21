@@ -39,6 +39,16 @@ def test_intersect_ranges_negative() -> None:
     assert intersect_ranges((-3, 2), (-5, -1)) == (-3, -1)
 
 
+def test_intersect_ranges_rejects_malformed_a() -> None:
+    with pytest.raises(ValueError, match="range a is malformed"):
+        intersect_ranges((5, 3), (1, 2))
+
+
+def test_intersect_ranges_rejects_malformed_b() -> None:
+    with pytest.raises(ValueError, match="range b is malformed"):
+        intersect_ranges((1, 2), (5, 3))
+
+
 def test_pick_from_preferred_uses_overlap() -> None:
     rng = random.Random(42)
     available = [1, 2, 3, 4]

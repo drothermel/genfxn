@@ -237,11 +237,11 @@ class TestPredicateJava:
     def test_custom_var(self) -> None:
         assert render_predicate_java(PredicateEven(), var="n") == "n % 2 == 0"
 
-    def test_lt_out_of_int32_preserves_int_input_semantics(self) -> None:
+    def test_lt_out_of_int32_renders_long_literal(self) -> None:
         result = render_predicate_java(PredicateLt(value=1 << 31))
         assert result == "x < 2147483648L"
 
-    def test_in_set_ignores_out_of_int32_values(self) -> None:
+    def test_in_set_renders_out_of_int32_values_as_long(self) -> None:
         result = render_predicate_java(
             PredicateInSet(values=frozenset({1, 1 << 31})),
         )
@@ -570,7 +570,9 @@ class TestPiecewiseJava:
         code = render_piecewise(spec)
         assert "(x == 1 || x == 2)" in code
 
-    def test_expression_constants_use_java_int_narrowing_literals(self) -> None:
+    def test_expression_constants_use_long_literals_for_oversized_values(
+        self,
+    ) -> None:
         from genfxn.langs.java.piecewise import render_piecewise
         from genfxn.piecewise.models import Branch, PiecewiseSpec
 

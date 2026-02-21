@@ -40,6 +40,12 @@ def java_long_literal(value: int) -> str:
     return f"{ivalue}L"
 
 
+def _java_literal(value: int) -> str:
+    if INT32_MIN <= value <= INT32_MAX:
+        return str(value)
+    return java_long_literal(value)
+
+
 def _regex_char_class_escape(chars: str) -> str:
     """Escape characters for use inside a Java regex character class [...]."""
     result: list[str] = []

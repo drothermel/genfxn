@@ -8,14 +8,7 @@ from genfxn.core.transforms import (
     TransformScale,
     TransformShift,
 )
-from genfxn.langs.rust._helpers import rust_i64_literal
-
-
-def _i64_expr(value: int) -> str:
-    literal = rust_i64_literal(value)
-    if literal.endswith("i64"):
-        return literal[:-3]
-    return literal
+from genfxn.langs.rust._helpers import _i64_expr
 
 
 def render_transform_rust(

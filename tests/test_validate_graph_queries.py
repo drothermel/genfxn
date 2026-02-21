@@ -273,7 +273,7 @@ def test_non_python_code_map_skips_python_validation(
     corrupted = baseline_task.model_copy(
         update={
             "code": {
-                "java": "public static int f(int src, int dst) { return 0; }"
+                "java": "public static long f(int src, int dst) { return 0L; }"
             }
         }
     )

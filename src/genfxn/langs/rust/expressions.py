@@ -1,4 +1,4 @@
-from genfxn.langs.rust._helpers import rust_i64_literal
+from genfxn.langs.rust._helpers import _i64_expr
 from genfxn.piecewise.models import (
     ExprAbs,
     ExprAffine,
@@ -6,13 +6,6 @@ from genfxn.piecewise.models import (
     ExprMod,
     ExprQuadratic,
 )
-
-
-def _i64_expr(value: int) -> str:
-    literal = rust_i64_literal(value)
-    if literal.endswith("i64"):
-        return literal[:-3]
-    return literal
 
 
 def render_expression_rust(

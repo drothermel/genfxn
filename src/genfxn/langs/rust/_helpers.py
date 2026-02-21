@@ -24,3 +24,10 @@ def rust_i64_literal(value: int) -> str:
     if ivalue == INT64_MIN:
         return "i64::MIN"
     return f"{ivalue}i64"
+
+
+def _i64_expr(value: int) -> str:
+    literal = rust_i64_literal(value)
+    if literal.endswith("i64"):
+        return literal[:-3]
+    return literal

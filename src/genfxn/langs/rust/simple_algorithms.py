@@ -1,4 +1,4 @@
-from genfxn.langs.rust._helpers import rust_i64_literal
+from genfxn.langs.rust._helpers import _i64_expr
 from genfxn.langs.rust.predicates import render_predicate_rust
 from genfxn.langs.rust.transforms import render_transform_rust
 from genfxn.simple_algorithms.models import (
@@ -9,13 +9,6 @@ from genfxn.simple_algorithms.models import (
     SimpleAlgorithmsSpec,
     TieBreakMode,
 )
-
-
-def _i64_expr(value: int) -> str:
-    literal = rust_i64_literal(value)
-    if literal.endswith("i64"):
-        return literal[:-3]
-    return literal
 
 
 def _render_preprocess_rust(

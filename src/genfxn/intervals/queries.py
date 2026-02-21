@@ -4,6 +4,7 @@ from typing import Any
 from genfxn.core.models import Query, QueryTag, dedupe_queries_per_tag_input
 from genfxn.intervals.eval import eval_intervals
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.utils import _clamp
 
 
 def _ordered_pair(value: Any, fallback: tuple[int, int]) -> tuple[int, int]:
@@ -30,10 +31,6 @@ def _get_axis_range(
         if hasattr(axes, name):
             return _ordered_pair(getattr(axes, name), fallback)
     return fallback
-
-
-def _clamp(value: int, lo: int, hi: int) -> int:
-    return min(max(value, lo), hi)
 
 
 def _sample_non_degenerate_interval(
