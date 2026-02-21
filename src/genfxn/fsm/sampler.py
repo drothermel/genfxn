@@ -40,7 +40,12 @@ def _sample_predicate(
         case PredicateType.GE:
             return PredicateGe(value=rng.randint(*threshold_range))
         case PredicateType.MOD_EQ:
-            divisor = rng.randint(*divisor_range)
+            divisor_lo, divisor_hi = divisor_range
+            if divisor_hi < 1:
+                raise ValueError(
+                    "divisor_range must include values >= 1 for mod_eq"
+                )
+            divisor = rng.randint(max(1, divisor_lo), divisor_hi)
             remainder = rng.randint(0, divisor - 1)
             return PredicateModEq(divisor=divisor, remainder=remainder)
         case _:

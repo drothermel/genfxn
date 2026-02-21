@@ -2,7 +2,11 @@ import random
 
 import pytest
 
-from genfxn.core.sampling import intersect_ranges, pick_from_preferred
+from genfxn.core.sampling import (
+    intersect_ranges,
+    pick_from_preferred,
+    sample_probability,
+)
 from genfxn.core.trace import TraceStep, trace_step
 
 
@@ -71,6 +75,34 @@ def test_pick_from_preferred_rejects_empty_available() -> None:
         ValueError, match="available must contain at least one item"
     ):
         pick_from_preferred([], ["x"], rng)
+
+
+def test_sample_probability_within_range() -> None:
+    rng = random.Random(42)
+    value = sample_probability((0.2, 0.4), rng)
+    assert 0.2 <= value <= 0.4
+
+
+def test_sample_probability_rejects_malformed_range() -> None:
+    rng = random.Random(42)
+    with pytest.raises(ValueError, match="prob_range is malformed"):
+        sample_probability((0.8, 0.2), rng)
+
+
+@pytest.mark.parametrize(
+    "prob_range",
+    [
+        (-0.1, 0.5),
+        (0.0, 1.1),
+        (-0.2, 1.2),
+    ],
+)
+def test_sample_probability_rejects_bounds_outside_unit_interval(
+    prob_range: tuple[float, float],
+) -> None:
+    rng = random.Random(42)
+    with pytest.raises(ValueError, match=r"within \[0.0, 1.0\]"):
+        sample_probability(prob_range, rng)
 
 
 def test_trace_step_appends_when_trace_is_present() -> None:

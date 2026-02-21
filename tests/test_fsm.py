@@ -317,6 +317,17 @@ class TestSampler:
                 rng=random.Random(1),
             )
 
+    def test_sample_predicate_mod_eq_rejects_non_positive_divisor_range(
+        self,
+    ) -> None:
+        with pytest.raises(ValueError, match="divisor_range must include"):
+            _sample_predicate(
+                PredicateType.MOD_EQ,
+                threshold_range=(-1, 1),
+                divisor_range=(0, 0),
+                rng=random.Random(1),
+            )
+
 
 class TestQueries:
     def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
