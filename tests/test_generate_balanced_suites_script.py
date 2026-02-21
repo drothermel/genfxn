@@ -93,10 +93,14 @@ def test_main_skips_generated_style_checks_when_flag_set(
     monkeypatch.setattr(
         _SCRIPT_MODULE, "quota_report", lambda tasks, family: []
     )
+
+    def _raise_assertion(tasks: list[_FakeTask]) -> None:  # noqa: ARG001
+        raise AssertionError("should not run")
+
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "check_generated_code_quality",
-        lambda tasks: (_ for _ in ()).throw(AssertionError("should not run")),
+        _raise_assertion,
     )
 
     generate_balanced_suites_main(
@@ -121,12 +125,14 @@ def test_main_exits_when_generated_style_checks_fail(
     monkeypatch.setattr(
         _SCRIPT_MODULE, "quota_report", lambda tasks, family: []
     )
+
+    def _raise_quality_error(tasks: list[_FakeTask]) -> None:  # noqa: ARG001
+        raise _SCRIPT_MODULE.GeneratedCodeQualityError("bad generated code")
+
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "check_generated_code_quality",
-        lambda tasks: (_ for _ in ()).throw(
-            _SCRIPT_MODULE.GeneratedCodeQualityError("bad generated code")
-        ),
+        _raise_quality_error,
     )
 
     with pytest.raises(Exit) as exc_info:

@@ -26,7 +26,7 @@ from genfxn.stringrules.models import StringRulesSpec
 from genfxn.temporal_logic.models import TemporalLogicSpec
 
 _CHECK_LANGUAGES: tuple[Language, ...] = (Language.JAVA, Language.RUST)
-_REQUIRED_TOOLS = ("google-java-format", "javac", "rustfmt", "rustc")
+_REQUIRED_TOOLS = ("cargo", "google-java-format", "javac", "rustfmt")
 _SUBPROCESS_TIMEOUT_SEC = 30.0
 _CHECK_FAIL_HINT = (
     "Use --skip-generated-style-checks to bypass locally if needed."
@@ -132,22 +132,35 @@ def _check_java_code(code: str) -> None:
 def _check_rust_code(code: str) -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
-        src = tmp / "main.rs"
-        out = tmp / "main.out"
+        src_dir = tmp / "src"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        src = src_dir / "main.rs"
         src.write_text(_rust_source(code), encoding="utf-8")
+
+        cargo_toml = tmp / "Cargo.toml"
+        cargo_toml.write_text(
+            (
+                "[package]\n"
+                'name = "generated_code_quality_check"\n'
+                'version = "0.1.0"\n'
+                'edition = "2021"\n'
+            ),
+            encoding="utf-8",
+        )
+
         _run_checked_subprocess(["rustfmt", "--check", str(src)], cwd=tmp)
         _run_checked_subprocess(
             [
-                "rustc",
-                "--edition=2021",
+                "cargo",
+                "clippy",
+                "--quiet",
+                "--",
                 "-D",
                 "warnings",
-                str(src),
-                "-o",
-                str(out),
             ],
             cwd=tmp,
         )
+        _run_checked_subprocess(["cargo", "check", "--quiet"], cwd=tmp)
 
 
 def _render_code(task: Task, language: Language, spec_obj: Any) -> str:

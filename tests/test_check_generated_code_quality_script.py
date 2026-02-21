@@ -113,12 +113,14 @@ def test_main_exits_when_quality_checks_fail(monkeypatch) -> None:
             SimpleNamespace(errors=0, duplicates=0),
         ),
     )
+
+    def _raise_quality_error(tasks: list[_FakeTask]) -> None:  # noqa: ARG001
+        raise _SCRIPT_MODULE.GeneratedCodeQualityError("quality failure")
+
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "check_generated_code_quality",
-        lambda tasks: (_ for _ in ()).throw(
-            _SCRIPT_MODULE.GeneratedCodeQualityError("quality failure")
-        ),
+        _raise_quality_error,
     )
 
     with pytest.raises(typer.Exit) as exc_info:

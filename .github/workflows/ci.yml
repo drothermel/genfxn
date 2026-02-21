@@ -79,11 +79,11 @@ jobs:
         run: |
           mkdir -p "$HOME/.local/bin" "$HOME/.local/share"
           curl -sSL \
-            -o "$HOME/.local/share/google-java-format.jar" \
-            "https://github.com/google/google-java-format/releases/download/v1.25.2/google-java-format-1.25.2-all-deps.jar"
+            -o "$HOME/.local/share/google-java-format-1.34.1-all-deps.jar" \
+            "https://github.com/google/google-java-format/releases/download/v1.34.1/google-java-format-1.34.1-all-deps.jar"
           cat > "$HOME/.local/bin/google-java-format" <<'SH'
           #!/usr/bin/env bash
-          exec java -jar "$HOME/.local/share/google-java-format.jar" "$@"
+          exec java -jar "$HOME/.local/share/google-java-format-1.34.1-all-deps.jar" "$@"
           SH
           chmod +x "$HOME/.local/bin/google-java-format"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"

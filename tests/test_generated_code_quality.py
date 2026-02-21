@@ -13,7 +13,7 @@ def test_validate_required_tools_reports_missing_tools(
 
     with pytest.raises(
         quality.GeneratedCodeQualityError,
-        match="google-java-format, javac, rustc, rustfmt",
+        match="cargo, google-java-format, javac, rustfmt",
     ):
         quality._validate_required_tools()
 
