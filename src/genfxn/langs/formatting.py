@@ -78,9 +78,9 @@ def format_rust_rendered_code(code: str) -> str:
                 text=True,
                 timeout=_FORMAT_TIMEOUT_SEC,
             )
+            return src.read_text(encoding="utf-8").rstrip()
         except (OSError, subprocess.SubprocessError):
             return code
-        return src.read_text(encoding="utf-8").rstrip()
 
 
 def format_rendered_code(language: Language, code: str) -> str:

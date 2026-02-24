@@ -1,5 +1,7 @@
 """Generate balanced task suites per family."""
 
+import os
+import tempfile
 from pathlib import Path
 
 import srsly
@@ -13,6 +15,28 @@ from genfxn.suites.families import parse_families
 from genfxn.suites.generate import generate_suite, quota_report
 
 app = typer.Typer()
+
+
+def _write_jsonl_atomically(
+    path: Path, records: list[dict[str, object]]
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=str(path.parent),
+        text=True,
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            for record in records:
+                handle.write(srsly.json_dumps(record))
+                handle.write("\n")
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 @app.command()
@@ -34,10 +58,12 @@ def main(
 ) -> None:
     """Generate balanced 50-task suites per family."""
     family_list = parse_families(families)
+    generated: dict[str, list] = {}
+    reports: dict[str, list[tuple[str, str, int, int, str]]] = {}
 
     for family in family_list:
         typer.echo(f"\n{'=' * 60}")
-        typer.echo(f"Generating {family} suite...")
+        typer.echo(f"Generating and validating {family} suite...")
         typer.echo(f"{'=' * 60}")
 
         tasks = generate_suite(
@@ -53,16 +79,22 @@ def main(
                 typer.echo(str(err), err=True)
                 raise typer.Exit(1) from err
 
-        typer.echo(f"Selected {len(tasks)} tasks")
+        generated[family] = tasks
+        reports[family] = quota_report(tasks, family)
+        typer.echo(f"Validated {len(tasks)} tasks for {family}")
 
+    typer.echo(f"\n{'=' * 60}")
+    typer.echo("All suites validated. Writing output files...")
+    typer.echo(f"{'=' * 60}")
+
+    for family in family_list:
+        tasks = generated[family]
         out_path = output_dir / family / "all.jsonl"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
         records = [task.model_dump(mode="json") for task in tasks]
-        srsly.write_jsonl(str(out_path), records)
+        _write_jsonl_atomically(out_path, records)
         typer.echo(f"Written to {out_path}")
 
-        report = quota_report(tasks, family)
+        report = reports[family]
         if not report:
             typer.echo("No bucket quotas configured for this family.")
             continue

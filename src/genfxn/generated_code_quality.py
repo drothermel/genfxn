@@ -27,7 +27,13 @@ from genfxn.stringrules.models import StringRulesSpec
 from genfxn.temporal_logic.models import TemporalLogicSpec
 
 _CHECK_LANGUAGES: tuple[Language, ...] = (Language.JAVA, Language.RUST)
-_REQUIRED_TOOLS = ("cargo", "google-java-format", "javac", "rustfmt")
+_REQUIRED_TOOLS = (
+    "cargo",
+    "cargo-clippy",
+    "google-java-format",
+    "javac",
+    "rustfmt",
+)
 _SUBPROCESS_TIMEOUT_SEC = 30.0
 _CHECK_FAIL_HINT = (
     "Use --skip-generated-style-checks to bypass locally if needed."
@@ -78,14 +84,20 @@ def _validate_spec_for_task(task: Task) -> Any:
 
 
 def _run_checked_subprocess(cmd: list[str], *, cwd: Path) -> None:
-    subprocess.run(
-        cmd,
-        cwd=cwd,
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=_SUBPROCESS_TIMEOUT_SEC,
-    )
+    try:
+        subprocess.run(
+            cmd,
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=_SUBPROCESS_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise subprocess.SubprocessError(
+            "tool timed out after "
+            f"{_SUBPROCESS_TIMEOUT_SEC:.1f}s while running: {' '.join(cmd)}"
+        ) from exc
 
 
 def _java_source(code: str) -> str:
@@ -202,8 +214,12 @@ def check_generated_code_quality(
             try:
                 if language == Language.JAVA:
                     _check_java_code(rendered)
-                else:
+                elif language == Language.RUST:
                     _check_rust_code(rendered)
+                else:
+                    raise RuntimeError(
+                        f"Unsupported check language: {language!r}"
+                    )
             except subprocess.CalledProcessError as exc:
                 failures.append(
                     f"{task.task_id} ({task.family}/{language.value}) "

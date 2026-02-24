@@ -145,3 +145,4 @@ def test_main_exits_when_generated_style_checks_fail(
         )
 
     assert exc_info.value.exit_code == 1
+    assert not (tmp_path / "stateful" / "all.jsonl").exists()

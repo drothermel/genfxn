@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import re
 import stat
 from typing import Any, cast
 
@@ -42,6 +43,11 @@ from genfxn.temporal_logic.validate import (
 from genfxn.temporal_logic.validate import validate_temporal_logic_task
 
 runner = CliRunner()
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE_RE.sub("", text)
 
 
 @pytest.fixture(autouse=True)
@@ -389,7 +395,9 @@ class TestGenerate:
         )
 
         assert result.exit_code != 0
-        assert "Invalid --value-range for graph_queries" in result.output
+        assert "Invalid --value-range for graph_queries" in _strip_ansi(
+            result.output
+        )
 
     def test_generate_temporal_logic(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -2730,7 +2738,9 @@ class TestSplit:
         )
 
         assert result.exit_code != 0
-        assert "Invalid value for '--holdout-type'" in result.output
+        assert "Invalid value for '--holdout-type'" in _strip_ansi(
+            result.output
+        )
         assert "Traceback" not in result.output
 
     def test_split_case_mismatched_holdout_type_has_clean_error(
@@ -2774,7 +2784,9 @@ class TestSplit:
         )
 
         assert result.exit_code != 0
-        assert "Invalid value for '--holdout-type'" in result.output
+        assert "Invalid value for '--holdout-type'" in _strip_ansi(
+            result.output
+        )
         assert "Traceback" not in result.output
 
     def test_split_random_ratio_accepts_zero_and_one(self, tmp_path) -> None:

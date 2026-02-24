@@ -6,6 +6,14 @@ import pytest
 import genfxn.generated_code_quality as quality
 
 
+def _raise_called_process_error(_: str) -> None:
+    raise subprocess.CalledProcessError(
+        returncode=1,
+        cmd=["javac", "Main.java"],
+        stderr="compile error",
+    )
+
+
 def test_validate_required_tools_reports_missing_tools(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -86,15 +94,7 @@ def test_check_generated_code_quality_aggregates_subprocess_failures(
         quality, "_render_code", lambda task, language, spec: "code"
     )
     monkeypatch.setattr(
-        quality,
-        "_check_java_code",
-        lambda code: (_ for _ in ()).throw(
-            subprocess.CalledProcessError(
-                returncode=1,
-                cmd=["javac", "Main.java"],
-                stderr="compile error",
-            )
-        ),
+        quality, "_check_java_code", _raise_called_process_error
     )
     monkeypatch.setattr(quality, "_check_rust_code", lambda code: None)
 

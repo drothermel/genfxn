@@ -53,11 +53,6 @@ def _run_step(name: str, cmd: Sequence[str]) -> int:
     return rc
 
 
-def _has_changes(paths: Sequence[str]) -> bool:
-    cmd = ["git", "diff", "--quiet", "--", *paths]
-    return subprocess.run(cmd, cwd=REPO_ROOT).returncode != 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -69,8 +64,8 @@ def main() -> int:
         "--ci",
         action="store_true",
         help=(
-            "CI mode. Uses ruff format --check and fails if ruff --fix would "
-            "modify src/tests/scripts."
+            "CI mode. Uses ruff format --check and non-mutating ruff lint "
+            "for src/tests/scripts."
         ),
     )
     args = parser.parse_args()
@@ -80,13 +75,20 @@ def main() -> int:
         if args.ci
         else ["uv", "run", "ruff", "format", "."]
     )
+    lint_cmd = (
+        ["uv", "run", "ruff", "check", *RUFF_FIX_PATHS]
+        if args.ci
+        else ["uv", "run", "ruff", "check", "--fix", *RUFF_FIX_PATHS]
+    )
+    lint_step_name = (
+        "Ruff check (src/tests/scripts)"
+        if args.ci
+        else "Ruff check --fix (src/tests/scripts)"
+    )
 
     steps = [
         ("Ruff format (all Python files)", format_cmd),
-        (
-            "Ruff check --fix (src/tests/scripts)",
-            ["uv", "run", "ruff", "check", "--fix", *RUFF_FIX_PATHS],
-        ),
+        (lint_step_name, lint_cmd),
         (
             "Ruff check (src blocking scope)",
             ["uv", "run", "ruff", "check", "src/"],
@@ -100,19 +102,6 @@ def main() -> int:
         rc = _run_step(name, cmd)
         if rc != 0:
             return rc
-
-    if args.ci and _has_changes(RUFF_FIX_PATHS):
-        print(
-            (
-                "CI mode failure: `ruff check --fix src/ tests/ scripts/` "
-                "would modify files. "
-                "Run `uv run python scripts/run_all_checks.py` "
-                "locally and commit the resulting changes."
-            ),
-            file=sys.stderr,
-            flush=True,
-        )
-        return 1
 
     print("\nAll checks passed.", flush=True)
     return 0

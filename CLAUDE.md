@@ -51,10 +51,14 @@ Required:
 
 - Generated Java/Rust code quality checks are now part of the workflow:
   `google-java-format --dry-run --set-exit-if-changed`,
-  `javac -Xlint:all -Werror`, `rustfmt --check`, and
-  `rustc --edition=2021 -D warnings`.
+  `javac -Xlint:all -Werror`, `cargo fmt -- --check`,
+  `cargo clippy -- -D warnings`, and `cargo check`.
 - CI runs deterministic smoke coverage via
   `scripts/check_generated_code_quality.py`.
+- Historical note: older single-file Rust checks used
+  `rustc --edition=2021 -D warnings` for snippet compatibility and therefore
+  missed broader Clippy lint coverage. The current check materializes snippets
+  as temporary Cargo projects so Clippy is enforced.
 
 ## Mandatory Verification Workflow
 
