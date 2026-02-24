@@ -81,7 +81,7 @@ def _run_rust_f(
         out = tmp / "main_bin"
         src_path.write_text(main_src, encoding="utf-8")
         run_checked_subprocess(
-            [rustc, str(src_path), "-O", "-o", str(out)],
+            [rustc, "--edition=2021", str(src_path), "-O", "-o", str(out)],
             cwd=tmp,
         )
         proc = run_checked_subprocess(

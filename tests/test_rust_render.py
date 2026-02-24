@@ -2,9 +2,16 @@
 
 import importlib.util
 import random
-from typing import Literal
+import tempfile
+from pathlib import Path
+from typing import Any, Literal
 
 import pytest
+from helpers import (
+    require_java_runtime,
+    require_rust_runtime,
+    run_checked_subprocess,
+)
 
 from genfxn.bitops.models import BitInstruction, BitOp, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
@@ -22,6 +29,7 @@ from genfxn.core.predicates import (
     PredicateOdd,
     PredicateOr,
 )
+from genfxn.core.safe_exec import execute_code_restricted
 from genfxn.core.string_predicates import (
     StringPredicateAnd,
     StringPredicateContains,
@@ -93,6 +101,28 @@ def _code_map(task: Task) -> dict[str, str]:
 
 def seeded_rng(seed: int) -> random.Random:  # noqa: S311
     return random.Random(seed)
+
+
+_ALLOWED_BUILTINS = {
+    "abs": abs,
+    "all": all,
+    "any": any,
+    "dict": dict,
+    "enumerate": enumerate,
+    "int": int,
+    "isinstance": isinstance,
+    "len": len,
+    "list": list,
+    "max": max,
+    "min": min,
+    "range": range,
+    "set": set,
+    "sorted": sorted,
+    "str": str,
+    "sum": sum,
+    "tuple": tuple,
+    "zip": zip,
+}
 
 
 def _supports_stack_bytecode_rust() -> bool:
@@ -241,8 +271,10 @@ class TestGraphQueriesRust:
         spec.edges[0].v = 99
 
         code = render_graph_queries(spec)
-        assert "if raw_u_i64 < 0 || raw_u_i64 >= n_nodes as i64 || " in code
-        assert "raw_v_i64 < 0 || raw_v_i64 >= n_nodes as i64 {" in code
+        assert "if raw_u_i64 < 0" in code
+        assert "|| raw_u_i64 >= n_nodes as i64" in code
+        assert "|| raw_v_i64 < 0" in code
+        assert "|| raw_v_i64 >= n_nodes as i64" in code
         assert (
             'panic!("edge endpoint out of range for '
             'n_nodes={}", n_nodes);' in code
@@ -679,7 +711,7 @@ class TestStringrulesRust:
         assert "fn f(s: &str) -> String" in code
         assert 's.starts_with("a")' in code
         assert "s.to_uppercase()" in code
-        assert "} else {" in code
+        assert "return s.to_uppercase();" in code
 
     def test_no_rules(self) -> None:
         from genfxn.langs.rust.stringrules import render_stringrules
@@ -739,7 +771,7 @@ class TestSimpleAlgorithmsRust:
             counting_mode=CountingMode.ALL_INDICES,
         )
         code = render_simple_algorithms(spec)
-        assert "xs[i] + xs[j] == 10" in code
+        assert "x_i + x_j == 10" in code
         assert "count += 1" in code
 
     def test_count_pairs_unique(self) -> None:
@@ -841,6 +873,409 @@ class TestSimpleAlgorithmsRust:
 # ── Integration Tests ──────────────────────────────────────────────────
 
 
+def _execute_python_code(python_code: str) -> Any:
+    """Execute Python code and return the function f."""
+    namespace = execute_code_restricted(
+        python_code,
+        _ALLOWED_BUILTINS,
+        trust_untrusted_code=True,
+    )
+    return namespace["f"]
+
+
+def _parse_query_input_by_family(family: str, input_value: Any) -> Any:
+    """Parse query input based on task family."""
+    if family == "piecewise":
+        return int(input_value)
+    elif family in ("stateful", "fsm", "simple_algorithms", "temporal_logic"):
+        if isinstance(input_value, (list, tuple)):
+            return list(input_value)
+        return input_value
+    elif family == "stringrules":
+        if isinstance(input_value, str):
+            return input_value
+        return str(input_value)
+    elif family == "bitops":
+        return int(input_value)
+    elif family == "sequence_dp":
+        if not isinstance(input_value, dict):
+            raise TypeError("sequence_dp query input must be a dict")
+        a_vals = input_value.get("a")
+        b_vals = input_value.get("b")
+        if not isinstance(a_vals, (list, tuple)) or not isinstance(
+            b_vals, (list, tuple)
+        ):
+            raise TypeError(
+                "sequence_dp query input must contain list/tuple fields"
+            )
+        return (list(a_vals), list(b_vals))
+    elif family == "intervals":
+        if not isinstance(input_value, list):
+            raise TypeError("intervals query input must be a list")
+        parsed: list[tuple[int, int]] = []
+        for item in input_value:
+            if (
+                isinstance(item, (tuple, list))
+                and len(item) == 2
+                and isinstance(item[0], int)
+                and isinstance(item[1], int)
+            ):
+                parsed.append((int(item[0]), int(item[1])))
+            else:
+                raise TypeError("intervals query input must contain int pairs")
+        return parsed
+    elif family == "graph_queries":
+        if not isinstance(input_value, dict):
+            raise TypeError("graph_queries query input must be a dict")
+        src = input_value.get("src")
+        dst = input_value.get("dst")
+        if not isinstance(src, int) or not isinstance(dst, int):
+            raise TypeError(
+                "graph_queries query input must contain integer src/dst"
+            )
+        return (src, dst)
+    elif family == "stack_bytecode":
+        if isinstance(input_value, (list, tuple)):
+            return list(input_value)
+        return input_value
+    else:
+        return input_value
+
+
+def _run_rust_code(
+    rustc: str,
+    code: str,
+    family: str,
+    query_input: Any,
+) -> Any:
+    """Execute Rust code and return the result."""
+    payload = _family_payload(family, query_input)
+    main_src = _build_rust_main_source(code, family, payload)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src_path = tmp / "main.rs"
+        out = tmp / "main_bin"
+        src_path.write_text(main_src, encoding="utf-8")
+        run_checked_subprocess(
+            [rustc, "--edition=2021", str(src_path), "-O", "-o", str(out)],
+            cwd=tmp,
+        )
+        proc = run_checked_subprocess(
+            [str(out)],
+            cwd=tmp,
+        )
+        output = proc.stdout.strip()
+
+        if family == "stack_bytecode":
+            parts = output.split()
+            if len(parts) != 2:
+                raise ValueError(f"Expected 2 outputs, got: {output}")
+            return (int(parts[0]), int(parts[1]))
+        elif family == "stringrules":
+            return output
+        else:
+            return int(output)
+
+
+def _run_java_code(
+    javac: str,
+    java: str,
+    code: str,
+    family: str,
+    query_input: Any,
+) -> Any:
+    """Execute Java code and return the result."""
+    payload = _family_payload(family, query_input)
+    main_src = _build_java_main_source(code, family, payload)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src_path = tmp / "Main.java"
+        src_path.write_text(main_src, encoding="utf-8")
+        run_checked_subprocess(
+            [javac, str(src_path)],
+            cwd=tmp,
+        )
+        proc = run_checked_subprocess(
+            [java, "-cp", str(tmp), "Main"],
+            cwd=tmp,
+        )
+        output = proc.stdout.strip()
+
+        if family == "stringrules":
+            return output
+        else:
+            return int(output)
+
+
+def _sequence_payload(query_input: Any) -> dict[str, Any]:
+    xs = list(query_input) if isinstance(query_input, list) else [query_input]
+    return {"xs": xs}
+
+
+def _family_payload(family: str, query_input: Any) -> dict[str, Any]:
+    shared_sequence_families = {
+        "stateful",
+        "fsm",
+        "simple_algorithms",
+        "temporal_logic",
+        "stack_bytecode",
+    }
+    if family in {"piecewise", "bitops"}:
+        return {"x": int(query_input)}
+    if family in shared_sequence_families:
+        return _sequence_payload(query_input)
+    if family == "stringrules":
+        return {"s": str(query_input)}
+    if family == "sequence_dp":
+        a_vals, b_vals = query_input
+        return {"a_vals": a_vals, "b_vals": b_vals}
+    if family == "intervals":
+        return {"intervals": query_input}
+    if family == "graph_queries":
+        src, dst = query_input
+        return {"src": src, "dst": dst}
+    raise ValueError(f"Unknown family: {family}")
+
+
+def _build_rust_main_source(
+    code: str, family: str, payload: dict[str, Any]
+) -> str:
+    xs_lit = ", ".join(f"{x}i64" for x in payload.get("xs", []))
+    a_lit = ", ".join(f"{x}i64" for x in payload.get("a_vals", []))
+    b_lit = ", ".join(f"{x}i64" for x in payload.get("b_vals", []))
+    intervals_lit = ", ".join(
+        f"({a}i64, {b}i64)" for a, b in payload.get("intervals", [])
+    )
+    builders = {
+        "piecewise": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let x: i64 = {payload['x']}i64;\n"
+            '    println!("{}", f(x));\n'
+            "}\n"
+        ),
+        "stateful": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
+            '    println!("{}", f(&xs));\n'
+            "}\n"
+        ),
+        "fsm": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
+            '    println!("{}", f(&xs));\n'
+            "}\n"
+        ),
+        "simple_algorithms": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
+            '    println!("{}", f(&xs));\n'
+            "}\n"
+        ),
+        "temporal_logic": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
+            '    println!("{}", f(&xs));\n'
+            "}\n"
+        ),
+        "stringrules": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let s = {rust_string_literal(payload['s'])};\n"
+            '    print!("{}", f(s));\n'
+            "}\n"
+        ),
+        "bitops": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let x: i64 = {payload['x']}i64;\n"
+            '    println!("{}", f(x));\n'
+            "}\n"
+        ),
+        "sequence_dp": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let a: Vec<i64> = vec![{a_lit}];\n"
+            f"    let b: Vec<i64> = vec![{b_lit}];\n"
+            '    println!("{}", f(&a, &b));\n'
+            "}\n"
+        ),
+        "intervals": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let intervals: Vec<(i64, i64)> = vec![{intervals_lit}];\n"
+            '    println!("{}", f(&intervals));\n'
+            "}\n"
+        ),
+        "graph_queries": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f'    println!("{{}}", f({payload["src"]}, {payload["dst"]}));\n'
+            "}\n"
+        ),
+        "stack_bytecode": lambda: (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
+            "    let (status, value) = f(&xs);\n"
+            '    println!("{} {}", status, value);\n'
+            "}\n"
+        ),
+    }
+    if family not in builders:
+        raise ValueError(f"Unknown family: {family}")
+    return builders[family]()
+
+
+def _java_string_literal(value: str) -> str:
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+        .replace("\b", "\\b")
+        .replace("\f", "\\f")
+    )
+    return f'"{escaped}"'
+
+
+def _build_java_main_source(
+    code: str, family: str, payload: dict[str, Any]
+) -> str:
+    xs_lit_int = ", ".join(str(x) for x in payload.get("xs", []))
+    xs_lit_long = ", ".join(f"{x}L" for x in payload.get("xs", []))
+    a_lit = ", ".join(f"{x}L" for x in payload.get("a_vals", []))
+    b_lit = ", ".join(f"{x}L" for x in payload.get("b_vals", []))
+    interval_rows = ", ".join(
+        "{" + f"{a}L, {b}L" + "}" for a, b in payload.get("intervals", [])
+    )
+    builders = {
+        "piecewise": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long x = {payload['x']}L;\n"
+            "    System.out.print(f(x));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "stateful": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long[] xs = new long[]{{{xs_lit_long}}};\n"
+            "    System.out.print(f(xs));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "fsm": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    int[] xs = new int[]{{{xs_lit_int}}};\n"
+            "    System.out.print(f(xs));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "simple_algorithms": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long[] xs = new long[]{{{xs_lit_long}}};\n"
+            "    System.out.print(f(xs));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "temporal_logic": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long[] xs = new long[]{{{xs_lit_long}}};\n"
+            "    System.out.print(f(xs));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "stringrules": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    String s = {_java_string_literal(payload['s'])};\n"
+            "    System.out.print(f(s));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "bitops": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long x = {payload['x']}L;\n"
+            "    System.out.print(f(x));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "sequence_dp": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long[] a = new long[]{{{a_lit}}};\n"
+            f"    long[] b = new long[]{{{b_lit}}};\n"
+            "    System.out.print(f(a, b));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "intervals": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long[][] intervals = new long[][]{{{interval_rows}}};\n"
+            "    System.out.print(f(intervals));\n"
+            "  }\n"
+            "}\n"
+        ),
+        "graph_queries": lambda: (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    System.out.print(f({payload['src']}, {payload['dst']}));\n"
+            "  }\n"
+            "}\n"
+        ),
+    }
+    if family not in builders:
+        raise ValueError(f"Unknown family: {family}")
+    return builders[family]()
+
+
+def _expected_python_output(
+    python_f: Any, family: str, query_input: Any
+) -> Any:
+    if family in ("sequence_dp", "graph_queries") and isinstance(
+        query_input, tuple
+    ):
+        return python_f(*query_input)
+    return python_f(query_input)
+
+
+def _assert_rust_parity(task: Task, code: dict[str, str]) -> None:
+    rustc = require_rust_runtime()
+    python_f = _execute_python_code(code["python"])
+
+    for query in task.queries:
+        query_input = _parse_query_input_by_family(task.family, query.input)
+        expected = _expected_python_output(python_f, task.family, query_input)
+        actual = _run_rust_code(rustc, code["rust"], task.family, query_input)
+        assert actual == expected, (
+            f"Query input {query.input}: expected {expected}, got {actual}"
+        )
+
+
 class TestMultiLanguageRustGeneration:
     """Test that task generation with Rust produces valid output."""
 
@@ -855,6 +1290,8 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(x: i64) -> i64" in code["rust"]
 
+        _assert_rust_parity(task, code)
+
     def test_stateful_generates_rust(self) -> None:
         task = generate_stateful_task(
             rng=seeded_rng(42),
@@ -865,6 +1302,8 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
+        _assert_rust_parity(task, code)
 
     def test_stringrules_generates_rust(self) -> None:
         task = generate_stringrules_task(
@@ -877,6 +1316,8 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(s: &str) -> String" in code["rust"]
 
+        _assert_rust_parity(task, code)
+
     def test_simple_algorithms_generates_rust(self) -> None:
         task = generate_simple_algorithms_task(
             rng=seeded_rng(42),
@@ -887,6 +1328,8 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
+        _assert_rust_parity(task, code)
 
     def test_fsm_generates_rust(self) -> None:
         task = generate_fsm_task(
@@ -899,6 +1342,8 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
 
+        _assert_rust_parity(task, code)
+
     def test_bitops_generates_rust(self) -> None:
         task = generate_bitops_task(
             rng=seeded_rng(42),
@@ -909,6 +1354,8 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(x: i64) -> i64" in code["rust"]
+
+        _assert_rust_parity(task, code)
 
     def test_sequence_dp_generates_rust(self) -> None:
         task = generate_sequence_dp_task(
@@ -921,6 +1368,8 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(a: &[i64], b: &[i64]) -> i64" in code["rust"]
 
+        _assert_rust_parity(task, code)
+
     def test_intervals_generates_rust(self) -> None:
         task = generate_intervals_task(
             rng=seeded_rng(42),
@@ -931,6 +1380,8 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(intervals: &[(i64, i64)]) -> i64" in code["rust"]
+
+        _assert_rust_parity(task, code)
 
     def test_graph_queries_generates_rust(self) -> None:
         task = generate_graph_queries_task(
@@ -943,6 +1394,8 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(" in code["rust"]
 
+        _assert_rust_parity(task, code)
+
     def test_temporal_logic_generates_rust(self) -> None:
         task = generate_temporal_logic_task(
             rng=seeded_rng(42),
@@ -953,6 +1406,8 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
+        _assert_rust_parity(task, code)
 
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
@@ -969,6 +1424,8 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> (i64, i64)" in code["rust"]
         assert "return (" in code["rust"]
+
+        _assert_rust_parity(task, code)
 
     def test_rust_only(self) -> None:
         task = generate_piecewise_task(
@@ -987,41 +1444,73 @@ class TestMultiLanguageRustGeneration:
         assert "java" in task.code
         assert "rust" in task.code
 
+        # Execute and compare outputs across all languages
+        code = _code_map(task)
+        rustc = require_rust_runtime()
+        javac, java = require_java_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            rust_result = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            java_result = _run_java_code(
+                javac, java, code["java"], task.family, query_input
+            )
+            assert rust_result == expected, (
+                f"Rust: Query input {query.input}: "
+                f"expected {expected}, got {rust_result}"
+            )
+            assert java_result == expected, (
+                f"Java: Query input {query.input}: "
+                f"expected {expected}, got {java_result}"
+            )
+
     @pytest.mark.parametrize("seed", range(10))
     def test_piecewise_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_piecewise_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        _assert_rust_parity(task, code)
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stateful_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_stateful_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        _assert_rust_parity(task, code)
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stringrules_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_stringrules_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        _assert_rust_parity(task, code)
 
     @pytest.mark.parametrize("seed", range(10))
     def test_simple_algorithms_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_simple_algorithms_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        _assert_rust_parity(task, code)
 
 
 # ── Registry Tests ─────────────────────────────────────────────────────

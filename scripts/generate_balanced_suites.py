@@ -1,34 +1,44 @@
 """Generate balanced task suites per family."""
 
+import os
+import tempfile
 from pathlib import Path
 
 import srsly
 import typer
 
+from genfxn.core.models import Task
+from genfxn.generated_code_quality import (
+    GeneratedCodeQualityError,
+    check_generated_code_quality,
+    validate_generated_code_quality_tools,
+)
+from genfxn.suites.families import parse_families
 from genfxn.suites.generate import generate_suite, quota_report
-from genfxn.suites.quotas import QUOTAS
 
 app = typer.Typer()
 
 
-def _parse_families(families: str) -> list[str]:
-    if families == "all":
-        return list(QUOTAS.keys())
-
-    family_list = [
-        family.strip() for family in families.split(",") if family.strip()
-    ]
-    if not family_list:
-        raise typer.BadParameter("families must not be empty")
-
-    invalid = [family for family in family_list if family not in QUOTAS]
-    if invalid:
-        invalid_str = ", ".join(invalid)
-        valid = ", ".join(sorted(QUOTAS.keys()))
-        raise typer.BadParameter(
-            f"Invalid families: {invalid_str}. Valid options: {valid}"
-        )
-    return family_list
+def _write_jsonl_atomically(
+    path: Path, records: list[dict[str, object]]
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=str(path.parent),
+        text=True,
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            for record in records:
+                handle.write(srsly.json_dumps(record))
+                handle.write("\n")
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 @app.command()
@@ -43,13 +53,26 @@ def main(
         "all",
         help="Comma-separated families or 'all'",
     ),
+    skip_generated_style_checks: bool = typer.Option(
+        False,
+        help="Skip Java/Rust generated-code style/lint checks.",
+    ),
 ) -> None:
     """Generate balanced 50-task suites per family."""
-    family_list = _parse_families(families)
+    family_list = parse_families(families)
+    generated: dict[str, list[Task]] = {}
+    reports: dict[str, list[tuple[str, str, int, int, str]]] = {}
+
+    if not skip_generated_style_checks:
+        try:
+            validate_generated_code_quality_tools()
+        except GeneratedCodeQualityError as err:
+            typer.echo(str(err), err=True)
+            raise typer.Exit(1) from err
 
     for family in family_list:
         typer.echo(f"\n{'=' * 60}")
-        typer.echo(f"Generating {family} suite...")
+        typer.echo(f"Generating and validating {family} suite...")
         typer.echo(f"{'=' * 60}")
 
         tasks = generate_suite(
@@ -58,16 +81,29 @@ def main(
             pool_size=pool_size,
         )
 
-        typer.echo(f"Selected {len(tasks)} tasks")
+        if not skip_generated_style_checks:
+            try:
+                check_generated_code_quality(tasks, validate_tools=False)
+            except GeneratedCodeQualityError as err:
+                typer.echo(str(err), err=True)
+                raise typer.Exit(1) from err
 
+        generated[family] = tasks
+        reports[family] = quota_report(tasks, family)
+        typer.echo(f"Validated {len(tasks)} tasks for {family}")
+
+    typer.echo(f"\n{'=' * 60}")
+    typer.echo("All suites validated. Writing output files...")
+    typer.echo(f"{'=' * 60}")
+
+    for family in family_list:
+        tasks = generated[family]
         out_path = output_dir / family / "all.jsonl"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
         records = [task.model_dump(mode="json") for task in tasks]
-        srsly.write_jsonl(str(out_path), records)
+        _write_jsonl_atomically(out_path, records)
         typer.echo(f"Written to {out_path}")
 
-        report = quota_report(tasks, family)
+        report = reports[family]
         if not report:
             typer.echo("No bucket quotas configured for this family.")
             continue

@@ -18,15 +18,20 @@ def _render_conditional_linear_sum(
     false_expr = render_transform_rust(spec.false_transform, "x")
     init_value = _i64_expr(spec.init_value)
 
+    if true_expr == false_expr:
+        expr = true_expr
+        update_expr = f"        acc += {expr};"
+    else:
+        update_expr = (
+            "        acc += if "
+            f"{cond} {{ {true_expr} }} else {{ {false_expr} }};"
+        )
+
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
         f"    let mut acc: i64 = {init_value};",
         f"    for &x in {var} {{",
-        f"        if {cond} {{",
-        f"            acc += {true_expr};",
-        "        } else {",
-        f"            acc += {false_expr};",
-        "        }",
+        update_expr,
         "    }",
         "    acc",
         "}",

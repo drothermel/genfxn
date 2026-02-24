@@ -51,7 +51,6 @@ def sample_probability(
         )
     if lo < 0.0 or hi > 1.0:
         raise ValueError(
-            "prob_range bounds must be within [0.0, 1.0], "
-            f"got ({lo}, {hi})"
+            f"prob_range bounds must be within [0.0, 1.0], got ({lo}, {hi})"
         )
     return rng.uniform(lo, hi)

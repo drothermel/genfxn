@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import re
 import stat
 from typing import Any, cast
 
@@ -42,6 +43,20 @@ from genfxn.temporal_logic.validate import (
 from genfxn.temporal_logic.validate import validate_temporal_logic_task
 
 runner = CliRunner()
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
+@pytest.fixture(autouse=True)
+def _stub_generated_style_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "check_generated_code_quality",
+        lambda tasks: None,
+    )
 
 
 def _supports_bitops_family() -> bool:
@@ -100,6 +115,84 @@ class TestGenerate:
         tasks = cast(list[dict[str, Any]], list(srsly.read_jsonl(output)))
         assert len(tasks) == 5
         assert all(t["family"] == "piecewise" for t in tasks)
+
+    def test_generate_runs_generated_style_checks_by_default(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+        seen_task_counts: list[int] = []
+
+        def _fake_check(tasks: list[Task]) -> None:
+            seen_task_counts.append(len(tasks))
+
+        monkeypatch.setattr(
+            cli_module, "check_generated_code_quality", _fake_check
+        )
+
+        result = runner.invoke(
+            app,
+            ["generate", "-o", str(output), "-f", "piecewise", "-n", "3"],
+        )
+
+        assert result.exit_code == 0
+        assert seen_task_counts == [3]
+
+    def test_generate_skip_generated_style_checks(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+
+        def _fail_if_called(tasks: list[Task]) -> None:  # noqa: ARG001
+            raise AssertionError("generated style checks should be skipped")
+
+        monkeypatch.setattr(
+            cli_module, "check_generated_code_quality", _fail_if_called
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "2",
+                "--skip-generated-style-checks",
+            ],
+        )
+
+        assert result.exit_code == 0
+
+    def test_generate_quality_check_failure_does_not_write_output(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+
+        def _raise_quality_error(tasks: list[Task]) -> None:  # noqa: ARG001
+            raise cli_module.GeneratedCodeQualityError("bad generated code")
+
+        monkeypatch.setattr(
+            cli_module, "check_generated_code_quality", _raise_quality_error
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "2",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "bad generated code" in result.output
+        assert not output.exists()
 
     def test_generate_rejects_negative_count(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -331,7 +424,9 @@ class TestGenerate:
         )
 
         assert result.exit_code != 0
-        assert "Invalid --value-range for graph_queries" in result.output
+        assert "Invalid --value-range for graph_queries" in _strip_ansi(
+            result.output
+        )
 
     def test_generate_temporal_logic(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
@@ -2672,7 +2767,9 @@ class TestSplit:
         )
 
         assert result.exit_code != 0
-        assert "Invalid value for '--holdout-type'" in result.output
+        assert "Invalid value for '--holdout-type'" in _strip_ansi(
+            result.output
+        )
         assert "Traceback" not in result.output
 
     def test_split_case_mismatched_holdout_type_has_clean_error(
@@ -2716,7 +2813,9 @@ class TestSplit:
         )
 
         assert result.exit_code != 0
-        assert "Invalid value for '--holdout-type'" in result.output
+        assert "Invalid value for '--holdout-type'" in _strip_ansi(
+            result.output
+        )
         assert "Traceback" not in result.output
 
     def test_split_random_ratio_accepts_zero_and_one(self, tmp_path) -> None:
