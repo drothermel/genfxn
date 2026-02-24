@@ -165,6 +165,35 @@ class TestGenerate:
 
         assert result.exit_code == 0
 
+    def test_generate_quality_check_failure_does_not_write_output(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = tmp_path / "tasks.jsonl"
+
+        def _raise_quality_error(tasks: list[Task]) -> None:  # noqa: ARG001
+            raise cli_module.GeneratedCodeQualityError("bad generated code")
+
+        monkeypatch.setattr(
+            cli_module, "check_generated_code_quality", _raise_quality_error
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "-o",
+                str(output),
+                "-f",
+                "piecewise",
+                "-n",
+                "2",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "bad generated code" in result.output
+        assert not output.exists()
+
     def test_generate_rejects_negative_count(self, tmp_path) -> None:
         output = tmp_path / "tasks.jsonl"
         result = runner.invoke(

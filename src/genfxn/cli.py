@@ -1055,158 +1055,155 @@ def generate(
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1) from err
 
-    with _atomic_output_file_or_exit(output) as output_handle:
-        generated_tasks: list[Task] = []
+    generated_tasks: list[Task] = []
 
-        def emit(task: Task) -> None:
-            nonlocal generated_count
-            generated_tasks.append(task)
-            rendered_task = _render_task_for_language(task, selected_language)
-            _write_task_line(output_handle, rendered_task)
-            generated_count += 1
+    def emit(task: Task) -> None:
+        nonlocal generated_count
+        generated_tasks.append(task)
+        generated_count += 1
 
-        if family == "all":
-            # Split count as evenly as possible across all families.
-            base = count // len(family_order)
-            remainder = count % len(family_order)
-            family_counts = {
-                fam: base + (1 if idx < remainder else 0)
-                for idx, fam in enumerate(family_order)
-            }
+    if family == "all":
+        # Split count as evenly as possible across all families.
+        base = count // len(family_order)
+        remainder = count % len(family_order)
+        family_counts = {
+            fam: base + (1 if idx < remainder else 0)
+            for idx, fam in enumerate(family_order)
+        }
 
-            for _ in range(family_counts["piecewise"]):
-                emit(
-                    generate_piecewise_task(
-                        axes=piecewise_axes,
-                        rng=rng,
-                    )
+        for _ in range(family_counts["piecewise"]):
+            emit(
+                generate_piecewise_task(
+                    axes=piecewise_axes,
+                    rng=rng,
                 )
-            for _ in range(family_counts["stateful"]):
-                emit(
-                    generate_stateful_task(
-                        axes=stateful_axes,
-                        rng=rng,
-                    )
+            )
+        for _ in range(family_counts["stateful"]):
+            emit(
+                generate_stateful_task(
+                    axes=stateful_axes,
+                    rng=rng,
                 )
-            for _ in range(family_counts["simple_algorithms"]):
-                emit(
-                    generate_simple_algorithms_task(
-                        axes=simple_algo_axes,
-                        rng=rng,
-                    )
+            )
+        for _ in range(family_counts["simple_algorithms"]):
+            emit(
+                generate_simple_algorithms_task(
+                    axes=simple_algo_axes,
+                    rng=rng,
                 )
-            for _ in range(family_counts["stringrules"]):
-                emit(generate_stringrules_task(axes=stringrules_axes, rng=rng))
-            for _ in range(family_counts["bitops"]):
-                emit(generate_bitops_task(axes=bitops_axes, rng=rng))
-            for _ in range(family_counts["sequence_dp"]):
-                emit(generate_sequence_dp_task(axes=sequence_dp_axes, rng=rng))
-            for _ in range(family_counts["intervals"]):
-                emit(generate_intervals_task(axes=intervals_axes, rng=rng))
-            for _ in range(family_counts["graph_queries"]):
-                emit(
-                    generate_graph_queries_task(
-                        axes=graph_queries_axes,
-                        rng=rng,
-                    )
+            )
+        for _ in range(family_counts["stringrules"]):
+            emit(generate_stringrules_task(axes=stringrules_axes, rng=rng))
+        for _ in range(family_counts["bitops"]):
+            emit(generate_bitops_task(axes=bitops_axes, rng=rng))
+        for _ in range(family_counts["sequence_dp"]):
+            emit(generate_sequence_dp_task(axes=sequence_dp_axes, rng=rng))
+        for _ in range(family_counts["intervals"]):
+            emit(generate_intervals_task(axes=intervals_axes, rng=rng))
+        for _ in range(family_counts["graph_queries"]):
+            emit(
+                generate_graph_queries_task(
+                    axes=graph_queries_axes,
+                    rng=rng,
                 )
-            for _ in range(family_counts["temporal_logic"]):
-                emit(
-                    generate_temporal_logic_task(
-                        axes=temporal_logic_axes,
-                        rng=rng,
-                    )
+            )
+        for _ in range(family_counts["temporal_logic"]):
+            emit(
+                generate_temporal_logic_task(
+                    axes=temporal_logic_axes,
+                    rng=rng,
                 )
-            for _ in range(family_counts["stack_bytecode"]):
-                emit(
-                    generate_stack_bytecode_task(
-                        axes=stack_bytecode_axes,
-                        rng=rng,
-                    )
+            )
+        for _ in range(family_counts["stack_bytecode"]):
+            emit(
+                generate_stack_bytecode_task(
+                    axes=stack_bytecode_axes,
+                    rng=rng,
                 )
-            for _ in range(family_counts["fsm"]):
-                emit(generate_fsm_task(axes=fsm_axes, rng=rng))
-        elif family == "bitops":
-            for _ in range(count):
-                emit(generate_bitops_task(axes=bitops_axes, rng=rng))
-        elif family == "sequence_dp":
-            for _ in range(count):
-                emit(
-                    generate_sequence_dp_task(
-                        axes=sequence_dp_axes,
-                        rng=rng,
-                    )
+            )
+        for _ in range(family_counts["fsm"]):
+            emit(generate_fsm_task(axes=fsm_axes, rng=rng))
+    elif family == "bitops":
+        for _ in range(count):
+            emit(generate_bitops_task(axes=bitops_axes, rng=rng))
+    elif family == "sequence_dp":
+        for _ in range(count):
+            emit(
+                generate_sequence_dp_task(
+                    axes=sequence_dp_axes,
+                    rng=rng,
                 )
-        elif family == "intervals":
-            for _ in range(count):
-                emit(
-                    generate_intervals_task(
-                        axes=intervals_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "intervals":
+        for _ in range(count):
+            emit(
+                generate_intervals_task(
+                    axes=intervals_axes,
+                    rng=rng,
                 )
-        elif family == "graph_queries":
-            for _ in range(count):
-                emit(
-                    generate_graph_queries_task(
-                        axes=graph_queries_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "graph_queries":
+        for _ in range(count):
+            emit(
+                generate_graph_queries_task(
+                    axes=graph_queries_axes,
+                    rng=rng,
                 )
-        elif family == "temporal_logic":
-            for _ in range(count):
-                emit(
-                    generate_temporal_logic_task(
-                        axes=temporal_logic_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "temporal_logic":
+        for _ in range(count):
+            emit(
+                generate_temporal_logic_task(
+                    axes=temporal_logic_axes,
+                    rng=rng,
                 )
-        elif family == "piecewise":
-            for _ in range(count):
-                emit(
-                    generate_piecewise_task(
-                        axes=piecewise_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "piecewise":
+        for _ in range(count):
+            emit(
+                generate_piecewise_task(
+                    axes=piecewise_axes,
+                    rng=rng,
                 )
-        elif family == "stateful":
-            for _ in range(count):
-                emit(
-                    generate_stateful_task(
-                        axes=stateful_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "stateful":
+        for _ in range(count):
+            emit(
+                generate_stateful_task(
+                    axes=stateful_axes,
+                    rng=rng,
                 )
-        elif family == "simple_algorithms":
-            for _ in range(count):
-                emit(
-                    generate_simple_algorithms_task(
-                        axes=simple_algo_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "simple_algorithms":
+        for _ in range(count):
+            emit(
+                generate_simple_algorithms_task(
+                    axes=simple_algo_axes,
+                    rng=rng,
                 )
-        elif family == "stringrules":
-            for _ in range(count):
-                emit(
-                    generate_stringrules_task(
-                        axes=stringrules_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "stringrules":
+        for _ in range(count):
+            emit(
+                generate_stringrules_task(
+                    axes=stringrules_axes,
+                    rng=rng,
                 )
-        elif family == "stack_bytecode":
-            for _ in range(count):
-                emit(
-                    generate_stack_bytecode_task(
-                        axes=stack_bytecode_axes,
-                        rng=rng,
-                    )
+            )
+    elif family == "stack_bytecode":
+        for _ in range(count):
+            emit(
+                generate_stack_bytecode_task(
+                    axes=stack_bytecode_axes,
+                    rng=rng,
                 )
-        elif family == "fsm":
-            for _ in range(count):
-                emit(generate_fsm_task(axes=fsm_axes, rng=rng))
-        else:
-            typer.echo(f"Unknown family: {family}", err=True)
-            raise typer.Exit(1)
+            )
+    elif family == "fsm":
+        for _ in range(count):
+            emit(generate_fsm_task(axes=fsm_axes, rng=rng))
+    else:
+        typer.echo(f"Unknown family: {family}", err=True)
+        raise typer.Exit(1)
 
     if not skip_generated_style_checks:
         try:
@@ -1214,6 +1211,11 @@ def generate(
         except GeneratedCodeQualityError as err:
             typer.echo(str(err), err=True)
             raise typer.Exit(1) from err
+
+    with _atomic_output_file_or_exit(output) as output_handle:
+        for task in generated_tasks:
+            rendered_task = _render_task_for_language(task, selected_language)
+            _write_task_line(output_handle, rendered_task)
 
     typer.echo(f"Generated {generated_count} tasks to {output}")
 
