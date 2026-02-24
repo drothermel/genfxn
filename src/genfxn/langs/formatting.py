@@ -78,7 +78,7 @@ def format_rust_rendered_code(code: str) -> str:
         src.write_text(code.rstrip() + "\n", encoding="utf-8")
         try:
             subprocess.run(  # noqa: S603
-                [formatter, str(src)],  # noqa: S607
+                [formatter, "--edition", "2021", str(src)],  # noqa: S607
                 check=True,
                 capture_output=True,
                 text=True,

@@ -902,8 +902,12 @@ def _parse_query_input_by_family(family: str, input_value: Any) -> Any:
             raise TypeError("sequence_dp query input must be a dict")
         a_vals = input_value.get("a")
         b_vals = input_value.get("b")
-        if not isinstance(a_vals, list) or not isinstance(b_vals, list):
-            raise TypeError("sequence_dp query input must contain list fields")
+        if not isinstance(a_vals, (list, tuple)) or not isinstance(
+            b_vals, (list, tuple)
+        ):
+            raise TypeError(
+                "sequence_dp query input must contain list/tuple fields"
+            )
         return (list(a_vals), list(b_vals))
     elif family == "intervals":
         if not isinstance(input_value, list):
