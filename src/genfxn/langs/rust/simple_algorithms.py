@@ -141,9 +141,9 @@ def _render_count_pairs_sum(
         lines.extend(
             [
                 "    let mut count: i64 = 0;",
-                f"    for i in 0..{var}.len() {{",
-                f"        for j in (i + 1)..{var}.len() {{",
-                f"            if {var}[i] + {var}[j] == {target} {{",
+                f"    for (i, &x_i) in {var}.iter().enumerate() {{",
+                f"        for &x_j in {var}.iter().skip(i + 1) {{",
+                f"            if x_i + x_j == {target} {{",
                 "                count += 1;",
                 "            }",
                 "        }",
@@ -171,12 +171,10 @@ def _render_count_pairs_sum(
         lines.extend(
             [
                 "    let mut seen_pairs: HashSet<(i64, i64)> = HashSet::new();",
-                f"    for i in 0..{var}.len() {{",
-                f"        for j in (i + 1)..{var}.len() {{",
-                f"            if {var}[i] + {var}[j] == {target} {{",
-                "                seen_pairs.insert(("
-                f"{var}[i].min({var}[j]), "
-                f"{var}[i].max({var}[j])));",
+                f"    for (i, &x_i) in {var}.iter().enumerate() {{",
+                f"        for &x_j in {var}.iter().skip(i + 1) {{",
+                f"            if x_i + x_j == {target} {{",
+                "                seen_pairs.insert((x_i.min(x_j), x_i.max(x_j)));",
                 "            }",
                 "        }",
                 "    }",
@@ -218,15 +216,12 @@ def _render_max_window_sum(
             f"        return {invalid_k_default};",
             "    }",
             "    let mut window_sum: i64 = 0;",
-            f"    for i in 0..{spec.k} {{",
-            f"        window_sum += {var}[i];",
+            f"    for &x in {var}.iter().take({spec.k}) {{",
+            f"        window_sum += x;",
             "    }",
             "    let mut max_sum = window_sum;",
-            f"    for i in {spec.k}..{var}.len() {{",
-            (
-                "        window_sum = window_sum "
-                f"- {var}[i - {spec.k}] + {var}[i];"
-            ),
+            f"    for (&x_new, &x_old) in {var}.iter().skip({spec.k}).zip({var}.iter()) {{",
+            "        window_sum = window_sum - x_old + x_new;",
             "        max_sum = max_sum.max(window_sum);",
             "    }",
             "    max_sum",

@@ -81,14 +81,6 @@ def render_fsm(spec: FsmSpec, func_name: str = "f", var: str = "xs") -> str:
     elif spec.output_mode == OutputMode.TRANSITION_COUNT:
         lines.append(f"    {counter_var}")
     else:
-        lines.extend(
-            [
-                f"    if {_render_accept_expr(spec)} {{",
-                "        1",
-                "    } else {",
-                "        0",
-                "    }",
-            ]
-        )
+        lines.append(f"    if {_render_accept_expr(spec)} {{ 1 }} else {{ 0 }}")
     lines.append("}")
     return "\n".join(lines)

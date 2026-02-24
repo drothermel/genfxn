@@ -13,20 +13,20 @@ def render_stringrules(
     lines = [f"fn {func_name}({var}: &str) -> String {{"]
     lines.append(f"    {render_python_isdigit_helper_rust()}")
 
-    for i, rule in enumerate(spec.rules):
+    default_result = render_string_transform_rust(spec.default_transform, var)
+    if not spec.rules:
+        lines.append(f"    {default_result}")
+        lines.append("}")
+        return "\n".join(lines)
+
+    for rule in spec.rules:
         cond = render_string_predicate_rust(rule.predicate, var)
         result = render_string_transform_rust(rule.transform, var)
-        keyword = "if" if i == 0 else "} else if"
-        lines.append(f"    {keyword} {cond} {{")
-        lines.append(f"        {result}")
-
-    default_result = render_string_transform_rust(spec.default_transform, var)
-    if spec.rules:
-        lines.append("    } else {")
-        lines.append(f"        {default_result}")
+        lines.append(f"    if {cond} {{")
+        lines.append(f"        return {result};")
         lines.append("    }")
-    else:
-        lines.append(f"    {default_result}")
 
+    lines.append(f"    {default_result}")
     lines.append("}")
+
     return "\n".join(lines)

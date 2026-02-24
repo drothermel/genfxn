@@ -11,11 +11,12 @@ def test_validate_required_tools_reports_missing_tools(
 ) -> None:
     monkeypatch.setattr(quality.shutil, "which", lambda tool: None)
 
-    with pytest.raises(
-        quality.GeneratedCodeQualityError,
-        match="cargo, google-java-format, javac, rustfmt",
-    ):
+    with pytest.raises(quality.GeneratedCodeQualityError) as exc_info:
         quality._validate_required_tools()
+
+    message = str(exc_info.value)
+    for tool in quality._REQUIRED_TOOLS:
+        assert tool in message
 
 
 def test_check_generated_code_quality_runs_java_and_rust_checks(

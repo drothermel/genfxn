@@ -9,30 +9,10 @@ from genfxn.generated_code_quality import (
     GeneratedCodeQualityError,
     check_generated_code_quality,
 )
+from genfxn.suites.families import parse_families
 from genfxn.suites.generate import generate_suite, quota_report
-from genfxn.suites.quotas import QUOTAS
 
 app = typer.Typer()
-
-
-def _parse_families(families: str) -> list[str]:
-    if families == "all":
-        return list(QUOTAS.keys())
-
-    family_list = [
-        family.strip() for family in families.split(",") if family.strip()
-    ]
-    if not family_list:
-        raise typer.BadParameter("families must not be empty")
-
-    invalid = [family for family in family_list if family not in QUOTAS]
-    if invalid:
-        invalid_str = ", ".join(invalid)
-        valid = ", ".join(sorted(QUOTAS.keys()))
-        raise typer.BadParameter(
-            f"Invalid families: {invalid_str}. Valid options: {valid}"
-        )
-    return family_list
 
 
 @app.command()
@@ -53,7 +33,7 @@ def main(
     ),
 ) -> None:
     """Generate balanced 50-task suites per family."""
-    family_list = _parse_families(families)
+    family_list = parse_families(families)
 
     for family in family_list:
         typer.echo(f"\n{'=' * 60}")

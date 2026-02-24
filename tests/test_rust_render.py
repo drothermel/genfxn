@@ -681,7 +681,7 @@ class TestStringrulesRust:
         assert "fn f(s: &str) -> String" in code
         assert 's.starts_with("a")' in code
         assert "s.to_uppercase()" in code
-        assert "} else {" in code
+        assert "return s.to_uppercase();" in code
 
     def test_no_rules(self) -> None:
         from genfxn.langs.rust.stringrules import render_stringrules
@@ -741,7 +741,7 @@ class TestSimpleAlgorithmsRust:
             counting_mode=CountingMode.ALL_INDICES,
         )
         code = render_simple_algorithms(spec)
-        assert "xs[i] + xs[j] == 10" in code
+        assert "x_i + x_j == 10" in code
         assert "count += 1" in code
 
     def test_count_pairs_unique(self) -> None:

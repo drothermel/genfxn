@@ -8,30 +8,10 @@ from genfxn.generated_code_quality import (
     GeneratedCodeQualityError,
     check_generated_code_quality,
 )
+from genfxn.suites.families import parse_families
 from genfxn.suites.generate import generate_pool
-from genfxn.suites.quotas import QUOTAS
 
 app = typer.Typer()
-
-
-def _parse_families(families: str) -> list[str]:
-    if families == "all":
-        return sorted(QUOTAS.keys())
-
-    family_list = [
-        family.strip() for family in families.split(",") if family.strip()
-    ]
-    if not family_list:
-        raise typer.BadParameter("families must not be empty")
-
-    invalid = [family for family in family_list if family not in QUOTAS]
-    if invalid:
-        invalid_str = ", ".join(invalid)
-        valid = ", ".join(sorted(QUOTAS.keys()))
-        raise typer.BadParameter(
-            f"Invalid families: {invalid_str}. Valid options: {valid}"
-        )
-    return family_list
 
 
 @app.command()
@@ -56,7 +36,7 @@ def main(
     if pool_size < count_per_family:
         raise typer.BadParameter("pool_size must be >= count_per_family")
 
-    selected_families = _parse_families(families)
+    selected_families = parse_families(families)
     tasks = []
 
     for idx, family in enumerate(selected_families):

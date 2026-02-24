@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -21,15 +22,15 @@ def _indent_java_method(code: str) -> str:
 
 
 def _extract_java_method(formatted_wrapper: str) -> str:
-    prefix = "public final class Main {\n"
-    suffix = "\n}\n"
-    if not (
-        formatted_wrapper.startswith(prefix)
-        and formatted_wrapper.endswith(suffix)
-    ):
+    match = re.fullmatch(
+        r"\s*public\s+final\s+class\s+Main\s*\{(?P<body>.*)\}\s*",
+        formatted_wrapper,
+        flags=re.DOTALL,
+    )
+    if match is None:
         raise ValueError("Unexpected google-java-format wrapper output")
 
-    body = formatted_wrapper[len(prefix) : -len(suffix)]
+    body = match.group("body").strip("\n")
     lines = body.splitlines()
     unindented = [line[2:] if line.startswith("  ") else line for line in lines]
     return "\n".join(unindented).rstrip()
