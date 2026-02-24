@@ -174,7 +174,10 @@ def _render_count_pairs_sum(
                 f"    for (i, &x_i) in {var}.iter().enumerate() {{",
                 f"        for &x_j in {var}.iter().skip(i + 1) {{",
                 f"            if x_i + x_j == {target} {{",
-                "                seen_pairs.insert((x_i.min(x_j), x_i.max(x_j)));",
+                (
+                    "                seen_pairs.insert(("
+                    "x_i.min(x_j), x_i.max(x_j)));"
+                ),
                 "            }",
                 "        }",
                 "    }",
@@ -220,7 +223,10 @@ def _render_max_window_sum(
             "        window_sum += x;",
             "    }",
             "    let mut max_sum = window_sum;",
-            f"    for (&x_new, &x_old) in {var}.iter().skip({spec.k}).zip({var}.iter()) {{",
+            (
+                "    for (&x_new, &x_old) in "
+                f"{var}.iter().skip({spec.k}).zip({var}.iter()) {{"
+            ),
             "        window_sum = window_sum - x_old + x_new;",
             "        max_sum = max_sum.max(window_sum);",
             "    }",

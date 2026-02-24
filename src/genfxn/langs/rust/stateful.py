@@ -22,7 +22,10 @@ def _render_conditional_linear_sum(
         expr = true_expr
         update_expr = f"        acc += {expr};"
     else:
-        update_expr = f"        acc += if {cond} {{ {true_expr} }} else {{ {false_expr} }};"
+        update_expr = (
+            "        acc += if "
+            f"{cond} {{ {true_expr} }} else {{ {false_expr} }};"
+        )
 
     lines = [
         f"fn {func_name}({var}: &[i64]) -> i64 {{",
