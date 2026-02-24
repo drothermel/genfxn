@@ -239,10 +239,7 @@ CI gate (`.github/workflows/ci.yml`) enforces:
 
 ```bash
 uv sync
-uv run ruff check .
-uv run ty check
-uv run python scripts/check_generated_code_quality.py --families all --seed 42 --count-per-family 2 --pool-size 24
-uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal
+uv run python scripts/run_all_checks.py --ci
 ```
 
 ## CLI Reference

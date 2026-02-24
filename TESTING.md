@@ -27,6 +27,16 @@ chmod +x "$HOME/.local/bin/google-java-format"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+## One-Command Full Gate
+
+```bash
+# Local (auto-fixes format/lint where configured)
+uv run python scripts/run_all_checks.py
+
+# CI mode (no write-back; fails if fixes would be needed)
+uv run python scripts/run_all_checks.py --ci
+```
+
 ## Verification Tiers
 
 ```bash
@@ -49,15 +59,24 @@ Notes:
 ## Core Quality Commands
 
 ```bash
-# Lint
-uv run ruff check .
+# Format all Python files
+uv run ruff format .
 
-# Type check
-uv run ty check
+# Lint with AGENTS scope
+uv run ruff check --fix src/ tests/ scripts/
+
+# Blocking lint scope after autofix
+uv run ruff check src/
+
+# Type check (AGENTS blocking scope)
+uv run ty check src
 
 # Generated Java/Rust quality checks
 uv run python scripts/check_generated_code_quality.py \
   --families all --seed 42 --count-per-family 2 --pool-size 24
+
+# Full verification tests
+uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal
 ```
 
 ## Recommended Local Flows
@@ -79,10 +98,7 @@ uv run pytest tests/ -v --verification-level=standard -n auto --dist=worksteal
 
 ```bash
 # Full CI-equivalent run
-uv run ruff check .
-uv run ty check
-uv run python scripts/check_generated_code_quality.py --families all --seed 42 --count-per-family 2 --pool-size 24
-uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal
+uv run python scripts/run_all_checks.py --ci
 ```
 
 ## Family-Scoped Full Markers
@@ -99,7 +115,4 @@ Available families have matching markers like `full_stateful`,
 
 Current CI jobs (`.github/workflows/ci.yml`) map directly to:
 
-- `lint`: `uv run ruff check .`
-- `typecheck`: `uv run ty check`
-- `generated-code-quality`: `uv run python scripts/check_generated_code_quality.py --families all --seed 42 --count-per-family 2 --pool-size 24`
-- `test-full`: `uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal`
+- `all-checks`: `uv run python scripts/run_all_checks.py --ci`

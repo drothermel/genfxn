@@ -105,10 +105,23 @@ def seeded_rng(seed: int) -> random.Random:  # noqa: S311
 
 _ALLOWED_BUILTINS = {
     "abs": abs,
+    "all": all,
+    "any": any,
+    "dict": dict,
+    "enumerate": enumerate,
+    "int": int,
+    "isinstance": isinstance,
     "len": len,
+    "list": list,
     "max": max,
     "min": min,
     "range": range,
+    "set": set,
+    "sorted": sorted,
+    "str": str,
+    "sum": sum,
+    "tuple": tuple,
+    "zip": zip,
 }
 
 
