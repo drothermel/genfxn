@@ -217,7 +217,7 @@ def _render_max_window_sum(
             "    }",
             "    let mut window_sum: i64 = 0;",
             f"    for &x in {var}.iter().take({spec.k}) {{",
-            f"        window_sum += x;",
+            "        window_sum += x;",
             "    }",
             "    let mut max_sum = window_sum;",
             f"    for (&x_new, &x_old) in {var}.iter().skip({spec.k}).zip({var}.iter()) {{",

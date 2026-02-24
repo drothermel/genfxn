@@ -26,4 +26,5 @@ def parse_families(families: str) -> list[str]:
             f"Invalid families: {invalid_str}. Valid options: {valid}"
         )
 
-    return family_list
+    # Deduplicate while preserving order
+    return list(dict.fromkeys(family_list))

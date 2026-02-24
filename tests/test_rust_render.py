@@ -2,9 +2,16 @@
 
 import importlib.util
 import random
-from typing import Literal
+import tempfile
+from pathlib import Path
+from typing import Any, Literal
 
 import pytest
+from helpers import (
+    require_java_runtime,
+    require_rust_runtime,
+    run_checked_subprocess,
+)
 
 from genfxn.bitops.models import BitInstruction, BitOp, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
@@ -22,6 +29,7 @@ from genfxn.core.predicates import (
     PredicateOdd,
     PredicateOr,
 )
+from genfxn.core.safe_exec import execute_code_restricted
 from genfxn.core.string_predicates import (
     StringPredicateAnd,
     StringPredicateContains,
@@ -93,6 +101,15 @@ def _code_map(task: Task) -> dict[str, str]:
 
 def seeded_rng(seed: int) -> random.Random:  # noqa: S311
     return random.Random(seed)
+
+
+_ALLOWED_BUILTINS = {
+    "abs": abs,
+    "len": len,
+    "max": max,
+    "min": min,
+    "range": range,
+}
 
 
 def _supports_stack_bytecode_rust() -> bool:
@@ -843,6 +860,310 @@ class TestSimpleAlgorithmsRust:
 # ── Integration Tests ──────────────────────────────────────────────────
 
 
+def _execute_python_code(python_code: str) -> Any:
+    """Execute Python code and return the function f."""
+    namespace = execute_code_restricted(
+        python_code,
+        _ALLOWED_BUILTINS,
+        trust_untrusted_code=True,
+    )
+    return namespace["f"]
+
+
+def _parse_query_input_by_family(family: str, input_value: Any) -> Any:
+    """Parse query input based on task family."""
+    if family == "piecewise":
+        return int(input_value)
+    elif family in ("stateful", "fsm", "simple_algorithms", "temporal_logic"):
+        if isinstance(input_value, list):
+            return list(input_value)
+        return input_value
+    elif family == "stringrules":
+        if isinstance(input_value, str):
+            return input_value
+        return str(input_value)
+    elif family == "bitops":
+        return int(input_value)
+    elif family == "sequence_dp":
+        if not isinstance(input_value, dict):
+            raise TypeError("sequence_dp query input must be a dict")
+        a_vals = input_value.get("a")
+        b_vals = input_value.get("b")
+        if not isinstance(a_vals, list) or not isinstance(b_vals, list):
+            raise TypeError("sequence_dp query input must contain list fields")
+        return (list(a_vals), list(b_vals))
+    elif family == "intervals":
+        if not isinstance(input_value, list):
+            raise TypeError("intervals query input must be a list")
+        parsed: list[tuple[int, int]] = []
+        for item in input_value:
+            if (
+                isinstance(item, (tuple, list))
+                and len(item) == 2
+                and isinstance(item[0], int)
+                and isinstance(item[1], int)
+            ):
+                parsed.append((int(item[0]), int(item[1])))
+            else:
+                raise TypeError("intervals query input must contain int pairs")
+        return parsed
+    elif family == "graph_queries":
+        if not isinstance(input_value, dict):
+            raise TypeError("graph_queries query input must be a dict")
+        src = input_value.get("src")
+        dst = input_value.get("dst")
+        if not isinstance(src, int) or not isinstance(dst, int):
+            raise TypeError(
+                "graph_queries query input must contain integer src/dst"
+            )
+        return (src, dst)
+    elif family == "stack_bytecode":
+        if isinstance(input_value, list):
+            return list(input_value)
+        return input_value
+    else:
+        return input_value
+
+
+def _run_rust_code(
+    rustc: str,
+    code: str,
+    family: str,
+    query_input: Any,
+) -> Any:
+    """Execute Rust code and return the result."""
+    if family == "piecewise":
+        x = int(query_input)
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let x: i64 = {x}i64;\n"
+            '    println!("{}", f(x));\n'
+            "}\n"
+        )
+    elif family in ("stateful", "fsm", "simple_algorithms", "temporal_logic"):
+        xs = (
+            list(query_input)
+            if isinstance(query_input, list)
+            else [query_input]
+        )
+        xs_lit = ", ".join(f"{x}i64" for x in xs)
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
+            '    println!("{}", f(&xs));\n'
+            "}\n"
+        )
+    elif family == "stringrules":
+        s = str(query_input)
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let s = {rust_string_literal(s)};\n"
+            '    print!("{}", f(s));\n'
+            "}\n"
+        )
+    elif family == "bitops":
+        x = int(query_input)
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let x: i64 = {x}i64;\n"
+            '    println!("{}", f(x));\n'
+            "}\n"
+        )
+    elif family == "sequence_dp":
+        a_vals, b_vals = query_input
+        a_lit = ", ".join(f"{x}i64" for x in a_vals)
+        b_lit = ", ".join(f"{x}i64" for x in b_vals)
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let a: Vec<i64> = vec![{a_lit}];\n"
+            f"    let b: Vec<i64> = vec![{b_lit}];\n"
+            '    println!("{}", f(&a, &b));\n'
+            "}\n"
+        )
+    elif family == "intervals":
+        intervals = query_input
+        intervals_lit = ", ".join(f"({a}i64, {b}i64)" for a, b in intervals)
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let intervals: Vec<(i64, i64)> = vec![{intervals_lit}];\n"
+            '    println!("{}", f(&intervals));\n'
+            "}\n"
+        )
+    elif family == "graph_queries":
+        src, dst = query_input
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f'    println!("{{}}", f({src}, {dst}));\n'
+            "}\n"
+        )
+    elif family == "stack_bytecode":
+        xs = (
+            list(query_input)
+            if isinstance(query_input, list)
+            else [query_input]
+        )
+        xs_lit = ", ".join(f"{x}i64" for x in xs)
+        main_src = (
+            f"{code}\n"
+            "fn main() {\n"
+            f"    let xs: Vec<i64> = vec![{xs_lit}];\n"
+            "    let (status, value) = f(&xs);\n"
+            '    println!("{} {}", status, value);\n'
+            "}\n"
+        )
+    else:
+        raise ValueError(f"Unknown family: {family}")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src = tmp / "main.rs"
+        out = tmp / "main_bin"
+        src.write_text(main_src, encoding="utf-8")
+        run_checked_subprocess(
+            [rustc, str(src), "-O", "-o", str(out)],
+            cwd=tmp,
+        )
+        proc = run_checked_subprocess(
+            [str(out)],
+            cwd=tmp,
+        )
+        output = proc.stdout.strip()
+
+        if family == "stack_bytecode":
+            parts = output.split()
+            if len(parts) != 2:
+                raise ValueError(f"Expected 2 outputs, got: {output}")
+            return (int(parts[0]), int(parts[1]))
+        elif family == "stringrules":
+            return output
+        else:
+            return int(output)
+
+
+def _run_java_code(
+    javac: str,
+    java: str,
+    code: str,
+    family: str,
+    query_input: Any,
+) -> Any:
+    """Execute Java code and return the result."""
+    if family == "piecewise":
+        x = int(query_input)
+        main_src = (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long x = {x}L;\n"
+            "    System.out.print(f(x));\n"
+            "  }\n"
+            "}\n"
+        )
+    elif family in ("stateful", "fsm", "simple_algorithms", "temporal_logic"):
+        xs = (
+            list(query_input)
+            if isinstance(query_input, list)
+            else [query_input]
+        )
+        xs_lit = ", ".join(str(x) for x in xs)
+        main_src = (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    int[] xs = new int[]{{{xs_lit}}};\n"
+            "    System.out.print(f(xs));\n"
+            "  }\n"
+            "}\n"
+        )
+    elif family == "stringrules":
+        s = str(query_input)
+        escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+        main_src = (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f'    String s = "{escaped}";\n'
+            "    System.out.print(f(s));\n"
+            "  }\n"
+            "}\n"
+        )
+    elif family == "bitops":
+        x = int(query_input)
+        main_src = (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long x = {x}L;\n"
+            "    System.out.print(f(x));\n"
+            "  }\n"
+            "}\n"
+        )
+    elif family == "sequence_dp":
+        a_vals, b_vals = query_input
+        a_lit = ", ".join(f"{x}L" for x in a_vals)
+        b_lit = ", ".join(f"{x}L" for x in b_vals)
+        main_src = (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long[] a = new long[]{{{a_lit}}};\n"
+            f"    long[] b = new long[]{{{b_lit}}};\n"
+            "    System.out.print(f(a, b));\n"
+            "  }\n"
+            "}\n"
+        )
+    elif family == "intervals":
+        intervals = query_input
+        rows = ", ".join("{" + f"{a}L, {b}L" + "}" for a, b in intervals)
+        main_src = (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    long[][] intervals = new long[][]{{{rows}}};\n"
+            "    System.out.print(f(intervals));\n"
+            "  }\n"
+            "}\n"
+        )
+    elif family == "graph_queries":
+        src, dst = query_input
+        main_src = (
+            "public class Main {\n"
+            f"{code}\n"
+            "  public static void main(String[] args) {\n"
+            f"    System.out.print(f({src}, {dst}));\n"
+            "  }\n"
+            "}\n"
+        )
+    else:
+        raise ValueError(f"Unknown family: {family}")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        src = tmp / "Main.java"
+        src.write_text(main_src, encoding="utf-8")
+        run_checked_subprocess(
+            [javac, str(src)],
+            cwd=tmp,
+        )
+        proc = run_checked_subprocess(
+            [java, "-cp", str(tmp), "Main"],
+            cwd=tmp,
+        )
+        output = proc.stdout.strip()
+
+        if family == "stringrules":
+            return output
+        else:
+            return int(output)
+
+
 class TestMultiLanguageRustGeneration:
     """Test that task generation with Rust produces valid output."""
 
@@ -857,6 +1178,20 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(x: i64) -> i64" in code["rust"]
 
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
+
     def test_stateful_generates_rust(self) -> None:
         task = generate_stateful_task(
             rng=seeded_rng(42),
@@ -867,6 +1202,20 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     def test_stringrules_generates_rust(self) -> None:
         task = generate_stringrules_task(
@@ -879,6 +1228,20 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(s: &str) -> String" in code["rust"]
 
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
+
     def test_simple_algorithms_generates_rust(self) -> None:
         task = generate_simple_algorithms_task(
             rng=seeded_rng(42),
@@ -889,6 +1252,20 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     def test_fsm_generates_rust(self) -> None:
         task = generate_fsm_task(
@@ -901,6 +1278,20 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
 
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
+
     def test_bitops_generates_rust(self) -> None:
         task = generate_bitops_task(
             rng=seeded_rng(42),
@@ -911,6 +1302,20 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(x: i64) -> i64" in code["rust"]
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     def test_sequence_dp_generates_rust(self) -> None:
         task = generate_sequence_dp_task(
@@ -923,6 +1328,25 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(a: &[i64], b: &[i64]) -> i64" in code["rust"]
 
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            if task.family in ("sequence_dp", "graph_queries") and isinstance(
+                query_input, tuple
+            ):
+                expected = python_f(*query_input)
+            else:
+                expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
+
     def test_intervals_generates_rust(self) -> None:
         task = generate_intervals_task(
             rng=seeded_rng(42),
@@ -933,6 +1357,20 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(intervals: &[(i64, i64)]) -> i64" in code["rust"]
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     def test_graph_queries_generates_rust(self) -> None:
         task = generate_graph_queries_task(
@@ -945,6 +1383,25 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(" in code["rust"]
 
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            if task.family in ("sequence_dp", "graph_queries") and isinstance(
+                query_input, tuple
+            ):
+                expected = python_f(*query_input)
+            else:
+                expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
+
     def test_temporal_logic_generates_rust(self) -> None:
         task = generate_temporal_logic_task(
             rng=seeded_rng(42),
@@ -955,6 +1412,20 @@ class TestMultiLanguageRustGeneration:
         assert "rust" in code
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> i64" in code["rust"]
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     def test_stack_bytecode_generates_rust_when_available(self) -> None:
         if not _supports_stack_bytecode_rust():
@@ -971,6 +1442,20 @@ class TestMultiLanguageRustGeneration:
         assert "def f(" in code["python"]
         assert "fn f(xs: &[i64]) -> (i64, i64)" in code["rust"]
         assert "return (" in code["rust"]
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     def test_rust_only(self) -> None:
         task = generate_piecewise_task(
@@ -989,41 +1474,121 @@ class TestMultiLanguageRustGeneration:
         assert "java" in task.code
         assert "rust" in task.code
 
+        # Execute and compare outputs across all languages
+        code = _code_map(task)
+        rustc = require_rust_runtime()
+        javac, java = require_java_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            rust_result = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            java_result = _run_java_code(
+                javac, java, code["java"], task.family, query_input
+            )
+            assert rust_result == expected, (
+                f"Rust: Query input {query.input}: "
+                f"expected {expected}, got {rust_result}"
+            )
+            assert java_result == expected, (
+                f"Java: Query input {query.input}: "
+                f"expected {expected}, got {java_result}"
+            )
+
     @pytest.mark.parametrize("seed", range(10))
     def test_piecewise_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_piecewise_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stateful_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_stateful_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     @pytest.mark.parametrize("seed", range(10))
     def test_stringrules_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_stringrules_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
     @pytest.mark.parametrize("seed", range(10))
     def test_simple_algorithms_rust_renders_non_empty(self, seed: int) -> None:
         task = generate_simple_algorithms_task(
             rng=seeded_rng(seed),
-            languages=[Language.RUST],
+            languages=[Language.PYTHON, Language.RUST],
         )
         code = _code_map(task)
         assert len(code["rust"]) > 20
+
+        # Execute and compare outputs
+        rustc = require_rust_runtime()
+        python_f = _execute_python_code(code["python"])
+
+        for query in task.queries:
+            query_input = _parse_query_input_by_family(task.family, query.input)
+            expected = python_f(query_input)
+            actual = _run_rust_code(
+                rustc, code["rust"], task.family, query_input
+            )
+            assert actual == expected, (
+                f"Query input {query.input}: expected {expected}, got {actual}"
+            )
 
 
 # ── Registry Tests ─────────────────────────────────────────────────────
