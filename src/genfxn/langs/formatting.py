@@ -12,13 +12,19 @@ from pathlib import Path
 from genfxn.langs.types import Language
 
 _FORMAT_TIMEOUT_SEC = 15.0
+GOOGLE_JAVA_FORMATTER = shutil.which("google-java-format")
+RUST_FORMATTER = shutil.which("rustfmt")
 
 
-def _indent_java_method(code: str) -> str:
+def indent_java_method(code: str) -> str:
     lines = code.splitlines()
     if not lines:
         return ""
     return "\n".join(f"  {line}" if line else "" for line in lines)
+
+
+# Backward-compatible alias for older imports.
+_indent_java_method = indent_java_method
 
 
 def _extract_java_method(formatted_wrapper: str) -> str:
@@ -39,11 +45,11 @@ def _extract_java_method(formatted_wrapper: str) -> str:
 @lru_cache(maxsize=2048)
 def format_java_rendered_method(code: str) -> str:
     """Format a rendered Java method when google-java-format is available."""
-    formatter = shutil.which("google-java-format")
+    formatter = GOOGLE_JAVA_FORMATTER
     if formatter is None:
         return code
 
-    wrapped = f"public final class Main {{\n{_indent_java_method(code)}\n}}\n"
+    wrapped = f"public final class Main {{\n{indent_java_method(code)}\n}}\n"
     with tempfile.TemporaryDirectory() as tmp_dir:
         src = Path(tmp_dir) / "Main.java"
         src.write_text(wrapped, encoding="utf-8")
@@ -63,7 +69,7 @@ def format_java_rendered_method(code: str) -> str:
 @lru_cache(maxsize=2048)
 def format_rust_rendered_code(code: str) -> str:
     """Format rendered Rust code when rustfmt is available."""
-    formatter = shutil.which("rustfmt")
+    formatter = RUST_FORMATTER
     if formatter is None:
         return code
 

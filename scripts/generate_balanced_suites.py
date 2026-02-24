@@ -10,6 +10,7 @@ import typer
 from genfxn.generated_code_quality import (
     GeneratedCodeQualityError,
     check_generated_code_quality,
+    validate_generated_code_quality_tools,
 )
 from genfxn.suites.families import parse_families
 from genfxn.suites.generate import generate_suite, quota_report
@@ -61,6 +62,13 @@ def main(
     generated: dict[str, list] = {}
     reports: dict[str, list[tuple[str, str, int, int, str]]] = {}
 
+    if not skip_generated_style_checks:
+        try:
+            validate_generated_code_quality_tools()
+        except GeneratedCodeQualityError as err:
+            typer.echo(str(err), err=True)
+            raise typer.Exit(1) from err
+
     for family in family_list:
         typer.echo(f"\n{'=' * 60}")
         typer.echo(f"Generating and validating {family} suite...")
@@ -74,7 +82,7 @@ def main(
 
         if not skip_generated_style_checks:
             try:
-                check_generated_code_quality(tasks)
+                check_generated_code_quality(tasks, validate_tools=False)
             except GeneratedCodeQualityError as err:
                 typer.echo(str(err), err=True)
                 raise typer.Exit(1) from err

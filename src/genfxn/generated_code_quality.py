@@ -15,7 +15,7 @@ from genfxn.core.models import Task
 from genfxn.fsm.models import FsmSpec
 from genfxn.graph_queries.models import GraphQueriesSpec
 from genfxn.intervals.models import IntervalsSpec
-from genfxn.langs.formatting import _indent_java_method
+from genfxn.langs.formatting import indent_java_method
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
 from genfxn.piecewise.models import PiecewiseSpec
@@ -101,7 +101,7 @@ def _run_checked_subprocess(cmd: list[str], *, cwd: Path) -> None:
 
 
 def _java_source(code: str) -> str:
-    return f"public final class Main {{\n{_indent_java_method(code)}\n}}\n"
+    return f"public final class Main {{\n{indent_java_method(code)}\n}}\n"
 
 
 def _rust_source(code: str) -> str:
@@ -165,7 +165,11 @@ def _check_rust_code(code: str) -> None:
             ],
             cwd=tmp,
         )
-        _run_checked_subprocess(["cargo", "check", "--quiet"], cwd=tmp)
+
+
+def validate_generated_code_quality_tools() -> None:
+    """Validate that external tool prerequisites are available."""
+    _validate_required_tools()
 
 
 def _render_code(task: Task, language: Language, spec_obj: Any) -> str:
@@ -186,12 +190,14 @@ def check_generated_code_quality(
     tasks: list[Task],
     *,
     families: set[str] | None = None,
+    validate_tools: bool = True,
 ) -> None:
     """Validate generated Java/Rust formatting and lint contracts."""
     if not tasks:
         return
 
-    _validate_required_tools()
+    if validate_tools:
+        validate_generated_code_quality_tools()
 
     failures: list[str] = []
     for task in tasks:

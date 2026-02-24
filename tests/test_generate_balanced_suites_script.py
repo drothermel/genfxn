@@ -56,8 +56,13 @@ def test_main_parses_filters_and_writes_output(tmp_path, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         _SCRIPT_MODULE,
+        "validate_generated_code_quality_tools",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
         "check_generated_code_quality",
-        lambda tasks: checked.append(len(tasks)),
+        lambda tasks, validate_tools=True: checked.append(len(tasks)),  # noqa: ARG005
     )
 
     generate_balanced_suites_main(
@@ -97,10 +102,18 @@ def test_main_skips_generated_style_checks_when_flag_set(
     def _raise_assertion(tasks: list[_FakeTask]) -> None:  # noqa: ARG001
         raise AssertionError("should not run")
 
+    def _raise_assertion_no_args() -> None:
+        raise AssertionError("should not run")
+
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "check_generated_code_quality",
         _raise_assertion,
+    )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "validate_generated_code_quality_tools",
+        _raise_assertion_no_args,
     )
 
     generate_balanced_suites_main(
@@ -125,8 +138,15 @@ def test_main_exits_when_generated_style_checks_fail(
     monkeypatch.setattr(
         _SCRIPT_MODULE, "quota_report", lambda tasks, family: []
     )
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "validate_generated_code_quality_tools",
+        lambda: None,
+    )
 
-    def _raise_quality_error(tasks: list[_FakeTask]) -> None:  # noqa: ARG001
+    def _raise_quality_error(
+        tasks: list[_FakeTask], validate_tools: bool = True
+    ) -> None:  # noqa: ARG001,ARG005
         raise _SCRIPT_MODULE.GeneratedCodeQualityError("bad generated code")
 
     monkeypatch.setattr(

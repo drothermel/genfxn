@@ -36,12 +36,12 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       - name: Cache google-java-format jar
         uses: actions/cache@v4
         with:
-          path: $HOME/.local/share/google-java-format-${{ env.GOOGLE_JAVA_FORMAT_VERSION }}-all-deps.jar
+          path: ${{ env.HOME }}/.local/share/google-java-format-${{ env.GOOGLE_JAVA_FORMAT_VERSION }}-all-deps.jar
           key: google-java-format-${{ runner.os }}-${{ env.GOOGLE_JAVA_FORMAT_VERSION }}-${{ env.GOOGLE_JAVA_FORMAT_SHA256 }}
 
       - name: Install google-java-format
@@ -54,9 +54,9 @@ jobs:
               "https://github.com/google/google-java-format/releases/download/v${GOOGLE_JAVA_FORMAT_VERSION}/google-java-format-${GOOGLE_JAVA_FORMAT_VERSION}-all-deps.jar"
           fi
           echo "${GOOGLE_JAVA_FORMAT_SHA256}  $JAR_PATH" | sha256sum --check --status
-          cat > "$HOME/.local/bin/google-java-format" <<'SH'
+          cat > "$HOME/.local/bin/google-java-format" <<SH
           #!/usr/bin/env bash
-          exec java -jar "$HOME/.local/share/google-java-format-${GOOGLE_JAVA_FORMAT_VERSION}-all-deps.jar" "$@"
+          exec java -jar "$JAR_PATH" "\$@"
           SH
           chmod +x "$HOME/.local/bin/google-java-format"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
