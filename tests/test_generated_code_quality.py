@@ -43,7 +43,7 @@ def test_check_generated_code_quality_runs_java_and_rust_checks(
     monkeypatch.setattr(
         quality,
         "_render_code",
-        lambda task, language, spec_obj: (
+        lambda task, language, spec_obj, **kwargs: (  # noqa: ARG005
             f"{task.task_id}-{language.value}-{spec_obj['ok']}"
         ),
     )
@@ -69,8 +69,8 @@ def test_check_generated_code_quality_respects_family_filter(
     monkeypatch.setattr(quality, "_validate_spec_for_task", lambda _: {})
     monkeypatch.setattr(
         quality,
-        "_render_code",
-        lambda task, language, spec_obj: (  # noqa: ARG005
+        "_render_code",  # noqa: ARG005
+        lambda task, language, spec_obj, **kwargs: (
             rendered_task_ids.append(f"{task.task_id}-{language.value}")
             or "code"
         ),
@@ -91,7 +91,9 @@ def test_check_generated_code_quality_aggregates_subprocess_failures(
     monkeypatch.setattr(quality, "_validate_required_tools", lambda: None)
     monkeypatch.setattr(quality, "_validate_spec_for_task", lambda _: {})
     monkeypatch.setattr(
-        quality, "_render_code", lambda task, language, spec: "code"
+        quality,
+        "_render_code",
+        lambda task, language, spec, **kwargs: "code",  # noqa: ARG005
     )
     monkeypatch.setattr(
         quality, "_check_java_code", _raise_called_process_error
@@ -107,14 +109,14 @@ def test_check_generated_code_quality_aggregates_subprocess_failures(
     assert "Use --skip-generated-style-checks" in message
 
 
-def test_check_generated_code_quality_skips_unsupported_language_render(
+def test_check_generated_code_quality_surfaces_render_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = SimpleNamespace(task_id="task-1", family="piecewise", spec={})
     java_called = False
     rust_seen: list[str] = []
 
-    def _fake_render(task, language, spec_obj):  # noqa: ARG001
+    def _fake_render(task, language, spec_obj, **kwargs):  # noqa: ARG001,ARG005
         if language == quality.Language.JAVA:
             raise ValueError("unsupported")
         return "rust-code"
@@ -129,7 +131,10 @@ def test_check_generated_code_quality_skips_unsupported_language_render(
     monkeypatch.setattr(quality, "_check_java_code", _fake_check_java)
     monkeypatch.setattr(quality, "_check_rust_code", rust_seen.append)
 
-    quality.check_generated_code_quality([task])
+    with pytest.raises(quality.GeneratedCodeQualityError) as exc_info:
+        quality.check_generated_code_quality([task])
 
     assert java_called is False
     assert rust_seen == ["rust-code"]
+    assert "task-1 (piecewise/java)" in str(exc_info.value)
+    assert "render failed: unsupported" in str(exc_info.value)

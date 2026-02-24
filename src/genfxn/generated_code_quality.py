@@ -39,6 +39,8 @@ _CHECK_FAIL_HINT = (
     "Use --skip-generated-style-checks to bypass locally if needed."
 )
 
+# Keep this registry in sync with task families:
+# add new families as "<family_name>": TypeAdapter(<FamilySpec>).
 _SPEC_ADAPTERS: dict[str, TypeAdapter[Any]] = {
     "bitops": TypeAdapter(BitopsSpec),
     "fsm": TypeAdapter(FsmSpec),
@@ -94,9 +96,14 @@ def _run_checked_subprocess(cmd: list[str], *, cwd: Path) -> None:
             timeout=_SUBPROCESS_TIMEOUT_SEC,
         )
     except subprocess.TimeoutExpired as exc:
+        timeout_stdout = (exc.stdout or "").strip()
+        timeout_stderr = (exc.stderr or "").strip()
+        timeout_output = timeout_stderr or timeout_stdout
+        timeout_suffix = f" Output: {timeout_output}" if timeout_output else ""
         raise subprocess.SubprocessError(
             "tool timed out after "
-            f"{_SUBPROCESS_TIMEOUT_SEC:.1f}s while running: {' '.join(cmd)}"
+            f"{_SUBPROCESS_TIMEOUT_SEC:.1f}s while running: {' '.join(cmd)}."
+            f"{timeout_suffix}"
         ) from exc
 
 
@@ -172,8 +179,15 @@ def validate_generated_code_quality_tools() -> None:
     _validate_required_tools()
 
 
-def _render_code(task: Task, language: Language, spec_obj: Any) -> str:
-    render_fn = get_render_fn(language, task.family)
+def _render_code(
+    task: Task,
+    language: Language,
+    spec_obj: Any,
+    *,
+    render_fn: Any | None = None,
+) -> str:
+    if render_fn is None:
+        render_fn = get_render_fn(language, task.family)
     return render_fn(spec_obj, func_name="f")
 
 
@@ -206,10 +220,17 @@ def check_generated_code_quality(
         spec_obj = _validate_spec_for_task(task)
         for language in _CHECK_LANGUAGES:
             try:
-                rendered = _render_code(task, language, spec_obj)
+                render_fn = get_render_fn(language, task.family)
             except ValueError:
                 # Family/language pair not supported by registry.
                 continue
+            try:
+                rendered = _render_code(
+                    task,
+                    language,
+                    spec_obj,
+                    render_fn=render_fn,
+                )
             except Exception as exc:
                 failures.append(
                     f"{task.task_id} ({task.family}/{language.value}) "

@@ -888,7 +888,7 @@ def _parse_query_input_by_family(family: str, input_value: Any) -> Any:
     if family == "piecewise":
         return int(input_value)
     elif family in ("stateful", "fsm", "simple_algorithms", "temporal_logic"):
-        if isinstance(input_value, list):
+        if isinstance(input_value, (list, tuple)):
             return list(input_value)
         return input_value
     elif family == "stringrules":
@@ -931,7 +931,7 @@ def _parse_query_input_by_family(family: str, input_value: Any) -> Any:
             )
         return (src, dst)
     elif family == "stack_bytecode":
-        if isinstance(input_value, list):
+        if isinstance(input_value, (list, tuple)):
             return list(input_value)
         return input_value
     else:
@@ -954,7 +954,7 @@ def _run_rust_code(
         out = tmp / "main_bin"
         src_path.write_text(main_src, encoding="utf-8")
         run_checked_subprocess(
-            [rustc, str(src_path), "-O", "-o", str(out)],
+            [rustc, "--edition=2021", str(src_path), "-O", "-o", str(out)],
             cwd=tmp,
         )
         proc = run_checked_subprocess(

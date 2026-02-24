@@ -7,6 +7,7 @@ from pathlib import Path
 import srsly
 import typer
 
+from genfxn.core.models import Task
 from genfxn.generated_code_quality import (
     GeneratedCodeQualityError,
     check_generated_code_quality,
@@ -59,7 +60,7 @@ def main(
 ) -> None:
     """Generate balanced 50-task suites per family."""
     family_list = parse_families(families)
-    generated: dict[str, list] = {}
+    generated: dict[str, list[Task]] = {}
     reports: dict[str, list[tuple[str, str, int, int, str]]] = {}
 
     if not skip_generated_style_checks:

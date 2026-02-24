@@ -110,7 +110,7 @@ def _run_rust_f(
         src = tmp / "main.rs"
         out = tmp / "main_bin"
         src.write_text(main_src, encoding="utf-8")
-        compile_cmd = [rustc, str(src)]
+        compile_cmd = [rustc, "--edition=2021", str(src)]
         if optimize:
             compile_cmd.append("-O")
         compile_cmd.extend(["-o", str(out)])
