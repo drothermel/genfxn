@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/simple_algorithms/models.py
-# hypothesis_version: 6.151.9
-
-[-100, 100, ', ', 'SimpleAlgorithmsAxes', 'after', 'all_indices', 'before', 'count_pairs_sum', 'empty_default_range', 'first_seen', 'list_length_range', 'max_window_sum', 'most_frequent', 'smallest', 'target_range', 'template', 'tie_default_range', 'unique_values', 'value_range', 'window_size_range']

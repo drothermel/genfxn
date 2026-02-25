@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stateful/ast_safety.py
-# hypothesis_version: 6.151.9
-
-['ValueError', 'abs', 'acc', 'best_sum', 'current_run', 'current_sum', 'init', 'int', 'list', 'longest_run', 'max', 'min', 'on', 'x', 'xs']

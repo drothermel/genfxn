@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/adapters/families/temporal_logic.py
-# hypothesis_version: 6.151.9
-
-['layer2-strategy', 'list_length_range', 'temporal_logic', 'value_range']

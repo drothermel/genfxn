@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/piecewise/models.py
-# hypothesis_version: 6.151.9
-
-[-100, 100, 'Coefficient for x', 'Coefficient for x^2', 'Constant term', 'PiecewiseAxes', 'abs', 'affine', 'after', 'before', 'coeff_range', 'divisor_range', 'kind', 'mod', 'quadratic', 'threshold_range', 'value_range']

@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/layer3.py
-# hypothesis_version: 6.151.9
-
-[0.0, 1.0, 1.96, 256, 10000, ',', ':', 'all_indices', 'and', 'big', 'bool_flip', 'enum_swap', 'first_sat_index', 'first_seen', 'ge', 'gt', 'int_minus_one', 'int_plus_one', 'int_to_zero', 'le', 'lt', 'mutant_hash', 'mutant_index', 'or', 'sat_at_start', 'sat_count', 'smallest', 'swap_first_two', 'unique_values', 'utf-8']

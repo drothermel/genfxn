@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/temporal_logic/ast_safety.py
-# hypothesis_version: 6.151.9
-
-['ValueError', '_eval', '_eval_predicate', 'bool', 'constant', 'dict', 'enumerate', 'formula', 'i', 'idx', 'int', 'j', 'k', 'kind', 'len', 'list', 'n', 'node', 'op', 'output_mode', 'range', 'str', 'sum', 'truth_values', 'valid', 'value', 'xs']

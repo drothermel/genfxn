@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stack_bytecode/render.py
-# hypothesis_version: 6.151.9
-
-['                )', '            continue', '            else:', '            if cond:', '            pc += 1', '            return 0', '        ):', '        if op in (', '        steps += 1', '    ]', '    input_mode = ', '    n = len(program)', '    pc = 0', '    program = [', '    return (1, 0)', '    steps = 0', ') == 0:', '):', ')]),', ',', '[idx % len(', '[idx]))', 'f', 'index', 'op', 'target', 'value', 'xs']

@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/core/safe_exec.py
-# hypothesis_version: 6.151.9
-
-[0.05, 0.2, 0.25, 1.0, 256, 1024, 1000000, ', ', '; ', '<', '>', 'NameError', 'RuntimeError', '__', '__builtins__', '__code__', '__file__', '__getattribute__', '__globals__', '__import__', '__mro__', '__subclasses__', 'bootstrapping phase', 'call', 'compile', 'delattr', 'eval', 'exec', 'f', 'forkserver', 'getattr', 'globals', 'input', 'locals', 'open', 'posix', 'setattr', 'shutdown', 'spawn', 'vars']

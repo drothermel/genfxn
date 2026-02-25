@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/core/transforms.py
-# hypothesis_version: 6.151.9
-
-['TransformClip', 'TransformPipeline', 'abs', 'after', 'clip', 'identity', 'kind', 'negate', 'pipeline', 'scale', 'shift', 'x']

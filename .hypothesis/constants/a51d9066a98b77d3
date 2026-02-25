@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/adapters/families/piecewise.py
-# hypothesis_version: 6.151.9
-
-['layer2-strategy', 'piecewise', 'value_range']

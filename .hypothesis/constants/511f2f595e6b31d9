@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/langs/rust/intervals.py
-# hypothesis_version: 6.151.9
-
-['            (lo, hi)', '            prev_end', '            }', '        return 0;', '        return best;', '        return gaps;', '        }', '        } else {', '        };', '    }', 'f', 'intervals', '}']

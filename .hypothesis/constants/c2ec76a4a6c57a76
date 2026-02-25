@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/core/task_ids.py
-# hypothesis_version: 6.151.9
-
-['AST_ID_MISMATCH', 'MISSING_AST_ID', 'MISSING_SEM_HASH', 'MISSING_SPEC_ID', 'SEM_HASH_MISMATCH', 'SPEC_ID_MISMATCH', 'ast_id', 'sem_hash', 'spec_id']

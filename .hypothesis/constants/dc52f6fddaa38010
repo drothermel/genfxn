@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/bitops/render.py
-# hypothesis_version: 6.151.9
-
-['            arg = 0', '            else:', '        else:', '    ]', '    operations = [', '    return value', ',', 'and_mask', 'arg', 'elif', 'f', 'if', 'not', 'op', 'or_mask', 'parity', 'popcount', 'rotl', 'rotr', 'shl', 'shr_logical', 'x', 'xor_mask']

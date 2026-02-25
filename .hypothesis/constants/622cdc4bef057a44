@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/simple_algorithms/validate.py
-# hypothesis_version: 6.151.9
-
-['CODE_EXEC_ERROR', 'CODE_MISSING_FUNC', 'CODE_PARSE_ERROR', 'CODE_RUNTIME_ERROR', 'EDGE_CASE_FAILURE', 'FUNC_NOT_CALLABLE', 'QUERY_INPUT_TYPE', 'QUERY_OUTPUT_TYPE', 'SEMANTIC_MISMATCH', 'TASK_ID_MISMATCH', 'TIE_BREAK_MISMATCH', 'UNSAFE_AST', 'ValueError', '__', 'abs', 'close', 'code', 'code.f', 'col_offset', 'counting_mode', 'f', 'family', 'int', 'len', 'lineno', 'list', 'max', 'min', 'python', 'range', 'set', 'simple_algorithms', 'sorted', 'spec', 'sum', 'task_id', 'tuple', 'xs']

@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stateful/render.py
-# hypothesis_version: 6.151.9
-
-['        else:', '        if on:', '    best_sum = init', '    current_run = 0', '    longest_run = 0', '    on = False', '    return acc', '    return best_sum', 'f', 'x', 'xs']

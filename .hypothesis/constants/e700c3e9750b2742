@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/graph_queries/ast_safety.py
-# hypothesis_version: 6.151.9
-
-['ValueError', '_', 'add', 'adjacency', 'append', 'best', 'best_cost', 'best_cost_curr', 'best_cost_prev', 'best_idx', 'best_node', 'best_pair', 'candidate_node', 'candidate_pair', 'changed', 'cost', 'dict', 'directed', 'edges', 'frontier', 'get', 'head', 'hops', 'i', 'int', 'isinstance', 'items', 'key', 'len', 'list', 'n_nodes', 'neighbor', 'neighbors', 'next_cost', 'node', 'pop', 'prev', 'query_type', 'queue', 'range', 'raw_u', 'raw_v', 'raw_w', 'rev_key', 'rev_prev', 'sort', 'tuple', 'u', 'v', 'value', 'values', 'visited', 'weight', 'weighted']

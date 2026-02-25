@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/adapters/families/stringrules.py
-# hypothesis_version: 6.151.9
-
-['  spaced  ', '0', 'A', 'ABC', 'a', 'a1B2', 'abc', 'layer2-strategy', 'string_length_range', 'stringrules']

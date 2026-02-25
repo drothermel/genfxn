@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/fsm/sampler.py
-# hypothesis_version: 6.151.9
-
-['is_accept', 'sample_machine_type', 'sample_n_states', 'sample_output_mode']

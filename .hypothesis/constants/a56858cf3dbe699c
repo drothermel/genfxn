@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/langs/registry.py
-# hypothesis_version: 6.151.9
-
-['bitops', 'fsm', 'genfxn.bitops.render', 'genfxn.fsm.render', 'graph_queries', 'intervals', 'piecewise', 'render_bitops', 'render_fsm', 'render_graph_queries', 'render_intervals', 'render_piecewise', 'render_sequence_dp', 'render_stateful', 'render_stringrules', 'sequence_dp', 'simple_algorithms', 'stack_bytecode', 'stateful', 'stringrules', 'temporal_logic']

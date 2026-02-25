@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/langs/rust/temporal_logic.py
-# hypothesis_version: 6.151.9
-
-['            }', '        if *value {', '        if valid {', '        return 0;', '        }', '    -1', '    false', '    true', '    }', '&&', 'always', 'and', 'atom', 'child', 'constant', 'eq', 'eventually', 'f', 'ge', 'gt', 'le', 'left', 'lt', 'ne', 'next', 'not', 'op', 'or', 'predicate', 'right', 'since', 'until', 'xs', '||', '}']

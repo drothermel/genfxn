@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/intervals/validate.py
-# hypothesis_version: 6.151.9
-
-[0.5, 'CODE_CODE_EXEC_ERROR', 'CODE_UNSAFE_AST', 'TASK_ID_MISMATCH', 'ValueError', '__', 'abs', 'close', 'code', 'code.f', 'col_offset', 'f', 'family', 'intervals', 'len', 'lineno', 'max', 'min', 'python', 'range', 'sorted', 'spec', 'task_id']

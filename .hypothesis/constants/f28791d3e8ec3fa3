@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/scripts/check_generated_dataset_verification.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.7, 1.0, 10000, 'Deterministic seed.', '__main__', 'all']

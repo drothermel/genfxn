@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/langs/java/intervals.py
-# hypothesis_version: 6.151.9
-
-['            );', '            }', '        long end;', '        long start;', '        return 0L;', '        return best;', '        return gaps;', '        }', '        } else {', '    );', '    }', '    });', 'f', 'intervals', '}']

@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/temporal_logic/sampler.py
-# hypothesis_version: 6.151.9
-
-['child', 'constant', 'left', 'op', 'predicate', 'right', 'sample_formula', 'sample_formula_depth', 'sample_include_since', 'sample_output_mode']

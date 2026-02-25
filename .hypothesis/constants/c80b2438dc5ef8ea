@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/core/family_registry.py
-# hypothesis_version: 6.151.9
-
-[',', ', ', 'all', 'bitops', 'fsm', 'graph_queries', 'intervals', 'piecewise', 'sequence_dp', 'simple_algorithms', 'stack_bytecode', 'stateful', 'stringrules', 'temporal_logic']

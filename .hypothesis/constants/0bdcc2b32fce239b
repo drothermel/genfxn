@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/simple_algorithms/render.py
-# hypothesis_version: 6.151.9
-
-['            return x', '    count = 0', '    counts = {}', '    if count == 0:', '    return count', '    return max_sum', '    window_sum = 0', 'f', 'x', 'xs']

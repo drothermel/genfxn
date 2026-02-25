@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stringrules/sampler.py
-# hypothesis_version: 6.151.9
-
-[0.2, 0.5, 0.6, ' \t\n_-', 'eq', 'ge', 'gt', 'le', 'lt', 'sample_n_rules']

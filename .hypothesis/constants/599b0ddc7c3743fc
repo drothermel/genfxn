@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stack_bytecode/__init__.py
-# hypothesis_version: 6.151.9
-
-['InputMode', 'Instruction', 'InstructionOp', 'JumpTargetMode', 'RuntimeStatus', 'StackBytecodeAxes', 'StackBytecodeSpec', 'eval_stack_bytecode']

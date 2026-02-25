@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/bitops/models.py
-# hypothesis_version: 6.151.9
-
-[-1024, 1024, 65535, 'BitInstruction', 'BitopsAxes', 'after', 'and_mask', 'before', 'mask_range', 'n_ops_range', 'not', 'or_mask', 'parity', 'popcount', 'rotl', 'rotr', 'shift_range', 'shl', 'shr_logical', 'value_range', 'xor_mask']

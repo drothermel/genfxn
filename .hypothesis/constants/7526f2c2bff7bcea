@@ -1,4 +1,0 @@
-# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/models.py
-# hypothesis_version: 6.151.9
-
-[0.0, 1.0, 'before', 'expected_output', 'heldout_mutant_fpr', 'input', 'layer1_spec_boundary', 'layer2_property', 'layer3_mutation', 'source_detail', 'value']
