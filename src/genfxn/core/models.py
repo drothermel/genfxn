@@ -223,17 +223,12 @@ class Task(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str = Field(description="Deterministic hash of spec")
-    spec_id: str | None = Field(
-        default=None,
-        description="Canonical semantic-preserving spec hash",
+    spec_id: str = Field(description="Canonical semantic-preserving spec hash")
+    sem_hash: str = Field(
+        description="Behavioral hash from deterministic interpreter probes"
     )
-    sem_hash: str | None = Field(
-        default=None,
-        description="Behavioral hash from deterministic interpreter probes",
-    )
-    ast_id: dict[str, str] | None = Field(
-        default=None,
-        description="Per-language tree-sitter AST hash map",
+    ast_id: dict[str, str] = Field(
+        description="Per-language tree-sitter AST hash map"
     )
     family: str = Field(description="Function family (piecewise, stateful)")
     spec: dict[str, Any] = Field(description="Full specification as dict")

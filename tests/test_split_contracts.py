@@ -17,6 +17,9 @@ def _build_task_records(count: int) -> list[dict[str, Any]]:
         records.append(
             {
                 "task_id": f"task-{i}",
+                "spec_id": f"task-{i}_spec",
+                "sem_hash": f"task-{i}_sem",
+                "ast_id": {"python": f"task-{i}_ast"},
                 "family": "stateful",
                 "spec": {"n": i},
                 "code": "def f(x):\n    return x\n",

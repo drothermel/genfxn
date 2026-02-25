@@ -6,6 +6,7 @@ from typing import Any
 import srsly
 
 from genfxn.core.codegen import _canonicalize_for_hash
+from genfxn.core.spec_registry import validate_spec_for_family
 
 SPEC_CANON_V1 = "spec_canon_v1"
 
@@ -164,10 +165,13 @@ def _normalize_fsm_spec(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def canonicalize_spec_for_hash(family: str, spec: Any) -> Any:
-    if hasattr(spec, "model_dump") and callable(spec.model_dump):
-        base: Any = spec.model_dump(mode="python")
+    validated_spec = validate_spec_for_family(family, spec)
+    if hasattr(validated_spec, "model_dump") and callable(
+        validated_spec.model_dump
+    ):
+        base: Any = validated_spec.model_dump(mode="python")
     else:
-        base = spec
+        base = validated_spec
 
     if not isinstance(base, dict):
         raise ValueError("Spec must be a dictionary-like object")

@@ -462,6 +462,18 @@ class TestTaskId:
 
 
 class TestSpecIdCanonicalization:
+    def test_defaults_are_included_via_validated_spec(self) -> None:
+        spec_with_default_omitted = {
+            "operations": [{"op": "not"}],
+        }
+        spec_with_default_explicit = {
+            "width_bits": 8,
+            "operations": [{"op": "not"}],
+        }
+        assert compute_spec_id(
+            "bitops", spec_with_default_omitted
+        ) == compute_spec_id("bitops", spec_with_default_explicit)
+
     def test_commutative_and_operands_order_independent(self) -> None:
         spec_a = {
             "template": "longest_run",

@@ -24,11 +24,41 @@ def test_java_ast_hash_wrapper_fallback() -> None:
     assert ast_hash
 
 
+def test_java_ast_hash_formatting_invariant() -> None:
+    code_a = "public final class S { static long f(long x) { return x + 1L; } }"
+    code_b = (
+        "public final class S {\n"
+        "  static long f(long x){\n"
+        "    return x+1L;\n"
+        "  }\n"
+        "}\n"
+    )
+    assert compute_ast_hash("java", code_a) == compute_ast_hash("java", code_b)
+
+
+def test_java_ast_hash_changes_for_token_change() -> None:
+    code_a = "public final class S { static long f(long x) { return x + 1L; } }"
+    code_b = "public final class S { static long f(long x) { return x + 2L; } }"
+    assert compute_ast_hash("java", code_a) != compute_ast_hash("java", code_b)
+
+
 def test_rust_ast_hash_computes() -> None:
     rust_code = "pub fn f(x: i64) -> i64 { x + 1 }"
     ast_hash = compute_ast_hash("rust", rust_code)
     assert isinstance(ast_hash, str)
     assert ast_hash
+
+
+def test_rust_ast_hash_formatting_invariant() -> None:
+    code_a = "pub fn f(x: i64) -> i64 { x + 1 }"
+    code_b = "pub fn f( x:i64 )->i64 {\n    x+1\n}\n"
+    assert compute_ast_hash("rust", code_a) == compute_ast_hash("rust", code_b)
+
+
+def test_rust_ast_hash_changes_for_token_change() -> None:
+    code_a = "pub fn f(x: i64) -> i64 { x + 1 }"
+    code_b = "pub fn f(x: i64) -> i64 { x + 2 }"
+    assert compute_ast_hash("rust", code_a) != compute_ast_hash("rust", code_b)
 
 
 def test_multi_language_ast_id_map() -> None:

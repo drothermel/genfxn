@@ -50,6 +50,24 @@ def _strip_ansi(text: str) -> str:
     return _ANSI_ESCAPE_RE.sub("", text)
 
 
+def _task_with_required_ids(task: dict[str, Any]) -> dict[str, Any]:
+    task_id = task.get("task_id")
+    if not isinstance(task_id, str):
+        raise ValueError("task_id must be present as a string")
+
+    task_with_ids = dict(task)
+    task_with_ids.setdefault("spec_id", f"{task_id}_spec")
+    task_with_ids.setdefault("sem_hash", f"{task_id}_sem")
+    task_with_ids.setdefault("ast_id", {"python": f"{task_id}_ast"})
+    return task_with_ids
+
+
+def _tasks_with_required_ids(
+    tasks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [_task_with_required_ids(task) for task in tasks]
+
+
 @pytest.fixture(autouse=True)
 def _stub_generated_style_checks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
@@ -1464,14 +1482,16 @@ class TestSplit:
         train_file = tmp_path / "train.jsonl"
         test_file = tmp_path / "test.jsonl"
 
-        first_row = {
-            "task_id": "task-1",
-            "family": "stateful",
-            "spec": {"template": "sum"},
-            "code": "def f(x):\n    return x\n",
-            "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-            "description": "valid row",
-        }
+        first_row = _task_with_required_ids(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"template": "sum"},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "valid row",
+            }
+        )
         input_file.write_text(
             f'{srsly.json_dumps(first_row)}\n{{"broken":\n',
             encoding="utf-8",
@@ -1689,7 +1709,7 @@ class TestSplit:
                 "description": "finite values",
             }
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -1735,7 +1755,7 @@ class TestSplit:
                 "description": "finite values",
             }
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -1780,7 +1800,7 @@ class TestSplit:
                 "description": "string values",
             }
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -1825,7 +1845,7 @@ class TestSplit:
                 "description": "boolean values",
             }
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -1870,7 +1890,7 @@ class TestSplit:
                 "description": "string other",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -1935,7 +1955,7 @@ class TestSplit:
                 "description": "score 2.0",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -1986,7 +2006,7 @@ class TestSplit:
                 "description": "max int64 minus one",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2050,7 +2070,7 @@ class TestSplit:
                 "description": "int zero",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2078,14 +2098,16 @@ class TestSplit:
 
     def test_split_range_rejects_bool_bounds_in_matcher(self) -> None:
         task = Task.model_validate(
-            {
-                "task_id": "task-1",
-                "family": "stateful",
-                "spec": {"score": 0},
-                "code": "def f(x):\n    return x\n",
-                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-                "description": "score zero",
-            }
+            _task_with_required_ids(
+                {
+                    "task_id": "task-1",
+                    "family": "stateful",
+                    "spec": {"score": 0},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                    "description": "score zero",
+                }
+            )
         )
         bool_bound_holdout = AxisHoldout(
             axis_path="score",
@@ -2120,14 +2142,16 @@ class TestSplit:
         self, spec_value: object, holdout_value: object, expected: bool
     ) -> None:
         task = Task.model_validate(
-            {
-                "task_id": "task-1",
-                "family": "stateful",
-                "spec": {"value": spec_value},
-                "code": "def f(x):\n    return x\n",
-                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-                "description": "type matrix",
-            }
+            _task_with_required_ids(
+                {
+                    "task_id": "task-1",
+                    "family": "stateful",
+                    "spec": {"value": spec_value},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                    "description": "type matrix",
+                }
+            )
         )
         holdout = AxisHoldout(
             axis_path="value",
@@ -2161,14 +2185,16 @@ class TestSplit:
         self, spec_value: object, holdout_value: object, expected: bool
     ) -> None:
         task = Task.model_validate(
-            {
-                "task_id": "task-1",
-                "family": "stateful",
-                "spec": {"value": spec_value},
-                "code": "def f(x):\n    return x\n",
-                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-                "description": "contains type matrix",
-            }
+            _task_with_required_ids(
+                {
+                    "task_id": "task-1",
+                    "family": "stateful",
+                    "spec": {"value": spec_value},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                    "description": "contains type matrix",
+                }
+            )
         )
         holdout = AxisHoldout(
             axis_path="value",
@@ -2180,14 +2206,16 @@ class TestSplit:
 
     def test_split_exact_matcher_nested_type_sensitive(self) -> None:
         task = Task.model_validate(
-            {
-                "task_id": "task-1",
-                "family": "stateful",
-                "spec": {"value": [0]},
-                "code": "def f(x):\n    return x\n",
-                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-                "description": "nested exact",
-            }
+            _task_with_required_ids(
+                {
+                    "task_id": "task-1",
+                    "family": "stateful",
+                    "spec": {"value": [0]},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                    "description": "nested exact",
+                }
+            )
         )
         holdout = AxisHoldout(
             axis_path="value",
@@ -2199,14 +2227,16 @@ class TestSplit:
 
     def test_split_contains_matcher_nested_type_sensitive(self) -> None:
         task = Task.model_validate(
-            {
-                "task_id": "task-1",
-                "family": "stateful",
-                "spec": {"value": [[0]]},
-                "code": "def f(x):\n    return x\n",
-                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-                "description": "nested contains",
-            }
+            _task_with_required_ids(
+                {
+                    "task_id": "task-1",
+                    "family": "stateful",
+                    "spec": {"value": [[0]]},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                    "description": "nested contains",
+                }
+            )
         )
         holdout = AxisHoldout(
             axis_path="value",
@@ -2220,14 +2250,16 @@ class TestSplit:
         self,
     ) -> None:
         task = Task.model_validate(
-            {
-                "task_id": "task-1",
-                "family": "stateful",
-                "spec": {},
-                "code": "def f(x):\n    return x\n",
-                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-                "description": "missing path",
-            }
+            _task_with_required_ids(
+                {
+                    "task_id": "task-1",
+                    "family": "stateful",
+                    "spec": {},
+                    "code": "def f(x):\n    return x\n",
+                    "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                    "description": "missing path",
+                }
+            )
         )
         holdout = AxisHoldout(
             axis_path="value",
@@ -2308,7 +2340,7 @@ class TestSplit:
                 "description": "Task with false flag",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2360,7 +2392,7 @@ class TestSplit:
                 "description": "int zero",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2462,7 +2494,7 @@ class TestSplit:
                 "description": "none",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2511,7 +2543,7 @@ class TestSplit:
                 "description": "does not contain alpha",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2564,7 +2596,7 @@ class TestSplit:
                 "description": "nested int list",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2615,7 +2647,7 @@ class TestSplit:
                 "description": "contains nested int list",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -2706,7 +2738,7 @@ class TestSplit:
                 "description": "second has five",
             },
         ]
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -3057,7 +3089,7 @@ class TestSplit:
                     "description": f"task {i}",
                 }
             )
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         result = runner.invoke(
             app,
@@ -3135,7 +3167,7 @@ class TestSplit:
                     "description": f"task {i}",
                 }
             )
-        srsly.write_jsonl(input_file, tasks)
+        srsly.write_jsonl(input_file, _tasks_with_required_ids(tasks))
 
         def _raise_random_split(*args: Any, **kwargs: Any) -> Any:
             raise AssertionError("random_split helper should not be used")
@@ -3223,14 +3255,16 @@ class TestInfo:
 
     def test_info_malformed_row_has_clean_error(self, tmp_path) -> None:
         input_file = tmp_path / "tasks.jsonl"
-        first_row = {
-            "task_id": "task-1",
-            "family": "stateful",
-            "spec": {"template": "sum"},
-            "code": "def f(x):\n    return x\n",
-            "queries": [{"input": 1, "output": 1, "tag": "typical"}],
-            "description": "valid row",
-        }
+        first_row = _task_with_required_ids(
+            {
+                "task_id": "task-1",
+                "family": "stateful",
+                "spec": {"template": "sum"},
+                "code": "def f(x):\n    return x\n",
+                "queries": [{"input": 1, "output": 1, "tag": "typical"}],
+                "description": "valid row",
+            }
+        )
         input_file.write_text(
             f'{srsly.json_dumps(first_row)}\n{{"broken":\n',
             encoding="utf-8",

@@ -5,6 +5,7 @@ import pytest
 
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.task_ids import compute_task_ids
 from genfxn.core.validate import WRONG_FAMILY, Severity
 from genfxn.fsm.models import (
     FsmSpec,
@@ -206,11 +207,16 @@ class TestQueryAndSemantics:
             states=[State(id=0, transitions=[], is_accept=False)],
         )
         spec_dict = spec.model_dump()
+        code = render_fsm(spec)
+        ids = compute_task_ids("fsm", spec_dict, code)
         task = Task(
             task_id=task_id_from_spec("fsm", spec_dict),
+            spec_id=ids.spec_id,
+            sem_hash=ids.sem_hash,
+            ast_id=ids.ast_id,
             family="fsm",
             spec=spec_dict,
-            code=render_fsm(spec),
+            code=code,
             queries=[
                 Query(input=[123], output=0, tag=QueryTag.TYPICAL),
             ],

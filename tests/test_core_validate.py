@@ -57,6 +57,9 @@ def _minimal_task_payload(**overrides: object) -> dict:
     """Minimal Task payload for validation tests."""
     return {
         "task_id": "test_abc123",
+        "spec_id": "s" * 64,
+        "sem_hash": "h" * 64,
+        "ast_id": {"python": "a" * 64},
         "family": "piecewise",
         "spec": {},
         "code": "def f(): pass",
