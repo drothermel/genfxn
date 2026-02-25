@@ -344,7 +344,7 @@ def compute_sem_hash(
         except Exception as exc:
             result = {
                 "__error__": {
-                    "message": str(exc),
+                    "message": "<error>",
                     "type": type(exc).__name__,
                 }
             }

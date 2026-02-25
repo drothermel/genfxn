@@ -1,19 +1,10 @@
 import random
+from collections.abc import Callable
 
 from genfxn.bitops.models import BitInstruction, BitOp, BitopsSpec
-from genfxn.bitops.task import generate_bitops_task
+from genfxn.core.models import Task
 from genfxn.core.semantic_hash import _probes_bitops, compute_sem_hash
 from genfxn.core.task_ids import validate_task_ids
-from genfxn.fsm.task import generate_fsm_task
-from genfxn.graph_queries.task import generate_graph_queries_task
-from genfxn.intervals.task import generate_intervals_task
-from genfxn.piecewise.task import generate_piecewise_task
-from genfxn.sequence_dp.task import generate_sequence_dp_task
-from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.stack_bytecode.task import generate_stack_bytecode_task
-from genfxn.stateful.task import generate_stateful_task
-from genfxn.stringrules.task import generate_stringrules_task
-from genfxn.temporal_logic.task import generate_temporal_logic_task
 
 
 def test_sem_hash_deterministic_for_same_spec() -> None:
@@ -27,6 +18,8 @@ def test_sem_hash_deterministic_for_same_spec() -> None:
 
 
 def test_sem_hash_equivalent_graph_specs_match() -> None:
+    # Undirected graph semantics collapse reverse duplicates,
+    # keeping the minimum edge weight.
     spec_a = {
         "query_type": "shortest_path_cost",
         "directed": False,
@@ -80,21 +73,10 @@ def test_bitops_exhaustive_probe_domain_small_width() -> None:
     assert len(probes_large) != (1 << 12)
 
 
-def test_generated_tasks_have_non_empty_sem_hash_all_families() -> None:
-    generators = [
-        lambda: generate_piecewise_task(rng=random.Random(1)),
-        lambda: generate_stateful_task(rng=random.Random(1)),
-        lambda: generate_simple_algorithms_task(rng=random.Random(1)),
-        lambda: generate_stringrules_task(rng=random.Random(1)),
-        lambda: generate_stack_bytecode_task(rng=random.Random(1)),
-        lambda: generate_fsm_task(rng=random.Random(1)),
-        lambda: generate_bitops_task(rng=random.Random(1)),
-        lambda: generate_sequence_dp_task(rng=random.Random(1)),
-        lambda: generate_intervals_task(rng=random.Random(1)),
-        lambda: generate_graph_queries_task(rng=random.Random(1)),
-        lambda: generate_temporal_logic_task(rng=random.Random(1)),
-    ]
-    for make_task in generators:
+def test_generated_tasks_have_non_empty_sem_hash_all_families(
+    task_factories: tuple[Callable[[], Task], ...],
+) -> None:
+    for make_task in task_factories:
         task = make_task()
         assert isinstance(task.sem_hash, str) and task.sem_hash
         assert validate_task_ids(task) == []

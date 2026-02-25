@@ -99,10 +99,10 @@ def _canonicalize_node(value: Any) -> Any:
         return tuple(_canonicalize_node(item) for item in value)
     if isinstance(value, set):
         items = [_canonicalize_node(item) for item in value]
-        return sorted(items, key=_stable_sort_key)
+        return {"__set__": sorted(items, key=_stable_sort_key)}
     if isinstance(value, frozenset):
         items = [_canonicalize_node(item) for item in value]
-        return tuple(sorted(items, key=_stable_sort_key))
+        return {"__frozenset__": sorted(items, key=_stable_sort_key)}
     return value
 
 
@@ -174,7 +174,7 @@ def canonicalize_spec_for_hash(family: str, spec: Any) -> Any:
         base = validated_spec
 
     if not isinstance(base, dict):
-        raise ValueError("Spec must be a dictionary-like object")
+        raise TypeError("Spec must validate to a dictionary-like object")
 
     normalized = dict(base)
     if family == "graph_queries":

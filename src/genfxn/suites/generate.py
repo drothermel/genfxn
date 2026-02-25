@@ -160,16 +160,13 @@ def generate_pool(
 
         if task.task_id in seen_task_ids:
             stats.duplicate_task_ids += 1
+            continue
         seen_task_ids.add(task.task_id)
 
-        if task.spec_id is not None and task.spec_id in seen_spec_ids:
+        if task.spec_id in seen_spec_ids:
             stats.duplicate_spec_ids += 1
-        if task.spec_id is not None:
-            seen_spec_ids.add(task.spec_id)
+        seen_spec_ids.add(task.spec_id)
 
-        if task.sem_hash is None:
-            stats.errors += 1
-            continue
         if task.sem_hash in seen_sem_hashes:
             stats.duplicates += 1
             stats.duplicate_sem_hashes += 1

@@ -41,7 +41,7 @@ def _recompute_ast_id(task: Task) -> dict[str, str]:
         return compute_ast_id_map(task.code)
 
     if not isinstance(task.code, str):
-        raise ValueError("Task code must be a string or language->source map")
+        raise TypeError("Task code must be a string or language->source map")
 
     languages = list(task.ast_id)
     if len(languages) != 1:

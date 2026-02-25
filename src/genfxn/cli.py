@@ -489,7 +489,7 @@ def _parse_single_language(language: str) -> Language:
         ) from err
 
 
-def _render_task_for_language(task: Task, language: Language) -> Task:
+def render_task_for_language(task: Task, language: Language) -> Task:
     if language == Language.PYTHON:
         return task
 
@@ -1216,7 +1216,7 @@ def generate(
 
     with _atomic_output_file_or_exit(output) as output_handle:
         for task in generated_tasks:
-            rendered_task = _render_task_for_language(task, selected_language)
+            rendered_task = render_task_for_language(task, selected_language)
             _write_task_line(output_handle, rendered_task)
 
     typer.echo(f"Generated {generated_count} tasks to {output}")

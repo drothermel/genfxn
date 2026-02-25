@@ -829,7 +829,7 @@ class TestGenerate:
     ) -> None:
         output = tmp_path / "tasks.jsonl"
         render_calls = 0
-        original_render = cli_module._render_task_for_language
+        original_render = cli_module.render_task_for_language
 
         def fail_after_first_render(*args, **kwargs):
             nonlocal render_calls
@@ -840,7 +840,7 @@ class TestGenerate:
 
         monkeypatch.setattr(
             cli_module,
-            "_render_task_for_language",
+            "render_task_for_language",
             fail_after_first_render,
         )
 
