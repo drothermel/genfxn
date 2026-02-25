@@ -36,6 +36,10 @@ from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
 from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
 from genfxn.intervals.task import generate_intervals_task
+from genfxn.irt.bank import BankBuildSettings, build_stratified_item_bank
+from genfxn.irt.diagnostics import DiagnosticsSettings, run_fit_diagnostics
+from genfxn.irt.fit import FitSettings, fit_irt_models
+from genfxn.irt.score import AnchorScoringSettings, score_with_anchors
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
 from genfxn.piecewise.models import ExprType, PiecewiseAxes, PiecewiseSpec
@@ -86,6 +90,8 @@ from genfxn.verification.runner import (
 )
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
+irt_app = typer.Typer(help="IRT calibration commands.")
+app.add_typer(irt_app, name="irt")
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
 _simple_algorithms_spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 _fsm_spec_adapter = TypeAdapter(FsmSpec)
@@ -1912,3 +1918,247 @@ def verify(
     except OSError as err:
         typer.echo(_render_os_error(err), err=True)
         raise typer.Exit(1) from err
+
+
+def _parse_irt_families(raw: str) -> list[str]:
+    families = [token.strip() for token in raw.split(",") if token.strip()]
+    if not families:
+        raise typer.BadParameter("at least one family is required")
+    return families
+
+
+def _reject_legacy_irt_flags(
+    *,
+    legacy_difficulty: str | None,
+    legacy_balanced_suite: bool,
+) -> None:
+    if legacy_difficulty is not None or legacy_balanced_suite:
+        raise typer.BadParameter(
+            "legacy difficulty/balanced-suite options are removed. "
+            "Use `genfxn irt build-bank` stratified quotas and "
+            "manifest-driven artifacts."
+        )
+
+
+@irt_app.command("build-bank")
+def irt_build_bank(
+    bank_id: Annotated[
+        str,
+        typer.Option(help="Bank identifier used under out-dir."),
+    ] = "bank_v1",
+    out_dir: Annotated[
+        Path,
+        typer.Option(help="Base output directory for bank artifacts."),
+    ] = Path("data/irt/banks"),
+    families: Annotated[
+        str,
+        typer.Option(
+            help=(
+                "Comma-separated families "
+                "(stateful,simple_algorithms,fsm,bitops)."
+            )
+        ),
+    ] = "stateful,simple_algorithms,fsm,bitops",
+    per_family_count: Annotated[
+        int,
+        typer.Option(help="Target items per family (locked to 300 for v1)."),
+    ] = 300,
+    seed: Annotated[
+        int,
+        typer.Option(help="Deterministic generation seed."),
+    ] = 0,
+    prompt_version: Annotated[
+        str,
+        typer.Option(help="Prompt template version identifier."),
+    ] = "spec_to_outputs_v1",
+    max_attempts_per_family: Annotated[
+        int,
+        typer.Option(help="Maximum generation attempts per family."),
+    ] = 250_000,
+    legacy_difficulty: Annotated[
+        str | None,
+        typer.Option(
+            "--difficulty",
+            help="Deprecated legacy option (kept only for fail-fast guidance).",
+        ),
+    ] = None,
+    legacy_balanced_suite: Annotated[
+        bool,
+        typer.Option(
+            "--balanced-suite",
+            help="Deprecated legacy option (kept only for fail-fast guidance).",
+        ),
+    ] = False,
+) -> None:
+    _reject_legacy_irt_flags(
+        legacy_difficulty=legacy_difficulty,
+        legacy_balanced_suite=legacy_balanced_suite,
+    )
+    resolved_families = _parse_irt_families(families)
+    settings = BankBuildSettings(
+        bank_id=bank_id,
+        out_dir=out_dir,
+        families=resolved_families,
+        per_family_count=per_family_count,
+        seed=seed,
+        prompt_version=prompt_version,
+        max_attempts_per_family=max_attempts_per_family,
+    )
+    result = build_stratified_item_bank(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "bank_id": bank_id,
+                "bank_root": str(result.bank_root),
+                "items_path": str(result.items_path),
+                "eval_cases_inputs_path": str(result.eval_cases_inputs_path),
+                "eval_cases_expected_path": str(
+                    result.eval_cases_expected_path
+                ),
+                "manifest_path": str(result.manifest_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+@irt_app.command("fit")
+def irt_fit(
+    fit_id: Annotated[
+        str,
+        typer.Option(help="Fit identifier under out-dir."),
+    ] = "fit_v1",
+    responses_path: Annotated[
+        Path,
+        typer.Option(help="Response matrix JSONL path."),
+    ] = Path("data/irt/runs/run_v1/responses.jsonl"),
+    out_dir: Annotated[
+        Path,
+        typer.Option(help="Base output directory for fitted artifacts."),
+    ] = Path("data/irt/fits"),
+    min_item_respondents: Annotated[
+        int,
+        typer.Option(help="Minimum observed respondents per item."),
+    ] = 8,
+    min_respondent_items: Annotated[
+        int,
+        typer.Option(help="Minimum observed items per respondent."),
+    ] = 20,
+) -> None:
+    settings = FitSettings(
+        fit_id=fit_id,
+        responses_path=responses_path,
+        out_dir=out_dir,
+        min_item_respondents=min_item_respondents,
+        min_respondent_items=min_respondent_items,
+    )
+    result = fit_irt_models(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "fit_id": fit_id,
+                "fit_dir": str(result.fit_dir),
+                "item_params_1pl_path": str(result.item_params_1pl_path),
+                "item_params_2pl_path": str(result.item_params_2pl_path),
+                "respondent_params_1pl_path": str(
+                    result.respondent_params_1pl_path
+                ),
+                "respondent_params_2pl_path": str(
+                    result.respondent_params_2pl_path
+                ),
+                "diagnostics_path": str(result.diagnostics_path),
+                "difficulty_bins_global_path": str(
+                    result.difficulty_bins_global_path
+                ),
+                "difficulty_bins_family_path": str(
+                    result.difficulty_bins_family_path
+                ),
+                "anchors_path": str(result.anchors_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+@irt_app.command("diagnostics")
+def irt_diagnostics(
+    fit_id: Annotated[
+        str,
+        typer.Option(help="Fit identifier for output metadata."),
+    ] = "fit_v1",
+    fit_dir: Annotated[
+        Path,
+        typer.Option(help="Directory containing fitted parameter files."),
+    ] = Path("data/irt/fits/fit_v1"),
+    responses_path: Annotated[
+        Path,
+        typer.Option(help="Response matrix JSONL path."),
+    ] = Path("data/irt/runs/run_v1/responses.jsonl"),
+    out_dir: Annotated[
+        Path | None,
+        typer.Option(help="Optional diagnostics output directory."),
+    ] = None,
+) -> None:
+    settings = DiagnosticsSettings(
+        fit_id=fit_id,
+        fit_dir=fit_dir,
+        responses_path=responses_path,
+        out_dir=out_dir,
+    )
+    result = run_fit_diagnostics(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "fit_id": fit_id,
+                "diagnostics_dir": str(result.diagnostics_dir),
+                "icc_path": str(result.icc_path),
+                "item_information_path": str(result.item_information_path),
+                "local_dependence_path": str(result.local_dependence_path),
+                "summary_path": str(result.summary_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+@irt_app.command("score-anchored")
+def irt_score_anchored(
+    fit_id: Annotated[
+        str,
+        typer.Option(help="Scoring run identifier under out-dir."),
+    ] = "score_v1",
+    anchors_path: Annotated[
+        Path,
+        typer.Option(help="Anchors JSON path."),
+    ] = Path("data/irt/fits/fit_v1/anchors.json"),
+    responses_path: Annotated[
+        Path,
+        typer.Option(help="Response matrix JSONL path."),
+    ] = Path("data/irt/runs/run_v1/responses.jsonl"),
+    out_dir: Annotated[
+        Path,
+        typer.Option(help="Base output directory."),
+    ] = Path("data/irt/fits"),
+) -> None:
+    settings = AnchorScoringSettings(
+        fit_id=fit_id,
+        anchors_path=anchors_path,
+        responses_path=responses_path,
+        out_dir=out_dir,
+    )
+    result = score_with_anchors(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "fit_id": fit_id,
+                "fit_dir": str(result.fit_dir),
+                "theta_scores_path": str(result.theta_scores_path),
+                "theta_summary_path": str(result.theta_summary_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
