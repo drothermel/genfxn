@@ -623,6 +623,37 @@ class TestBitopsJava:
         assert "public static long g(long n)" in code
         assert "value = (~value) & mask;" in code
 
+    def test_renderer_only_includes_used_ops(self) -> None:
+        from genfxn.langs.java.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=8,
+            operations=[BitInstruction(op=BitOp.NOT)],
+        )
+        code = render_bitops(spec)
+        assert 'if (op.equals("not")) {' in code
+        assert 'op.equals("rotl")' not in code
+        assert 'op.equals("parity")' not in code
+        assert 'throw new IllegalArgumentException("Unsupported op");' in code
+
+    def test_renderer_deduplicates_ops_and_keeps_first_seen_order(self) -> None:
+        from genfxn.langs.java.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=8,
+            operations=[
+                BitInstruction(op=BitOp.XOR_MASK, arg=3),
+                BitInstruction(op=BitOp.XOR_MASK, arg=7),
+                BitInstruction(op=BitOp.SHL, arg=1),
+            ],
+        )
+        code = render_bitops(spec)
+        assert code.count('op.equals("xor_mask")') == 1
+        assert code.count('op.equals("shl")') == 1
+        assert code.index('if (op.equals("xor_mask")) {') < code.index(
+            '} else if (op.equals("shl")) {'
+        )
+
 
 class TestStatefulJava:
     def test_conditional_linear_sum(self) -> None:
