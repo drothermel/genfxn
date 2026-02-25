@@ -3,6 +3,8 @@ import random
 import pytest
 
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.temporal_logic.models import TemporalLogicAxes
+from genfxn.temporal_logic.task import generate_temporal_logic_task
 from genfxn.verification.layer2 import generate_layer2_cases
 from genfxn.verification.models import VerificationLayer
 
@@ -45,3 +47,14 @@ def test_layer2_generation_fails_when_budget_cannot_be_filled(
     )
     with pytest.raises(ValueError, match="Unable to generate"):
         _ = generate_layer2_cases(task, count=8, seed=0)
+
+
+def test_temporal_logic_layer2_uses_sequence_length_range_axis() -> None:
+    task = generate_temporal_logic_task(
+        rng=random.Random(19),
+        axes=TemporalLogicAxes(sequence_length_range=(2, 2)),
+    )
+    cases = generate_layer2_cases(task, count=32, seed=5)
+    assert len(cases) == 32
+    assert all(isinstance(case.input, list) for case in cases)
+    assert all(len(case.input) == 2 for case in cases)

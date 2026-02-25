@@ -8,6 +8,7 @@ import srsly
 from genfxn.core.models import Query, QueryTag
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
+from genfxn.stateful.task import generate_stateful_task
 from genfxn.verification.io import (
     load_verification_sidecars,
     write_verification_sidecars,
@@ -264,3 +265,75 @@ def test_summarize_case_counts_initializes_from_enum() -> None:
         VerificationLayer.LAYER2_PROPERTY.value: 0,
         VerificationLayer.LAYER3_MUTATION.value: 0,
     }
+
+
+def test_build_verification_artifacts_uses_family_level_heldout_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    piecewise_a = generate_piecewise_task(rng=random.Random(3))
+    piecewise_b = generate_piecewise_task(rng=random.Random(5))
+    stateful = generate_stateful_task(rng=random.Random(7))
+    tasks = [piecewise_a, piecewise_b, stateful]
+    seen_heldout_budgets: dict[str, int] = {}
+
+    monkeypatch.setattr(
+        "genfxn.verification.runner.generate_layer1_cases",
+        lambda task: [],  # noqa: ARG005
+    )
+    monkeypatch.setattr(
+        "genfxn.verification.runner.generate_layer2_cases",
+        lambda task, count, seed: [],  # noqa: ARG005
+    )
+
+    def _fake_generate_layer3_cases(
+        task,  # noqa: ANN001
+        *,
+        layer1_inputs,  # noqa: ARG001
+        layer2_inputs,  # noqa: ARG001
+        budget,  # noqa: ARG001
+        heldout_mutants,  # noqa: ANN001
+        seed,  # noqa: ARG001
+    ) -> SimpleNamespace:
+        seen_heldout_budgets[task.task_id] = heldout_mutants
+        if task.family == "piecewise":
+            escapes = (
+                0 if task.task_id == piecewise_a.task_id else heldout_mutants
+            )
+            distinguishable = heldout_mutants
+        else:
+            distinguishable = heldout_mutants
+            escapes = heldout_mutants // 5
+        return SimpleNamespace(
+            cases=[],
+            mutation_score=1.0,
+            mutation_score_curve=[],
+            heldout_mutant_fpr=0.0,
+            heldout_mutant_fpr_ci95=0.0,
+            heldout_distinguishable_mutants=distinguishable,
+            heldout_mutant_escapes=escapes,
+        )
+
+    monkeypatch.setattr(
+        "genfxn.verification.runner.generate_layer3_cases",
+        _fake_generate_layer3_cases,
+    )
+
+    artifacts = build_verification_artifacts(tasks, heldout_mutants=50, seed=11)
+    metrics_by_task_id = {
+        metric.task_id: metric for metric in artifacts.metrics
+    }
+
+    assert seen_heldout_budgets[piecewise_a.task_id] == 25
+    assert seen_heldout_budgets[piecewise_b.task_id] == 25
+    assert seen_heldout_budgets[stateful.task_id] == 50
+
+    piecewise_a_metric = metrics_by_task_id[piecewise_a.task_id]
+    piecewise_b_metric = metrics_by_task_id[piecewise_b.task_id]
+    stateful_metric = metrics_by_task_id[stateful.task_id]
+
+    assert piecewise_a_metric.heldout_mutant_fpr == pytest.approx(0.5)
+    assert piecewise_b_metric.heldout_mutant_fpr == pytest.approx(0.5)
+    assert piecewise_a_metric.heldout_mutant_fpr_ci95 == pytest.approx(
+        piecewise_b_metric.heldout_mutant_fpr_ci95
+    )
+    assert stateful_metric.heldout_mutant_fpr == pytest.approx(0.2)

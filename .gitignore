@@ -1,5 +1,6 @@
 .env
 genfxn_src_*.md
+.hypothesis/
 
 # Python
 __pycache__/

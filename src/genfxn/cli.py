@@ -6,6 +6,7 @@ import re
 import shutil
 import stat
 import tempfile
+from collections import Counter
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -298,6 +299,69 @@ def _render_os_error(error: OSError) -> str:
         detail = error.strerror or str(error)
         return f"Error: file operation failed for '{path}': {detail}"
     return f"Error: file operation failed: {error}"
+
+
+def _format_task_id_summary(task_ids: list[str], *, limit: int = 10) -> str:
+    if not task_ids:
+        return "(none)"
+    shown = ", ".join(task_ids[:limit])
+    if len(task_ids) <= limit:
+        return shown
+    return f"{shown}, ... (+{len(task_ids) - limit} more)"
+
+
+def _verification_sidecar_coverage_errors(
+    tasks: Sequence[Task],
+    cases: Sequence[VerificationCase],
+    metrics: Sequence[VerificationMetrics],
+) -> list[str]:
+    expected_task_ids = {task.task_id for task in tasks}
+    case_task_ids = {case.task_id for case in cases}
+    metric_task_ids = [metric.task_id for metric in metrics]
+    metric_task_ids_set = set(metric_task_ids)
+    duplicate_metric_task_ids = sorted(
+        task_id
+        for task_id, count in Counter(metric_task_ids).items()
+        if count > 1
+    )
+
+    errors: list[str] = []
+
+    missing_case_task_ids = sorted(expected_task_ids - case_task_ids)
+    if missing_case_task_ids:
+        errors.append(
+            "missing verification cases for task_id(s): "
+            f"{_format_task_id_summary(missing_case_task_ids)}"
+        )
+
+    extra_case_task_ids = sorted(case_task_ids - expected_task_ids)
+    if extra_case_task_ids:
+        errors.append(
+            "verification cases include unknown task_id(s): "
+            f"{_format_task_id_summary(extra_case_task_ids)}"
+        )
+
+    missing_metric_task_ids = sorted(expected_task_ids - metric_task_ids_set)
+    if missing_metric_task_ids:
+        errors.append(
+            "missing verification metrics for task_id(s): "
+            f"{_format_task_id_summary(missing_metric_task_ids)}"
+        )
+
+    extra_metric_task_ids = sorted(metric_task_ids_set - expected_task_ids)
+    if extra_metric_task_ids:
+        errors.append(
+            "verification metrics include unknown task_id(s): "
+            f"{_format_task_id_summary(extra_metric_task_ids)}"
+        )
+
+    if duplicate_metric_task_ids:
+        errors.append(
+            "duplicate verification metrics rows for task_id(s): "
+            f"{_format_task_id_summary(duplicate_metric_task_ids)}"
+        )
+
+    return errors
 
 
 def _safe_unlink(path: Path) -> None:
@@ -1788,6 +1852,20 @@ def verify(
                     err=True,
                 )
                 raise typer.Exit(1) from exc
+
+        coverage_errors = _verification_sidecar_coverage_errors(
+            tasks,
+            cases,
+            metrics,
+        )
+        if coverage_errors:
+            typer.echo(
+                "Verification sidecar coverage validation failed:",
+                err=True,
+            )
+            for line in coverage_errors:
+                typer.echo(f"- {line}", err=True)
+            raise typer.Exit(1)
 
         failures = verify_cases(tasks, cases, full_parity=verify_full)
         if failures:

@@ -11,9 +11,46 @@ import genfxn.cli as cli_module
 from genfxn.cli import app
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.verification.io import verification_sidecar_paths
-from genfxn.verification.models import VerificationFailure
+from genfxn.verification.models import (
+    VerificationCase,
+    VerificationFailure,
+    VerificationLayer,
+    VerificationMetrics,
+)
 
 runner = CliRunner()
+
+
+def _placeholder_artifacts(tasks: list[object]) -> SimpleNamespace:
+    cases = []
+    metrics = []
+    for idx, task in enumerate(tasks):
+        task_id = cast(str, getattr(task, "task_id"))
+        family = cast(str, getattr(task, "family"))
+        cases.append(
+            VerificationCase(
+                task_id=task_id,
+                family=family,
+                layer=VerificationLayer.LAYER1_SPEC_BOUNDARY,
+                case_id=f"layer1-{idx:04d}",
+                input=0,
+                expected_output=0,
+            )
+        )
+        metrics.append(
+            VerificationMetrics(
+                task_id=task_id,
+                family=family,
+                n_layer1_cases=1,
+                n_layer2_cases=0,
+                n_layer3_cases=0,
+                mutation_score=1.0,
+                mutation_score_curve=[],
+                heldout_mutant_fpr=0.0,
+                heldout_mutant_fpr_ci95=0.0,
+            )
+        )
+    return SimpleNamespace(cases=cases, metrics=metrics)
 
 
 def test_generate_emits_sidecars_and_verify_passes(
@@ -335,6 +372,66 @@ def test_verify_regenerates_when_sidecars_are_malformed(
     )
 
 
+def test_verify_fails_when_sidecars_miss_dataset_task_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "check_generated_code_quality",
+        lambda tasks: None,  # noqa: ARG005
+    )
+
+    output = tmp_path / "tasks.jsonl"
+    verification_dir = tmp_path / "verification_cases"
+    generate_result = runner.invoke(
+        app,
+        [
+            "generate",
+            "-o",
+            str(output),
+            "-f",
+            "piecewise",
+            "-n",
+            "2",
+            "--no-verify-full",
+            "--verification-output-dir",
+            str(verification_dir),
+        ],
+    )
+    assert generate_result.exit_code == 0
+
+    dataset_rows = cast(list[dict], list(srsly.read_jsonl(output)))
+    assert len(dataset_rows) == 2
+    removed_task_id = cast(str, dataset_rows[0]["task_id"])
+
+    cases_path, _ = verification_sidecar_paths(
+        output,
+        output_dir=verification_dir,
+    )
+    case_rows = cast(list[dict], list(srsly.read_jsonl(cases_path)))
+    filtered_rows = [
+        row for row in case_rows if row.get("task_id") != removed_task_id
+    ]
+    srsly.write_jsonl(cases_path, filtered_rows)
+
+    verify_result = runner.invoke(
+        app,
+        [
+            "verify",
+            str(output),
+            "--no-full",
+            "--verification-output-dir",
+            str(verification_dir),
+        ],
+    )
+    assert verify_result.exit_code == 1
+    assert (
+        "Verification sidecar coverage validation failed"
+        in verify_result.output
+    )
+    assert "missing verification cases for task_id(s)" in verify_result.output
+
+
 def test_generate_uses_full_parity_by_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -346,7 +443,7 @@ def test_generate_uses_full_parity_by_default(
     monkeypatch.setattr(
         cli_module,
         "build_verification_artifacts",
-        lambda *args, **kwargs: SimpleNamespace(cases=[], metrics=[]),  # noqa: ARG005
+        lambda tasks, **kwargs: _placeholder_artifacts(tasks),  # noqa: ARG005
     )
     seen_full_parity: list[bool] = []
 
@@ -386,7 +483,7 @@ def test_verify_uses_full_parity_by_default(
     monkeypatch.setattr(
         cli_module,
         "build_verification_artifacts",
-        lambda *args, **kwargs: SimpleNamespace(cases=[], metrics=[]),  # noqa: ARG005
+        lambda tasks, **kwargs: _placeholder_artifacts(tasks),  # noqa: ARG005
     )
     seen_full_parity: list[bool] = []
 

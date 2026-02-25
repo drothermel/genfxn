@@ -8,6 +8,7 @@ from typing import Any
 
 import typer
 
+from genfxn.core.describe import describe_task
 from genfxn.core.task_ids import compute_task_ids
 from genfxn.verification.io import write_jsonl_atomically
 
@@ -23,7 +24,7 @@ def main(
     ),
     overwrite_existing: bool = typer.Option(
         False,
-        help="Overwrite existing spec_id/sem_hash/ast_id when present.",
+        help="Overwrite existing spec_id/sem_hash/ast_id/description.",
     ),
 ) -> None:
     target = output_file or input_file
@@ -60,6 +61,10 @@ def main(
                 row["sem_hash"] = ids.sem_hash
             if overwrite_existing or row.get("ast_id") is None:
                 row["ast_id"] = ids.ast_id
+            if overwrite_existing or not isinstance(
+                row.get("description"), str
+            ):
+                row["description"] = describe_task(family, spec)
 
             rows.append(row)
 

@@ -53,6 +53,8 @@ class Layer3Summary:
     mutation_score_curve: list[MutationCurvePoint]
     heldout_mutant_fpr: float
     heldout_mutant_fpr_ci95: float
+    heldout_distinguishable_mutants: int
+    heldout_mutant_escapes: int
 
 
 def _iter_mutation_candidates(
@@ -426,4 +428,6 @@ def generate_layer3_cases(
         mutation_score_curve=curve,
         heldout_mutant_fpr=heldout_mutant_fpr,
         heldout_mutant_fpr_ci95=heldout_mutant_fpr_ci95,
+        heldout_distinguishable_mutants=heldout_distinguishable,
+        heldout_mutant_escapes=heldout_escapes,
     )

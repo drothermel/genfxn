@@ -37,10 +37,15 @@ def _layer2_strategy(
     seed: int,
 ) -> SearchStrategy[Any]:
     value_range = range_from_axes(axes, "value_range", DEFAULT_INT_RANGE)
+    length_key = (
+        "sequence_length_range"
+        if axes is not None and "sequence_length_range" in axes
+        else "list_length_range"
+    )
     length_range = nonnegative_range(
         range_from_axes(
             axes,
-            "list_length_range",
+            length_key,
             DEFAULT_LIST_LENGTH_RANGE,
         )
     )
@@ -70,6 +75,11 @@ def _layer2_strategy(
     edge_lists = [[], [lo], [hi], [0], [1, -1], [lo, hi]]
     for c in constants[:10]:
         edge_lists.extend([[c], [c - 1, c, c + 1]])
+    edge_lists = [
+        values
+        for values in edge_lists
+        if length_range[0] <= len(values) <= length_range[1]
+    ]
 
     return int_list_strategy(
         int_value_strategy=int_value_strategy,

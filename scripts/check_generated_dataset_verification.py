@@ -51,11 +51,30 @@ def main(
 
     sampled_tasks = []
     for family_idx, family in enumerate(selected_families):
-        for i in range(sample_per_family):
-            rng = random.Random(seed + family_idx * 10_000 + i)
-            sampled_tasks.append(
-                generate_task_for_family(family, rng=rng, axes=None)
+        seen_task_ids: set[str] = set()
+        sampled_for_family = []
+        attempt_budget = max(sample_per_family * 8, sample_per_family)
+        for attempt in range(attempt_budget):
+            rng = random.Random(seed + family_idx * 10_000 + attempt)
+            task = generate_task_for_family(family, rng=rng, axes=None)
+            if task.task_id in seen_task_ids:
+                continue
+            seen_task_ids.add(task.task_id)
+            sampled_for_family.append(task)
+            if len(sampled_for_family) >= sample_per_family:
+                break
+
+        if len(sampled_for_family) < sample_per_family:
+            unique_label = "task" if len(sampled_for_family) == 1 else "tasks"
+            raise typer.BadParameter(
+                "Family "
+                f"'{family}' produced only {len(sampled_for_family)} unique "
+                f"{unique_label} "
+                f"with attempt_budget={attempt_budget}; need "
+                f"{sample_per_family}."
             )
+
+        sampled_tasks.extend(sampled_for_family)
 
     try:
         artifacts = build_verification_artifacts(sampled_tasks, seed=seed)

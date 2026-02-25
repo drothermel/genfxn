@@ -142,3 +142,22 @@ def test_main_exits_on_low_mutation_score(
             verify_full=False,
         )
     assert exc_info.value.exit_code == 1
+
+
+def test_main_raises_for_insufficient_unique_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "generate_task_for_family",
+        lambda family, rng, axes: _FakeTask(f"{family}-same", family),  # noqa: ARG005
+    )
+
+    with pytest.raises(typer.BadParameter, match="produced only 1 unique task"):
+        check_generated_dataset_verification_main(
+            families="piecewise",
+            seed=3,
+            sample_per_family=2,
+            mutation_score_floor=0.7,
+            verify_full=False,
+        )
