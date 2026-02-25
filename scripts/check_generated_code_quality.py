@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import random
+
 import typer
 
+from genfxn.core.family_registry import (
+    generate_task_for_family,
+    parse_family_selector,
+)
 from genfxn.generated_code_quality import (
     GeneratedCodeQualityError,
     check_generated_code_quality,
 )
-from genfxn.suites.families import parse_families
-from genfxn.suites.generate import generate_pool
 
 app = typer.Typer()
 
@@ -25,7 +29,11 @@ def main(
         2, help="Deterministic tasks checked per family"
     ),
     pool_size: int = typer.Option(
-        20, help="Candidate pool size used to sample tasks per family"
+        20,
+        help=(
+            "Deterministic sample attempt budget per family. Must be >= "
+            "count-per-family."
+        ),
     ),
 ) -> None:
     """Run generated-code style/lint checks on deterministic sampled tasks."""
@@ -36,25 +44,40 @@ def main(
     if pool_size < count_per_family:
         raise typer.BadParameter("pool_size must be >= count_per_family")
 
-    selected_families = parse_families(families)
-    tasks = []
+    try:
+        selected_families = parse_family_selector(families)
+    except ValueError as err:
+        raise typer.BadParameter(str(err)) from err
 
+    tasks = []
     for idx, family in enumerate(selected_families):
         family_seed = seed + idx * 10_000
-        candidates, stats = generate_pool(
-            family=family,
-            seed=family_seed,
-            pool_size=pool_size,
-        )
-        if len(candidates) < count_per_family:
-            raise typer.BadParameter(
-                f"Family '{family}' produced only {len(candidates)} "
-                f"candidate tasks (errors={stats.errors}, "
-                f"duplicates={stats.duplicates}); need {count_per_family}."
+        seen_task_ids: set[str] = set()
+        sampled = []
+
+        for attempt in range(pool_size):
+            task = generate_task_for_family(
+                family,
+                rng=random.Random(family_seed + attempt),
+                axes=None,
             )
-        tasks.extend(
-            candidate.task for candidate in candidates[:count_per_family]
-        )
+            if task.task_id in seen_task_ids:
+                continue
+            seen_task_ids.add(task.task_id)
+            sampled.append(task)
+            if len(sampled) >= count_per_family:
+                break
+
+        if len(sampled) < count_per_family:
+            unique_count = len(sampled)
+            unique_label = "task" if unique_count == 1 else "tasks"
+            raise typer.BadParameter(
+                "Family "
+                f"'{family}' produced only {unique_count} "
+                f"unique {unique_label} "
+                f"with pool_size={pool_size}; need {count_per_family}."
+            )
+        tasks.extend(sampled)
 
     try:
         check_generated_code_quality(tasks)

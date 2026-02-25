@@ -41,7 +41,7 @@ uv run genfxn info tasks.jsonl
 | `temporal_logic` | `f(xs: list[int]) -> int` | Finite-trace temporal-logic evaluation |
 
 All families are integrated across generation, validation, rendering, splitting,
-and suite workflows.
+and verification workflows.
 
 ## Generation CLI
 
@@ -112,25 +112,57 @@ uv run genfxn generate -o tasks.jsonl -f graph_queries -n 50 \
 
 ## Generated Code Quality Checks
 
-By default, both:
-- `uv run genfxn generate ...`
-- `uv run python scripts/generate_balanced_suites.py ...`
-
-run generated Java/Rust checks after sampling tasks:
+By default, `uv run genfxn generate ...` runs generated Java/Rust checks after
+sampling tasks:
 - `google-java-format --dry-run --set-exit-if-changed`
 - `javac -Xlint:all -Werror`
 - `rustfmt --check`
 - `rustc --edition=2021 -D warnings`
 
-Skip flags (local fallback):
+Skip flag (local fallback):
 - `uv run genfxn generate ... --skip-generated-style-checks`
-- `uv run python scripts/generate_balanced_suites.py --skip-generated-style-checks`
 
 Deterministic smoke command used in CI:
 
 ```bash
 uv run python scripts/check_generated_code_quality.py \
   --families all --seed 42 --count-per-family 2 --pool-size 24
+```
+
+## Public Verification Sidecars
+
+Generation emits a public verification suite per dataset and fails generation
+if verification mismatches are detected:
+
+```bash
+uv run genfxn generate -o tasks.jsonl -f all -n 50
+```
+
+Sidecars are written to (paths are relative to the working directory; for
+example, when run from the repo root they default to
+`data/verification_cases/`):
+- `data/verification_cases/tasks.verification_cases.jsonl`
+- `data/verification_cases/tasks.verification_metrics.jsonl`
+
+The output base directory is configured by
+`DEFAULT_VERIFICATION_OUTPUT_DIR` (currently `Path("data/verification_cases")`),
+so changing the working directory or that value changes where sidecars are
+written by commands like `uv run genfxn generate`.
+
+You can verify an existing dataset directly:
+
+```bash
+uv run genfxn verify tasks.jsonl
+```
+
+Legacy dataset migration/backfill:
+
+```bash
+# Backfill spec_id/sem_hash/ast_id into a legacy dataset
+uv run python scripts/migrate_dataset_task_ids.py data/all_tasks.jsonl
+
+# Generate verification sidecars for the migrated dataset
+uv run python scripts/backfill_verification_cases.py data/all_tasks.jsonl
 ```
 
 ## Task JSONL Format
@@ -248,4 +280,5 @@ uv run python scripts/run_all_checks.py --ci
 uv run genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
 uv run genfxn split INPUT --train TRAIN --test TEST [SPLIT OPTIONS]
 uv run genfxn info FILE
+uv run genfxn verify FILE
 ```

@@ -1,6 +1,5 @@
 from collections.abc import Callable
 from pathlib import Path
-from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -26,30 +25,26 @@ class _FakeTask:
         self.task_id = task_id
 
 
-class _FakeCandidate:
-    def __init__(self, task: _FakeTask) -> None:
-        self.task = task
-
-
 def test_main_samples_tasks_and_runs_checks(monkeypatch) -> None:
-    pool_calls: list[tuple[str, int, int]] = []
+    generation_calls: list[tuple[str, object | None]] = []
     checked_task_ids: list[str] = []
+    per_family_idx: dict[str, int] = {}
 
-    def _fake_generate_pool(
-        family: str, seed: int, pool_size: int
-    ) -> tuple[list[_FakeCandidate], SimpleNamespace]:
-        pool_calls.append((family, seed, pool_size))
-        candidates = [
-            _FakeCandidate(_FakeTask(f"{family}-0")),
-            _FakeCandidate(_FakeTask(f"{family}-1")),
-            _FakeCandidate(_FakeTask(f"{family}-2")),
-        ]
-        return candidates, SimpleNamespace(errors=0, duplicates=0)
+    def _fake_generate_task_for_family(family: str, rng, axes):  # noqa: ANN001
+        del rng
+        generation_calls.append((family, axes))
+        idx = per_family_idx.get(family, 0)
+        per_family_idx[family] = idx + 1
+        return _FakeTask(f"{family}-{idx}")
 
     def _fake_check(tasks: list[_FakeTask]) -> None:
         checked_task_ids.extend(task.task_id for task in tasks)
 
-    monkeypatch.setattr(_SCRIPT_MODULE, "generate_pool", _fake_generate_pool)
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "generate_task_for_family",
+        _fake_generate_task_for_family,
+    )
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "check_generated_code_quality",
@@ -63,9 +58,11 @@ def test_main_samples_tasks_and_runs_checks(monkeypatch) -> None:
         pool_size=5,
     )
 
-    assert pool_calls == [
-        ("piecewise", 9, 5),
-        ("stateful", 10_009, 5),
+    assert generation_calls == [
+        ("piecewise", None),
+        ("piecewise", None),
+        ("stateful", None),
+        ("stateful", None),
     ]
     assert checked_task_ids == [
         "piecewise-0",
@@ -75,24 +72,19 @@ def test_main_samples_tasks_and_runs_checks(monkeypatch) -> None:
     ]
 
 
-def test_main_raises_for_insufficient_candidates(monkeypatch) -> None:
-    def _fake_generate_pool(
-        family: str,
-        seed: int,
-        pool_size: int,  # noqa: ARG001
-    ) -> tuple[list[_FakeCandidate], SimpleNamespace]:
-        return [_FakeCandidate(_FakeTask(f"{family}-0"))], SimpleNamespace(
-            errors=2, duplicates=3
-        )
-
-    monkeypatch.setattr(_SCRIPT_MODULE, "generate_pool", _fake_generate_pool)
+def test_main_raises_for_insufficient_unique_tasks(monkeypatch) -> None:
+    monkeypatch.setattr(
+        _SCRIPT_MODULE,
+        "generate_task_for_family",
+        lambda family, rng, axes: _FakeTask(f"{family}-same"),  # noqa: ARG005
+    )
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "check_generated_code_quality",
-        lambda tasks: None,
+        lambda tasks: None,  # noqa: ARG005
     )
 
-    with pytest.raises(typer.BadParameter, match="produced only 1"):
+    with pytest.raises(typer.BadParameter, match="produced only 1 unique task"):
         check_generated_code_quality_main(
             families="piecewise",
             seed=7,
@@ -104,14 +96,8 @@ def test_main_raises_for_insufficient_candidates(monkeypatch) -> None:
 def test_main_exits_when_quality_checks_fail(monkeypatch) -> None:
     monkeypatch.setattr(
         _SCRIPT_MODULE,
-        "generate_pool",
-        lambda family, seed, pool_size: (  # noqa: ARG005
-            [
-                _FakeCandidate(_FakeTask("t0")),
-                _FakeCandidate(_FakeTask("t1")),
-            ],
-            SimpleNamespace(errors=0, duplicates=0),
-        ),
+        "generate_task_for_family",
+        lambda family, rng, axes: _FakeTask(f"{family}-{rng.random()}"),  # noqa: ARG005
     )
 
     def _raise_quality_error(tasks: list[_FakeTask]) -> None:  # noqa: ARG001

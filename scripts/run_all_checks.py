@@ -26,6 +26,21 @@ GENERATED_CODE_QUALITY_CMD = [
     "24",
 ]
 
+GENERATED_DATASET_VERIFICATION_CMD = [
+    "uv",
+    "run",
+    "python",
+    "scripts/check_generated_dataset_verification.py",
+    "--families",
+    "all",
+    "--seed",
+    "42",
+    "--sample-per-family",
+    "3",
+    "--mutation-score-floor",
+    "0.70",
+]
+
 FULL_TEST_CMD = [
     "uv",
     "run",
@@ -57,7 +72,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Run the full repository checks: formatting, lint, type checks, "
-            "generated Java/Rust quality checks, and full tests."
+            "generated Java/Rust quality checks, dataset verification, and "
+            "full tests."
         )
     )
     parser.add_argument(
@@ -95,6 +111,10 @@ def main() -> int:
         ),
         ("Type check (src)", ["uv", "run", "ty", "check", "src"]),
         ("Generated code quality (Java/Rust)", GENERATED_CODE_QUALITY_CMD),
+        (
+            "Generated dataset verification",
+            GENERATED_DATASET_VERIFICATION_CMD,
+        ),
         ("Pytest full verification", FULL_TEST_CMD),
     ]
 

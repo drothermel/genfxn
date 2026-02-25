@@ -22,6 +22,7 @@ from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
+from genfxn.core.task_ids import validate_task_ids
 from genfxn.core.transforms import TransformType
 from genfxn.fsm.models import FsmAxes, FsmSpec
 from genfxn.fsm.task import generate_fsm_task
@@ -65,6 +66,17 @@ from genfxn.stringrules.models import (
 from genfxn.stringrules.task import generate_stringrules_task
 from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
 from genfxn.temporal_logic.task import generate_temporal_logic_task
+from genfxn.verification.io import (
+    DEFAULT_VERIFICATION_OUTPUT_DIR,
+    load_verification_sidecars,
+    verification_sidecar_paths,
+    write_verification_sidecars,
+)
+from genfxn.verification.runner import (
+    build_verification_artifacts,
+    summarize_case_counts,
+    verify_cases,
+)
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
@@ -925,6 +937,30 @@ def generate(
         str | None,
         typer.Option("--scale-range", help="Scale range (lo,hi)"),
     ] = None,
+    verification_output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--verification-output-dir",
+            help="Directory for generated verification sidecar JSONL files.",
+        ),
+    ] = DEFAULT_VERIFICATION_OUTPUT_DIR,
+    verification_seed: Annotated[
+        int,
+        typer.Option(
+            "--verification-seed",
+            help="Deterministic seed for generated verification cases.",
+        ),
+    ] = 0,
+    verify_full: Annotated[
+        bool,
+        typer.Option(
+            "--verify-full",
+            help=(
+                "Run full verification mode (includes expensive parity hooks "
+                "when available)."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Generate tasks to JSONL file."""
     rng = random.Random(seed)
@@ -1214,12 +1250,74 @@ def generate(
             typer.echo(str(err), err=True)
             raise typer.Exit(1) from err
 
+    rendered_tasks = [
+        render_task_for_language(task, selected_language)
+        for task in generated_tasks
+    ]
+
+    try:
+        artifacts = build_verification_artifacts(
+            rendered_tasks,
+            seed=verification_seed,
+        )
+    except Exception as err:
+        typer.echo(
+            f"Error: failed to build verification artifacts: {err}",
+            err=True,
+        )
+        raise typer.Exit(1) from err
+
+    failures = verify_cases(
+        rendered_tasks,
+        artifacts.cases,
+        full_parity=verify_full,
+    )
+    if failures:
+        typer.echo(
+            "Error: generated verification failed for newly generated tasks.",
+            err=True,
+        )
+        for failure in failures[:20]:
+            typer.echo(
+                (
+                    f"- {failure.task_id} [{failure.family}] "
+                    f"{failure.case_id}: {failure.message}"
+                ),
+                err=True,
+            )
+        if len(failures) > 20:
+            typer.echo(
+                f"- ... and {len(failures) - 20} more verification failures",
+                err=True,
+            )
+        raise typer.Exit(1)
+
+    cases_path, metrics_path = verification_sidecar_paths(
+        output,
+        output_dir=verification_output_dir,
+    )
+
     with _atomic_output_file_or_exit(output) as output_handle:
-        for task in generated_tasks:
-            rendered_task = render_task_for_language(task, selected_language)
-            _write_task_line(output_handle, rendered_task)
+        for task in rendered_tasks:
+            _write_task_line(output_handle, task)
+
+    try:
+        write_verification_sidecars(
+            cases_path,
+            metrics_path,
+            cases=artifacts.cases,
+            metrics=artifacts.metrics,
+        )
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
 
     typer.echo(f"Generated {generated_count} tasks to {output}")
+    counts = summarize_case_counts(artifacts.cases)
+    typer.echo(
+        "Verification sidecars: "
+        f"{cases_path} ({sum(counts.values())} cases), {metrics_path}"
+    )
 
 
 @app.command()
@@ -1413,6 +1511,151 @@ def info(
         typer.echo(f"{input_file}: {total} tasks")
         for fam, cnt in sorted(by_family.items()):
             typer.echo(f"  {fam}: {cnt}")
+    except _TaskRowError as err:
+        typer.echo(_render_task_row_error(input_file, err), err=True)
+        raise typer.Exit(1) from err
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
+
+
+@app.command()
+def verify(
+    input_file: Annotated[Path, typer.Argument(help="Input tasks JSONL file")],
+    verification_output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--verification-output-dir",
+            help="Directory for generated verification sidecar JSONL files.",
+        ),
+    ] = DEFAULT_VERIFICATION_OUTPUT_DIR,
+    regenerate_sidecars: Annotated[
+        bool,
+        typer.Option(
+            "--regenerate-sidecars",
+            help="Regenerate verification cases instead of loading sidecars.",
+        ),
+    ] = False,
+    write_sidecars: Annotated[
+        bool,
+        typer.Option(
+            "--write-sidecars/--no-write-sidecars",
+            help="Write regenerated verification sidecars to disk.",
+        ),
+    ] = True,
+    verify_full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Run full verification mode (includes parity hooks).",
+        ),
+    ] = False,
+    verification_seed: Annotated[
+        int,
+        typer.Option(
+            "--verification-seed",
+            help="Deterministic seed used when regenerating sidecars.",
+        ),
+    ] = 0,
+) -> None:
+    """Verify dataset correctness using generated verification sidecars."""
+    try:
+        tasks = list(_iter_validated_tasks(input_file))
+        id_errors: list[str] = []
+        for task in tasks:
+            issues = validate_task_ids(task)
+            if issues:
+                details = "; ".join(
+                    f"{issue.code}: {issue.message}" for issue in issues
+                )
+                id_errors.append(f"{task.task_id}: {details}")
+        if id_errors:
+            typer.echo(
+                "Task identity validation failed:",
+                err=True,
+            )
+            for line in id_errors[:20]:
+                typer.echo(f"- {line}", err=True)
+            if len(id_errors) > 20:
+                typer.echo(
+                    f"- ... and {len(id_errors) - 20} more",
+                    err=True,
+                )
+            raise typer.Exit(1)
+
+        cases_path, metrics_path = verification_sidecar_paths(
+            input_file,
+            output_dir=verification_output_dir,
+        )
+        missing_sidecars: list[str] = []
+        if not cases_path.exists():
+            missing_sidecars.append(str(cases_path))
+        if not metrics_path.exists():
+            missing_sidecars.append(str(metrics_path))
+
+        if not regenerate_sidecars and not missing_sidecars:
+            cases, metrics = load_verification_sidecars(
+                cases_path, metrics_path
+            )
+        else:
+            if not regenerate_sidecars and missing_sidecars:
+                missing_display = ", ".join(missing_sidecars)
+                typer.echo(
+                    "Warning: requested sidecar reuse but the following "
+                    "sidecar file(s) are missing; regenerating verification "
+                    f"artifacts: {missing_display}",
+                    err=True,
+                )
+            artifacts = build_verification_artifacts(
+                tasks,
+                seed=verification_seed,
+            )
+            cases = artifacts.cases
+            metrics = artifacts.metrics
+            if write_sidecars:
+                write_verification_sidecars(
+                    cases_path,
+                    metrics_path,
+                    cases=cases,
+                    metrics=metrics,
+                )
+
+        failures = verify_cases(tasks, cases, full_parity=verify_full)
+        if failures:
+            typer.echo(
+                f"Verification failed with {len(failures)} case mismatch(es).",
+                err=True,
+            )
+            for failure in failures[:20]:
+                typer.echo(
+                    (
+                        f"- {failure.task_id} [{failure.family}] "
+                        f"{failure.case_id}: {failure.message}"
+                    ),
+                    err=True,
+                )
+            if len(failures) > 20:
+                typer.echo(
+                    f"- ... and {len(failures) - 20} more failures",
+                    err=True,
+                )
+            raise typer.Exit(1)
+
+        counts = summarize_case_counts(cases)
+        typer.echo(
+            f"Verified {len(tasks)} task(s) using {sum(counts.values())} "
+            "verification case(s)."
+        )
+        typer.echo(
+            "Case counts by layer: "
+            f"layer1={counts.get('layer1_spec_boundary', 0)}, "
+            f"layer2={counts.get('layer2_property', 0)}, "
+            f"layer3={counts.get('layer3_mutation', 0)}"
+        )
+        typer.echo(
+            f"Metrics rows: {len(metrics)} "
+            f"(sidecars at {cases_path}, {metrics_path})"
+        )
     except _TaskRowError as err:
         typer.echo(_render_task_row_error(input_file, err), err=True)
         raise typer.Exit(1) from err

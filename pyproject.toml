@@ -39,6 +39,7 @@ include = ["src", "scripts"]
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.140.0",
     "ty>=0.0.14",
     "pytest>=9.0.2",
     "pytest-xdist>=3.8.0",
