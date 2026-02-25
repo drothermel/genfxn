@@ -6,7 +6,11 @@ fn parse_i64_vec(raw: &str) -> Vec<i64> {
         return Vec::new();
     }
     raw.split(',')
-        .map(|part| part.parse::<i64>().unwrap())
+        .map(|part| {
+            part.parse::<i64>().expect(
+                &format!("invalid i64 token '{part}' while parsing '{raw}'"),
+            )
+        })
         .collect()
 }
 
@@ -17,8 +21,18 @@ fn parse_intervals(raw: &str) -> Vec<(i64, i64)> {
     raw.split(',')
         .map(|part| {
             let mut iter = part.splitn(2, ':');
-            let a = iter.next().unwrap().parse::<i64>().unwrap();
-            let b = iter.next().unwrap().parse::<i64>().unwrap();
+            let a_str = iter.next().expect(
+                &format!("missing interval start in '{part}' (expected start:end)"),
+            );
+            let b_str = iter.next().expect(
+                &format!("missing interval end in '{part}' (expected start:end)"),
+            );
+            let a = a_str.parse::<i64>().expect(
+                &format!("invalid interval start '{a_str}' in '{part}'"),
+            );
+            let b = b_str.parse::<i64>().expect(
+                &format!("invalid interval end '{b_str}' in '{part}'"),
+            );
             (a, b)
         })
         .collect()

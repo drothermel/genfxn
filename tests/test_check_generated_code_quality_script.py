@@ -4,7 +4,7 @@ from typing import cast
 
 import pytest
 import typer
-from helpers import load_script_module
+from helpers import _FakeTask, load_script_module
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -18,11 +18,6 @@ _SCRIPT_MODULE = load_script_module(
 check_generated_code_quality_main = cast(
     Callable[..., None], _SCRIPT_MODULE.main
 )
-
-
-class _FakeTask:
-    def __init__(self, task_id: str) -> None:
-        self.task_id = task_id
 
 
 def test_main_samples_tasks_and_runs_checks(monkeypatch) -> None:

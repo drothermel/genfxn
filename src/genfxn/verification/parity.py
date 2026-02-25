@@ -154,14 +154,30 @@ def _encode_input_args(family: str, input_value: Any) -> list[str]:
 
 
 def _decode_output(family: str, output_text: str) -> Any:
-    if family == "stringrules":
-        return output_text
-    if family == "stack_bytecode":
-        parts = output_text.strip().split(",", maxsplit=1)
-        if len(parts) != 2:
-            raise ValueError(f"invalid stack_bytecode output: {output_text!r}")
-        return [int(parts[0]), int(parts[1])]
-    return int(output_text.strip())
+    match family:
+        case "stringrules":
+            return output_text
+        case "stack_bytecode":
+            parts = output_text.strip().split(",", maxsplit=1)
+            if len(parts) != 2:
+                raise ValueError(
+                    f"invalid stack_bytecode output: {output_text!r}"
+                )
+            return [int(parts[0]), int(parts[1])]
+        case (
+            "piecewise"
+            | "bitops"
+            | "stateful"
+            | "simple_algorithms"
+            | "fsm"
+            | "temporal_logic"
+            | "sequence_dp"
+            | "intervals"
+            | "graph_queries"
+        ):
+            return int(output_text.strip())
+        case _:
+            raise ValueError(f"Unsupported family for parity output: {family}")
 
 
 def _java_runner_source(family: str, method_code: str) -> str:

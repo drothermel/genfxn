@@ -58,7 +58,7 @@ def main(
                 row["spec_id"] = ids.spec_id
             if overwrite_existing or not row.get("sem_hash"):
                 row["sem_hash"] = ids.sem_hash
-            if overwrite_existing or not row.get("ast_id"):
+            if overwrite_existing or row.get("ast_id") is None:
                 row["ast_id"] = ids.ast_id
 
             rows.append(row)

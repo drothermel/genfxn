@@ -76,6 +76,34 @@ def test_main_preserves_existing_ids_without_overwrite(tmp_path: Path) -> None:
     assert migrated["ast_id"] == {"python": "custom-ast"}
 
 
+def test_main_overwrites_existing_ids_when_flag_set(tmp_path: Path) -> None:
+    task = generate_piecewise_task(rng=random.Random(7)).model_dump(mode="json")
+    stale_spec_id = "stale-spec-id"
+    task["spec_id"] = stale_spec_id
+    task["sem_hash"] = "stale-sem-hash"
+    task["ast_id"] = {"python": "stale-ast-id"}
+
+    dataset_path = tmp_path / "legacy.jsonl"
+    srsly.write_jsonl(dataset_path, [task])
+
+    migrate_dataset_task_ids_main(
+        input_file=dataset_path,
+        output_file=None,
+        overwrite_existing=True,
+    )
+
+    migrated = _read_single_row(dataset_path)
+    ids = compute_task_ids(
+        migrated["family"],
+        migrated["spec"],
+        migrated["code"],
+    )
+    assert migrated["spec_id"] == ids.spec_id
+    assert migrated["sem_hash"] == ids.sem_hash
+    assert migrated["ast_id"] == ids.ast_id
+    assert migrated["spec_id"] != stale_spec_id
+
+
 def test_main_reports_json_decode_errors_with_line_number(
     tmp_path: Path,
 ) -> None:

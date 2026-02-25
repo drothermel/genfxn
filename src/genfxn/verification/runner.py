@@ -71,8 +71,12 @@ def build_verification_artifacts(
                 n_layer3_cases=len(layer3_summary.cases),
                 mutation_score=layer3_summary.mutation_score,
                 mutation_score_curve=layer3_summary.mutation_score_curve,
-                heldout_mutant_fpr=layer3_summary.heldout_mutant_fpr,
-                heldout_mutant_fpr_ci95=layer3_summary.heldout_mutant_fpr_ci95,
+                heldout_mutant_escape_rate=(
+                    layer3_summary.heldout_mutant_escape_rate
+                ),
+                heldout_mutant_escape_ci95=(
+                    layer3_summary.heldout_mutant_escape_ci95
+                ),
             )
         )
 
@@ -91,7 +95,7 @@ def _verify_case(task: Task, case: VerificationCase) -> str | None:
             f"{type(exc).__name__}: {exc}"
         )
 
-    expected = normalize_case_value(case.expected_output)
+    expected = case.expected_output
     if actual != expected:
         return f"expected {expected!r}, got {actual!r} for case {case.case_id}"
 

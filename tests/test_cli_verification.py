@@ -7,20 +7,10 @@ from typer.testing import CliRunner
 
 import genfxn.cli as cli_module
 from genfxn.cli import app
+from genfxn.verification.io import verification_sidecar_paths
 from genfxn.verification.models import VerificationFailure
 
 runner = CliRunner()
-
-
-def _sidecar_paths(
-    verification_dir: Path,
-    dataset_path: Path,
-) -> tuple[Path, Path]:
-    stem = dataset_path.stem
-    return (
-        verification_dir / f"{stem}.verification_cases.jsonl",
-        verification_dir / f"{stem}.verification_metrics.jsonl",
-    )
 
 
 def test_generate_emits_sidecars_and_verify_passes(
@@ -51,7 +41,10 @@ def test_generate_emits_sidecars_and_verify_passes(
     assert generate_result.exit_code == 0
     assert output.exists()
 
-    cases_path, metrics_path = _sidecar_paths(verification_dir, output)
+    cases_path, metrics_path = verification_sidecar_paths(
+        output,
+        output_dir=verification_dir,
+    )
     assert cases_path.exists()
     assert metrics_path.exists()
 
@@ -76,18 +69,22 @@ def test_generate_fails_atomically_on_verification_mismatch(
         "check_generated_code_quality",
         lambda tasks: None,  # noqa: ARG005
     )
-    monkeypatch.setattr(
-        cli_module,
-        "verify_cases",
-        lambda tasks, cases, full_parity=False: [  # noqa: ARG005
+
+    def _fake_verify_cases(
+        *args: object,
+        **kwargs: object,  # noqa: ARG001
+    ) -> list[VerificationFailure]:
+        tasks = cast(list, args[0])
+        return [
             VerificationFailure(
                 task_id=tasks[0].task_id,
                 family=tasks[0].family,
                 case_id="layer1-0000",
                 message="forced failure",
             )
-        ],
-    )
+        ]
+
+    monkeypatch.setattr(cli_module, "verify_cases", _fake_verify_cases)
 
     output = tmp_path / "tasks.jsonl"
     verification_dir = tmp_path / "verification_cases"
@@ -107,7 +104,10 @@ def test_generate_fails_atomically_on_verification_mismatch(
     )
     assert result.exit_code == 1
     assert not output.exists()
-    cases_path, metrics_path = _sidecar_paths(verification_dir, output)
+    cases_path, metrics_path = verification_sidecar_paths(
+        output,
+        output_dir=verification_dir,
+    )
     assert not cases_path.exists()
     assert not metrics_path.exists()
 
@@ -139,10 +139,21 @@ def test_verify_fails_when_sidecar_case_is_tampered(
     )
     assert generate_result.exit_code == 0
 
-    cases_path, _ = _sidecar_paths(verification_dir, output)
+    cases_path, _ = verification_sidecar_paths(
+        output,
+        output_dir=verification_dir,
+    )
     rows = cast(list[dict], list(srsly.read_jsonl(cases_path)))
     assert rows
-    rows[0]["expected_output"] = rows[0]["expected_output"] + 1
+    expected = rows[0]["expected_output"]
+    if isinstance(expected, int):
+        rows[0]["expected_output"] = expected + 1
+    elif isinstance(expected, list):
+        rows[0]["expected_output"] = [*expected, "__TAMPERED__"]
+    elif isinstance(expected, dict):
+        rows[0]["expected_output"] = {**expected, "_tampered": True}
+    else:
+        rows[0]["expected_output"] = "__TAMPERED__"
     srsly.write_jsonl(cases_path, rows)
 
     verify_result = runner.invoke(
@@ -185,7 +196,10 @@ def test_verify_warns_when_sidecars_missing_and_regenerates(
     )
     assert generate_result.exit_code == 0
 
-    cases_path, metrics_path = _sidecar_paths(verification_dir, output)
+    cases_path, metrics_path = verification_sidecar_paths(
+        output,
+        output_dir=verification_dir,
+    )
     cases_path.unlink()
     assert not cases_path.exists()
     assert metrics_path.exists()

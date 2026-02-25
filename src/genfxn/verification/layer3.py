@@ -48,12 +48,8 @@ class Layer3Summary:
     cases: list[VerificationCase]
     mutation_score: float
     mutation_score_curve: list[MutationCurvePoint]
-    heldout_mutant_fpr: float
-    heldout_mutant_fpr_ci95: float
-
-
-def _path_to_string(path: tuple[Any, ...]) -> str:
-    return ".".join(str(part) for part in path)
+    heldout_mutant_escape_rate: float
+    heldout_mutant_escape_ci95: float
 
 
 def _iter_mutation_candidates(
@@ -99,6 +95,13 @@ def _iter_mutation_candidates(
 
 
 def _set_at_path(root: Any, path: tuple[Any, ...], value: Any) -> Any:
+    """Set a value at path.
+
+    For ``_set_at_path(root: Any, path: tuple[Any, ...], value: Any)``, an
+    empty ``path`` returns ``value`` (replacing/discarding the original root).
+    A non-empty ``path`` mutates ``root`` in place along the path and returns
+    the same root reference. Callers should deep-copy before calling.
+    """
     if len(path) == 0:
         return value
 
@@ -343,13 +346,16 @@ def generate_layer3_cases(
 
     n_heldout = len(heldout)
     heldout_detect_rate = (heldout_detected / n_heldout) if n_heldout else 0.0
-    heldout_fpr = 1.0 - heldout_detect_rate
-    heldout_ci95 = _ci95_for_rate(heldout_fpr, n_heldout)
+    heldout_mutant_escape_rate = 1.0 - heldout_detect_rate
+    heldout_mutant_escape_ci95 = _ci95_for_rate(
+        heldout_mutant_escape_rate,
+        n_heldout,
+    )
 
     return Layer3Summary(
         cases=cases,
         mutation_score=mutation_score,
         mutation_score_curve=curve,
-        heldout_mutant_fpr=heldout_fpr,
-        heldout_mutant_fpr_ci95=heldout_ci95,
+        heldout_mutant_escape_rate=heldout_mutant_escape_rate,
+        heldout_mutant_escape_ci95=heldout_mutant_escape_ci95,
     )

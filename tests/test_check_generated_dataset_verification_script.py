@@ -5,7 +5,7 @@ from typing import cast
 
 import pytest
 import typer
-from helpers import load_script_module
+from helpers import _FakeMetric, _FakeTask, load_script_module
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -21,22 +21,9 @@ check_generated_dataset_verification_main = cast(
 )
 
 
-class _FakeTask:
-    def __init__(self, task_id: str, family: str) -> None:
-        self.task_id = task_id
-        self.family = family
-
-
-class _FakeMetric:
-    def __init__(
-        self, task_id: str, family: str, mutation_score: float
-    ) -> None:
-        self.task_id = task_id
-        self.family = family
-        self.mutation_score = mutation_score
-
-
-def test_main_passes_with_sufficient_mutation_scores(monkeypatch) -> None:
+def test_main_passes_with_sufficient_mutation_scores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     generated: list[_FakeTask] = []
     built_with_seed: list[int] = []
 
@@ -84,7 +71,9 @@ def test_main_passes_with_sufficient_mutation_scores(monkeypatch) -> None:
     assert built_with_seed == [11]
 
 
-def test_main_exits_on_verification_mismatch(monkeypatch) -> None:
+def test_main_exits_on_verification_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "generate_task_for_family",
@@ -122,7 +111,9 @@ def test_main_exits_on_verification_mismatch(monkeypatch) -> None:
     assert exc_info.value.exit_code == 1
 
 
-def test_main_exits_on_low_mutation_score(monkeypatch) -> None:
+def test_main_exits_on_low_mutation_score(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         _SCRIPT_MODULE,
         "generate_task_for_family",

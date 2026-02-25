@@ -66,8 +66,8 @@ class VerificationMetrics(BaseModel):
     n_layer3_cases: int
     mutation_score: float
     mutation_score_curve: list[MutationCurvePoint]
-    heldout_mutant_fpr: float
-    heldout_mutant_fpr_ci95: float
+    heldout_mutant_escape_rate: float
+    heldout_mutant_escape_ci95: float
 
 
 class VerificationFailure(BaseModel):

@@ -32,3 +32,12 @@ def test_generate_task_for_family_supported_families() -> None:
     for family in FAMILY_ORDER:
         task = generate_task_for_family(family, rng=random.Random(7), axes=None)
         assert task.family == family
+
+
+def test_generate_task_for_family_unknown_family() -> None:
+    with pytest.raises(ValueError, match="Unknown family"):
+        generate_task_for_family(
+            "unknown_family",
+            rng=random.Random(7),
+            axes=None,
+        )

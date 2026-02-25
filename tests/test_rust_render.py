@@ -377,7 +377,7 @@ class TestStringPredicateRust:
     def test_is_digit(self) -> None:
         result = render_string_predicate_rust(StringPredicateIsDigit())
         assert result == (
-            "!s.is_empty() && s.chars().all(|c| __genfxn_is_python_digit(c))"
+            "!s.is_empty() && s.chars().all(&__genfxn_is_python_digit)"
         )
 
     def test_is_digit_uses_python_authoritative_digit_helper(self) -> None:

@@ -1607,19 +1607,26 @@ def verify(
                     f"artifacts: {missing_display}",
                     err=True,
                 )
-            artifacts = build_verification_artifacts(
-                tasks,
-                seed=verification_seed,
-            )
-            cases = artifacts.cases
-            metrics = artifacts.metrics
-            if write_sidecars:
-                write_verification_sidecars(
-                    cases_path,
-                    metrics_path,
-                    cases=cases,
-                    metrics=metrics,
+            try:
+                artifacts = build_verification_artifacts(
+                    tasks,
+                    seed=verification_seed,
                 )
+                cases = artifacts.cases
+                metrics = artifacts.metrics
+                if write_sidecars:
+                    write_verification_sidecars(
+                        cases_path,
+                        metrics_path,
+                        cases=cases,
+                        metrics=metrics,
+                    )
+            except Exception as exc:
+                typer.echo(
+                    f"Failed to build verification artifacts: {exc}",
+                    err=True,
+                )
+                raise typer.Exit(1) from exc
 
         failures = verify_cases(tasks, cases, full_parity=verify_full)
         if failures:

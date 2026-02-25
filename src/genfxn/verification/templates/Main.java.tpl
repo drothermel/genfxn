@@ -32,6 +32,11 @@ $method_code
         long[][] out = new long[parts.length][2];
         for (int i = 0; i < parts.length; i++) {
             String[] pair = parts[i].split(":", 2);
+            if (pair.length < 2) {
+                throw new IllegalArgumentException(
+                    "Invalid interval token '" + parts[i] + "' (expected start:end)"
+                );
+            }
             out[i][0] = Long.parseLong(pair[0]);
             out[i][1] = Long.parseLong(pair[1]);
         }

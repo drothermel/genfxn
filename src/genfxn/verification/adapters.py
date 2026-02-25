@@ -5,8 +5,6 @@ import random
 import string
 from typing import Any
 
-from hypothesis import strategies as st
-
 from genfxn.bitops.eval import eval_bitops
 from genfxn.core.spec_registry import validate_spec_for_family
 from genfxn.fsm.eval import eval_fsm
@@ -72,7 +70,9 @@ def _range_from_axes(
 
 def _random_string(rng: random.Random, lo: int, hi: int) -> str:
     alphabet = string.ascii_letters + string.digits + " _-"
-    n = rng.randint(max(0, lo), max(0, hi))
+    lo_clamped = max(0, lo)
+    hi_clamped = max(lo_clamped, max(0, hi))
+    n = rng.randint(lo_clamped, hi_clamped)
     return "".join(rng.choice(alphabet) for _ in range(n))
 
 
@@ -189,7 +189,7 @@ def _sample_graph_query_inputs(
     n_nodes: int,
 ) -> list[dict[str, int]]:
     if n_nodes <= 0:
-        return [{"src": 0, "dst": 0} for _ in range(count)]
+        return []
 
     candidates: list[dict[str, int]] = [
         {"src": 0, "dst": 0},
@@ -207,85 +207,6 @@ def _sample_graph_query_inputs(
         )
 
     return candidates[:count]
-
-
-def hypothesis_strategy_for_family(
-    family: str,
-    *,
-    axes: dict[str, Any] | None,
-    spec_obj: Any,
-) -> st.SearchStrategy[Any]:
-    constants = _collect_int_constants(spec_obj.model_dump(mode="python"))
-
-    if family in {"piecewise", "bitops"}:
-        lo, hi = _range_from_axes(axes, "value_range", _DEFAULT_INT_RANGE)
-        base = st.integers(min_value=lo, max_value=hi)
-        if constants:
-            return st.one_of(st.sampled_from(constants[:16]), base)
-        return base
-
-    if family in {
-        "stateful",
-        "simple_algorithms",
-        "stack_bytecode",
-        "fsm",
-        "temporal_logic",
-    }:
-        lo, hi = _range_from_axes(axes, "value_range", _DEFAULT_INT_RANGE)
-        len_lo, len_hi = _range_from_axes(
-            axes,
-            "list_length_range",
-            _DEFAULT_LIST_LENGTH_RANGE,
-        )
-        atom = st.integers(min_value=lo, max_value=hi)
-        if constants:
-            atom = st.one_of(st.sampled_from(constants[:16]), atom)
-        return st.lists(atom, min_size=len_lo, max_size=len_hi)
-
-    if family == "stringrules":
-        len_lo, len_hi = _range_from_axes(axes, "string_length_range", (0, 20))
-        alphabet = string.ascii_letters + string.digits + " _-"
-        return st.text(alphabet=alphabet, min_size=len_lo, max_size=len_hi)
-
-    if family == "intervals":
-        lo, hi = _range_from_axes(axes, "endpoint_range", _DEFAULT_INT_RANGE)
-        len_lo, len_hi = _range_from_axes(axes, "n_intervals_range", (0, 10))
-        interval = st.tuples(
-            st.integers(min_value=lo, max_value=hi),
-            st.integers(min_value=lo, max_value=hi),
-        )
-        return st.lists(interval, min_size=len_lo, max_size=len_hi)
-
-    if family == "sequence_dp":
-        lo, hi = _range_from_axes(axes, "value_range", _DEFAULT_INT_RANGE)
-        a_lo, a_hi = _range_from_axes(axes, "len_a_range", (0, 20))
-        b_lo, b_hi = _range_from_axes(axes, "len_b_range", (0, 20))
-        return st.fixed_dictionaries(
-            {
-                "a": st.lists(
-                    st.integers(min_value=lo, max_value=hi),
-                    min_size=a_lo,
-                    max_size=a_hi,
-                ),
-                "b": st.lists(
-                    st.integers(min_value=lo, max_value=hi),
-                    min_size=b_lo,
-                    max_size=b_hi,
-                ),
-            }
-        )
-
-    if family == "graph_queries":
-        n_nodes = int(getattr(spec_obj, "n_nodes", 1))
-        upper = max(0, n_nodes - 1)
-        return st.fixed_dictionaries(
-            {
-                "src": st.integers(min_value=0, max_value=upper),
-                "dst": st.integers(min_value=0, max_value=upper),
-            }
-        )
-
-    raise ValueError(f"Unsupported family for strategy generation: {family}")
 
 
 def generate_layer2_inputs(

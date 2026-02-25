@@ -11,6 +11,24 @@ import pytest
 RUNTIME_SUBPROCESS_TIMEOUT_SEC = 30.0
 
 
+class _FakeTask:
+    def __init__(self, task_id: str, family: str | None = None) -> None:
+        self.task_id = task_id
+        self.family = family
+
+
+class _FakeMetric:
+    def __init__(
+        self,
+        task_id: str,
+        family: str | None,
+        mutation_score: float,
+    ) -> None:
+        self.task_id = task_id
+        self.family = family
+        self.mutation_score = mutation_score
+
+
 def load_script_module(script: Path, module_name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(module_name, script)
     if spec is None or spec.loader is None:

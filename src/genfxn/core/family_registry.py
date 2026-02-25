@@ -71,7 +71,7 @@ KNOWN_FAMILIES: frozenset[str] = frozenset(FAMILY_ORDER)
 
 
 def parse_family_selector(families: str) -> list[str]:
-    """Parse comma-separated family selectors preserving canonical order."""
+    """Parse selectors, deduplicate repeats, and keep FAMILY_ORDER order."""
     if families == "all":
         return list(FAMILY_ORDER)
 

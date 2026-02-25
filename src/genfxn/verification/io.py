@@ -33,7 +33,12 @@ def _write_jsonl_atomically(path: Path, rows: list[dict[str, Any]]) -> None:
     )
     tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        try:
+            handle = os.fdopen(fd, "w", encoding="utf-8")
+        except Exception:
+            os.close(fd)
+            raise
+        with handle:
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False))
                 handle.write("\n")
@@ -43,6 +48,7 @@ def _write_jsonl_atomically(path: Path, rows: list[dict[str, Any]]) -> None:
             tmp_path.unlink()
 
 
+# Public alias for scripts/tests to import a stable name from this module.
 write_jsonl_atomically = _write_jsonl_atomically
 
 
