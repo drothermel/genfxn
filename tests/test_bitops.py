@@ -7,6 +7,7 @@ import pytest
 import genfxn.bitops.eval as bitops_eval
 import genfxn.bitops.models as bitops_models
 import genfxn.bitops.queries as bitops_queries
+import genfxn.bitops.render as bitops_render
 import genfxn.bitops.sampler as bitops_sampler
 import genfxn.bitops.task as bitops_task
 from genfxn.core.models import QueryTag
@@ -114,6 +115,7 @@ sample_bitops_spec = _find_callable(bitops_sampler, "sample_bitops_spec")
 generate_bitops_queries = _find_callable(
     bitops_queries, "generate_bitops_queries"
 )
+render_bitops = _find_callable(bitops_render, "render_bitops")
 generate_bitops_task = _find_callable(bitops_task, "generate_bitops_task")
 
 
@@ -241,6 +243,40 @@ class TestEvaluatorSemantics:
                 assert input_value == before
             else:
                 assert input_value == before
+
+
+class TestRenderer:
+    def test_renderer_only_includes_used_ops(self) -> None:
+        spec = SpecCls.model_validate(
+            {
+                "width_bits": 8,
+                "operations": [{"op": "and_mask", "arg": 15}],
+            }
+        )
+        code = render_bitops(spec)
+        assert "if op == 'and_mask':" in code
+        assert "op == 'or_mask'" not in code
+        assert "op == 'rotl'" not in code
+        assert "op == 'parity'" not in code
+        assert "raise ValueError('Unsupported op')" in code
+
+    def test_renderer_deduplicates_ops_and_keeps_first_seen_order(self) -> None:
+        spec = SpecCls.model_validate(
+            {
+                "width_bits": 8,
+                "operations": [
+                    {"op": "xor_mask", "arg": 3},
+                    {"op": "xor_mask", "arg": 7},
+                    {"op": "shl", "arg": 1},
+                ],
+            }
+        )
+        code = render_bitops(spec)
+        assert code.count("op == 'xor_mask'") == 1
+        assert code.count("op == 'shl'") == 1
+        assert code.index("if op == 'xor_mask':") < code.index(
+            "elif op == 'shl':"
+        )
 
 
 class TestSampler:

@@ -636,6 +636,37 @@ class TestBitopsRust:
         assert "fn g(n: i64) -> i64" in code
         assert "value = (!value) & mask;" in code
 
+    def test_renderer_only_includes_used_ops(self) -> None:
+        from genfxn.langs.rust.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=8,
+            operations=[BitInstruction(op=BitOp.NOT)],
+        )
+        code = render_bitops(spec)
+        assert 'if op == "not" {' in code
+        assert 'op == "rotl"' not in code
+        assert 'op == "parity"' not in code
+        assert 'panic!("Unsupported op");' in code
+
+    def test_renderer_deduplicates_ops_and_keeps_first_seen_order(self) -> None:
+        from genfxn.langs.rust.bitops import render_bitops
+
+        spec = BitopsSpec(
+            width_bits=8,
+            operations=[
+                BitInstruction(op=BitOp.XOR_MASK, arg=3),
+                BitInstruction(op=BitOp.XOR_MASK, arg=7),
+                BitInstruction(op=BitOp.SHL, arg=1),
+            ],
+        )
+        code = render_bitops(spec)
+        assert code.count('op == "xor_mask"') == 1
+        assert code.count('op == "shl"') == 1
+        assert code.index('if op == "xor_mask" {') < code.index(
+            '} else if op == "shl" {'
+        )
+
 
 class TestStatefulRust:
     def test_conditional_linear_sum(self) -> None:

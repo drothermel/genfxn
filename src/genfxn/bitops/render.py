@@ -1,6 +1,50 @@
 from genfxn.bitops.models import BitopsSpec
 
 
+def _used_ops(spec: BitopsSpec) -> list[str]:
+    used_ops: list[str] = []
+    seen_ops: set[str] = set()
+    for instruction in spec.operations:
+        op = instruction.op.value
+        if op in seen_ops:
+            continue
+        seen_ops.add(op)
+        used_ops.append(op)
+    return used_ops
+
+
+_OP_BRANCH_BODIES: dict[str, list[str]] = {
+    "and_mask": ["            value = value & (arg & mask)"],
+    "or_mask": ["            value = value | (arg & mask)"],
+    "xor_mask": ["            value = value ^ (arg & mask)"],
+    "shl": ["            value = (value << (arg % width_bits)) & mask"],
+    "shr_logical": ["            value = (value & mask) >> (arg % width_bits)"],
+    "rotl": [
+        "            amt = arg % width_bits",
+        "            if amt == 0:",
+        "                value = value & mask",
+        "            else:",
+        "                value = (",
+        "                    (value << amt)",
+        "                    | (value >> (width_bits - amt))",
+        "                ) & mask",
+    ],
+    "rotr": [
+        "            amt = arg % width_bits",
+        "            if amt == 0:",
+        "                value = value & mask",
+        "            else:",
+        "                value = (",
+        "                    (value >> amt)",
+        "                    | (value << (width_bits - amt))",
+        "                ) & mask",
+    ],
+    "not": ["            value = (~value) & mask"],
+    "popcount": ["            value = (value & mask).bit_count() & mask"],
+    "parity": ["            value = (value & mask).bit_count() & 1"],
+}
+
+
 def render_bitops(
     spec: BitopsSpec,
     func_name: str = "f",
@@ -20,6 +64,18 @@ def render_bitops(
             + ","
         )
 
+    branch_lines: list[str] = []
+    for idx, op in enumerate(_used_ops(spec)):
+        keyword = "if" if idx == 0 else "elif"
+        branch_lines.append(f"        {keyword} op == {op!r}:")
+        branch_lines.extend(_OP_BRANCH_BODIES[op])
+    branch_lines.extend(
+        [
+            "        else:",
+            "            raise ValueError('Unsupported op')",
+        ]
+    )
+
     lines.extend(
         [
             "    ]",
@@ -31,42 +87,7 @@ def render_bitops(
             "        if arg is None:",
             "            arg = 0",
             "",
-            "        if op == 'and_mask':",
-            "            value = value & (arg & mask)",
-            "        elif op == 'or_mask':",
-            "            value = value | (arg & mask)",
-            "        elif op == 'xor_mask':",
-            "            value = value ^ (arg & mask)",
-            "        elif op == 'shl':",
-            "            value = (value << (arg % width_bits)) & mask",
-            "        elif op == 'shr_logical':",
-            "            value = (value & mask) >> (arg % width_bits)",
-            "        elif op == 'rotl':",
-            "            amt = arg % width_bits",
-            "            if amt == 0:",
-            "                value = value & mask",
-            "            else:",
-            "                value = (",
-            "                    (value << amt)",
-            "                    | (value >> (width_bits - amt))",
-            "                ) & mask",
-            "        elif op == 'rotr':",
-            "            amt = arg % width_bits",
-            "            if amt == 0:",
-            "                value = value & mask",
-            "            else:",
-            "                value = (",
-            "                    (value >> amt)",
-            "                    | (value << (width_bits - amt))",
-            "                ) & mask",
-            "        elif op == 'not':",
-            "            value = (~value) & mask",
-            "        elif op == 'popcount':",
-            "            value = (value & mask).bit_count() & mask",
-            "        elif op == 'parity':",
-            "            value = (value & mask).bit_count() & 1",
-            "        else:",
-            "            raise ValueError('Unsupported op')",
+            *branch_lines,
             "",
             "        value = value & mask",
             "",
