@@ -5,12 +5,14 @@ from types import SimpleNamespace
 import pytest
 import srsly
 
+from genfxn.core.models import Query, QueryTag
 from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.stack_bytecode.task import generate_stack_bytecode_task
 from genfxn.verification.io import (
     load_verification_sidecars,
     write_verification_sidecars,
 )
+from genfxn.verification.layer1 import generate_layer1_cases
 from genfxn.verification.models import VerificationCase, VerificationLayer
 from genfxn.verification.parity import select_parity_cases
 from genfxn.verification.runner import (
@@ -32,6 +34,48 @@ def test_build_verification_artifacts_is_deterministic_for_same_seed() -> None:
     assert [metric.model_dump(mode="json") for metric in first.metrics] == [
         metric.model_dump(mode="json") for metric in second.metrics
     ]
+    layer2_cases = [
+        case
+        for case in first.cases
+        if case.layer == VerificationLayer.LAYER2_PROPERTY
+    ]
+    assert layer2_cases
+    assert all(
+        case.source_detail.get("generator") == "hypothesis"
+        for case in layer2_cases
+    )
+
+
+def test_layer1_generation_is_independent_of_task_queries() -> None:
+    task = generate_piecewise_task(rng=random.Random(12))
+    original_cases = generate_layer1_cases(task)
+    task_with_tampered_queries = task.model_copy(
+        update={
+            "queries": [
+                Query(
+                    input=12345,
+                    output=-99999,
+                    tag=QueryTag.TYPICAL,
+                )
+            ]
+        }
+    )
+
+    tampered_cases = generate_layer1_cases(task_with_tampered_queries)
+    assert [case.model_dump(mode="json") for case in original_cases] == [
+        case.model_dump(mode="json") for case in tampered_cases
+    ]
+
+
+def test_layer1_generation_produces_cases_when_queries_empty() -> None:
+    task = generate_piecewise_task(rng=random.Random(13))
+    task_without_queries = task.model_copy(update={"queries": []})
+
+    cases = generate_layer1_cases(task_without_queries)
+    assert len(cases) > 0
+    assert all(
+        case.layer == VerificationLayer.LAYER1_SPEC_BOUNDARY for case in cases
+    )
 
 
 def test_sidecar_roundtrip_keeps_cases_verifiable(tmp_path: Path) -> None:

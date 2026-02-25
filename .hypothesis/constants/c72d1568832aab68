@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/langs/java/simple_algorithms.py
+# hypothesis_version: 6.151.9
+
+['                );', '            }', '        }', '    long count = 0L;', '    return count;', '    return max_sum;', '    }', 'f', 'x', 'xs', '}']

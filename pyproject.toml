@@ -43,6 +43,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-xdist>=3.8.0",
     "ruff>=0.14.14",
+    "hypothesis==6.151.9",
 ]
 
 [tool.pytest.ini_options]

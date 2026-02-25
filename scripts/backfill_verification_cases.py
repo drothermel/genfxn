@@ -49,7 +49,21 @@ def main(
                 f"Line {line_number}: task schema validation failed: {exc}"
             ) from exc
 
-    artifacts = build_verification_artifacts(tasks, seed=verification_seed)
+    try:
+        artifacts = build_verification_artifacts(tasks, seed=verification_seed)
+    except ValueError as exc:
+        typer.echo(
+            f"Failed to build verification artifacts: {exc}",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(
+            f"Unexpected verification artifact build failure: {exc}",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
+
     failures = verify_cases(
         tasks,
         artifacts.cases,
@@ -74,12 +88,19 @@ def main(
         input_file,
         output_dir=verification_output_dir,
     )
-    write_verification_sidecars(
-        cases_path,
-        metrics_path,
-        cases=artifacts.cases,
-        metrics=artifacts.metrics,
-    )
+    try:
+        write_verification_sidecars(
+            cases_path,
+            metrics_path,
+            cases=artifacts.cases,
+            metrics=artifacts.metrics,
+        )
+    except OSError as exc:
+        typer.echo(
+            f"Failed to write verification sidecars: {exc}",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
 
     counts = summarize_case_counts(artifacts.cases)
     typer.echo(

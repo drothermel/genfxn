@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/graph_queries/models.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.1, 0.25, 0.4, 1.0, 'GraphQueriesAxes', 'GraphQueriesSpec', 'after', 'before', 'edge.w must be >= 0', 'edge_count_range', 'hub_bias_prob_range', 'min_hops', 'n_nodes', 'n_nodes must be >= 1', 'n_nodes_range', 'reachable', 'shortest_path_cost', 'u', 'v', 'w', 'weight_range']

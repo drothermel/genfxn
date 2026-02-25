@@ -51,6 +51,13 @@ def test_generate_emits_sidecars_and_verify_passes(
     )
     assert cases_path.exists()
     assert metrics_path.exists()
+    rows = cast(list[dict], list(srsly.read_jsonl(cases_path)))
+    layer2_rows = [row for row in rows if row.get("layer") == "layer2_property"]
+    assert layer2_rows
+    assert all(
+        row.get("source_detail", {}).get("generator") == "hypothesis"
+        for row in layer2_rows
+    )
 
     verify_result = runner.invoke(
         app,
@@ -114,6 +121,55 @@ def test_generate_fails_atomically_on_verification_mismatch(
         output,
         output_dir=verification_dir,
     )
+    assert not cases_path.exists()
+    assert not metrics_path.exists()
+
+
+def test_generate_rolls_back_outputs_when_commit_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "check_generated_code_quality",
+        lambda tasks: None,  # noqa: ARG005
+    )
+    output = tmp_path / "tasks.jsonl"
+    verification_dir = tmp_path / "verification_cases"
+    cases_path, metrics_path = verification_sidecar_paths(
+        output,
+        output_dir=verification_dir,
+    )
+
+    original_replace = cli_module.os.replace
+    failed_once = False
+
+    def _fail_dataset_replace(src: object, dst: object) -> None:
+        nonlocal failed_once
+        destination = Path(dst)
+        if destination == output and not failed_once:
+            failed_once = True
+            raise OSError("simulated output commit failure")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(cli_module.os, "replace", _fail_dataset_replace)
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "-o",
+            str(output),
+            "-f",
+            "piecewise",
+            "-n",
+            "1",
+            "--no-verify-full",
+            "--verification-output-dir",
+            str(verification_dir),
+        ],
+    )
+    assert result.exit_code == 1
+    assert not output.exists()
     assert not cases_path.exists()
     assert not metrics_path.exists()
 

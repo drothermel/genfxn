@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/core/models.py
+# hypothesis_version: 6.151.9
+
+['Function input value', '__dataclass__', '__dict__', '__flat_list__', '__flat_tuple__', '__frozenset__', '__hashable__', '__list__', '__model__', '__nan__', '__object__', '__repr__', '__scalar__', '__set__', '__tuple__', 'adversarial', 'boundary', 'coverage', 'forbid', 'model_dump', 'typical']

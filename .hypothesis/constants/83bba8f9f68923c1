@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stateful/models.py
+# hypothesis_version: 6.151.9
+
+[-100, 100, ', ', 'StatefulAxes', 'after', 'before', 'divisor_range', 'list_length_range', 'longest_run', 'scale_range', 'shift_range', 'template', 'threshold_range', 'toggle_sum', 'value_range']

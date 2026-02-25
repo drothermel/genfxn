@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stack_bytecode/ast_safety.py
+# hypothesis_version: 6.151.9
+
+['None', 'a', 'abs', 'append', 'b', 'cond', 'div_trunc_zero', 'i64_mask', 'i64_min', 'idx', 'input_mode', 'instr', 'int', 'jump_target_mode', 'len', 'list', 'max', 'max_step_count', 'min', 'mod_trunc_zero', 'n', 'normalize_target', 'op', 'pc', 'pop', 'program', 'range', 'repr', 'resolved', 'sign', 'stack', 'steps', 'str', 'target', 'tuple', 'value', 'wrap_i64', 'wrapped', 'xs']

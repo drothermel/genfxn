@@ -19,9 +19,12 @@ from genfxn.verification.models import (
     MutationCurvePoint,
     VerificationCase,
     VerificationLayer,
+    normalize_case_value,
 )
 
+# Keep mutations within signed i64 to maintain Python/Java/Rust parity.
 I64_MIN = -(1 << 63)
+# Keep mutations within signed i64 to maintain Python/Java/Rust parity.
 I64_MAX = (1 << 63) - 1
 _CURVE_POINTS = (1, 2, 3, 4, 6, 8, 12, 16, 20, 24)
 _SWAP_MAP: dict[str, str] = {
@@ -270,8 +273,12 @@ def _distinguishes(
     mutant_obj: Any,
     input_value: Any,
 ) -> tuple[bool, Any]:
-    expected = evaluate_input(family, spec_obj, input_value)
-    actual = evaluate_input(family, mutant_obj, input_value)
+    expected = normalize_case_value(
+        evaluate_input(family, spec_obj, input_value)
+    )
+    actual = normalize_case_value(
+        evaluate_input(family, mutant_obj, input_value)
+    )
     return expected != actual, expected
 
 

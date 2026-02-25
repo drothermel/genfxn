@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/langs/types.py
+# hypothesis_version: 6.151.9
+
+['java', 'python', 'rust']

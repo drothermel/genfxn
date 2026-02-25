@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/bitops/__init__.py
+# hypothesis_version: 6.151.9
+
+['BitInstruction', 'BitOp', 'BitopsAxes', 'BitopsSpec', 'eval_bitops', 'generate_bitops_task', 'render_bitops', 'sample_bitops_spec', 'validate_bitops_task']

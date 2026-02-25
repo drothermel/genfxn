@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -56,8 +57,8 @@ def write_verification_sidecars(
     cases_path: Path,
     metrics_path: Path,
     *,
-    cases: list[VerificationCase],
-    metrics: list[VerificationMetrics],
+    cases: Sequence[VerificationCase],
+    metrics: Sequence[VerificationMetrics],
 ) -> None:
     _write_jsonl_atomically(
         cases_path,

@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stateful/validate.py
+# hypothesis_version: 6.151.9
+
+['CODE_EXEC_ERROR', 'CODE_MISSING_FUNC', 'CODE_PARSE_ERROR', 'CODE_RUNTIME_ERROR', 'FUNC_NOT_CALLABLE', 'QUERY_INPUT_TYPE', 'QUERY_OUTPUT_TYPE', 'SEMANTIC_MISMATCH', 'TASK_ID_MISMATCH', 'UNSAFE_AST', 'ValueError', 'abs', 'close', 'code', 'code.f', 'f', 'family', 'int', 'len', 'list', 'max', 'min', 'python', 'set', 'spec', 'stateful', 'task_id', 'xs']

@@ -17,7 +17,9 @@ def normalize_case_value(value: Any) -> Any:
     if isinstance(value, Enum):
         return normalize_case_value(value.value)
     if isinstance(value, dict):
-        return {key: normalize_case_value(item) for key, item in value.items()}
+        return {
+            str(key): normalize_case_value(item) for key, item in value.items()
+        }
     if isinstance(value, list | tuple):
         return [normalize_case_value(item) for item in value]
     if isinstance(value, set | frozenset):
@@ -54,20 +56,20 @@ class VerificationCase(BaseModel):
 
 
 class MutationCurvePoint(BaseModel):
-    n_tests: int
-    mutation_score: float
+    n_tests: int = Field(ge=0)
+    mutation_score: float = Field(ge=0.0, le=1.0)
 
 
 class VerificationMetrics(BaseModel):
     task_id: str
     family: str
-    n_layer1_cases: int
-    n_layer2_cases: int
-    n_layer3_cases: int
-    mutation_score: float
+    n_layer1_cases: int = Field(ge=0)
+    n_layer2_cases: int = Field(ge=0)
+    n_layer3_cases: int = Field(ge=0)
+    mutation_score: float = Field(ge=0.0, le=1.0)
     mutation_score_curve: list[MutationCurvePoint]
-    heldout_mutant_fpr: float
-    heldout_mutant_fpr_ci95: float
+    heldout_mutant_fpr: float = Field(ge=0.0, le=1.0)
+    heldout_mutant_fpr_ci95: float = Field(ge=0.0, le=1.0)
 
     @model_validator(mode="before")
     @classmethod

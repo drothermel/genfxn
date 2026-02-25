@@ -65,7 +65,9 @@ def generate_layer2_cases(
                     seed=seed + attempt,
                     source_detail={
                         "sample_index": idx,
-                        "generator": "domain_aware",
+                        "generator": "hypothesis",
+                        "adapter_family": task.family,
+                        "hypothesis_seed": seed + attempt,
                         "attempt": attempt,
                     },
                 )
@@ -75,6 +77,15 @@ def generate_layer2_cases(
         attempt += 1
 
     if len(cases) < count:
+        if cases:
+            logger.warning(
+                "Layer2 generation capped below requested count for task %s: "
+                "requested=%d built=%d (domain appears finite/fully covered)",
+                task.task_id,
+                count,
+                len(cases),
+            )
+            return cases
         raise ValueError(
             f"Unable to generate {count} valid layer2 cases "
             f"for {task.task_id}; "

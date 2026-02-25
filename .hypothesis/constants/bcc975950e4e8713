@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/langs/rust/_helpers.py
+# hypothesis_version: 6.151.9
+
+['"', '\\', '\\"', '\\\\', '\\n', '\\r', '\\t', 'i64', 'i64::MIN']

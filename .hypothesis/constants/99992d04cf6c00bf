@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/.venv/bin/genfxn
+# hypothesis_version: 6.151.9
+
+['-script.pyw', '.exe', '__main__']

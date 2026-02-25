@@ -3,9 +3,10 @@ import math
 import os
 import random
 import re
+import shutil
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any, TextIO
@@ -373,6 +374,146 @@ def _commit_split_outputs(
             _safe_unlink(train_backup)
         if test_backup is not None:
             _safe_unlink(test_backup)
+
+
+def _stage_jsonl_rows(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    create_parent: bool,
+) -> Path:
+    if create_parent:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+        )
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = None
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False))
+                handle.write("\n")
+        return tmp_path
+    except Exception:
+        _safe_close_fd(fd)
+        if tmp_path is not None:
+            _safe_unlink(tmp_path)
+        raise
+
+
+def _commit_generated_outputs(
+    *,
+    dataset_tmp: Path,
+    dataset: Path,
+    cases_tmp: Path,
+    cases_path: Path,
+    metrics_tmp: Path,
+    metrics_path: Path,
+) -> None:
+    dataset_backup: Path | None = None
+    cases_backup: Path | None = None
+    metrics_backup: Path | None = None
+    dataset_replaced = False
+    cases_replaced = False
+    metrics_replaced = False
+    try:
+        dataset_backup = _copy_existing_output_to_backup(dataset)
+        cases_backup = _copy_existing_output_to_backup(cases_path)
+        metrics_backup = _copy_existing_output_to_backup(metrics_path)
+
+        os.replace(cases_tmp, cases_path)
+        cases_replaced = True
+        os.replace(metrics_tmp, metrics_path)
+        metrics_replaced = True
+        os.replace(dataset_tmp, dataset)
+        dataset_replaced = True
+    except Exception:
+        if dataset_replaced:
+            _safe_unlink(dataset)
+        if cases_replaced:
+            _safe_unlink(cases_path)
+        if metrics_replaced:
+            _safe_unlink(metrics_path)
+        _restore_backup(dataset, dataset_backup)
+        _restore_backup(cases_path, cases_backup)
+        _restore_backup(metrics_path, metrics_backup)
+        raise
+    finally:
+        _safe_unlink(dataset_tmp)
+        _safe_unlink(cases_tmp)
+        _safe_unlink(metrics_tmp)
+        if dataset_backup is not None:
+            _safe_unlink(dataset_backup)
+        if cases_backup is not None:
+            _safe_unlink(cases_backup)
+        if metrics_backup is not None:
+            _safe_unlink(metrics_backup)
+
+
+def _copy_existing_output_to_backup(path: Path) -> Path | None:
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return None
+
+    backup_fd, backup_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".bak",
+        dir=path.parent,
+    )
+    os.close(backup_fd)
+    backup = Path(backup_name)
+    try:
+        shutil.copy2(path, backup)
+    except FileNotFoundError:
+        _safe_unlink(backup)
+        return None
+    return backup
+
+
+def _write_generated_outputs_atomically(
+    *,
+    output: Path,
+    rendered_tasks: list[Task],
+    cases_path: Path,
+    metrics_path: Path,
+    cases: Sequence[VerificationCase],
+    metrics: Sequence[VerificationMetrics],
+) -> None:
+    dataset_rows = [
+        task.model_dump(exclude_none=True) for task in rendered_tasks
+    ]
+    case_rows = [case.model_dump(mode="json") for case in cases]
+    metric_rows = [metric.model_dump(mode="json") for metric in metrics]
+
+    dataset_tmp = _stage_jsonl_rows(
+        output,
+        dataset_rows,
+        create_parent=False,
+    )
+    cases_tmp = _stage_jsonl_rows(
+        cases_path,
+        case_rows,
+        create_parent=True,
+    )
+    metrics_tmp = _stage_jsonl_rows(
+        metrics_path,
+        metric_rows,
+        create_parent=True,
+    )
+    _commit_generated_outputs(
+        dataset_tmp=dataset_tmp,
+        dataset=output,
+        cases_tmp=cases_tmp,
+        cases_path=cases_path,
+        metrics_tmp=metrics_tmp,
+        metrics_path=metrics_path,
+    )
 
 
 def _paths_resolve_to_same_target(left: Path, right: Path) -> bool:
@@ -1302,14 +1443,12 @@ def generate(
         output_dir=verification_output_dir,
     )
 
-    with _atomic_output_file_or_exit(output) as output_handle:
-        for task in rendered_tasks:
-            _write_task_line(output_handle, task)
-
     try:
-        write_verification_sidecars(
-            cases_path,
-            metrics_path,
+        _write_generated_outputs_atomically(
+            output=output,
+            rendered_tasks=rendered_tasks,
+            cases_path=cases_path,
+            metrics_path=metrics_path,
             cases=artifacts.cases,
             metrics=artifacts.metrics,
         )
@@ -1601,8 +1740,8 @@ def verify(
         should_regenerate_sidecars = regenerate_sidecars or bool(
             missing_sidecars
         )
-        cases: list[VerificationCase]
-        metrics: list[VerificationMetrics]
+        cases: list[VerificationCase] = []
+        metrics: list[VerificationMetrics] = []
         if not should_regenerate_sidecars:
             try:
                 cases, metrics = load_verification_sidecars(
@@ -1634,8 +1773,8 @@ def verify(
                     tasks,
                     seed=verification_seed,
                 )
-                cases = artifacts.cases
-                metrics = artifacts.metrics
+                cases = list(artifacts.cases)
+                metrics = list(artifacts.metrics)
                 if write_sidecars:
                     write_verification_sidecars(
                         cases_path,
@@ -1685,10 +1824,10 @@ def verify(
             "layer3="
             f"{counts.get(VerificationLayer.LAYER3_MUTATION.value, 0)}"
         )
-        typer.echo(
-            f"Metrics rows: {len(metrics)} "
-            f"(sidecars at {cases_path}, {metrics_path})"
-        )
+        metrics_message = f"Metrics rows: {len(metrics)}"
+        if write_sidecars:
+            metrics_message += f" (sidecars at {cases_path}, {metrics_path})"
+        typer.echo(metrics_message)
     except _TaskRowError as err:
         typer.echo(_render_task_row_error(input_file, err), err=True)
         raise typer.Exit(1) from err

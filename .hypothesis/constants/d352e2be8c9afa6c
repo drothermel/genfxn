@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/layer2.py
+# hypothesis_version: 6.151.9
+
+[128, 'adapter_family', 'attempt', 'generator', 'hypothesis', 'hypothesis_seed', 'sample_index']

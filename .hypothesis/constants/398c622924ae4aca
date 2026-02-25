@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stringrules/models.py
+# hypothesis_version: 6.151.9
+
+[127, 'StringRulesAxes', 'after', 'ascii_letters_digits', 'before', 'high', 'low', 'none', 'string_length_range']

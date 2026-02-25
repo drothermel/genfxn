@@ -4,7 +4,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
@@ -444,7 +444,7 @@ def select_parity_cases(
 
 def run_parity_checks(
     tasks: list[Task],
-    cases: list[VerificationCase],
+    cases: Sequence[VerificationCase],
     *,
     parity_case_count: int,
 ) -> list[ParityFailure]:

@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/simple_algorithms/sampler.py
+# hypothesis_version: 6.151.9
+
+['sample_counting_mode', 'sample_empty_default', 'sample_target', 'sample_template', 'sample_tie_break', 'sample_window_size']

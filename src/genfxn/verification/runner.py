@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,8 +22,8 @@ from genfxn.verification.parity import run_parity_checks
 
 @dataclass(frozen=True)
 class VerificationArtifacts:
-    cases: list[VerificationCase]
-    metrics: list[VerificationMetrics]
+    cases: tuple[VerificationCase, ...]
+    metrics: tuple[VerificationMetrics, ...]
 
 
 def build_verification_artifacts(
@@ -77,7 +78,9 @@ def build_verification_artifacts(
             )
         )
 
-    return VerificationArtifacts(cases=all_cases, metrics=all_metrics)
+    return VerificationArtifacts(
+        cases=tuple(all_cases), metrics=tuple(all_metrics)
+    )
 
 
 def _validated_spec_for_task(
@@ -117,7 +120,7 @@ def _verify_case(
 
 def verify_cases(
     tasks: list[Task],
-    cases: list[VerificationCase],
+    cases: Sequence[VerificationCase],
     *,
     full_parity: bool = True,
     parity_case_count: int = 48,
@@ -174,7 +177,7 @@ def verify_cases(
     return failures
 
 
-def summarize_case_counts(cases: list[VerificationCase]) -> dict[str, int]:
+def summarize_case_counts(cases: Sequence[VerificationCase]) -> dict[str, int]:
     counts = {member.value: 0 for member in VerificationLayer}
     for case in cases:
         counts[case.layer.value] += 1

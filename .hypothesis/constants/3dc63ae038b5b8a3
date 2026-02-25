@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/core/spec_registry.py
+# hypothesis_version: 6.151.9
+
+[', ', 'BitopsSpec', 'FsmSpec', 'GraphQueriesSpec', 'IntervalsSpec', 'PiecewiseSpec', 'SequenceDpSpec', 'SimpleAlgorithmsSpec', 'StackBytecodeSpec', 'StatefulSpec', 'StringRulesSpec', 'TemporalLogicSpec', 'bitops', 'fsm', 'genfxn.bitops.models', 'genfxn.fsm.models', 'graph_queries', 'intervals', 'piecewise', 'sequence_dp', 'simple_algorithms', 'stack_bytecode', 'stateful', 'stringrules', 'temporal_logic']

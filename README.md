@@ -138,6 +138,11 @@ if verification mismatches are detected:
 uv run genfxn generate -o tasks.jsonl -f all -n 50
 ```
 
+Layer 2 verification cases are generated with Hypothesis strategies. For
+deterministic regeneration, pin the Hypothesis version in `pyproject.toml`,
+use fixed verification seeds, and regenerate sidecars from the same task
+dataset.
+
 Sidecars are written to (paths are relative to the working directory; for
 example, when run from the repo root they default to
 `data/verification_cases/`):
@@ -163,6 +168,13 @@ uv run python scripts/migrate_dataset_task_ids.py data/all_tasks.jsonl
 
 # Generate verification sidecars for the migrated dataset
 uv run python scripts/backfill_verification_cases.py data/all_tasks.jsonl
+```
+
+If Layer 2 strategy logic changes, regenerate and recommit sidecars for
+affected datasets:
+
+```bash
+uv run genfxn verify data/all_tasks.jsonl --regenerate-sidecars
 ```
 
 ## Task JSONL Format

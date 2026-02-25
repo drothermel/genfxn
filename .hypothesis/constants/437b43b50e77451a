@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/stringrules/validate.py
+# hypothesis_version: 6.151.9
+
+[100, '  spaces  ', '.', '1', '123', 'A', 'ABC', 'AXES_INVALID', 'AbC123', 'CODE_EXEC_ERROR', 'CODE_MISSING_FUNC', 'CODE_PARSE_ERROR', 'CODE_RUNTIME_ERROR', 'EMPTY_RULESET', 'FUNC_NOT_CALLABLE', 'INVALID_CHARSET', 'QUERY_INPUT_TYPE', 'QUERY_OUTPUT_TYPE', 'SEMANTIC_MISMATCH', 'SHADOWED_RULE', 'TASK_ID_MISMATCH', 'UNSAFE_AST', '__', 'a', 'abc', 'axes.charset', 'charset', 'close', 'code', 'code.f', 'col_offset', 'f', 'family', 'len', 'lineno', 'loc', 'python', 's', 'spec', 'spec.rules', 'str', 'stringrules', 'task_id', 'value']

@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/temporal_logic/models.py
+# hypothesis_version: 6.151.9
+
+['after', 'always', 'and', 'atom', 'before', 'child', 'constant', 'eq', 'eventually', 'first_sat_index', 'formula_depth_range', 'ge', 'gt', 'le', 'left', 'lt', 'ne', 'next', 'not', 'op', 'or', 'predicate', 'right', 'sat_at_start', 'sat_count', 'since', 'until', 'value_range']

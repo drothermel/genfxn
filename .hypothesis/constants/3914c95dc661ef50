@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/sequence_dp/validate.py
+# hypothesis_version: 6.151.9
+
+['CODE_CODE_EXEC_ERROR', 'CODE_UNSAFE_AST', 'RuntimeError', 'TASK_ID_MISMATCH', 'ValueError', '__', 'a', 'abs', 'b', 'close', 'code', 'code.f', 'col_offset', 'f', 'family', 'len', 'lineno', 'max', 'python', 'range', 'sequence_dp', 'spec', 'task_id']

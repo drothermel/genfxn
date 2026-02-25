@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/intervals/models.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.3, 1.0, 'IntervalsAxes', 'after', 'before', 'closed_closed', 'closed_open', 'endpoint_range', 'gap_count', 'max_overlap_count', 'max_span_range', 'merged_count', 'n_intervals_range', 'open_closed', 'open_open', 'total_coverage']

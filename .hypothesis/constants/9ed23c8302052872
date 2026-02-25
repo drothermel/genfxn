@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/adapters/families/intervals.py
+# hypothesis_version: 6.151.9
+
+['endpoint_range', 'intervals', 'layer2-strategy', 'n_intervals_range']

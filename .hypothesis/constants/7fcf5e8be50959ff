@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/intervals/queries.py
+# hypothesis_version: 6.151.9
+
+['endpoint_range', 'input_length_range', 'list_length_range', 'max_span_range', 'n_intervals_range', 'value_range']

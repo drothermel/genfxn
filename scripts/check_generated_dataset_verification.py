@@ -57,7 +57,14 @@ def main(
                 generate_task_for_family(family, rng=rng, axes=None)
             )
 
-    artifacts = build_verification_artifacts(sampled_tasks, seed=seed)
+    try:
+        artifacts = build_verification_artifacts(sampled_tasks, seed=seed)
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(
+            f"Failed to build verification artifacts: {exc}",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
     failures = verify_cases(
         sampled_tasks,
         artifacts.cases,

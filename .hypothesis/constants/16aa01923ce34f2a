@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/sequence_dp/ast_safety.py
+# hypothesis_version: 6.151.9
+
+['RuntimeError', 'ValueError', '_matches', '_pick', '_unsigned_i64', '_wrap_i64', 'a', 'abs', 'abs_diff', 'ai', 'b', 'best', 'best_score', 'bj', 'bool', 'candidate', 'chosen', 'delta', 'diag', 'dp', 'g', 'gap_score', 'i', 'i64_mask', 'int', 'j', 'kind', 'l', 'left', 'left_g', 'left_l', 'left_s', 'len', 'list', 'm', 'match_score', 'max', 'mismatch_score', 'move', 'n', 'options', 'output_mode', 'predicate', 'prev_g', 'prev_l', 'prev_s', 'range', 'result', 's', 'template', 'tie_order', 'up', 'up_g', 'up_l', 'up_s', 'value', 'wrapped', 'x', 'y', 'zero']

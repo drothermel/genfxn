@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/fsm/render.py
+# hypothesis_version: 6.151.9
+
+['            continue', '        ],', '        continue', '        if matched:', '    return state', '    transitions = {', '    }', 'f', 'x', 'xs']

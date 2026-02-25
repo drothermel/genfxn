@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/sequence_dp/render.py
+# hypothesis_version: 6.151.9
+
+['            )', '            diag = (', '            else:', '            left = (', '            up = (', '    best = zero', '    else:', '    return result[2]', 'a', 'b', 'diag', 'f', 'left', 'up']

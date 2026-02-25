@@ -1,0 +1,4 @@
+# file: /Users/daniellerothermel/drotherm/repos/genfxn/src/genfxn/verification/parity.py
+# hypothesis_version: 6.151.9
+
+[20.0, ',', ', ', '--edition=2021', '-cp', '-o', 'Main', 'Main.java', 'Main.java.tpl', 'Main.rs.tpl', 'a', 'b', 'bitops', 'dst', 'f', 'fsm', 'graph_queries', 'intervals', 'java', 'javac', 'main', 'main.rs', 'parity-setup', 'piecewise', 'python', 'replace', 'rustc', 'sequence_dp', 'simple_algorithms', 'src', 'stack_bytecode', 'stateful', 'stringrules', 'temporal_logic', 'utf-8']
