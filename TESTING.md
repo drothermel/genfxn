@@ -55,6 +55,8 @@ Notes:
   `--verification-level=full`.
 - Pytest default parallelization comes from `pyproject.toml` (`-n auto`).
   Use `-n 0` for single-process debugging.
+- Layer 2 verification generation uses Hypothesis. Deterministic behavior is
+  guaranteed with pinned Hypothesis version plus fixed verification seeds.
 
 ## Core Quality Commands
 
@@ -75,6 +77,13 @@ uv run ty check src
 uv run python scripts/check_generated_code_quality.py \
   --families all --seed 42 --count-per-family 2 --pool-size 24
 
+# Generated dataset verification (public sidecars only)
+uv run python scripts/check_generated_dataset_verification.py \
+  --families all --seed 42 --sample-per-family 3 --mutation-score-floor 0.70
+
+# Regenerate sidecars deterministically for an existing dataset
+uv run genfxn verify data/all_tasks.jsonl --regenerate-sidecars
+
 # Full verification tests
 uv run pytest tests/ -v --verification-level=full -n auto --dist=worksteal
 ```
@@ -93,6 +102,7 @@ uv run pytest tests/ -v --verification-level=fast -n auto --dist=worksteal
 uv run ruff check .
 uv run ty check
 uv run python scripts/check_generated_code_quality.py --families all --seed 42 --count-per-family 2 --pool-size 24
+uv run python scripts/check_generated_dataset_verification.py --families all --seed 42 --sample-per-family 3 --mutation-score-floor 0.70
 uv run pytest tests/ -v --verification-level=standard -n auto --dist=worksteal
 ```
 

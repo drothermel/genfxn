@@ -3,9 +3,11 @@ import math
 import os
 import random
 import re
+import shutil
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections import Counter
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any, TextIO
@@ -22,6 +24,7 @@ from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
 from genfxn.core.string_transforms import StringTransformType
+from genfxn.core.task_ids import validate_task_ids
 from genfxn.core.transforms import TransformType
 from genfxn.fsm.models import FsmAxes, FsmSpec
 from genfxn.fsm.task import generate_fsm_task
@@ -65,6 +68,22 @@ from genfxn.stringrules.models import (
 from genfxn.stringrules.task import generate_stringrules_task
 from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
 from genfxn.temporal_logic.task import generate_temporal_logic_task
+from genfxn.verification.io import (
+    DEFAULT_VERIFICATION_OUTPUT_DIR,
+    load_verification_sidecars,
+    verification_sidecar_paths,
+    write_verification_sidecars,
+)
+from genfxn.verification.models import (
+    VerificationCase,
+    VerificationLayer,
+    VerificationMetrics,
+)
+from genfxn.verification.runner import (
+    build_verification_artifacts,
+    summarize_case_counts,
+    verify_cases,
+)
 
 app = typer.Typer(help="Generate and split function synthesis tasks.")
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
@@ -282,6 +301,69 @@ def _render_os_error(error: OSError) -> str:
     return f"Error: file operation failed: {error}"
 
 
+def _format_task_id_summary(task_ids: list[str], *, limit: int = 10) -> str:
+    if not task_ids:
+        return "(none)"
+    shown = ", ".join(task_ids[:limit])
+    if len(task_ids) <= limit:
+        return shown
+    return f"{shown}, ... (+{len(task_ids) - limit} more)"
+
+
+def _verification_sidecar_coverage_errors(
+    tasks: Sequence[Task],
+    cases: Sequence[VerificationCase],
+    metrics: Sequence[VerificationMetrics],
+) -> list[str]:
+    expected_task_ids = {task.task_id for task in tasks}
+    case_task_ids = {case.task_id for case in cases}
+    metric_task_ids = [metric.task_id for metric in metrics]
+    metric_task_ids_set = set(metric_task_ids)
+    duplicate_metric_task_ids = sorted(
+        task_id
+        for task_id, count in Counter(metric_task_ids).items()
+        if count > 1
+    )
+
+    errors: list[str] = []
+
+    missing_case_task_ids = sorted(expected_task_ids - case_task_ids)
+    if missing_case_task_ids:
+        errors.append(
+            "missing verification cases for task_id(s): "
+            f"{_format_task_id_summary(missing_case_task_ids)}"
+        )
+
+    extra_case_task_ids = sorted(case_task_ids - expected_task_ids)
+    if extra_case_task_ids:
+        errors.append(
+            "verification cases include unknown task_id(s): "
+            f"{_format_task_id_summary(extra_case_task_ids)}"
+        )
+
+    missing_metric_task_ids = sorted(expected_task_ids - metric_task_ids_set)
+    if missing_metric_task_ids:
+        errors.append(
+            "missing verification metrics for task_id(s): "
+            f"{_format_task_id_summary(missing_metric_task_ids)}"
+        )
+
+    extra_metric_task_ids = sorted(metric_task_ids_set - expected_task_ids)
+    if extra_metric_task_ids:
+        errors.append(
+            "verification metrics include unknown task_id(s): "
+            f"{_format_task_id_summary(extra_metric_task_ids)}"
+        )
+
+    if duplicate_metric_task_ids:
+        errors.append(
+            "duplicate verification metrics rows for task_id(s): "
+            f"{_format_task_id_summary(duplicate_metric_task_ids)}"
+        )
+
+    return errors
+
+
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
@@ -356,6 +438,146 @@ def _commit_split_outputs(
             _safe_unlink(train_backup)
         if test_backup is not None:
             _safe_unlink(test_backup)
+
+
+def _stage_jsonl_rows(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    create_parent: bool,
+) -> Path:
+    if create_parent:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+        )
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = None
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False))
+                handle.write("\n")
+        return tmp_path
+    except Exception:
+        _safe_close_fd(fd)
+        if tmp_path is not None:
+            _safe_unlink(tmp_path)
+        raise
+
+
+def _commit_generated_outputs(
+    *,
+    dataset_tmp: Path,
+    dataset: Path,
+    cases_tmp: Path,
+    cases_path: Path,
+    metrics_tmp: Path,
+    metrics_path: Path,
+) -> None:
+    dataset_backup: Path | None = None
+    cases_backup: Path | None = None
+    metrics_backup: Path | None = None
+    dataset_replaced = False
+    cases_replaced = False
+    metrics_replaced = False
+    try:
+        dataset_backup = _copy_existing_output_to_backup(dataset)
+        cases_backup = _copy_existing_output_to_backup(cases_path)
+        metrics_backup = _copy_existing_output_to_backup(metrics_path)
+
+        os.replace(cases_tmp, cases_path)
+        cases_replaced = True
+        os.replace(metrics_tmp, metrics_path)
+        metrics_replaced = True
+        os.replace(dataset_tmp, dataset)
+        dataset_replaced = True
+    except Exception:
+        if dataset_replaced:
+            _safe_unlink(dataset)
+        if cases_replaced:
+            _safe_unlink(cases_path)
+        if metrics_replaced:
+            _safe_unlink(metrics_path)
+        _restore_backup(dataset, dataset_backup)
+        _restore_backup(cases_path, cases_backup)
+        _restore_backup(metrics_path, metrics_backup)
+        raise
+    finally:
+        _safe_unlink(dataset_tmp)
+        _safe_unlink(cases_tmp)
+        _safe_unlink(metrics_tmp)
+        if dataset_backup is not None:
+            _safe_unlink(dataset_backup)
+        if cases_backup is not None:
+            _safe_unlink(cases_backup)
+        if metrics_backup is not None:
+            _safe_unlink(metrics_backup)
+
+
+def _copy_existing_output_to_backup(path: Path) -> Path | None:
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return None
+
+    backup_fd, backup_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".bak",
+        dir=path.parent,
+    )
+    os.close(backup_fd)
+    backup = Path(backup_name)
+    try:
+        shutil.copy2(path, backup)
+    except FileNotFoundError:
+        _safe_unlink(backup)
+        return None
+    return backup
+
+
+def _write_generated_outputs_atomically(
+    *,
+    output: Path,
+    rendered_tasks: list[Task],
+    cases_path: Path,
+    metrics_path: Path,
+    cases: Sequence[VerificationCase],
+    metrics: Sequence[VerificationMetrics],
+) -> None:
+    dataset_rows = [
+        task.model_dump(exclude_none=True) for task in rendered_tasks
+    ]
+    case_rows = [case.model_dump(mode="json") for case in cases]
+    metric_rows = [metric.model_dump(mode="json") for metric in metrics]
+
+    dataset_tmp = _stage_jsonl_rows(
+        output,
+        dataset_rows,
+        create_parent=False,
+    )
+    cases_tmp = _stage_jsonl_rows(
+        cases_path,
+        case_rows,
+        create_parent=True,
+    )
+    metrics_tmp = _stage_jsonl_rows(
+        metrics_path,
+        metric_rows,
+        create_parent=True,
+    )
+    _commit_generated_outputs(
+        dataset_tmp=dataset_tmp,
+        dataset=output,
+        cases_tmp=cases_tmp,
+        cases_path=cases_path,
+        metrics_tmp=metrics_tmp,
+        metrics_path=metrics_path,
+    )
 
 
 def _paths_resolve_to_same_target(left: Path, right: Path) -> bool:
@@ -925,6 +1147,30 @@ def generate(
         str | None,
         typer.Option("--scale-range", help="Scale range (lo,hi)"),
     ] = None,
+    verification_output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--verification-output-dir",
+            help="Directory for generated verification sidecar JSONL files.",
+        ),
+    ] = DEFAULT_VERIFICATION_OUTPUT_DIR,
+    verification_seed: Annotated[
+        int,
+        typer.Option(
+            "--verification-seed",
+            help="Deterministic seed for generated verification cases.",
+        ),
+    ] = 0,
+    verify_full: Annotated[
+        bool,
+        typer.Option(
+            "--verify-full/--no-verify-full",
+            help=(
+                "Run full verification mode (includes expensive parity hooks "
+                "when available)."
+            ),
+        ),
+    ] = True,
 ) -> None:
     """Generate tasks to JSONL file."""
     rng = random.Random(seed)
@@ -1214,12 +1460,72 @@ def generate(
             typer.echo(str(err), err=True)
             raise typer.Exit(1) from err
 
-    with _atomic_output_file_or_exit(output) as output_handle:
-        for task in generated_tasks:
-            rendered_task = render_task_for_language(task, selected_language)
-            _write_task_line(output_handle, rendered_task)
+    rendered_tasks = [
+        render_task_for_language(task, selected_language)
+        for task in generated_tasks
+    ]
+
+    try:
+        artifacts = build_verification_artifacts(
+            rendered_tasks,
+            seed=verification_seed,
+        )
+    except Exception as err:
+        typer.echo(
+            f"Error: failed to build verification artifacts: {err}",
+            err=True,
+        )
+        raise typer.Exit(1) from err
+
+    failures = verify_cases(
+        rendered_tasks,
+        artifacts.cases,
+        full_parity=verify_full,
+    )
+    if failures:
+        typer.echo(
+            "Error: generated verification failed for newly generated tasks.",
+            err=True,
+        )
+        for failure in failures[:20]:
+            typer.echo(
+                (
+                    f"- {failure.task_id} [{failure.family}] "
+                    f"{failure.case_id}: {failure.message}"
+                ),
+                err=True,
+            )
+        if len(failures) > 20:
+            typer.echo(
+                f"- ... and {len(failures) - 20} more verification failures",
+                err=True,
+            )
+        raise typer.Exit(1)
+
+    cases_path, metrics_path = verification_sidecar_paths(
+        output,
+        output_dir=verification_output_dir,
+    )
+
+    try:
+        _write_generated_outputs_atomically(
+            output=output,
+            rendered_tasks=rendered_tasks,
+            cases_path=cases_path,
+            metrics_path=metrics_path,
+            cases=artifacts.cases,
+            metrics=artifacts.metrics,
+        )
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
 
     typer.echo(f"Generated {generated_count} tasks to {output}")
+    counts = summarize_case_counts(artifacts.cases)
+    typer.echo(
+        "Verification sidecars: "
+        f"{cases_path} ({sum(counts.values())} cases), {metrics_path}"
+    )
 
 
 @app.command()
@@ -1413,6 +1719,193 @@ def info(
         typer.echo(f"{input_file}: {total} tasks")
         for fam, cnt in sorted(by_family.items()):
             typer.echo(f"  {fam}: {cnt}")
+    except _TaskRowError as err:
+        typer.echo(_render_task_row_error(input_file, err), err=True)
+        raise typer.Exit(1) from err
+    except OSError as err:
+        typer.echo(_render_os_error(err), err=True)
+        raise typer.Exit(1) from err
+
+
+@app.command()
+def verify(
+    input_file: Annotated[Path, typer.Argument(help="Input tasks JSONL file")],
+    verification_output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--verification-output-dir",
+            help="Directory for generated verification sidecar JSONL files.",
+        ),
+    ] = DEFAULT_VERIFICATION_OUTPUT_DIR,
+    regenerate_sidecars: Annotated[
+        bool,
+        typer.Option(
+            "--regenerate-sidecars",
+            help="Regenerate verification cases instead of loading sidecars.",
+        ),
+    ] = False,
+    write_sidecars: Annotated[
+        bool,
+        typer.Option(
+            "--write-sidecars/--no-write-sidecars",
+            help="Write regenerated verification sidecars to disk.",
+        ),
+    ] = True,
+    verify_full: Annotated[
+        bool,
+        typer.Option(
+            "--full/--no-full",
+            help="Run full verification mode (includes parity hooks).",
+        ),
+    ] = True,
+    verification_seed: Annotated[
+        int,
+        typer.Option(
+            "--verification-seed",
+            help="Deterministic seed used when regenerating sidecars.",
+        ),
+    ] = 0,
+) -> None:
+    """Verify dataset correctness using generated verification sidecars."""
+    try:
+        tasks = list(_iter_validated_tasks(input_file))
+        id_errors: list[str] = []
+        for task in tasks:
+            issues = validate_task_ids(task)
+            if issues:
+                details = "; ".join(
+                    f"{issue.code}: {issue.message}" for issue in issues
+                )
+                id_errors.append(f"{task.task_id}: {details}")
+        if id_errors:
+            typer.echo(
+                "Task identity validation failed:",
+                err=True,
+            )
+            for line in id_errors[:20]:
+                typer.echo(f"- {line}", err=True)
+            if len(id_errors) > 20:
+                typer.echo(
+                    f"- ... and {len(id_errors) - 20} more",
+                    err=True,
+                )
+            raise typer.Exit(1)
+
+        cases_path, metrics_path = verification_sidecar_paths(
+            input_file,
+            output_dir=verification_output_dir,
+        )
+        missing_sidecars: list[str] = []
+        if not cases_path.exists():
+            missing_sidecars.append(str(cases_path))
+        if not metrics_path.exists():
+            missing_sidecars.append(str(metrics_path))
+
+        should_regenerate_sidecars = regenerate_sidecars or bool(
+            missing_sidecars
+        )
+        cases: list[VerificationCase] = []
+        metrics: list[VerificationMetrics] = []
+        if not should_regenerate_sidecars:
+            try:
+                cases, metrics = load_verification_sidecars(
+                    cases_path, metrics_path
+                )
+            except (
+                ValidationError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
+                typer.echo(
+                    "Warning: failed to load verification sidecars "
+                    f"({type(exc).__name__}: {exc}); regenerating artifacts.",
+                    err=True,
+                )
+                should_regenerate_sidecars = True
+
+        if should_regenerate_sidecars:
+            if not regenerate_sidecars and missing_sidecars:
+                missing_display = ", ".join(missing_sidecars)
+                typer.echo(
+                    "Warning: requested sidecar reuse but the following "
+                    "sidecar file(s) are missing; regenerating verification "
+                    f"artifacts: {missing_display}",
+                    err=True,
+                )
+            try:
+                artifacts = build_verification_artifacts(
+                    tasks,
+                    seed=verification_seed,
+                )
+                cases = list(artifacts.cases)
+                metrics = list(artifacts.metrics)
+                if write_sidecars:
+                    write_verification_sidecars(
+                        cases_path,
+                        metrics_path,
+                        cases=cases,
+                        metrics=metrics,
+                    )
+            except Exception as exc:
+                typer.echo(
+                    f"Failed to build verification artifacts: {exc}",
+                    err=True,
+                )
+                raise typer.Exit(1) from exc
+
+        coverage_errors = _verification_sidecar_coverage_errors(
+            tasks,
+            cases,
+            metrics,
+        )
+        if coverage_errors:
+            typer.echo(
+                "Verification sidecar coverage validation failed:",
+                err=True,
+            )
+            for line in coverage_errors:
+                typer.echo(f"- {line}", err=True)
+            raise typer.Exit(1)
+
+        failures = verify_cases(tasks, cases, full_parity=verify_full)
+        if failures:
+            typer.echo(
+                f"Verification failed with {len(failures)} case mismatch(es).",
+                err=True,
+            )
+            for failure in failures[:20]:
+                typer.echo(
+                    (
+                        f"- {failure.task_id} [{failure.family}] "
+                        f"{failure.case_id}: {failure.message}"
+                    ),
+                    err=True,
+                )
+            if len(failures) > 20:
+                typer.echo(
+                    f"- ... and {len(failures) - 20} more failures",
+                    err=True,
+                )
+            raise typer.Exit(1)
+
+        counts = summarize_case_counts(cases)
+        typer.echo(
+            f"Verified {len(tasks)} task(s) using {sum(counts.values())} "
+            "verification case(s)."
+        )
+        typer.echo(
+            "Case counts by layer: "
+            "layer1="
+            f"{counts.get(VerificationLayer.LAYER1_SPEC_BOUNDARY.value, 0)}, "
+            "layer2="
+            f"{counts.get(VerificationLayer.LAYER2_PROPERTY.value, 0)}, "
+            "layer3="
+            f"{counts.get(VerificationLayer.LAYER3_MUTATION.value, 0)}"
+        )
+        metrics_message = f"Metrics rows: {len(metrics)}"
+        if write_sidecars:
+            metrics_message += f" (sidecars at {cases_path}, {metrics_path})"
+        typer.echo(metrics_message)
     except _TaskRowError as err:
         typer.echo(_render_task_row_error(input_file, err), err=True)
         raise typer.Exit(1) from err

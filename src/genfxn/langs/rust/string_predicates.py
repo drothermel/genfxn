@@ -137,7 +137,7 @@ def render_string_predicate_rust(pred: StringPredicate, var: str = "s") -> str:
         case StringPredicateIsDigit():
             return (
                 f"!{var}.is_empty() && "
-                f"{var}.chars().all(|c| __genfxn_is_python_digit(c))"
+                f"{var}.chars().all(&__genfxn_is_python_digit)"
             )
         case StringPredicateIsUpper():
             return (
