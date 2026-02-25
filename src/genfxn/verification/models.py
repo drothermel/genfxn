@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class VerificationLayer(str, Enum):
@@ -66,8 +66,30 @@ class VerificationMetrics(BaseModel):
     n_layer3_cases: int
     mutation_score: float
     mutation_score_curve: list[MutationCurvePoint]
-    heldout_mutant_escape_rate: float
-    heldout_mutant_escape_ci95: float
+    heldout_mutant_fpr: float
+    heldout_mutant_fpr_ci95: float
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_field_names(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        if (
+            "heldout_mutant_fpr" not in payload
+            and "heldout_mutant_escape_rate" in payload
+        ):
+            payload["heldout_mutant_fpr"] = payload[
+                "heldout_mutant_escape_rate"
+            ]
+        if (
+            "heldout_mutant_fpr_ci95" not in payload
+            and "heldout_mutant_escape_ci95" in payload
+        ):
+            payload["heldout_mutant_fpr_ci95"] = payload[
+                "heldout_mutant_escape_ci95"
+            ]
+        return payload
 
 
 class VerificationFailure(BaseModel):

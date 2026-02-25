@@ -48,8 +48,8 @@ class Layer3Summary:
     cases: list[VerificationCase]
     mutation_score: float
     mutation_score_curve: list[MutationCurvePoint]
-    heldout_mutant_escape_rate: float
-    heldout_mutant_escape_ci95: float
+    heldout_mutant_fpr: float
+    heldout_mutant_fpr_ci95: float
 
 
 def _iter_mutation_candidates(
@@ -318,8 +318,7 @@ def generate_layer3_cases(
             mutant_obj=mutant_obj,
             candidate_inputs=candidate_inputs,
             debug_context=(
-                "mutation candidate input "
-                f"mutant_index={mutant_index}"
+                f"mutation candidate input mutant_index={mutant_index}"
             ),
         )
         if witness is None:
@@ -404,13 +403,13 @@ def generate_layer3_cases(
         if detected_input is None:
             heldout_escapes += 1
 
-    heldout_mutant_escape_rate = (
+    heldout_mutant_fpr = (
         heldout_escapes / heldout_distinguishable
         if heldout_distinguishable
         else 0.0
     )
-    heldout_mutant_escape_ci95 = _ci95_for_rate(
-        heldout_mutant_escape_rate,
+    heldout_mutant_fpr_ci95 = _ci95_for_rate(
+        heldout_mutant_fpr,
         heldout_distinguishable,
     )
 
@@ -418,6 +417,6 @@ def generate_layer3_cases(
         cases=cases,
         mutation_score=mutation_score,
         mutation_score_curve=curve,
-        heldout_mutant_escape_rate=heldout_mutant_escape_rate,
-        heldout_mutant_escape_ci95=heldout_mutant_escape_ci95,
+        heldout_mutant_fpr=heldout_mutant_fpr,
+        heldout_mutant_fpr_ci95=heldout_mutant_fpr_ci95,
     )

@@ -54,9 +54,9 @@ def main(
                 )
 
             ids = compute_task_ids(family, spec, code)
-            if overwrite_existing or not row.get("spec_id"):
+            if overwrite_existing or row.get("spec_id") is None:
                 row["spec_id"] = ids.spec_id
-            if overwrite_existing or not row.get("sem_hash"):
+            if overwrite_existing or row.get("sem_hash") is None:
                 row["sem_hash"] = ids.sem_hash
             if overwrite_existing or row.get("ast_id") is None:
                 row["ast_id"] = ids.ast_id

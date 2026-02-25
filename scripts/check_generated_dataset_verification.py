@@ -34,7 +34,8 @@ def main(
         help="Minimum mutation_score required per task.",
     ),
     verify_full: bool = typer.Option(
-        False,
+        True,
+        "--verify-full/--no-verify-full",
         help="Run full verification mode parity hooks.",
     ),
 ) -> None:

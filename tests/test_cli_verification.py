@@ -1,4 +1,6 @@
+import random
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -7,6 +9,7 @@ from typer.testing import CliRunner
 
 import genfxn.cli as cli_module
 from genfxn.cli import app
+from genfxn.piecewise.task import generate_piecewise_task
 from genfxn.verification.io import verification_sidecar_paths
 from genfxn.verification.models import VerificationFailure
 
@@ -34,6 +37,7 @@ def test_generate_emits_sidecars_and_verify_passes(
             "piecewise",
             "-n",
             "2",
+            "--no-verify-full",
             "--verification-output-dir",
             str(verification_dir),
         ],
@@ -53,6 +57,7 @@ def test_generate_emits_sidecars_and_verify_passes(
         [
             "verify",
             str(output),
+            "--no-full",
             "--verification-output-dir",
             str(verification_dir),
         ],
@@ -98,6 +103,7 @@ def test_generate_fails_atomically_on_verification_mismatch(
             "piecewise",
             "-n",
             "1",
+            "--no-verify-full",
             "--verification-output-dir",
             str(verification_dir),
         ],
@@ -133,6 +139,7 @@ def test_verify_fails_when_sidecar_case_is_tampered(
             "piecewise",
             "-n",
             "1",
+            "--no-verify-full",
             "--verification-output-dir",
             str(verification_dir),
         ],
@@ -161,6 +168,7 @@ def test_verify_fails_when_sidecar_case_is_tampered(
         [
             "verify",
             str(output),
+            "--no-full",
             "--verification-output-dir",
             str(verification_dir),
         ],
@@ -190,6 +198,7 @@ def test_verify_warns_when_sidecars_missing_and_regenerates(
             "piecewise",
             "-n",
             "1",
+            "--no-verify-full",
             "--verification-output-dir",
             str(verification_dir),
         ],
@@ -209,6 +218,7 @@ def test_verify_warns_when_sidecars_missing_and_regenerates(
         [
             "verify",
             str(output),
+            "--no-full",
             "--verification-output-dir",
             str(verification_dir),
         ],
@@ -217,3 +227,130 @@ def test_verify_warns_when_sidecars_missing_and_regenerates(
     assert "Warning: requested sidecar reuse" in verify_result.output
     assert str(cases_path) in verify_result.output
     assert cases_path.exists()
+
+
+def test_verify_regenerates_when_sidecars_are_malformed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "check_generated_code_quality",
+        lambda tasks: None,  # noqa: ARG005
+    )
+
+    output = tmp_path / "tasks.jsonl"
+    verification_dir = tmp_path / "verification_cases"
+    generate_result = runner.invoke(
+        app,
+        [
+            "generate",
+            "-o",
+            str(output),
+            "-f",
+            "piecewise",
+            "-n",
+            "1",
+            "--no-verify-full",
+            "--verification-output-dir",
+            str(verification_dir),
+        ],
+    )
+    assert generate_result.exit_code == 0
+
+    cases_path, _ = verification_sidecar_paths(
+        output,
+        output_dir=verification_dir,
+    )
+    cases_path.write_text("{broken-json\n", encoding="utf-8")
+
+    verify_result = runner.invoke(
+        app,
+        [
+            "verify",
+            str(output),
+            "--no-full",
+            "--verification-output-dir",
+            str(verification_dir),
+        ],
+    )
+    assert verify_result.exit_code == 0
+    assert (
+        "Warning: failed to load verification sidecars" in verify_result.output
+    )
+
+
+def test_generate_uses_full_parity_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "check_generated_code_quality",
+        lambda tasks: None,  # noqa: ARG005
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "build_verification_artifacts",
+        lambda *args, **kwargs: SimpleNamespace(cases=[], metrics=[]),  # noqa: ARG005
+    )
+    seen_full_parity: list[bool] = []
+
+    def _fake_verify_cases(*args: object, **kwargs: object) -> list[object]:
+        seen_full_parity.append(bool(kwargs.get("full_parity")))
+        return []
+
+    monkeypatch.setattr(cli_module, "verify_cases", _fake_verify_cases)
+
+    output = tmp_path / "tasks.jsonl"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "-o",
+            str(output),
+            "-f",
+            "piecewise",
+            "-n",
+            "1",
+            "--verification-output-dir",
+            str(tmp_path / "verification_cases"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen_full_parity == [True]
+
+
+def test_verify_uses_full_parity_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task = generate_piecewise_task(rng=random.Random(5)).model_dump(mode="json")
+    dataset = tmp_path / "tasks.jsonl"
+    srsly.write_jsonl(dataset, [task])
+
+    monkeypatch.setattr(
+        cli_module,
+        "build_verification_artifacts",
+        lambda *args, **kwargs: SimpleNamespace(cases=[], metrics=[]),  # noqa: ARG005
+    )
+    seen_full_parity: list[bool] = []
+
+    def _fake_verify_cases(*args: object, **kwargs: object) -> list[object]:
+        seen_full_parity.append(bool(kwargs.get("full_parity")))
+        return []
+
+    monkeypatch.setattr(cli_module, "verify_cases", _fake_verify_cases)
+
+    result = runner.invoke(
+        app,
+        [
+            "verify",
+            str(dataset),
+            "--regenerate-sidecars",
+            "--no-write-sidecars",
+            "--verification-output-dir",
+            str(tmp_path / "verification_cases"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen_full_parity == [True]

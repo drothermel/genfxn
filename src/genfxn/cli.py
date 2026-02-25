@@ -72,7 +72,11 @@ from genfxn.verification.io import (
     verification_sidecar_paths,
     write_verification_sidecars,
 )
-from genfxn.verification.models import VerificationLayer
+from genfxn.verification.models import (
+    VerificationCase,
+    VerificationLayer,
+    VerificationMetrics,
+)
 from genfxn.verification.runner import (
     build_verification_artifacts,
     summarize_case_counts,
@@ -955,13 +959,13 @@ def generate(
     verify_full: Annotated[
         bool,
         typer.Option(
-            "--verify-full",
+            "--verify-full/--no-verify-full",
             help=(
                 "Run full verification mode (includes expensive parity hooks "
                 "when available)."
             ),
         ),
-    ] = False,
+    ] = True,
 ) -> None:
     """Generate tasks to JSONL file."""
     rng = random.Random(seed)
@@ -1547,10 +1551,10 @@ def verify(
     verify_full: Annotated[
         bool,
         typer.Option(
-            "--full",
+            "--full/--no-full",
             help="Run full verification mode (includes parity hooks).",
         ),
-    ] = False,
+    ] = True,
     verification_seed: Annotated[
         int,
         typer.Option(
@@ -1594,11 +1598,29 @@ def verify(
         if not metrics_path.exists():
             missing_sidecars.append(str(metrics_path))
 
-        if not regenerate_sidecars and not missing_sidecars:
-            cases, metrics = load_verification_sidecars(
-                cases_path, metrics_path
-            )
-        else:
+        should_regenerate_sidecars = regenerate_sidecars or bool(
+            missing_sidecars
+        )
+        cases: list[VerificationCase]
+        metrics: list[VerificationMetrics]
+        if not should_regenerate_sidecars:
+            try:
+                cases, metrics = load_verification_sidecars(
+                    cases_path, metrics_path
+                )
+            except (
+                ValidationError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
+                typer.echo(
+                    "Warning: failed to load verification sidecars "
+                    f"({type(exc).__name__}: {exc}); regenerating artifacts.",
+                    err=True,
+                )
+                should_regenerate_sidecars = True
+
+        if should_regenerate_sidecars:
             if not regenerate_sidecars and missing_sidecars:
                 missing_display = ", ".join(missing_sidecars)
                 typer.echo(

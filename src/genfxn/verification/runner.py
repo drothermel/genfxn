@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from genfxn.core.models import Task
 from genfxn.core.task_ids import validate_task_ids
@@ -71,21 +72,33 @@ def build_verification_artifacts(
                 n_layer3_cases=len(layer3_summary.cases),
                 mutation_score=layer3_summary.mutation_score,
                 mutation_score_curve=layer3_summary.mutation_score_curve,
-                heldout_mutant_escape_rate=(
-                    layer3_summary.heldout_mutant_escape_rate
-                ),
-                heldout_mutant_escape_ci95=(
-                    layer3_summary.heldout_mutant_escape_ci95
-                ),
+                heldout_mutant_fpr=layer3_summary.heldout_mutant_fpr,
+                heldout_mutant_fpr_ci95=layer3_summary.heldout_mutant_fpr_ci95,
             )
         )
 
     return VerificationArtifacts(cases=all_cases, metrics=all_metrics)
 
 
-def _verify_case(task: Task, case: VerificationCase) -> str | None:
+def _validated_spec_for_task(
+    task: Task,
+    spec_cache: dict[str, Any],
+) -> Any:
     try:
+        return spec_cache[task.task_id]
+    except KeyError:
         spec_obj = validate_spec_for_task(task.family, task.spec)
+        spec_cache[task.task_id] = spec_obj
+        return spec_obj
+
+
+def _verify_case(
+    task: Task,
+    case: VerificationCase,
+    spec_cache: dict[str, Any],
+) -> str | None:
+    try:
+        spec_obj = _validated_spec_for_task(task, spec_cache)
         actual = normalize_case_value(
             evaluate_input(task.family, spec_obj, case.input)
         )
@@ -106,10 +119,11 @@ def verify_cases(
     tasks: list[Task],
     cases: list[VerificationCase],
     *,
-    full_parity: bool = False,
+    full_parity: bool = True,
     parity_case_count: int = 48,
 ) -> list[VerificationFailure]:
     by_task_id = {task.task_id: task for task in tasks}
+    spec_cache: dict[str, Any] = {}
     failures: list[VerificationFailure] = []
 
     for case in cases:
@@ -127,7 +141,7 @@ def verify_cases(
             )
             continue
 
-        message = _verify_case(task, case)
+        message = _verify_case(task, case, spec_cache)
         if message is None:
             continue
 

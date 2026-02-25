@@ -35,7 +35,8 @@ def main(
         help="Deterministic seed for verification-case generation.",
     ),
     verify_full: bool = typer.Option(
-        False,
+        True,
+        "--verify-full/--no-verify-full",
         help="Run full parity replay checks when generating sidecars.",
     ),
 ) -> None:

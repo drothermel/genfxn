@@ -106,7 +106,7 @@ def test_mutation_score_is_vacuously_full_when_no_mutant_is_distinguishable(
 
     assert summary.cases == []
     assert summary.mutation_score == 1.0
-    assert summary.heldout_mutant_escape_rate == 0.0
+    assert summary.heldout_mutant_fpr == 0.0
     assert all(
         point.mutation_score == 1.0 for point in summary.mutation_score_curve
     )
