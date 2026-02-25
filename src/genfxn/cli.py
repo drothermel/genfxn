@@ -16,6 +16,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
+from genfxn.core.ast_hash import compute_ast_hash
 from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
@@ -450,7 +451,7 @@ def _atomic_output_file_or_exit(path: Path) -> Iterator[TextIO]:
 
 
 def _write_task_line(handle, task: Task) -> None:
-    handle.write(srsly.json_dumps(task.model_dump()))
+    handle.write(srsly.json_dumps(task.model_dump(exclude_none=True)))
     handle.write("\n")
 
 
@@ -488,7 +489,7 @@ def _parse_single_language(language: str) -> Language:
         ) from err
 
 
-def _render_task_for_language(task: Task, language: Language) -> Task:
+def render_task_for_language(task: Task, language: Language) -> Task:
     if language == Language.PYTHON:
         return task
 
@@ -541,7 +542,8 @@ def _render_task_for_language(task: Task, language: Language) -> Task:
             raise typer.BadParameter(f"Unknown family: {task.family}")
 
     rendered_code = render_fn(spec_obj, func_name="f")
-    return task.model_copy(update={"code": rendered_code})
+    ast_id = {language.value: compute_ast_hash(language.value, rendered_code)}
+    return task.model_copy(update={"code": rendered_code, "ast_id": ast_id})
 
 
 def _build_stateful_axes(
@@ -1214,7 +1216,7 @@ def generate(
 
     with _atomic_output_file_or_exit(output) as output_handle:
         for task in generated_tasks:
-            rendered_task = _render_task_for_language(task, selected_language)
+            rendered_task = render_task_for_language(task, selected_language)
             _write_task_line(output_handle, rendered_task)
 
     typer.echo(f"Generated {generated_count} tasks to {output}")

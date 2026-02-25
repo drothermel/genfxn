@@ -3,6 +3,7 @@ import random
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
 from genfxn.core.models import Task
+from genfxn.core.task_ids import compute_task_ids
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
@@ -56,10 +57,14 @@ def generate_stringrules_task(
         spec_dict = spec.model_dump()
         task_id = task_id_from_spec("stringrules", spec_dict)
         code = _render_stringrules_for_languages(spec, languages)
+        ids = compute_task_ids("stringrules", spec_dict, code)
         trace = GenerationTrace(family="stringrules", steps=trace_steps)
 
         return Task(
             task_id=task_id,
+            spec_id=ids.spec_id,
+            sem_hash=ids.sem_hash,
+            ast_id=ids.ast_id,
             family="stringrules",
             spec=spec_dict,
             code=code,

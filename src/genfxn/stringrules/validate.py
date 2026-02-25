@@ -12,6 +12,7 @@ from genfxn.core.safe_exec import (
     execute_code_restricted,
 )
 from genfxn.core.string_predicates import eval_string_predicate
+from genfxn.core.task_ids import validate_task_ids
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.stringrules.ast_safety import (
     ALLOWED_ANNOTATION_NAMES,
@@ -700,6 +701,7 @@ def validate_stringrules_task(
     issues: list[Issue] = []
 
     issues.extend(_validate_task_id(task))
+    issues.extend(validate_task_ids(task))
 
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)

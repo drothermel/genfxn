@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from genfxn.core.canonicalization import compute_spec_id
 from genfxn.core.codegen import render_tests, task_id_from_spec
 from genfxn.core.models import Query, QueryTag
 from genfxn.core.predicates import (
@@ -458,6 +459,123 @@ class TestTaskId:
         assert id_tuple != id_set
         assert id_tuple != id_frozenset
         assert id_set != id_frozenset
+
+
+class TestSpecIdCanonicalization:
+    def test_defaults_are_included_via_validated_spec(self) -> None:
+        spec_with_default_omitted = {
+            "operations": [{"op": "not"}],
+        }
+        spec_with_default_explicit = {
+            "width_bits": 8,
+            "operations": [{"op": "not"}],
+        }
+        assert compute_spec_id(
+            "bitops", spec_with_default_omitted
+        ) == compute_spec_id("bitops", spec_with_default_explicit)
+
+    def test_commutative_and_operands_order_independent(self) -> None:
+        spec_a = {
+            "template": "longest_run",
+            "match_predicate": {
+                "kind": "and",
+                "operands": [
+                    {"kind": "lt", "value": 3},
+                    {"kind": "ge", "value": 0},
+                ],
+            },
+        }
+        spec_b = {
+            "template": "longest_run",
+            "match_predicate": {
+                "kind": "and",
+                "operands": [
+                    {"kind": "ge", "value": 0},
+                    {"kind": "lt", "value": 3},
+                ],
+            },
+        }
+        assert compute_spec_id("stateful", spec_a) == compute_spec_id(
+            "stateful", spec_b
+        )
+
+    def test_temporal_and_duplicate_folded(self) -> None:
+        atom = {"op": "atom", "predicate": "eq", "constant": 1}
+        spec_a = {
+            "output_mode": "sat_at_start",
+            "formula": {"op": "and", "left": atom, "right": atom},
+        }
+        spec_b = {"output_mode": "sat_at_start", "formula": atom}
+        assert compute_spec_id("temporal_logic", spec_a) == compute_spec_id(
+            "temporal_logic", spec_b
+        )
+
+    def test_pipeline_identity_folded(self) -> None:
+        spec_a = {
+            "template": "conditional_linear_sum",
+            "predicate": {"kind": "even"},
+            "true_transform": {
+                "kind": "pipeline",
+                "steps": [
+                    {"kind": "identity"},
+                    {"kind": "shift", "offset": 2},
+                ],
+            },
+            "false_transform": {"kind": "identity"},
+            "init_value": 0,
+        }
+        spec_b = {
+            "template": "conditional_linear_sum",
+            "predicate": {"kind": "even"},
+            "true_transform": {"kind": "shift", "offset": 2},
+            "false_transform": {"kind": "identity"},
+            "init_value": 0,
+        }
+        assert compute_spec_id("stateful", spec_a) == compute_spec_id(
+            "stateful", spec_b
+        )
+
+    def test_graph_edge_normalization(self) -> None:
+        spec_a = {
+            "query_type": "shortest_path_cost",
+            "directed": False,
+            "weighted": True,
+            "n_nodes": 3,
+            "edges": [
+                {"u": 0, "v": 1, "w": 5},
+                {"u": 1, "v": 0, "w": 2},
+                {"u": 0, "v": 1, "w": 3},
+            ],
+        }
+        spec_b = {
+            "query_type": "shortest_path_cost",
+            "directed": False,
+            "weighted": True,
+            "n_nodes": 3,
+            "edges": [{"u": 0, "v": 1, "w": 2}],
+        }
+        assert compute_spec_id("graph_queries", spec_a) == compute_spec_id(
+            "graph_queries", spec_b
+        )
+
+    def test_fsm_state_order_and_machine_type_normalized(self) -> None:
+        state_low = {"id": 0, "transitions": [], "is_accept": False}
+        state_high = {"id": 2, "transitions": [], "is_accept": True}
+        spec_a = {
+            "machine_type": "mealy",
+            "output_mode": "final_state_id",
+            "undefined_transition_policy": "stay",
+            "start_state_id": 0,
+            "states": [state_high, state_low],
+        }
+        spec_b = {
+            "machine_type": "moore",
+            "output_mode": "final_state_id",
+            "undefined_transition_policy": "stay",
+            "start_state_id": 0,
+            "states": [state_low, state_high],
+        }
+        assert compute_spec_id("fsm", spec_a) == compute_spec_id("fsm", spec_b)
 
 
 class TestRenderTests:

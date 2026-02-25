@@ -47,6 +47,11 @@ class PoolStats(BaseModel):
     duplicates: int = 0
     errors: int = 0
     candidates: int = 0
+    duplicate_task_ids: int = 0
+    duplicate_spec_ids: int = 0
+    duplicate_sem_hashes: int = 0
+    semantic_uniqueness_ratio: float = 1.0
+    semantic_collapse: bool = False
 
 
 def _stable_seed(seed: int, family: str, index: int) -> int:
@@ -139,7 +144,9 @@ def generate_pool(
     extract_features = _FEATURE_EXTRACTORS[family]
 
     stats = PoolStats()
-    seen_ids: set[str] = set()
+    seen_task_ids: set[str] = set()
+    seen_spec_ids: set[str] = set()
+    seen_sem_hashes: set[str] = set()
     candidates: list[Candidate] = []
 
     for i in range(pool_size):
@@ -151,10 +158,20 @@ def generate_pool(
             stats.errors += 1
             continue
 
-        if task.task_id in seen_ids:
-            stats.duplicates += 1
+        if task.task_id in seen_task_ids:
+            stats.duplicate_task_ids += 1
             continue
-        seen_ids.add(task.task_id)
+        seen_task_ids.add(task.task_id)
+
+        if task.spec_id in seen_spec_ids:
+            stats.duplicate_spec_ids += 1
+        seen_spec_ids.add(task.spec_id)
+
+        if task.sem_hash in seen_sem_hashes:
+            stats.duplicates += 1
+            stats.duplicate_sem_hashes += 1
+            continue
+        seen_sem_hashes.add(task.sem_hash)
 
         candidates.append(
             Candidate(
@@ -165,6 +182,13 @@ def generate_pool(
         )
 
     stats.candidates = len(candidates)
+    successful = stats.total_sampled - stats.errors
+    unique_sem = len(seen_sem_hashes)
+    if successful > 0:
+        stats.semantic_uniqueness_ratio = unique_sem / successful
+    else:
+        stats.semantic_uniqueness_ratio = 1.0
+    stats.semantic_collapse = stats.semantic_uniqueness_ratio < 0.6
     return candidates, stats
 
 

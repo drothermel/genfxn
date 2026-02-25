@@ -11,6 +11,9 @@ def _make_task(task_id: str, spec: dict) -> Task:
     """Helper to create a minimal task for testing."""
     return Task(
         task_id=task_id,
+        spec_id=f"{task_id}_spec",
+        sem_hash=f"{task_id}_sem",
+        ast_id={"python": f"{task_id}_ast"},
         family="test",
         spec=spec,
         code="def f(): pass",

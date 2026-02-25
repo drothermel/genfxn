@@ -10,6 +10,14 @@ import pytest
 from genfxn.bitops import task as bitops_task
 from genfxn.bitops import validate as bitops_validate
 from genfxn.core.models import Query, QueryTag, Task
+from genfxn.core.task_ids import (
+    CODE_AST_ID_MISMATCH,
+    CODE_MISSING_AST_ID,
+    CODE_MISSING_SEM_HASH,
+    CODE_MISSING_SPEC_ID,
+    CODE_SEM_HASH_MISMATCH,
+    CODE_SPEC_ID_MISMATCH,
+)
 from genfxn.core.validate import Issue, Severity
 from genfxn.fsm import task as fsm_task
 from genfxn.fsm import validate as fsm_validate
@@ -487,3 +495,59 @@ def test_non_call_attributes_rejected_by_ast_contract(
     )
     codes = {issue.code for issue in issues}
     assert case.code_unsafe_ast_code in codes
+
+
+@pytest.mark.parametrize(
+    "case",
+    VALIDATOR_CASES,
+    ids=[case.name for case in VALIDATOR_CASES],
+)
+def test_validators_report_missing_canonical_ids(
+    case: ValidatorContractCase,
+) -> None:
+    task = _baseline_task(case)
+    corrupted = task.model_copy(
+        update={
+            "spec_id": "",
+            "sem_hash": "",
+            "ast_id": {},
+        }
+    )
+
+    issues = case.validate_task(
+        corrupted,
+        strict=True,
+        execute_untrusted_code=False,
+    )
+    codes = {issue.code for issue in issues}
+    assert CODE_MISSING_SPEC_ID in codes
+    assert CODE_MISSING_SEM_HASH in codes
+    assert CODE_MISSING_AST_ID in codes
+
+
+@pytest.mark.parametrize(
+    "case",
+    VALIDATOR_CASES,
+    ids=[case.name for case in VALIDATOR_CASES],
+)
+def test_validators_report_canonical_id_mismatches(
+    case: ValidatorContractCase,
+) -> None:
+    task = _baseline_task(case)
+    corrupted = task.model_copy(
+        update={
+            "spec_id": "bad",
+            "sem_hash": "bad",
+            "ast_id": {"python": "bad"},
+        }
+    )
+
+    issues = case.validate_task(
+        corrupted,
+        strict=True,
+        execute_untrusted_code=False,
+    )
+    codes = {issue.code for issue in issues}
+    assert CODE_SPEC_ID_MISMATCH in codes
+    assert CODE_SEM_HASH_MISMATCH in codes
+    assert CODE_AST_ID_MISMATCH in codes

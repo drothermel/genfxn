@@ -1,6 +1,7 @@
 import pytest
 
 import genfxn.suites.generate as suites_generate
+from genfxn.core.models import Query, QueryTag, Task
 from genfxn.piecewise.models import ExprType, PiecewiseAxes
 from genfxn.suites.generate import generate_pool, generate_suite
 from genfxn.suites.quotas import QUOTAS
@@ -69,3 +70,44 @@ def test_generate_pool_missing_feature_extractor_mapping_raises(
         ValueError, match="piecewise.*_FEATURE_EXTRACTORS mapping"
     ):
         suites_generate.generate_pool(family="piecewise", pool_size=1)
+
+
+def test_generate_pool_dedupes_by_sem_hash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _make_task(task_id: str) -> Task:
+        return Task(
+            task_id=task_id,
+            spec_id=task_id,
+            sem_hash="same_semantics",
+            ast_id={"python": "ast"},
+            family="piecewise",
+            spec={},
+            code="def f(x):\n    return x",
+            queries=[Query(input=0, output=0, tag=QueryTag.TYPICAL)],
+            description="stub",
+        )
+
+    call_count = {"n": 0}
+
+    def _fake_generator(rng, axes):  # noqa: ANN001
+        del rng, axes
+        call_count["n"] += 1
+        return _make_task(f"t-{call_count['n']}")
+
+    monkeypatch.setitem(
+        suites_generate._TASK_GENERATORS, "piecewise", _fake_generator
+    )
+    monkeypatch.setitem(
+        suites_generate._FEATURE_EXTRACTORS, "piecewise", lambda _spec: {}
+    )
+
+    candidates, stats = suites_generate.generate_pool(
+        family="piecewise", seed=1, pool_size=4
+    )
+
+    assert len(candidates) == 1
+    assert stats.duplicate_sem_hashes == 3
+    assert stats.duplicates == 3
+    assert stats.semantic_uniqueness_ratio == 0.25
+    assert stats.semantic_collapse is True

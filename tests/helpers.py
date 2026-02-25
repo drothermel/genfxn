@@ -56,27 +56,53 @@ def _require_runnable_tool(
 
 
 @lru_cache(maxsize=1)
-def require_java_runtime() -> tuple[str, str]:
+def _require_java_runtime_cached(
+    javac_path: str | None,
+    java_path: str | None,
+) -> tuple[str, str]:
     javac = _require_runnable_tool(
         tool_name="javac",
-        tool_path=shutil.which("javac"),
+        tool_path=javac_path,
         version_args=("-version",),
     )
     java = _require_runnable_tool(
         tool_name="java",
-        tool_path=shutil.which("java"),
+        tool_path=java_path,
         version_args=("-version",),
     )
     return javac, java
 
 
-@lru_cache(maxsize=1)
-def require_rust_runtime() -> str:
+def require_java_runtime() -> tuple[str, str]:
+    return _require_java_runtime_cached(
+        shutil.which("javac"),
+        shutil.which("java"),
+    )
+
+
+@lru_cache(maxsize=4)
+def _require_rust_runtime_cached(rustc_path: str | None) -> str:
     return _require_runnable_tool(
         tool_name="rustc",
-        tool_path=shutil.which("rustc"),
+        tool_path=rustc_path,
         version_args=("--version",),
     )
+
+
+def require_rust_runtime() -> str:
+    return _require_rust_runtime_cached(shutil.which("rustc"))
+
+
+def _clear_java_runtime_cache() -> None:
+    _require_java_runtime_cached.cache_clear()
+
+
+def _clear_rust_runtime_cache() -> None:
+    _require_rust_runtime_cached.cache_clear()
+
+
+require_java_runtime.cache_clear = _clear_java_runtime_cache  # type: ignore[attr-defined]
+require_rust_runtime.cache_clear = _clear_rust_runtime_cache  # type: ignore[attr-defined]
 
 
 def run_checked_subprocess(
