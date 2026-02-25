@@ -62,10 +62,11 @@ def generate_layer2_cases(
                     case_id=f"layer2-{idx:04d}",
                     input=input_value,
                     expected_output=expected,
-                    seed=seed,
+                    seed=seed + attempt,
                     source_detail={
                         "sample_index": idx,
                         "generator": "domain_aware",
+                        "attempt": attempt,
                     },
                 )
             )

@@ -43,6 +43,9 @@ def _write_jsonl_atomically(path: Path, rows: list[dict[str, Any]]) -> None:
             tmp_path.unlink()
 
 
+write_jsonl_atomically = _write_jsonl_atomically
+
+
 def write_verification_sidecars(
     cases_path: Path,
     metrics_path: Path,

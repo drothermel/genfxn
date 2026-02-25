@@ -69,11 +69,10 @@ def main(
                 break
 
         if len(sampled) < count_per_family:
-            unique_count = len(sampled)
-            unique_label = "task" if unique_count == 1 else "tasks"
+            unique_label = "task" if len(sampled) == 1 else "tasks"
             raise typer.BadParameter(
                 "Family "
-                f"'{family}' produced only {unique_count} "
+                f"'{family}' produced only {len(sampled)} "
                 f"unique {unique_label} "
                 f"with pool_size={pool_size}; need {count_per_family}."
             )

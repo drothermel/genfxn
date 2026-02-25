@@ -88,3 +88,23 @@ def test_main_reports_json_decode_errors_with_line_number(
             output_file=None,
             overwrite_existing=False,
         )
+
+
+def test_main_reports_json_decode_errors_with_correct_line_number(
+    tmp_path: Path,
+) -> None:
+    valid_task = generate_piecewise_task(rng=random.Random(11)).model_dump(
+        mode="json"
+    )
+    dataset_path = tmp_path / "broken_multiline.jsonl"
+    dataset_path.write_text(
+        srsly.json_dumps(valid_task) + "\n" + "{broken json}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(typer.BadParameter, match="Line 2: invalid JSON:"):
+        migrate_dataset_task_ids_main(
+            input_file=dataset_path,
+            output_file=None,
+            overwrite_existing=False,
+        )

@@ -72,6 +72,7 @@ from genfxn.verification.io import (
     verification_sidecar_paths,
     write_verification_sidecars,
 )
+from genfxn.verification.models import VerificationLayer
 from genfxn.verification.runner import (
     build_verification_artifacts,
     summarize_case_counts,
@@ -1648,9 +1649,12 @@ def verify(
         )
         typer.echo(
             "Case counts by layer: "
-            f"layer1={counts.get('layer1_spec_boundary', 0)}, "
-            f"layer2={counts.get('layer2_property', 0)}, "
-            f"layer3={counts.get('layer3_mutation', 0)}"
+            "layer1="
+            f"{counts.get(VerificationLayer.LAYER1_SPEC_BOUNDARY.value, 0)}, "
+            "layer2="
+            f"{counts.get(VerificationLayer.LAYER2_PROPERTY.value, 0)}, "
+            "layer3="
+            f"{counts.get(VerificationLayer.LAYER3_MUTATION.value, 0)}"
         )
         typer.echo(
             f"Metrics rows: {len(metrics)} "

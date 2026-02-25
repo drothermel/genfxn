@@ -9,7 +9,7 @@ from typing import Any
 import typer
 
 from genfxn.core.task_ids import compute_task_ids
-from genfxn.verification.io import _write_jsonl_atomically
+from genfxn.verification.io import write_jsonl_atomically
 
 app = typer.Typer()
 
@@ -63,7 +63,7 @@ def main(
 
             rows.append(row)
 
-    _write_jsonl_atomically(target, rows)
+    write_jsonl_atomically(target, rows)
     typer.echo(f"Wrote migrated dataset with {len(rows)} task(s) to {target}")
 
 

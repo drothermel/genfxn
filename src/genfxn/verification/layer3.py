@@ -114,6 +114,14 @@ def _spec_hash(spec: Any) -> str:
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _heldout_seed(seed: int) -> int:
+    digest = sha256(f"heldout:{seed}".encode()).digest()
+    derived = int.from_bytes(digest[:8], byteorder="big", signed=False)
+    if derived == seed:
+        return derived ^ (1 << 63)
+    return derived
+
+
 def _canonical_input_key(value: Any) -> str:
     try:
         return json.dumps(
@@ -299,7 +307,7 @@ def generate_layer3_cases(
         family=task.family,
         spec=task.spec,
         budget=heldout_mutants,
-        seed=seed + 1_000_000,
+        seed=_heldout_seed(seed),
     )
     heldout_detected = 0
     heldout_inputs = [
