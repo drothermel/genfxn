@@ -11,6 +11,7 @@ from genfxn.core.safe_exec import (
     SafeExecMissingFunctionError,
     execute_code_restricted,
 )
+from genfxn.core.task_ids import validate_task_ids
 from genfxn.core.validate import WRONG_FAMILY, Issue, Severity
 from genfxn.fsm.ast_safety import (
     ALLOWED_ANNOTATION_NAMES,
@@ -537,6 +538,7 @@ def validate_fsm_task(
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
     issues.extend(_validate_task_id(task))
+    issues.extend(validate_task_ids(task))
 
     spec_issues, spec = _validate_spec_deserialize(task)
     issues.extend(spec_issues)

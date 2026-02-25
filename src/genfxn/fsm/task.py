@@ -3,6 +3,7 @@ import random
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
 from genfxn.core.models import Task
+from genfxn.core.task_ids import compute_task_ids
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.fsm.models import FsmAxes, FsmSpec
 from genfxn.fsm.queries import generate_fsm_queries
@@ -41,12 +42,17 @@ def generate_fsm_task(
     trace_steps: list[TraceStep] = []
     spec = sample_fsm_spec(axes, rng, trace=trace_steps)
     spec_dict = spec.model_dump()
+    code = _render_fsm_for_languages(spec, languages)
+    ids = compute_task_ids("fsm", spec_dict, code)
 
     return Task(
         task_id=task_id_from_spec("fsm", spec_dict),
+        spec_id=ids.spec_id,
+        sem_hash=ids.sem_hash,
+        ast_id=ids.ast_id,
         family="fsm",
         spec=spec_dict,
-        code=_render_fsm_for_languages(spec, languages),
+        code=code,
         queries=generate_fsm_queries(spec, axes, rng),
         trace=GenerationTrace(family="fsm", steps=trace_steps),
         axes=axes.model_dump(),

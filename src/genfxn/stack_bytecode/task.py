@@ -3,6 +3,7 @@ import random
 from genfxn.core.codegen import task_id_from_spec
 from genfxn.core.describe import describe_task
 from genfxn.core.models import Task
+from genfxn.core.task_ids import compute_task_ids
 from genfxn.core.trace import GenerationTrace, TraceStep
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
@@ -43,11 +44,15 @@ def generate_stack_bytecode_task(
     spec_dict = spec.model_dump()
     task_id = task_id_from_spec("stack_bytecode", spec_dict)
     code = _render_stack_bytecode_for_languages(spec, languages)
+    ids = compute_task_ids("stack_bytecode", spec_dict, code)
     queries = generate_stack_bytecode_queries(spec, axes, rng)
     description = describe_task("stack_bytecode", spec_dict)
 
     return Task(
         task_id=task_id,
+        spec_id=ids.spec_id,
+        sem_hash=ids.sem_hash,
+        ast_id=ids.ast_id,
         family="stack_bytecode",
         spec=spec_dict,
         code=code,
