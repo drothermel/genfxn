@@ -650,6 +650,8 @@ class TestBitopsRust:
         assert 'panic!("Unsupported op");' in code
 
     def test_renderer_deduplicates_ops_and_keeps_first_seen_order(self) -> None:
+        from genfxn.bitops.render import render_bitops as render_bitops_python
+        from genfxn.langs.java.bitops import render_bitops as render_bitops_java
         from genfxn.langs.rust.bitops import render_bitops
 
         spec = BitopsSpec(
@@ -666,6 +668,22 @@ class TestBitopsRust:
         assert code.index('if op == "xor_mask" {') < code.index(
             '} else if op == "shl" {'
         )
+
+        python_code = render_bitops_python(spec, func_name="f")
+        java_code = render_bitops_java(spec, func_name="f")
+        rust_code = render_bitops(spec, func_name="f")
+
+        python_f = _execute_python_code(python_code)
+        javac, java = require_java_runtime()
+        rustc = require_rust_runtime()
+
+        for x in (0, 1, -1, 7, -13, 255):
+            python_output = int(python_f(x))
+            java_output = _run_java_code(javac, java, java_code, "bitops", x)
+            rust_output = _run_rust_code(rustc, rust_code, "bitops", x)
+            assert java_output == python_output
+            assert rust_output == python_output
+            assert java_output == rust_output
 
 
 class TestStatefulRust:
