@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-import copy
 import json
 import logging
 import math
-import random
 from dataclasses import dataclass
-from hashlib import sha256
 from typing import Any
 
 from genfxn.core.models import Task
 from genfxn.verification.adapters import (
     evaluate_input,
     generate_layer2_inputs,
+    generate_layer3_mutants,
     validate_spec_for_task,
 )
+from genfxn.verification.adapters.mutations import stable_spec_hash
 from genfxn.verification.models import (
     MutationCurvePoint,
     VerificationCase,
@@ -22,26 +21,7 @@ from genfxn.verification.models import (
     normalize_case_value,
 )
 
-# Keep mutations within signed i64 to maintain Python/Java/Rust parity.
-I64_MIN = -(1 << 63)
-# Keep mutations within signed i64 to maintain Python/Java/Rust parity.
-I64_MAX = (1 << 63) - 1
 _CURVE_POINTS = (1, 2, 3, 4, 6, 8, 12, 16, 20, 24)
-_SWAP_MAP: dict[str, str] = {
-    "lt": "le",
-    "le": "lt",
-    "gt": "ge",
-    "ge": "gt",
-    "and": "or",
-    "or": "and",
-    "smallest": "first_seen",
-    "first_seen": "smallest",
-    "all_indices": "unique_values",
-    "unique_values": "all_indices",
-    "sat_at_start": "sat_count",
-    "sat_count": "first_sat_index",
-    "first_sat_index": "sat_at_start",
-}
 
 logger = logging.getLogger(__name__)
 
@@ -55,79 +35,6 @@ class Layer3Summary:
     heldout_mutant_fpr_ci95: float
     heldout_distinguishable_mutants: int
     heldout_mutant_escapes: int
-
-
-def _iter_mutation_candidates(
-    value: Any,
-    path: tuple[Any, ...] = (),
-) -> list[tuple[tuple[Any, ...], Any, str]]:
-    candidates: list[tuple[tuple[Any, ...], Any, str]] = []
-
-    if isinstance(value, bool):
-        candidates.append((path, not value, "bool_flip"))
-        return candidates
-
-    if isinstance(value, int):
-        if value > I64_MIN:
-            candidates.append((path, value - 1, "int_minus_one"))
-        if value < I64_MAX:
-            candidates.append((path, value + 1, "int_plus_one"))
-        if value != 0:
-            candidates.append((path, 0, "int_to_zero"))
-        return candidates
-
-    if isinstance(value, str):
-        replacement = _SWAP_MAP.get(value)
-        if replacement is not None and replacement != value:
-            candidates.append((path, replacement, "enum_swap"))
-        return candidates
-
-    if isinstance(value, list):
-        for idx, item in enumerate(value):
-            candidates.extend(_iter_mutation_candidates(item, (*path, idx)))
-        if len(value) >= 2:
-            swapped = list(value)
-            swapped[0], swapped[1] = swapped[1], swapped[0]
-            candidates.append((path, swapped, "swap_first_two"))
-        return candidates
-
-    if isinstance(value, dict):
-        for key, item in value.items():
-            candidates.extend(_iter_mutation_candidates(item, (*path, key)))
-        return candidates
-
-    return candidates
-
-
-def _set_at_path(root: Any, path: tuple[Any, ...], value: Any) -> Any:
-    """Set a value at path.
-
-    For ``_set_at_path(root: Any, path: tuple[Any, ...], value: Any)``, an
-    empty ``path`` returns ``value`` (replacing/discarding the original root).
-    A non-empty ``path`` mutates ``root`` in place along the path and returns
-    the same root reference. Callers should deep-copy before calling.
-    """
-    if len(path) == 0:
-        return value
-
-    node = root
-    for key in path[:-1]:
-        node = node[key]
-    node[path[-1]] = value
-    return root
-
-
-def _spec_hash(spec: Any) -> str:
-    payload = json.dumps(spec, sort_keys=True, separators=(",", ":"))
-    return sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _heldout_seed(seed: int) -> int:
-    digest = sha256(f"heldout:{seed}".encode()).digest()
-    derived = int.from_bytes(digest[:8], byteorder="big", signed=False)
-    if derived == seed:
-        return derived ^ (1 << 63)
-    return derived
 
 
 def _canonical_input_key(value: Any) -> str:
@@ -230,44 +137,6 @@ def _find_witness(
     return None, None
 
 
-def _generate_valid_mutants(
-    *,
-    family: str,
-    spec: dict[str, Any],
-    budget: int,
-    seed: int,
-) -> list[dict[str, Any]]:
-    rng = random.Random(seed)
-    candidates = _iter_mutation_candidates(spec)
-    rng.shuffle(candidates)
-
-    mutants: list[dict[str, Any]] = []
-    seen_hashes = {_spec_hash(spec)}
-    for path, replacement, _kind in candidates:
-        if len(mutants) >= budget:
-            break
-        mutated = copy.deepcopy(spec)
-        _set_at_path(mutated, path, replacement)
-        digest = _spec_hash(mutated)
-        if digest in seen_hashes:
-            continue
-
-        try:
-            _ = validate_spec_for_task(family, mutated)
-        except Exception as exc:
-            logger.debug(
-                "Skipping mutated spec during validation: %s",
-                exc,
-                exc_info=True,
-            )
-            continue
-
-        seen_hashes.add(digest)
-        mutants.append(mutated)
-
-    return mutants
-
-
 def _distinguishes(
     *,
     family: str,
@@ -301,11 +170,14 @@ def generate_layer3_cases(
 ) -> Layer3Summary:
     spec_obj = validate_spec_for_task(task.family, task.spec)
 
-    mutants = _generate_valid_mutants(
-        family=task.family,
-        spec=task.spec,
+    mutants = generate_layer3_mutants(
+        task.family,
+        task_id=task.task_id,
+        spec_obj=spec_obj,
+        spec_dict=task.spec,
         budget=budget,
         seed=seed,
+        mode="train",
     )
 
     candidate_inputs = _extend_candidate_inputs(
@@ -319,7 +191,8 @@ def generate_layer3_cases(
     kill_case_index: dict[int, int] = {}
     distinguishable_mutants: set[int] = set()
 
-    for mutant_index, mutant_spec in enumerate(mutants):
+    for mutant_index, mutant in enumerate(mutants):
+        mutant_spec = mutant.mutant_spec
         mutant_obj = validate_spec_for_task(task.family, mutant_spec)
         witness, expected = _find_witness(
             task=task,
@@ -349,7 +222,10 @@ def generate_layer3_cases(
                 seed=seed,
                 source_detail={
                     "mutant_index": mutant_index,
-                    "mutant_hash": _spec_hash(mutant_spec),
+                    "mutant_hash": stable_spec_hash(mutant_spec),
+                    "mutant_kind": mutant.mutant_kind,
+                    "rule_id": mutant.rule_id,
+                    "mutant_metadata": mutant.metadata,
                 },
             )
         )
@@ -376,11 +252,14 @@ def generate_layer3_cases(
             MutationCurvePoint(n_tests=n_tests, mutation_score=score_at_n)
         )
 
-    heldout = _generate_valid_mutants(
-        family=task.family,
-        spec=task.spec,
+    heldout = generate_layer3_mutants(
+        task.family,
+        task_id=task.task_id,
+        spec_obj=spec_obj,
+        spec_dict=task.spec,
         budget=heldout_mutants,
-        seed=_heldout_seed(seed),
+        seed=seed,
+        mode="heldout",
     )
     heldout_distinguishable = 0
     heldout_escapes = 0
@@ -389,7 +268,8 @@ def generate_layer3_cases(
         *layer2_inputs,
         *(case.input for case in cases),
     ]
-    for mutant_spec in heldout:
+    for mutant in heldout:
+        mutant_spec = mutant.mutant_spec
         mutant_obj = validate_spec_for_task(task.family, mutant_spec)
         witness, _ = _find_witness(
             task=task,

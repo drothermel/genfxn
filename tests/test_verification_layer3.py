@@ -4,19 +4,39 @@ import pytest
 
 import genfxn.verification.layer3 as layer3_module
 from genfxn.piecewise.task import generate_piecewise_task
+from genfxn.verification.adapters.base import Layer3MutantCandidate
 
 
 def test_mutation_score_ignores_likely_equivalent_mutants(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = generate_piecewise_task(rng=random.Random(3))
-    mutants = [{"kind": "killable"}, {"kind": "equiv"}]
-    call_count = 0
+    mutants = [
+        Layer3MutantCandidate(
+            mutant_spec={"kind": "killable"},
+            mutant_kind="test_mutant",
+            rule_id="piecewise.test.killable",
+            metadata={"source": "unit"},
+        ),
+        Layer3MutantCandidate(
+            mutant_spec={"kind": "equiv"},
+            mutant_kind="test_mutant",
+            rule_id="piecewise.test.equiv",
+            metadata={"source": "unit"},
+        ),
+    ]
 
-    def _fake_generate_valid_mutants(**kwargs):  # noqa: ANN003, ARG001
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
+    def _fake_generate_layer3_mutants(
+        family: str,  # noqa: ARG001
+        *,
+        task_id: str,  # noqa: ARG001
+        spec_obj: object,  # noqa: ARG001
+        spec_dict: dict[str, object],  # noqa: ARG001
+        budget: int,  # noqa: ARG001
+        seed: int,  # noqa: ARG001
+        mode: str,
+    ) -> list[Layer3MutantCandidate]:
+        if mode == "train":
             return mutants
         return []
 
@@ -36,7 +56,7 @@ def test_mutation_score_ignores_likely_equivalent_mutants(
         return False, 0
 
     monkeypatch.setattr(
-        layer3_module, "_generate_valid_mutants", _fake_generate_valid_mutants
+        layer3_module, "generate_layer3_mutants", _fake_generate_layer3_mutants
     )
     monkeypatch.setattr(
         layer3_module, "validate_spec_for_task", lambda family, spec: spec
@@ -59,6 +79,10 @@ def test_mutation_score_ignores_likely_equivalent_mutants(
 
     assert len(summary.cases) == 1
     assert summary.cases[0].input == 1
+    assert summary.cases[0].source_detail["mutant_kind"] == "test_mutant"
+    assert (
+        summary.cases[0].source_detail["rule_id"] == "piecewise.test.killable"
+    )
     assert summary.mutation_score == 1.0
     assert all(
         point.mutation_score == 1.0 for point in summary.mutation_score_curve
@@ -69,17 +93,31 @@ def test_mutation_score_is_vacuously_full_when_no_mutant_is_distinguishable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     task = generate_piecewise_task(rng=random.Random(11))
-    call_count = 0
+    train_mutants = [
+        Layer3MutantCandidate(
+            mutant_spec={"kind": "equiv-only"},
+            mutant_kind="test_mutant",
+            rule_id="piecewise.test.equiv_only",
+            metadata={},
+        )
+    ]
 
-    def _fake_generate_valid_mutants(**kwargs):  # noqa: ANN003, ARG001
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return [{"kind": "equiv-only"}]
+    def _fake_generate_layer3_mutants(
+        family: str,  # noqa: ARG001
+        *,
+        task_id: str,  # noqa: ARG001
+        spec_obj: object,  # noqa: ARG001
+        spec_dict: dict[str, object],  # noqa: ARG001
+        budget: int,  # noqa: ARG001
+        seed: int,  # noqa: ARG001
+        mode: str,
+    ) -> list[Layer3MutantCandidate]:
+        if mode == "train":
+            return train_mutants
         return []
 
     monkeypatch.setattr(
-        layer3_module, "_generate_valid_mutants", _fake_generate_valid_mutants
+        layer3_module, "generate_layer3_mutants", _fake_generate_layer3_mutants
     )
     monkeypatch.setattr(
         layer3_module, "validate_spec_for_task", lambda family, spec: spec

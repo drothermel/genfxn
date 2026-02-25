@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from genfxn.verification.adapters.base import (
+    Layer3Mode,
+    Layer3MutantCandidate,
+)
 from genfxn.verification.adapters.common import (
     sample_strategy_examples,
     seed_for_task_layer,
@@ -65,9 +69,30 @@ def evaluate_input(family: str, spec_obj: Any, input_value: Any) -> Any:
     return get_adapter(family).evaluate(spec_obj, input_value)
 
 
+def generate_layer3_mutants(
+    family: str,
+    *,
+    task_id: str,
+    spec_obj: Any,
+    spec_dict: dict[str, Any],
+    budget: int,
+    seed: int,
+    mode: Layer3Mode,
+) -> list[Layer3MutantCandidate]:
+    return get_adapter(family).layer3_mutants(
+        task_id=task_id,
+        spec_obj=spec_obj,
+        spec_dict=spec_dict,
+        budget=budget,
+        seed=seed,
+        mode=mode,
+    )
+
+
 __all__ = [
     "evaluate_input",
     "generate_layer2_inputs",
+    "generate_layer3_mutants",
     "get_adapter",
     "get_registered_families",
     "validate_spec_for_task",
