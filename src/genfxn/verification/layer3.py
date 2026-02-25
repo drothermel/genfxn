@@ -137,6 +137,94 @@ def _canonical_input_key(value: Any) -> str:
         return repr(value)
 
 
+def _dedupe_inputs(values: list[Any]) -> list[Any]:
+    deduped: list[Any] = []
+    seen: set[str] = set()
+    for value in values:
+        key = _canonical_input_key(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
+
+
+def _extend_candidate_inputs(
+    *,
+    task: Task,
+    spec_obj: Any,
+    base_inputs: list[Any],
+    seed: int,
+    target_count: int = 256,
+    max_batches: int = 8,
+    batch_count: int = 64,
+) -> list[Any]:
+    candidates = _dedupe_inputs(base_inputs)
+    if len(candidates) >= target_count:
+        return candidates
+
+    seen = {_canonical_input_key(value) for value in candidates}
+    for batch in range(max_batches):
+        try:
+            sampled = generate_layer2_inputs(
+                task.family,
+                task_id=task.task_id,
+                spec_obj=spec_obj,
+                axes=task.axes,
+                count=batch_count,
+                seed=seed + 10_000 + batch,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Failed to extend mutation candidate inputs for task %s: %s",
+                task.task_id,
+                exc,
+                exc_info=True,
+            )
+            break
+
+        for value in sampled:
+            key = _canonical_input_key(value)
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(value)
+            if len(candidates) >= target_count:
+                return candidates
+    return candidates
+
+
+def _find_witness(
+    *,
+    task: Task,
+    spec_obj: Any,
+    mutant_obj: Any,
+    candidate_inputs: list[Any],
+    debug_context: str,
+) -> tuple[Any | None, Any | None]:
+    for input_value in candidate_inputs:
+        try:
+            differs, expected = _distinguishes(
+                family=task.family,
+                spec_obj=spec_obj,
+                mutant_obj=mutant_obj,
+                input_value=input_value,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Skipping %s for task %s input=%r: %s",
+                debug_context,
+                task.task_id,
+                input_value,
+                exc,
+                exc_info=True,
+            )
+            continue
+        if differs:
+            return input_value, expected
+    return None, None
+
+
 def _generate_valid_mutants(
     *,
     family: str,
@@ -211,88 +299,62 @@ def generate_layer3_cases(
         seed=seed,
     )
 
-    base_candidates: list[Any] = []
-    seen = set()
-    for value in [*layer1_inputs, *layer2_inputs]:
-        key = _canonical_input_key(value)
-        if key in seen:
-            continue
-        seen.add(key)
-        base_candidates.append(value)
+    candidate_inputs = _extend_candidate_inputs(
+        task=task,
+        spec_obj=spec_obj,
+        base_inputs=[*layer1_inputs, *layer2_inputs],
+        seed=seed,
+    )
 
     cases: list[VerificationCase] = []
     kill_case_index: dict[int, int] = {}
+    distinguishable_mutants: set[int] = set()
 
     for mutant_index, mutant_spec in enumerate(mutants):
         mutant_obj = validate_spec_for_task(task.family, mutant_spec)
-        found = False
+        witness, expected = _find_witness(
+            task=task,
+            spec_obj=spec_obj,
+            mutant_obj=mutant_obj,
+            candidate_inputs=candidate_inputs,
+            debug_context=(
+                "mutation candidate input "
+                f"mutant_index={mutant_index}"
+            ),
+        )
+        if witness is None:
+            continue
 
-        candidate_inputs = list(base_candidates)
-        if len(candidate_inputs) < 64:
-            candidate_inputs.extend(
-                generate_layer2_inputs(
-                    task.family,
-                    task_id=task.task_id,
-                    spec_obj=spec_obj,
-                    axes=task.axes,
-                    count=64,
-                    seed=seed + mutant_index + 10_000,
-                )
+        distinguishable_mutants.add(mutant_index)
+        if len(cases) >= budget:
+            continue
+
+        case_index = len(cases)
+        cases.append(
+            VerificationCase(
+                task_id=task.task_id,
+                family=task.family,
+                layer=VerificationLayer.LAYER3_MUTATION,
+                case_id=f"layer3-{case_index:04d}",
+                input=witness,
+                expected_output=expected,
+                seed=seed,
+                source_detail={
+                    "mutant_index": mutant_index,
+                    "mutant_hash": _spec_hash(mutant_spec),
+                },
             )
+        )
+        kill_case_index[mutant_index] = case_index
 
-        for input_value in candidate_inputs:
-            try:
-                differs, expected = _distinguishes(
-                    family=task.family,
-                    spec_obj=spec_obj,
-                    mutant_obj=mutant_obj,
-                    input_value=input_value,
-                )
-            except Exception as exc:
-                logger.debug(
-                    "Skipping mutation candidate input for task %s "
-                    "mutant_index=%d input=%r: %s",
-                    task.task_id,
-                    mutant_index,
-                    input_value,
-                    exc,
-                    exc_info=True,
-                )
-                continue
-            if not differs:
-                continue
-
-            case_index = len(cases)
-            cases.append(
-                VerificationCase(
-                    task_id=task.task_id,
-                    family=task.family,
-                    layer=VerificationLayer.LAYER3_MUTATION,
-                    case_id=f"layer3-{case_index:04d}",
-                    input=input_value,
-                    expected_output=expected,
-                    seed=seed,
-                    source_detail={
-                        "mutant_index": mutant_index,
-                        "mutant_hash": _spec_hash(mutant_spec),
-                    },
-                )
-            )
-            kill_case_index[mutant_index] = case_index
-            found = True
-            break
-
-        if found and len(cases) >= budget:
-            break
-
-    total_mutants = len(mutants)
+    total_mutants = len(distinguishable_mutants)
     killed_mutants = len(kill_case_index)
-    mutation_score = (killed_mutants / total_mutants) if total_mutants else 0.0
+    mutation_score = (killed_mutants / total_mutants) if total_mutants else 1.0
 
     curve: list[MutationCurvePoint] = []
     for n_tests in _CURVE_POINTS:
         if total_mutants == 0:
-            score_at_n = 0.0
+            score_at_n = 1.0
         else:
             # The curve uses case insertion order (`idx`) as the proxy for
             # "first N tests". If a different ordering policy is desired,
@@ -312,7 +374,8 @@ def generate_layer3_cases(
         budget=heldout_mutants,
         seed=_heldout_seed(seed),
     )
-    heldout_detected = 0
+    heldout_distinguishable = 0
+    heldout_escapes = 0
     heldout_inputs = [
         *layer1_inputs,
         *layer2_inputs,
@@ -320,36 +383,35 @@ def generate_layer3_cases(
     ]
     for mutant_spec in heldout:
         mutant_obj = validate_spec_for_task(task.family, mutant_spec)
-        detected = False
-        for input_value in heldout_inputs:
-            try:
-                differs, _ = _distinguishes(
-                    family=task.family,
-                    spec_obj=spec_obj,
-                    mutant_obj=mutant_obj,
-                    input_value=input_value,
-                )
-            except Exception as exc:
-                logger.debug(
-                    "Skipping heldout mutation check for task %s input=%r: %s",
-                    task.task_id,
-                    input_value,
-                    exc,
-                    exc_info=True,
-                )
-                continue
-            if differs:
-                detected = True
-                break
-        if detected:
-            heldout_detected += 1
+        witness, _ = _find_witness(
+            task=task,
+            spec_obj=spec_obj,
+            mutant_obj=mutant_obj,
+            candidate_inputs=candidate_inputs,
+            debug_context="heldout distinguishability probe",
+        )
+        if witness is None:
+            continue
 
-    n_heldout = len(heldout)
-    heldout_detect_rate = (heldout_detected / n_heldout) if n_heldout else 0.0
-    heldout_mutant_escape_rate = 1.0 - heldout_detect_rate
+        heldout_distinguishable += 1
+        detected_input, _ = _find_witness(
+            task=task,
+            spec_obj=spec_obj,
+            mutant_obj=mutant_obj,
+            candidate_inputs=heldout_inputs,
+            debug_context="heldout mutation check",
+        )
+        if detected_input is None:
+            heldout_escapes += 1
+
+    heldout_mutant_escape_rate = (
+        heldout_escapes / heldout_distinguishable
+        if heldout_distinguishable
+        else 0.0
+    )
     heldout_mutant_escape_ci95 = _ci95_for_rate(
         heldout_mutant_escape_rate,
-        n_heldout,
+        heldout_distinguishable,
     )
 
     return Layer3Summary(
