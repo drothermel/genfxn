@@ -13,7 +13,6 @@ from genfxn.core.describe import (
     describe_task,
 )
 from genfxn.fsm.models import (
-    MachineType,
     OutputMode,
     UndefinedTransitionPolicy,
 )
@@ -880,7 +879,6 @@ class TestDescribeTask:
 
     def test_fsm_family_is_self_contained(self) -> None:
         spec = {
-            "machine_type": MachineType.MOORE,
             "output_mode": OutputMode.ACCEPT_BOOL,
             "undefined_transition_policy": UndefinedTransitionPolicy.SINK,
             "start_state_id": 0,
@@ -891,7 +889,8 @@ class TestDescribeTask:
         }
         result = describe_task("fsm", spec)
         assert "Implement f(xs: list[int]) -> int" in result
-        assert "deterministic moore finite-state machine" in result
+        assert "deterministic" in result
+        assert "finite-state machine" in result
         assert "move to sink state (max_state_id + 1)" in result
         assert "Use output_mode 'accept_bool'" in result
         assert "accepting states: 0" in result

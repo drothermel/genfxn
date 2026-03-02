@@ -45,7 +45,7 @@ def generate_piecewise_task(
     task_id = task_id_from_spec("piecewise", spec_dict)
     code = _render_piecewise_for_languages(spec, languages)
     ids = compute_task_ids("piecewise", spec_dict, code)
-    queries = generate_piecewise_queries(spec, axes.value_range, rng)
+    queries = generate_piecewise_queries(spec, rng=rng)
 
     trace = GenerationTrace(family="piecewise", steps=trace_steps)
     description = describe_task("piecewise", spec_dict)

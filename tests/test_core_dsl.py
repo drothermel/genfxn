@@ -558,18 +558,16 @@ class TestSpecIdCanonicalization:
             "graph_queries", spec_b
         )
 
-    def test_fsm_state_order_and_machine_type_normalized(self) -> None:
+    def test_fsm_state_order_normalized(self) -> None:
         state_low = {"id": 0, "transitions": [], "is_accept": False}
         state_high = {"id": 2, "transitions": [], "is_accept": True}
         spec_a = {
-            "machine_type": "mealy",
             "output_mode": "final_state_id",
             "undefined_transition_policy": "stay",
             "start_state_id": 0,
             "states": [state_high, state_low],
         }
         spec_b = {
-            "machine_type": "moore",
             "output_mode": "final_state_id",
             "undefined_transition_policy": "stay",
             "start_state_id": 0,

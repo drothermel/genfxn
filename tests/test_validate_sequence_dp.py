@@ -104,11 +104,7 @@ def test_semantic_mismatch_detected(baseline_task: Task) -> None:
     )
     issues = validate_sequence_dp_task(
         corrupted,
-        axes=SequenceDpAxes(
-            len_a_range=(1, 1),
-            len_b_range=(1, 1),
-            value_range=(0, 0),
-        ),
+        axes=SequenceDpAxes(),
         semantic_trials=4,
         max_semantic_issues=4,
         random_seed=123,

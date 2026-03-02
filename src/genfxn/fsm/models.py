@@ -16,7 +16,6 @@ from genfxn.core.predicates import (
 _INT_RANGE_FIELDS = (
     "n_states_range",
     "transitions_per_state_range",
-    "value_range",
     "threshold_range",
     "divisor_range",
 )
@@ -38,13 +37,6 @@ def _validate_no_bool_int_range_bounds(data: Any) -> None:
             raise ValueError(
                 f"{field_name}: bool is not allowed for int range bounds"
             )
-
-
-class MachineType(str, Enum):
-    """Deprecated compatibility axis; currently does not affect semantics."""
-
-    MOORE = "moore"
-    MEALY = "mealy"
 
 
 class UndefinedTransitionPolicy(str, Enum):
@@ -93,13 +85,6 @@ class State(BaseModel):
 
 
 class FsmSpec(BaseModel):
-    machine_type: MachineType = Field(
-        description=(
-            "Deprecated compatibility field. Retained in schema and datasets, "
-            "but evaluator/render semantics are currently identical for all "
-            "machine_type values."
-        )
-    )
     output_mode: OutputMode
     undefined_transition_policy: UndefinedTransitionPolicy
     start_state_id: int = Field(ge=INT32_MIN, le=FSM_STATE_ID_MAX)
@@ -141,14 +126,6 @@ class FsmSpec(BaseModel):
 
 
 class FsmAxes(BaseModel):
-    machine_types: list[MachineType] = Field(
-        default_factory=lambda: list(MachineType),
-        description=(
-            "Deprecated compatibility axis for generation controls. Kept for "
-            "schema stability; does not currently alter evaluator/render "
-            "semantics."
-        ),
-    )
     output_modes: list[OutputMode] = Field(
         default_factory=lambda: list(OutputMode)
     )
@@ -160,7 +137,6 @@ class FsmAxes(BaseModel):
     )
     n_states_range: tuple[int, int] = Field(default=(2, 6))
     transitions_per_state_range: tuple[int, int] = Field(default=(1, 4))
-    value_range: tuple[int, int] = Field(default=(-20, 20))
     threshold_range: tuple[int, int] = Field(default=(-10, 10))
     divisor_range: tuple[int, int] = Field(default=(2, 10))
 
@@ -172,8 +148,6 @@ class FsmAxes(BaseModel):
 
     @model_validator(mode="after")
     def validate_axes(self) -> "FsmAxes":
-        if not self.machine_types:
-            raise ValueError("machine_types must not be empty")
         if not self.output_modes:
             raise ValueError("output_modes must not be empty")
         if not self.undefined_transition_policies:
@@ -184,7 +158,6 @@ class FsmAxes(BaseModel):
         for name in (
             "n_states_range",
             "transitions_per_state_range",
-            "value_range",
             "threshold_range",
             "divisor_range",
         ):
@@ -205,16 +178,6 @@ class FsmAxes(BaseModel):
             raise ValueError("divisor_range: low must be >= 1")
         if self.n_states_range[1] > INT32_MAX:
             raise ValueError(f"n_states_range: high must be <= {INT32_MAX}")
-        if self.value_range[0] < INT32_MIN:
-            raise ValueError(
-                "value_range: low must be >= "
-                f"{INT32_MIN} for fsm parity contract"
-            )
-        if self.value_range[1] > INT32_MAX:
-            raise ValueError(
-                "value_range: high must be <= "
-                f"{INT32_MAX} for fsm parity contract"
-            )
         if self.threshold_range[0] < INT32_MIN:
             raise ValueError(
                 "threshold_range: low must be >= "

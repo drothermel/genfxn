@@ -26,6 +26,9 @@ from genfxn.stateful.models import (
     ToggleSumSpec,
 )
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-100, 100)
+_DEFAULT_LIST_LENGTH_RANGE: tuple[int, int] = (5, 20)
+
 
 def _get_predicate_info(spec: StatefulSpec) -> Predicate:
     match spec:
@@ -188,8 +191,8 @@ def _generate_coverage_queries(
     rng: random.Random,
 ) -> list[Query]:
     """Empty list, single element, typical list."""
-    lo, hi = axes.value_range
-    len_lo, len_hi = axes.list_length_range
+    lo, hi = _DEFAULT_VALUE_RANGE
+    len_lo, len_hi = _DEFAULT_LIST_LENGTH_RANGE
     typical_len = (len_lo + len_hi) // 2
 
     queries: list[Query] = []
@@ -225,7 +228,7 @@ def _generate_boundary_queries(
     rng: random.Random,
 ) -> list[Query]:
     """Predicate transitions: True->False, False->True, alternating."""
-    lo, hi = axes.value_range
+    lo, hi = _DEFAULT_VALUE_RANGE
     pred = _get_predicate_info(spec)
 
     match_val = _make_matching_value(pred, (lo, hi), rng)
@@ -235,7 +238,7 @@ def _generate_boundary_queries(
     if match_val is None or non_match_val is None:
         return queries
 
-    length_bounds = axes.list_length_range
+    length_bounds = _DEFAULT_LIST_LENGTH_RANGE
     for template in (
         [match_val, match_val, non_match_val, non_match_val],
         [non_match_val, non_match_val, match_val, match_val],
@@ -260,8 +263,8 @@ def _generate_typical_queries(
     rng: random.Random,
 ) -> list[Query]:
     """Random lists of varying lengths."""
-    lo, hi = axes.value_range
-    len_lo, len_hi = axes.list_length_range
+    lo, hi = _DEFAULT_VALUE_RANGE
+    len_lo, len_hi = _DEFAULT_LIST_LENGTH_RANGE
 
     queries: list[Query] = []
     for _ in range(4):
@@ -283,8 +286,8 @@ def _generate_adversarial_queries(
     rng: random.Random,
 ) -> list[Query]:
     """All-matching, all-non-matching, and extreme values."""
-    lo, hi = axes.value_range
-    len_lo, len_hi = axes.list_length_range
+    lo, hi = _DEFAULT_VALUE_RANGE
+    len_lo, len_hi = _DEFAULT_LIST_LENGTH_RANGE
     typical_len = (len_lo + len_hi) // 2
     pred = _get_predicate_info(spec)
 
@@ -294,7 +297,7 @@ def _generate_adversarial_queries(
     ]
     all_match = [v for v in match_vals if v is not None]
     fitted_all_match = (
-        _fit_to_length_bounds(all_match, axes.list_length_range)
+        _fit_to_length_bounds(all_match, _DEFAULT_LIST_LENGTH_RANGE)
         if all_match
         else None
     )
@@ -315,7 +318,7 @@ def _generate_adversarial_queries(
     ]
     all_non_match = [v for v in non_match_vals if v is not None]
     fitted_all_non_match = (
-        _fit_to_length_bounds(all_non_match, axes.list_length_range)
+        _fit_to_length_bounds(all_non_match, _DEFAULT_LIST_LENGTH_RANGE)
         if all_non_match
         else None
     )
@@ -332,7 +335,9 @@ def _generate_adversarial_queries(
 
     extremes = [lo, hi, 0, -1, 1, lo, hi]
     extremes = [x for x in extremes if lo <= x <= hi]
-    fitted_extremes = _fit_to_length_bounds(extremes, axes.list_length_range)
+    fitted_extremes = _fit_to_length_bounds(
+        extremes, _DEFAULT_LIST_LENGTH_RANGE
+    )
     if fitted_extremes is not None:
         queries.append(
             Query(

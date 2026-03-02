@@ -6,6 +6,7 @@ from genfxn.core.models import Query, QueryTag, dedupe_queries
 
 I64_MIN = -(1 << 63)
 I64_MAX = (1 << 63) - 1
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-1024, 1024)
 
 
 def _clamp_i64(x: int) -> int:
@@ -21,7 +22,7 @@ def generate_bitops_queries(
         rng = random.Random()
 
     mask = (1 << spec.width_bits) - 1
-    v_lo, v_hi = axes.value_range
+    v_lo, v_hi = _DEFAULT_VALUE_RANGE
     bounded_lo = max(v_lo, I64_MIN)
     bounded_hi = min(v_hi, I64_MAX)
     if bounded_lo > bounded_hi:

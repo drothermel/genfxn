@@ -135,8 +135,6 @@ def test_simple_algorithms_runtime_parity_across_sampled_specs() -> None:
 
     rng = random.Random(77)
     axes = SimpleAlgorithmsAxes(
-        value_range=(-20, 20),
-        list_length_range=(0, 10),
         target_range=(-15, 15),
         window_size_range=(1, 8),
     )

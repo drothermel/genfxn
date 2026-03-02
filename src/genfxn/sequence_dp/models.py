@@ -4,9 +4,6 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 _INT_RANGE_FIELDS = (
-    "len_a_range",
-    "len_b_range",
-    "value_range",
     "match_score_range",
     "mismatch_score_range",
     "gap_score_range",
@@ -105,9 +102,6 @@ class SequenceDpAxes(BaseModel):
     predicate_types: list[PredicateType] = Field(
         default_factory=lambda: list(PredicateType)
     )
-    len_a_range: tuple[int, int] = Field(default=(2, 10))
-    len_b_range: tuple[int, int] = Field(default=(2, 10))
-    value_range: tuple[int, int] = Field(default=(-20, 20))
     match_score_range: tuple[int, int] = Field(default=(1, 6))
     mismatch_score_range: tuple[int, int] = Field(default=(-4, 1))
     gap_score_range: tuple[int, int] = Field(default=(-4, 0))
@@ -135,9 +129,6 @@ class SequenceDpAxes(BaseModel):
             raise ValueError("tie_break_orders must not be empty")
 
         for name in (
-            "len_a_range",
-            "len_b_range",
-            "value_range",
             "match_score_range",
             "mismatch_score_range",
             "gap_score_range",
@@ -148,17 +139,12 @@ class SequenceDpAxes(BaseModel):
             if lo > hi:
                 raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
 
-        if self.len_a_range[0] < 0:
-            raise ValueError("len_a_range: low must be >= 0")
-        if self.len_b_range[0] < 0:
-            raise ValueError("len_b_range: low must be >= 0")
         if self.abs_diff_range[0] < 0:
             raise ValueError("abs_diff_range: low must be >= 0")
         if self.divisor_range[0] < 1:
             raise ValueError("divisor_range: low must be >= 1")
 
         for name in (
-            "value_range",
             "match_score_range",
             "mismatch_score_range",
             "gap_score_range",

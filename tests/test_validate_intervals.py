@@ -6,7 +6,7 @@ import pytest
 from genfxn.core.models import Query, QueryTag, Task
 from genfxn.core.validate import Issue, Severity
 from genfxn.intervals.eval import eval_intervals
-from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.models import IntervalsSpec
 from genfxn.intervals.task import generate_intervals_task
 from genfxn.intervals.validate import (
     CODE_CODE_EXEC_ERROR,
@@ -132,14 +132,6 @@ def test_semantic_mismatch_detected(baseline_task: Task) -> None:
     )
     issues = validate_intervals_task(
         corrupted,
-        axes=IntervalsAxes(
-            n_intervals_range=(1, 1),
-            endpoint_range=(0, 0),
-            max_span_range=(0, 0),
-            allow_reversed_interval_prob_range=(0.0, 0.0),
-            degenerate_interval_prob_range=(1.0, 1.0),
-            nested_interval_prob_range=(0.0, 0.0),
-        ),
         semantic_trials=4,
         max_semantic_issues=4,
         random_seed=123,

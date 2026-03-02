@@ -231,8 +231,6 @@ class TestTemporalLogicSemantics:
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("value_range", (-(1 << 63) - 1, 0)),
-            ("value_range", (0, 1 << 63)),
             ("predicate_constant_range", (-(1 << 63) - 1, 0)),
             ("predicate_constant_range", (0, 1 << 63)),
         ],
@@ -247,8 +245,6 @@ class TestTemporalLogicSemantics:
         ("field_name", "range_value"),
         [
             ("formula_depth_range", (False, 3)),
-            ("sequence_length_range", (0, True)),
-            ("value_range", (False, 5)),
             ("predicate_constant_range", (0, True)),
         ],
     )
@@ -264,8 +260,6 @@ class TestTemporalLogicSemantics:
     def test_sampler_is_deterministic_for_fixed_seed(self) -> None:
         axes = TemporalLogicAxes(
             formula_depth_range=(2, 2),
-            sequence_length_range=(0, 5),
-            value_range=(-3, 3),
             predicate_constant_range=(-2, 2),
         )
         first = _call_sample(sample_temporal_logic_spec, axes, seed=123)
@@ -275,8 +269,6 @@ class TestTemporalLogicSemantics:
     def test_task_generation_smoke_and_query_tags(self) -> None:
         axes = TemporalLogicAxes(
             formula_depth_range=(2, 2),
-            sequence_length_range=(0, 4),
-            value_range=(-2, 2),
             predicate_constant_range=(-1, 1),
         )
         task = generate_temporal_logic_task(axes=axes, rng=random.Random(9))
@@ -302,8 +294,6 @@ class TestTemporalLogicSemantics:
     def test_render_matches_evaluator_on_queries(self) -> None:
         axes = TemporalLogicAxes(
             formula_depth_range=(2, 2),
-            sequence_length_range=(0, 5),
-            value_range=(-3, 3),
             predicate_constant_range=(-2, 2),
         )
         spec = sample_temporal_logic_spec(axes, rng=random.Random(44))
@@ -325,8 +315,6 @@ class TestTemporalLogicSemantics:
     def test_render_matches_evaluator_across_sampled_specs(self) -> None:
         axes = TemporalLogicAxes(
             formula_depth_range=(1, 4),
-            sequence_length_range=(0, 8),
-            value_range=(-4, 4),
             predicate_constant_range=(-4, 4),
         )
         for seed in range(300, 315):
@@ -352,9 +340,6 @@ class TestTemporalLogicSemantics:
         axes = TemporalLogicAxes(
             formula_depth_range=(1, 1),
             operator_mix=[TemporalOperator.ATOM, TemporalOperator.NEXT],
-            include_since_choices=[False],
-            sequence_length_range=(0, 0),
-            value_range=(0, 0),
             predicate_constant_range=(0, 0),
             output_modes=[TemporalOutputMode.SAT_AT_START],
         )
@@ -366,27 +351,6 @@ class TestTemporalLogicSemantics:
         assert {query.tag for query in queries} == set(QueryTag)
         for query in queries:
             assert query.output == eval_temporal_logic(spec, query.input)
-
-    def test_query_lengths_respect_sequence_length_range(self) -> None:
-        axes = TemporalLogicAxes(
-            formula_depth_range=(2, 2),
-            sequence_length_range=(0, 2),
-            value_range=(-2, 2),
-            predicate_constant_range=(-2, 2),
-            operator_mix=list(TemporalOperator),
-        )
-        spec = sample_temporal_logic_spec(axes, random.Random(601))
-        queries = generate_temporal_logic_queries(
-            spec,
-            axes,
-            rng=random.Random(602),
-        )
-
-        assert queries
-        lo, hi = axes.sequence_length_range
-        for query in queries:
-            n = len(query.input)
-            assert lo <= n <= hi
 
     def test_fit_sequence_length_truncates_and_pads_content(self) -> None:
         assert fit_sequence_length([1, 2, 3, 4], (1, 3), fill_value=9) == [
@@ -402,9 +366,6 @@ class TestTemporalLogicSemantics:
         axes = TemporalLogicAxes(
             formula_depth_range=(1, 1),
             operator_mix=[TemporalOperator.ATOM],
-            include_since_choices=[False],
-            sequence_length_range=(0, 0),
-            value_range=(0, 0),
             predicate_constant_range=(0, 0),
             output_modes=[TemporalOutputMode.SAT_AT_START],
         )
@@ -428,7 +389,6 @@ class TestTemporalLogicSemantics:
                 TemporalOperator.OR,
                 TemporalOperator.UNTIL,
             ],
-            include_since_choices=[False],
             output_modes=[TemporalOutputMode.SAT_COUNT],
         )
         for seed in range(700, 740):
@@ -439,9 +399,6 @@ class TestTemporalLogicSemantics:
         axes = TemporalLogicAxes(
             formula_depth_range=(1, 5),
             operator_mix=list(TemporalOperator),
-            include_since_choices=[False, True],
-            sequence_length_range=(0, 8),
-            value_range=(-5, 5),
             predicate_constant_range=(-5, 5),
             output_modes=list(TemporalOutputMode),
         )

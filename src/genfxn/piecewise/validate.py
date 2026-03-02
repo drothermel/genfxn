@@ -20,8 +20,10 @@ from genfxn.piecewise.ast_safety import (
     CALL_ARITIES,
 )
 from genfxn.piecewise.eval import eval_piecewise
-from genfxn.piecewise.models import PiecewiseAxes, PiecewiseSpec
+from genfxn.piecewise.models import PiecewiseSpec
 from genfxn.piecewise.queries import SUPPORTED_CONDITION_KINDS
+
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-100, 100)
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
@@ -503,7 +505,7 @@ def validate_piecewise_task(
             )
         ]
     if value_range is None:
-        value_range = PiecewiseAxes().value_range
+        value_range = _DEFAULT_VALUE_RANGE
     _ = paranoid
 
     issues: list[Issue] = []

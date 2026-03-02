@@ -142,7 +142,6 @@ def test_fsm_runtime_parity_forced_output_modes_and_policies() -> None:
         (
             FsmSpec.model_validate(
                 {
-                    "machine_type": "moore",
                     "output_mode": "final_state_id",
                     "undefined_transition_policy": "stay",
                     "start_state_id": 0,
@@ -175,7 +174,6 @@ def test_fsm_runtime_parity_forced_output_modes_and_policies() -> None:
         (
             FsmSpec.model_validate(
                 {
-                    "machine_type": "moore",
                     "output_mode": "transition_count",
                     "undefined_transition_policy": "sink",
                     "start_state_id": 0,
@@ -189,7 +187,6 @@ def test_fsm_runtime_parity_forced_output_modes_and_policies() -> None:
         (
             FsmSpec.model_validate(
                 {
-                    "machine_type": "moore",
                     "output_mode": "accept_bool",
                     "undefined_transition_policy": "error",
                     "start_state_id": 0,
@@ -239,7 +236,6 @@ def test_fsm_runtime_parity_rejects_lt_out_of_int32_threshold() -> None:
     with pytest.raises(Exception, match="signed 32-bit range"):
         FsmSpec.model_validate(
             {
-                "machine_type": "moore",
                 "output_mode": "accept_bool",
                 "undefined_transition_policy": "stay",
                 "start_state_id": 0,

@@ -982,7 +982,6 @@ def _describe_temporal_predicate_symbol(kind: str) -> str:
 
 
 def _describe_fsm(spec: dict[str, Any]) -> str:
-    machine_type = _enum_text(spec.get("machine_type", "moore"))
     output_mode = _enum_text(spec.get("output_mode", "final_state_id"))
     policy = _enum_text(spec.get("undefined_transition_policy", "stay"))
     start_state_id = spec.get("start_state_id", 0)
@@ -1037,7 +1036,7 @@ def _describe_fsm(spec: dict[str, Any]) -> str:
     return _join_description_parts(
         (
             "Implement f(xs: list[int]) -> int for a deterministic "
-            f"{machine_type} finite-state machine."
+            "finite-state machine."
         ),
         (
             f"The machine has {n_states} states, {n_transitions} transitions, "

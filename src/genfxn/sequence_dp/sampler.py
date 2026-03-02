@@ -38,8 +38,6 @@ def sample_sequence_dp_spec(
     template = rng.choice(axes.templates)
     output_mode = rng.choice(axes.output_modes)
     predicate_type = rng.choice(axes.predicate_types)
-    len_a = rng.randint(*axes.len_a_range)
-    len_b = rng.randint(*axes.len_b_range)
     tie_break = rng.choice(axes.tie_break_orders)
     match_score = rng.randint(*axes.match_score_range)
     mismatch_score = rng.randint(*axes.mismatch_score_range)
@@ -63,8 +61,6 @@ def sample_sequence_dp_spec(
         f"Predicate type: {predicate_type.value}",
         predicate_type.value,
     )
-    trace_step(trace, "sample_len_a", f"Length A: {len_a}", len_a)
-    trace_step(trace, "sample_len_b", f"Length B: {len_b}", len_b)
     trace_step(
         trace,
         "sample_tie_break",
@@ -97,10 +93,6 @@ def sample_sequence_dp_spec(
         f"Match predicate: {match_predicate.kind}",
         match_predicate.model_dump(),
     )
-
-    # Lengths shape query generation and future parity harnesses. They are not
-    # part of the core spec at M0, so we only trace them for observability.
-    _ = (len_a, len_b)
 
     return SequenceDpSpec(
         template=template,

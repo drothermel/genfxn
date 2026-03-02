@@ -5,6 +5,9 @@ from genfxn.temporal_logic.eval import eval_temporal_logic
 from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
 from genfxn.temporal_logic.utils import sample_sequence
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-10, 10)
+_DEFAULT_SEQUENCE_LENGTH_RANGE: tuple[int, int] = (0, 10)
+
 
 def _append_query(
     queries: list[Query],
@@ -55,7 +58,7 @@ def generate_temporal_logic_queries(
     if rng is None:
         rng = random.Random()  # noqa: S311
 
-    v_lo, v_hi = axes.value_range
+    v_lo, v_hi = _DEFAULT_VALUE_RANGE
     mid = (v_lo + v_hi) // 2
     queries: list[Query] = []
 
@@ -68,7 +71,7 @@ def generate_temporal_logic_queries(
         clipped = [min(max(v, v_lo), v_hi) for v in xs]
         clipped = _fit_sequence_length(
             clipped,
-            axes.sequence_length_range,
+            _DEFAULT_SEQUENCE_LENGTH_RANGE,
             fill_value=mid,
         )
         _append_query(queries, spec, clipped, QueryTag.COVERAGE)
@@ -82,20 +85,20 @@ def generate_temporal_logic_queries(
     for xs in boundary_cases:
         fitted = _fit_sequence_length(
             xs,
-            axes.sequence_length_range,
+            _DEFAULT_SEQUENCE_LENGTH_RANGE,
             fill_value=mid,
         )
         _append_query(queries, spec, fitted, QueryTag.BOUNDARY)
 
     for _ in range(4):
         sampled = sample_sequence(
-            length_range=axes.sequence_length_range,
-            value_range=axes.value_range,
+            length_range=_DEFAULT_SEQUENCE_LENGTH_RANGE,
+            value_range=_DEFAULT_VALUE_RANGE,
             rng=rng,
         )
         sampled = _fit_sequence_length(
             sampled,
-            axes.sequence_length_range,
+            _DEFAULT_SEQUENCE_LENGTH_RANGE,
             fill_value=mid,
         )
         _append_query(queries, spec, sampled, QueryTag.TYPICAL)
@@ -108,7 +111,7 @@ def generate_temporal_logic_queries(
     for xs in adversarial_cases:
         fitted = _fit_sequence_length(
             xs,
-            axes.sequence_length_range,
+            _DEFAULT_SEQUENCE_LENGTH_RANGE,
             fill_value=mid,
         )
         _append_query(queries, spec, fitted, QueryTag.ADVERSARIAL)
@@ -118,7 +121,7 @@ def generate_temporal_logic_queries(
             continue
         fallback = _fit_sequence_length(
             [mid],
-            axes.sequence_length_range,
+            _DEFAULT_SEQUENCE_LENGTH_RANGE,
             fill_value=mid,
         )
         _append_query(queries, spec, fallback, tag)

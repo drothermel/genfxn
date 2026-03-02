@@ -9,7 +9,6 @@ from genfxn.core.task_ids import compute_task_ids
 from genfxn.core.validate import WRONG_FAMILY, Severity
 from genfxn.fsm.models import (
     FsmSpec,
-    MachineType,
     OutputMode,
     State,
     UndefinedTransitionPolicy,
@@ -200,7 +199,6 @@ class TestQueryAndSemantics:
 
     def test_error_policy_invalid_query_input_is_reported(self) -> None:
         spec = FsmSpec(
-            machine_type=MachineType.MOORE,
             output_mode=OutputMode.FINAL_STATE_ID,
             undefined_transition_policy=UndefinedTransitionPolicy.ERROR,
             start_state_id=0,

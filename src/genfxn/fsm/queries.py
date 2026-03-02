@@ -2,7 +2,9 @@ import random
 
 from genfxn.core.models import Query, QueryTag, dedupe_queries
 from genfxn.fsm.eval import eval_fsm
-from genfxn.fsm.models import FsmAxes, FsmSpec
+from genfxn.fsm.models import FsmSpec
+
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-20, 20)
 
 
 def _rand_list(
@@ -16,13 +18,12 @@ def _rand_list(
 
 def generate_fsm_queries(
     spec: FsmSpec,
-    axes: FsmAxes,
     rng: random.Random | None = None,
 ) -> list[Query]:
     if rng is None:
         rng = random.Random()
 
-    v_lo, v_hi = axes.value_range
+    v_lo, v_hi = _DEFAULT_VALUE_RANGE
     n_states = len(spec.states)
 
     queries: list[Query] = []
@@ -44,7 +45,7 @@ def generate_fsm_queries(
         [v_lo],
         [v_hi],
         [0],
-        _rand_list(4, axes.value_range, rng),
+        _rand_list(4, _DEFAULT_VALUE_RANGE, rng),
     ]
     for xs in coverage_inputs:
         _append_query(xs, QueryTag.COVERAGE)
@@ -65,7 +66,7 @@ def generate_fsm_queries(
         if attempts > 80:
             break
         length = rng.randint(0, max(1, n_states + 2))
-        xs = _rand_list(length, axes.value_range, rng)
+        xs = _rand_list(length, _DEFAULT_VALUE_RANGE, rng)
         before = len(queries)
         _append_query(xs, QueryTag.TYPICAL)
         if len(queries) > before:
@@ -78,7 +79,7 @@ def generate_fsm_queries(
     if not any(q.tag == QueryTag.ADVERSARIAL for q in queries):
         for _ in range(40):
             length = rng.randint(max(1, n_states), n_states + 4)
-            xs = _rand_list(length, axes.value_range, rng)
+            xs = _rand_list(length, _DEFAULT_VALUE_RANGE, rng)
             before = len(queries)
             _append_query(xs, QueryTag.ADVERSARIAL)
             if len(queries) > before:

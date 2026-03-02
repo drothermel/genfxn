@@ -57,6 +57,16 @@ def _sampled_lifecycle_kwargs() -> dict[str, Any]:
     }
 
 
+def _fsm_lifecycle_kwargs() -> dict[str, Any]:
+    # FSM needs more trials because some inputs hit undefined transitions
+    # (ValueError) and are skipped, so 1 trial may never reach fn().
+    return {
+        "semantic_trials": 5,
+        "max_semantic_issues": 1,
+        "random_seed": 7,
+    }
+
+
 def _piecewise_lifecycle_kwargs() -> dict[str, Any]:
     return {"value_range": (0, 0), "max_semantic_issues": 1}
 
@@ -72,8 +82,6 @@ def _simple_algorithms_lifecycle_kwargs() -> dict[str, Any]:
 def _temporal_task_kwargs() -> dict[str, Any]:
     axes = TemporalLogicAxes(
         formula_depth_range=(2, 3),
-        sequence_length_range=(0, 4),
-        value_range=(-3, 3),
         predicate_constant_range=(-2, 2),
     )
     return {"axes": axes}
@@ -167,7 +175,7 @@ VALIDATOR_CASES: tuple[ValidatorContractCase, ...] = (
         code_unsafe_ast_code=fsm_validate.CODE_UNSAFE_AST,
         strictness_query=_strictness_query,
         bool_query=_bool_list_query,
-        lifecycle_kwargs=_sampled_lifecycle_kwargs,
+        lifecycle_kwargs=_fsm_lifecycle_kwargs,
     ),
     ValidatorContractCase(
         name="graph_queries",

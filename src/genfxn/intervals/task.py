@@ -54,7 +54,7 @@ def generate_intervals_task(
         family="intervals",
         spec=spec_dict,
         code=code,
-        queries=generate_intervals_queries(spec, axes, rng),
+        queries=generate_intervals_queries(spec, rng),
         trace=GenerationTrace(family="intervals", steps=trace_steps),
         axes=axes.model_dump(),
         description=description,

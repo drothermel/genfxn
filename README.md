@@ -5,7 +5,7 @@ It produces executable tasks with structured queries across 11 families,
 rendered in a single target language per task file (`python`, `java`, or `rust`).
 
 Additional docs:
-- [AXES.md](AXES.md): full family axes and split-path reference
+- [AXES.md](AXES.md): full family axes reference
 - [TESTING.md](TESTING.md): test and quality command guide
 
 ## Quickstart
@@ -15,10 +15,6 @@ uv sync
 
 # Generate 50 Python tasks from all families
 uv run genfxn generate -o tasks.jsonl -f all -n 50 -s 42
-
-# Split into train/test (deterministic for same input + seed)
-uv run genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-  --random-ratio 0.8 --seed 42
 
 # Inspect family counts
 uv run genfxn info tasks.jsonl
@@ -40,8 +36,8 @@ uv run genfxn info tasks.jsonl
 | `graph_queries` | `f(src: int, dst: int) -> int` | Reachability/hops/cost queries over sampled graph specs |
 | `temporal_logic` | `f(xs: list[int]) -> int` | Finite-trace temporal-logic evaluation |
 
-All families are integrated across generation, validation, rendering, splitting,
-and verification workflows.
+All families are integrated across generation, validation, rendering, and
+verification workflows.
 
 ## Generation CLI
 
@@ -194,49 +190,6 @@ Each line is one task object:
 }
 ```
 
-## Splitting CLI
-
-```bash
-uv run genfxn split INPUT --train TRAIN --test TEST \
-  [--random-ratio R --seed S | --holdout-axis A --holdout-value V [--holdout-type T]]
-```
-
-Examples:
-
-```bash
-# Random 80/20
-uv run genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-  --random-ratio 0.8 --seed 42
-
-# Exact holdout
-uv run genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-  --holdout-axis template --holdout-value longest_run --holdout-type exact
-
-# Numeric range holdout
-uv run genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-  --holdout-axis k --holdout-value "5,10" --holdout-type range
-```
-
-Holdout types:
-- `exact` (default)
-- `range`
-- `contains`
-
-For `exact` and `contains`, `--holdout-value` is parsed as JSON when valid:
-- Scalars/literals like `true`, `42`, `[1,2]` are parsed as JSON values.
-- Malformed JSON-like literals fail fast.
-- Non-finite values (`nan`, `inf`, `-inf`) are rejected.
-- To force a string that looks like a JSON scalar, pass JSON string form
-  (for example `"01"`, `"True"`).
-
-Axis paths use dotted traversal for nested specs (for example
-`predicate.kind`, `rules.0.transform.kind`). See [AXES.md](AXES.md).
-
-Random split note:
-- CLI random split is streaming and deterministic for same input/seed/ratio.
-- It guarantees exact floor train size, disjointness, and train+test union = input.
-- Exact membership can differ from library `random_split` shuffle+slice behavior.
-
 ## Python API
 
 ```python
@@ -246,20 +199,6 @@ from genfxn.piecewise.task import generate_piecewise_task
 task = generate_piecewise_task(languages=[Language.PYTHON, Language.JAVA])
 print(task.code["python"])
 print(task.code["java"])
-```
-
-```python
-from genfxn.splits import AxisHoldout, HoldoutType, split_tasks
-
-holdouts = [
-    AxisHoldout(
-        axis_path="template",
-        holdout_type=HoldoutType.EXACT,
-        holdout_value="longest_run",
-    )
-]
-result = split_tasks(tasks, holdouts)
-# result.train, result.test
 ```
 
 ## Semantics and Invariants
@@ -290,7 +229,6 @@ uv run python scripts/run_all_checks.py --ci
 
 ```bash
 uv run genfxn generate -o OUTPUT -f FAMILY -n COUNT [-s SEED] [OPTIONS]
-uv run genfxn split INPUT --train TRAIN --test TEST [SPLIT OPTIONS]
 uv run genfxn info FILE
 uv run genfxn verify FILE
 ```

@@ -13,7 +13,6 @@ from genfxn.fsm.eval import eval_fsm
 from genfxn.fsm.models import (
     FsmAxes,
     FsmSpec,
-    MachineType,
     OutputMode,
     PredicateType,
     State,
@@ -49,12 +48,10 @@ def _base_states() -> list[State]:
 
 def _spec(
     *,
-    machine_type: MachineType = MachineType.MOORE,
     output_mode: OutputMode = OutputMode.FINAL_STATE_ID,
     policy: UndefinedTransitionPolicy = UndefinedTransitionPolicy.STAY,
 ) -> FsmSpec:
     return FsmSpec(
-        machine_type=machine_type,
         output_mode=output_mode,
         undefined_transition_policy=policy,
         start_state_id=0,
@@ -66,7 +63,6 @@ class TestModels:
     def test_duplicate_state_ids_rejected(self) -> None:
         with pytest.raises(ValueError, match="state ids must be unique"):
             FsmSpec(
-                machine_type=MachineType.MOORE,
                 output_mode=OutputMode.FINAL_STATE_ID,
                 undefined_transition_policy=UndefinedTransitionPolicy.STAY,
                 start_state_id=0,
@@ -76,7 +72,6 @@ class TestModels:
     def test_transition_target_must_exist(self) -> None:
         with pytest.raises(ValueError, match="target_state_id"):
             FsmSpec(
-                machine_type=MachineType.MOORE,
                 output_mode=OutputMode.FINAL_STATE_ID,
                 undefined_transition_policy=UndefinedTransitionPolicy.STAY,
                 start_state_id=0,
@@ -97,7 +92,6 @@ class TestModels:
         with pytest.raises(Exception, match="states.0.id"):
             FsmSpec.model_validate(
                 {
-                    "machine_type": "moore",
                     "output_mode": "final_state_id",
                     "undefined_transition_policy": "stay",
                     "start_state_id": 2_147_483_647,
@@ -116,7 +110,6 @@ class TestModels:
         [
             ("n_states_range", (False, 3)),
             ("transitions_per_state_range", (0, True)),
-            ("value_range", (False, 5)),
             ("threshold_range", (0, True)),
             ("divisor_range", (2, True)),
         ],
@@ -137,8 +130,6 @@ class TestModels:
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("value_range", (-(1 << 31) - 1, 0)),
-            ("value_range", (0, (1 << 31))),
             ("threshold_range", (-(1 << 31) - 1, 0)),
             ("threshold_range", (0, (1 << 31))),
         ],
@@ -155,7 +146,6 @@ class TestModels:
         with pytest.raises(Exception, match="signed 32-bit range"):
             FsmSpec.model_validate(
                 {
-                    "machine_type": "moore",
                     "output_mode": "final_state_id",
                     "undefined_transition_policy": "stay",
                     "start_state_id": 0,
@@ -225,18 +215,12 @@ class TestEvaluatorSemantics:
         # 0->2 plus two sink transitions
         assert eval_fsm(spec_sink, [3, 5, 7]) == 3
 
-    def test_mealy_machine_type_uses_same_deterministic_transition_order(
-        self,
-    ) -> None:
-        spec = _spec(
-            machine_type=MachineType.MEALY,
-            output_mode=OutputMode.FINAL_STATE_ID,
-        )
+    def test_deterministic_transition_order(self) -> None:
+        spec = _spec(output_mode=OutputMode.FINAL_STATE_ID)
         assert eval_fsm(spec, [4, 5, 8]) == 1
 
 
 class TestRenderParity:
-    @pytest.mark.parametrize("machine_type", list(MachineType))
     @pytest.mark.parametrize(
         "policy",
         [UndefinedTransitionPolicy.STAY, UndefinedTransitionPolicy.SINK],
@@ -244,12 +228,10 @@ class TestRenderParity:
     @pytest.mark.parametrize("output_mode", list(OutputMode))
     def test_rendered_python_matches_evaluator(
         self,
-        machine_type: MachineType,
         policy: UndefinedTransitionPolicy,
         output_mode: OutputMode,
     ) -> None:
         spec = _spec(
-            machine_type=machine_type,
             output_mode=output_mode,
             policy=policy,
         )
@@ -332,12 +314,11 @@ class TestSampler:
 class TestQueries:
     def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
         axes = FsmAxes(
-            value_range=(-7, 7),
             n_states_range=(3, 4),
             transitions_per_state_range=(1, 2),
         )
         spec = sample_fsm_spec(axes, random.Random(41))
-        queries = generate_fsm_queries(spec, axes, random.Random(41))
+        queries = generate_fsm_queries(spec, random.Random(41))
 
         assert queries
         assert {q.tag for q in queries} == set(QueryTag)
@@ -351,13 +332,11 @@ class TestTaskGeneration:
         self,
     ) -> None:
         axes = FsmAxes(
-            machine_types=[MachineType.MOORE],
             output_modes=[OutputMode.FINAL_STATE_ID],
             undefined_transition_policies=[UndefinedTransitionPolicy.STAY],
             predicate_types=[PredicateType.EVEN, PredicateType.LT],
             n_states_range=(3, 3),
             transitions_per_state_range=(1, 1),
-            value_range=(-5, 5),
             threshold_range=(-2, 2),
             divisor_range=(2, 2),
         )
@@ -374,7 +353,6 @@ class TestTaskGeneration:
 
     def test_generate_fsm_task_is_deterministic_for_seed(self) -> None:
         axes = FsmAxes(
-            machine_types=[MachineType.MOORE],
             output_modes=[OutputMode.FINAL_STATE_ID],
             undefined_transition_policies=[UndefinedTransitionPolicy.STAY],
             predicate_types=[PredicateType.EVEN, PredicateType.LT],

@@ -25,11 +25,15 @@ class ExprType(str, Enum):
 
 
 _INT_RANGE_FIELDS = (
-    "value_range",
     "coeff_range",
     "threshold_range",
     "divisor_range",
 )
+
+# Hardcoded value range used only for overflow validation of expression types.
+# This is not a user-facing axis -- it defines the domain over which generated
+# piecewise functions must be overflow-safe.
+_OVERFLOW_VALUE_RANGE: tuple[int, int] = (-100, 100)
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -149,7 +153,6 @@ class PiecewiseAxes(BaseModel):
     expr_types: list[ExprType] = Field(
         default_factory=lambda: [ExprType.AFFINE]
     )
-    value_range: tuple[int, int] = Field(default=(-100, 100))
     coeff_range: tuple[int, int] = Field(default=(-5, 5))
     threshold_range: tuple[int, int] = Field(default=(-50, 50))
     divisor_range: tuple[int, int] = Field(default=(2, 10))
@@ -166,7 +169,6 @@ class PiecewiseAxes(BaseModel):
             raise ValueError("expr_types must not be empty")
 
         for name in (
-            "value_range",
             "coeff_range",
             "threshold_range",
             "divisor_range",
@@ -201,7 +203,7 @@ class PiecewiseAxes(BaseModel):
                 "literal rendering overflow-safe"
             )
 
-        value_range = self.value_range
+        value_range = _OVERFLOW_VALUE_RANGE
         coeff_range = self.coeff_range
 
         def _raise_overflow(expr_type: ExprType) -> None:

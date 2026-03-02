@@ -1,8 +1,6 @@
 import json
-import math
 import os
 import random
-import re
 import shutil
 import stat
 import tempfile
@@ -12,14 +10,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any, TextIO
 
-import srsly
 import typer
 from pydantic import TypeAdapter, ValidationError
 
 from genfxn.bitops.models import BitopsAxes, BitopsSpec
 from genfxn.bitops.task import generate_bitops_task
 from genfxn.core.ast_hash import compute_ast_hash
-from genfxn.core.codegen import get_spec_value
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
 from genfxn.core.string_predicates import StringPredicateType
@@ -36,6 +32,10 @@ from genfxn.graph_queries.models import GraphQueriesAxes, GraphQueriesSpec
 from genfxn.graph_queries.task import generate_graph_queries_task
 from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
 from genfxn.intervals.task import generate_intervals_task
+from genfxn.irt.bank import BankBuildSettings, build_stratified_item_bank
+from genfxn.irt.diagnostics import DiagnosticsSettings, run_fit_diagnostics
+from genfxn.irt.fit import FitSettings, fit_irt_models
+from genfxn.irt.score import AnchorScoringSettings, score_with_anchors
 from genfxn.langs.registry import get_render_fn
 from genfxn.langs.types import Language
 from genfxn.piecewise.models import ExprType, PiecewiseAxes, PiecewiseSpec
@@ -52,7 +52,6 @@ from genfxn.simple_algorithms.models import (
     TemplateType as SimpleAlgoTemplateType,
 )
 from genfxn.simple_algorithms.task import generate_simple_algorithms_task
-from genfxn.splits import AxisHoldout, HoldoutType, matches_holdout
 from genfxn.stack_bytecode.models import (
     StackBytecodeAxes,
     StackBytecodeSpec,
@@ -85,7 +84,9 @@ from genfxn.verification.runner import (
     verify_cases,
 )
 
-app = typer.Typer(help="Generate and split function synthesis tasks.")
+app = typer.Typer(help="Generate function synthesis tasks.")
+irt_app = typer.Typer(help="IRT calibration commands.")
+app.add_typer(irt_app, name="irt")
 _stateful_spec_adapter = TypeAdapter(StatefulSpec)
 _simple_algorithms_spec_adapter = TypeAdapter(SimpleAlgorithmsSpec)
 _fsm_spec_adapter = TypeAdapter(FsmSpec)
@@ -94,23 +95,6 @@ _sequence_dp_spec_adapter = TypeAdapter(SequenceDpSpec)
 _intervals_spec_adapter = TypeAdapter(IntervalsSpec)
 _graph_queries_spec_adapter = TypeAdapter(GraphQueriesSpec)
 _temporal_logic_spec_adapter = TypeAdapter(TemporalLogicSpec)
-_NON_FINITE_TOKENS = frozenset(
-    {
-        "nan",
-        "+nan",
-        "-nan",
-        "inf",
-        "+inf",
-        "-inf",
-        "infinity",
-        "+infinity",
-        "-infinity",
-    }
-)
-_UNSET_SAMPLE = object()
-_NUMERIC_LIKE_TOKEN_RE = re.compile(
-    r"^[+\-]?(?:\d[\d.eE+\-]*|\.\d[\d.eE+\-]*)$"
-)
 
 
 class _TaskRowError(Exception):
@@ -146,119 +130,6 @@ def _parse_range(value: str | None) -> tuple[int, int] | None:
         raise typer.BadParameter(
             f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
         ) from err
-
-
-def _parse_numeric_range(
-    value: str | None,
-) -> tuple[int | float, int | float] | None:
-    """Parse 'lo,hi' into numeric tuple (ints or floats)."""
-    if value is None:
-        return None
-    try:
-        parts = value.split(",")
-        if len(parts) != 2:
-            raise typer.BadParameter(
-                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
-            )
-        lo_s, hi_s = parts[0].strip(), parts[1].strip()
-        if not lo_s or not hi_s:
-            raise typer.BadParameter(
-                f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
-            )
-
-        def _parse_bound(raw: str) -> int | float:
-            # Parse integer-looking tokens as ints first to avoid precision loss
-            # from float round-trips on large values.
-            if "." not in raw and "e" not in raw.lower():
-                try:
-                    return int(raw)
-                except ValueError:
-                    pass
-
-            parsed_float = float(raw)
-            if not math.isfinite(parsed_float):
-                raise typer.BadParameter(
-                    f"Invalid range '{value}': bounds must be finite numbers "
-                    "(no nan/inf/-inf)"
-                )
-            return parsed_float
-
-        lo = _parse_bound(lo_s)
-        hi = _parse_bound(hi_s)
-        if lo > hi:
-            raise typer.BadParameter(
-                f"Invalid range '{value}': low must be <= high"
-            )
-        return lo, hi
-    except ValueError as err:
-        raise typer.BadParameter(
-            f"Invalid range '{value}': expected 'LO,HI' (e.g., '5,10')"
-        ) from err
-
-
-def _contains_non_finite_number(value: Any) -> bool:
-    if isinstance(value, float):
-        return not math.isfinite(value)
-    if isinstance(value, list | tuple | set | frozenset):
-        return any(_contains_non_finite_number(item) for item in value)
-    if isinstance(value, dict):
-        return any(
-            _contains_non_finite_number(key)
-            or _contains_non_finite_number(item)
-            for key, item in value.items()
-        )
-    return False
-
-
-def _looks_like_json_literal(value: str) -> bool:
-    stripped = value.lstrip()
-    return stripped.startswith(("[", "{", '"'))
-
-
-def _looks_like_malformed_json_scalar(value: str) -> bool:
-    stripped = value.strip()
-    if not stripped:
-        return False
-
-    lowered = stripped.lower()
-    if lowered in {"true", "false", "null"} and stripped != lowered:
-        return True
-
-    for keyword in ("true", "false", "null"):
-        if keyword.startswith(lowered) and lowered != keyword:
-            return True
-
-    return _NUMERIC_LIKE_TOKEN_RE.fullmatch(stripped) is not None
-
-
-def _parse_non_range_holdout_value(value: str) -> Any:
-    try:
-        parsed_value = json.loads(value)
-    except json.JSONDecodeError as err:
-        if value.strip().lower() in _NON_FINITE_TOKENS:
-            raise typer.BadParameter(
-                f"Invalid holdout value '{value}': non-finite numbers "
-                "(nan/inf/-inf) are not allowed for exact/contains "
-                "holdouts"
-            )
-        if _looks_like_json_literal(value):
-            raise typer.BadParameter(
-                f"Invalid holdout value '{value}': malformed JSON literal "
-                "for exact/contains holdouts"
-            ) from err
-        if _looks_like_malformed_json_scalar(value):
-            raise typer.BadParameter(
-                f"Invalid holdout value '{value}': malformed JSON scalar "
-                "for exact/contains holdouts"
-            ) from err
-        return value
-
-    if _contains_non_finite_number(parsed_value):
-        raise typer.BadParameter(
-            f"Invalid holdout value '{value}': non-finite numbers "
-            "(nan/inf/-inf) are not allowed for exact/contains holdouts"
-        )
-    return parsed_value
 
 
 def _iter_validated_tasks(input_file: Path):
@@ -380,64 +251,10 @@ def _safe_close_fd(fd: int | None) -> None:
         return
 
 
-def _move_existing_output_to_backup(path: Path) -> Path | None:
-    try:
-        path.stat()
-    except FileNotFoundError:
-        return None
-
-    backup_fd, backup_name = tempfile.mkstemp(
-        prefix=f".{path.name}.",
-        suffix=".bak",
-        dir=path.parent,
-    )
-    os.close(backup_fd)
-    backup = Path(backup_name)
-    _safe_unlink(backup)
-    os.replace(path, backup)
-    return backup
-
-
 def _restore_backup(path: Path, backup: Path | None) -> None:
     if backup is None:
         return
     os.replace(backup, path)
-
-
-def _commit_split_outputs(
-    *,
-    train_tmp: Path,
-    train: Path,
-    test_tmp: Path,
-    test: Path,
-) -> None:
-    train_backup: Path | None = None
-    test_backup: Path | None = None
-    train_replaced = False
-    test_replaced = False
-    try:
-        train_backup = _move_existing_output_to_backup(train)
-        test_backup = _move_existing_output_to_backup(test)
-
-        os.replace(train_tmp, train)
-        train_replaced = True
-        os.replace(test_tmp, test)
-        test_replaced = True
-    except Exception:
-        if train_replaced:
-            _safe_unlink(train)
-        if test_replaced:
-            _safe_unlink(test)
-        _restore_backup(train, train_backup)
-        _restore_backup(test, test_backup)
-        raise
-    finally:
-        _safe_unlink(train_tmp)
-        _safe_unlink(test_tmp)
-        if train_backup is not None:
-            _safe_unlink(train_backup)
-        if test_backup is not None:
-            _safe_unlink(test_backup)
 
 
 def _stage_jsonl_rows(
@@ -580,58 +397,6 @@ def _write_generated_outputs_atomically(
     )
 
 
-def _paths_resolve_to_same_target(left: Path, right: Path) -> bool:
-    left_resolved = left.expanduser().resolve(strict=False)
-    right_resolved = right.expanduser().resolve(strict=False)
-    return left_resolved == right_resolved
-
-
-@contextmanager
-def _atomic_split_outputs(
-    train: Path, test: Path
-) -> Iterator[tuple[TextIO, TextIO]]:
-    train_fd: int | None = None
-    test_fd: int | None = None
-    train_tmp: Path | None = None
-    test_tmp: Path | None = None
-    try:
-        train_fd, train_tmp_name = tempfile.mkstemp(
-            prefix=f".{train.name}.",
-            suffix=".tmp",
-            dir=train.parent,
-        )
-        train_tmp = Path(train_tmp_name)
-
-        test_fd, test_tmp_name = tempfile.mkstemp(
-            prefix=f".{test.name}.",
-            suffix=".tmp",
-            dir=test.parent,
-        )
-        test_tmp = Path(test_tmp_name)
-
-        with (
-            os.fdopen(train_fd, "w", encoding="utf-8") as train_handle,
-            os.fdopen(test_fd, "w", encoding="utf-8") as test_handle,
-        ):
-            train_fd = None
-            test_fd = None
-            yield train_handle, test_handle
-        _commit_split_outputs(
-            train_tmp=train_tmp,
-            train=train,
-            test_tmp=test_tmp,
-            test=test,
-        )
-    except Exception:
-        _safe_close_fd(train_fd)
-        _safe_close_fd(test_fd)
-        if train_tmp is not None:
-            _safe_unlink(train_tmp)
-        if test_tmp is not None:
-            _safe_unlink(test_tmp)
-        raise
-
-
 @contextmanager
 def _atomic_output_file(path: Path) -> Iterator[TextIO]:
     try:
@@ -670,19 +435,6 @@ def _atomic_output_file_or_exit(path: Path) -> Iterator[TextIO]:
     except OSError as err:
         typer.echo(_render_os_error(err), err=True)
         raise typer.Exit(1) from err
-
-
-def _write_task_line(handle, task: Task) -> None:
-    handle.write(srsly.json_dumps(task.model_dump(exclude_none=True)))
-    handle.write("\n")
-
-
-def _matches_holdout(task: Task, holdout: AxisHoldout) -> bool:
-    return matches_holdout(task, holdout)
-
-
-def _count_validated_tasks(input_file: Path) -> int:
-    return sum(1 for _ in _iter_validated_tasks(input_file))
 
 
 def _parse_single_language(language: str) -> Language:
@@ -1529,182 +1281,6 @@ def generate(
 
 
 @app.command()
-def split(
-    input_file: Annotated[Path, typer.Argument(help="Input JSONL file")],
-    train: Annotated[Path, typer.Option("--train", help="Train output JSONL")],
-    test: Annotated[Path, typer.Option("--test", help="Test output JSONL")],
-    # Random split options
-    random_ratio: Annotated[
-        float | None,
-        typer.Option("--random-ratio", help="Train ratio in [0, 1]"),
-    ] = None,
-    split_seed: Annotated[
-        int | None,
-        typer.Option("--seed", help="Random seed for reproducibility"),
-    ] = None,
-    # Axis holdout options
-    holdout_axis: Annotated[
-        str | None,
-        typer.Option("--holdout-axis", help="Dot-path to spec field"),
-    ] = None,
-    holdout_value: Annotated[
-        str | None,
-        typer.Option("--holdout-value", help="Value to hold out"),
-    ] = None,
-    holdout_type: Annotated[
-        HoldoutType,
-        typer.Option("--holdout-type", help="exact, range, or contains"),
-    ] = HoldoutType.EXACT,
-) -> None:
-    """Split tasks using random split or axis holdouts."""
-    try:
-        # Validate options
-        has_random = random_ratio is not None
-        has_holdout = holdout_axis is not None or holdout_value is not None
-
-        if has_random and has_holdout:
-            typer.echo(
-                "Error: Cannot use both --random-ratio and holdout options",
-                err=True,
-            )
-            raise typer.Exit(1)
-
-        if not has_random and not has_holdout:
-            typer.echo(
-                "Error: Must provide --random-ratio or holdout options",
-                err=True,
-            )
-            raise typer.Exit(1)
-
-        if _paths_resolve_to_same_target(train, test):
-            typer.echo(
-                "Error: --train and --test must be different output paths",
-                err=True,
-            )
-            raise typer.Exit(1)
-        if _paths_resolve_to_same_target(input_file, train):
-            typer.echo(
-                "Error: input file and --train must be different paths",
-                err=True,
-            )
-            raise typer.Exit(1)
-        if _paths_resolve_to_same_target(input_file, test):
-            typer.echo(
-                "Error: input file and --test must be different paths",
-                err=True,
-            )
-            raise typer.Exit(1)
-
-        if has_random:
-            if random_ratio is None:
-                typer.echo(
-                    "Error: --random-ratio is required for random split",
-                    err=True,
-                )
-                raise typer.Exit(1)
-            if (
-                not math.isfinite(random_ratio)
-                or random_ratio < 0
-                or random_ratio > 1
-            ):
-                typer.echo("Error: --random-ratio must be in [0, 1]", err=True)
-                raise typer.Exit(1)
-            total_count = _count_validated_tasks(input_file)
-            train_target = int(total_count * random_ratio)
-            remaining_items = total_count
-            remaining_train = train_target
-            rng = random.Random(split_seed)
-            train_count = 0
-            test_count = 0
-            with _atomic_split_outputs(train, test) as (
-                train_handle,
-                test_handle,
-            ):
-                for task in _iter_validated_tasks(input_file):
-                    assign_to_train = False
-                    if remaining_train > 0:
-                        assign_to_train = (
-                            rng.random() * remaining_items < remaining_train
-                        )
-
-                    if assign_to_train:
-                        _write_task_line(train_handle, task)
-                        train_count += 1
-                        remaining_train -= 1
-                    else:
-                        _write_task_line(test_handle, task)
-                        test_count += 1
-                    remaining_items -= 1
-        else:
-            if holdout_axis is None or holdout_value is None:
-                typer.echo(
-                    "Error: Both --holdout-axis and --holdout-value are "
-                    "required",
-                    err=True,
-                )
-                raise typer.Exit(1)
-
-            parsed_value: Any
-            if holdout_type == HoldoutType.RANGE:
-                range_val = _parse_numeric_range(holdout_value)
-                if range_val is None:
-                    typer.echo(
-                        "Error: --holdout-value is required for range holdout",
-                        err=True,
-                    )
-                    raise typer.Exit(1)
-                parsed_value = range_val
-            else:
-                parsed_value = _parse_non_range_holdout_value(holdout_value)
-
-            holdouts = [
-                AxisHoldout(
-                    axis_path=holdout_axis,
-                    holdout_type=holdout_type,
-                    holdout_value=parsed_value,
-                )
-            ]
-            total_count = 0
-            train_count = 0
-            test_count = 0
-            first_sample: Any = _UNSET_SAMPLE
-            with _atomic_split_outputs(train, test) as (
-                train_handle,
-                test_handle,
-            ):
-                for task in _iter_validated_tasks(input_file):
-                    total_count += 1
-                    if first_sample is _UNSET_SAMPLE:
-                        first_sample = get_spec_value(task.spec, holdout_axis)
-                    if any(_matches_holdout(task, h) for h in holdouts):
-                        _write_task_line(test_handle, task)
-                        test_count += 1
-                    else:
-                        _write_task_line(train_handle, task)
-                        train_count += 1
-
-            if test_count == 0 and total_count > 0:
-                typer.echo(
-                    f"Warning: holdout matched 0 of {total_count} tasks. "
-                    f"Check --holdout-axis spelling (got '{holdout_axis}').",
-                    err=True,
-                )
-                typer.echo(
-                    "  First task's value at "
-                    f"'{holdout_axis}': {first_sample!r}",
-                    err=True,
-                )
-
-        typer.echo(f"Train: {train_count}, Test: {test_count}")
-    except _TaskRowError as err:
-        typer.echo(_render_task_row_error(input_file, err), err=True)
-        raise typer.Exit(1) from err
-    except OSError as err:
-        typer.echo(_render_os_error(err), err=True)
-        raise typer.Exit(1) from err
-
-
-@app.command()
 def info(
     input_file: Annotated[Path, typer.Argument(help="Input JSONL file")],
 ) -> None:
@@ -1912,3 +1488,247 @@ def verify(
     except OSError as err:
         typer.echo(_render_os_error(err), err=True)
         raise typer.Exit(1) from err
+
+
+def _parse_irt_families(raw: str) -> list[str]:
+    families = [token.strip() for token in raw.split(",") if token.strip()]
+    if not families:
+        raise typer.BadParameter("at least one family is required")
+    return families
+
+
+def _reject_legacy_irt_flags(
+    *,
+    legacy_difficulty: str | None,
+    legacy_balanced_suite: bool,
+) -> None:
+    if legacy_difficulty is not None or legacy_balanced_suite:
+        raise typer.BadParameter(
+            "legacy difficulty/balanced-suite options are removed. "
+            "Use `genfxn irt build-bank` stratified quotas and "
+            "manifest-driven artifacts."
+        )
+
+
+@irt_app.command("build-bank")
+def irt_build_bank(
+    bank_id: Annotated[
+        str,
+        typer.Option(help="Bank identifier used under out-dir."),
+    ] = "bank_v1",
+    out_dir: Annotated[
+        Path,
+        typer.Option(help="Base output directory for bank artifacts."),
+    ] = Path("data/irt/banks"),
+    families: Annotated[
+        str,
+        typer.Option(
+            help=(
+                "Comma-separated families "
+                "(stateful,simple_algorithms,fsm,bitops)."
+            )
+        ),
+    ] = "stateful,simple_algorithms,fsm,bitops",
+    per_family_count: Annotated[
+        int,
+        typer.Option(help="Target items per family (locked to 300 for v1)."),
+    ] = 300,
+    seed: Annotated[
+        int,
+        typer.Option(help="Deterministic generation seed."),
+    ] = 0,
+    prompt_version: Annotated[
+        str,
+        typer.Option(help="Prompt template version identifier."),
+    ] = "spec_to_outputs_v1",
+    max_attempts_per_family: Annotated[
+        int,
+        typer.Option(help="Maximum generation attempts per family."),
+    ] = 250_000,
+    legacy_difficulty: Annotated[
+        str | None,
+        typer.Option(
+            "--difficulty",
+            help="Deprecated legacy option (kept only for fail-fast guidance).",
+        ),
+    ] = None,
+    legacy_balanced_suite: Annotated[
+        bool,
+        typer.Option(
+            "--balanced-suite",
+            help="Deprecated legacy option (kept only for fail-fast guidance).",
+        ),
+    ] = False,
+) -> None:
+    _reject_legacy_irt_flags(
+        legacy_difficulty=legacy_difficulty,
+        legacy_balanced_suite=legacy_balanced_suite,
+    )
+    resolved_families = _parse_irt_families(families)
+    settings = BankBuildSettings(
+        bank_id=bank_id,
+        out_dir=out_dir,
+        families=resolved_families,
+        per_family_count=per_family_count,
+        seed=seed,
+        prompt_version=prompt_version,
+        max_attempts_per_family=max_attempts_per_family,
+    )
+    result = build_stratified_item_bank(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "bank_id": bank_id,
+                "bank_root": str(result.bank_root),
+                "items_path": str(result.items_path),
+                "eval_cases_inputs_path": str(result.eval_cases_inputs_path),
+                "eval_cases_expected_path": str(
+                    result.eval_cases_expected_path
+                ),
+                "manifest_path": str(result.manifest_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+@irt_app.command("fit")
+def irt_fit(
+    fit_id: Annotated[
+        str,
+        typer.Option(help="Fit identifier under out-dir."),
+    ] = "fit_v1",
+    responses_path: Annotated[
+        Path,
+        typer.Option(help="Response matrix JSONL path."),
+    ] = Path("data/irt/runs/run_v1/responses.jsonl"),
+    out_dir: Annotated[
+        Path,
+        typer.Option(help="Base output directory for fitted artifacts."),
+    ] = Path("data/irt/fits"),
+    min_item_respondents: Annotated[
+        int,
+        typer.Option(help="Minimum observed respondents per item."),
+    ] = 8,
+    min_respondent_items: Annotated[
+        int,
+        typer.Option(help="Minimum observed items per respondent."),
+    ] = 20,
+) -> None:
+    settings = FitSettings(
+        fit_id=fit_id,
+        responses_path=responses_path,
+        out_dir=out_dir,
+        min_item_respondents=min_item_respondents,
+        min_respondent_items=min_respondent_items,
+    )
+    result = fit_irt_models(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "fit_id": fit_id,
+                "fit_dir": str(result.fit_dir),
+                "item_params_1pl_path": str(result.item_params_1pl_path),
+                "item_params_2pl_path": str(result.item_params_2pl_path),
+                "respondent_params_1pl_path": str(
+                    result.respondent_params_1pl_path
+                ),
+                "respondent_params_2pl_path": str(
+                    result.respondent_params_2pl_path
+                ),
+                "diagnostics_path": str(result.diagnostics_path),
+                "difficulty_bins_global_path": str(
+                    result.difficulty_bins_global_path
+                ),
+                "difficulty_bins_family_path": str(
+                    result.difficulty_bins_family_path
+                ),
+                "anchors_path": str(result.anchors_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+@irt_app.command("diagnostics")
+def irt_diagnostics(
+    fit_id: Annotated[
+        str,
+        typer.Option(help="Fit identifier for output metadata."),
+    ] = "fit_v1",
+    fit_dir: Annotated[
+        Path,
+        typer.Option(help="Directory containing fitted parameter files."),
+    ] = Path("data/irt/fits/fit_v1"),
+    responses_path: Annotated[
+        Path,
+        typer.Option(help="Response matrix JSONL path."),
+    ] = Path("data/irt/runs/run_v1/responses.jsonl"),
+    out_dir: Annotated[
+        Path | None,
+        typer.Option(help="Optional diagnostics output directory."),
+    ] = None,
+) -> None:
+    settings = DiagnosticsSettings(
+        fit_id=fit_id,
+        fit_dir=fit_dir,
+        responses_path=responses_path,
+        out_dir=out_dir,
+    )
+    result = run_fit_diagnostics(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "fit_id": fit_id,
+                "diagnostics_dir": str(result.diagnostics_dir),
+                "icc_path": str(result.icc_path),
+                "item_information_path": str(result.item_information_path),
+                "local_dependence_path": str(result.local_dependence_path),
+                "summary_path": str(result.summary_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+@irt_app.command("score-anchored")
+def irt_score_anchored(
+    fit_id: Annotated[
+        str,
+        typer.Option(help="Scoring run identifier under out-dir."),
+    ] = "score_v1",
+    anchors_path: Annotated[
+        Path,
+        typer.Option(help="Anchors JSON path."),
+    ] = Path("data/irt/fits/fit_v1/anchors.json"),
+    responses_path: Annotated[
+        Path,
+        typer.Option(help="Response matrix JSONL path."),
+    ] = Path("data/irt/runs/run_v1/responses.jsonl"),
+    out_dir: Annotated[
+        Path,
+        typer.Option(help="Base output directory."),
+    ] = Path("data/irt/fits"),
+) -> None:
+    settings = AnchorScoringSettings(
+        fit_id=fit_id,
+        anchors_path=anchors_path,
+        responses_path=responses_path,
+        out_dir=out_dir,
+    )
+    result = score_with_anchors(settings)
+    typer.echo(
+        json.dumps(
+            {
+                "fit_id": fit_id,
+                "fit_dir": str(result.fit_dir),
+                "theta_scores_path": str(result.theta_scores_path),
+                "theta_summary_path": str(result.theta_summary_path),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )

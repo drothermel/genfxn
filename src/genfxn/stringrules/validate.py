@@ -48,6 +48,7 @@ CURRENT_FAMILY = "stringrules"
 
 DEFAULT_MAX_SEMANTIC_ISSUES = 10
 PYTHON_CODE_KEY = "python"
+_DEFAULT_STRING_LENGTH_RANGE: tuple[int, int] = (1, 20)
 
 _spec_adapter = TypeAdapter(StringRulesSpec)
 _axes_adapter = TypeAdapter(StringRulesAxes)
@@ -461,7 +462,7 @@ def _generate_test_inputs(
     if not charset:
         raise ValueError("axes.charset resolved to an empty character set")
     inputs: list[str] = []
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     # Edge cases
     if lo <= 0 <= hi:

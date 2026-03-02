@@ -236,10 +236,6 @@ class TestSampler:
 
 
 class TestAxesValidation:
-    def test_invalid_value_range(self) -> None:
-        with pytest.raises(ValueError, match="value_range"):
-            PiecewiseAxes(value_range=(100, -100))
-
     def test_invalid_coeff_range(self) -> None:
         with pytest.raises(ValueError, match="coeff_range"):
             PiecewiseAxes(coeff_range=(5, -5))
@@ -284,25 +280,21 @@ class TestAxesValidation:
         with pytest.raises(ValueError, match="expr_types must not be empty"):
             PiecewiseAxes(expr_types=[])
 
-    def test_abs_expr_rejects_value_range_including_int64_min(self) -> None:
-        with pytest.raises(ValueError, match="expr_types includes 'abs'"):
-            PiecewiseAxes(
-                expr_types=[ExprType.ABS],
-                value_range=(-(1 << 63), 10),
-            )
-
-    def test_quadratic_expr_rejects_overflowing_ranges(self) -> None:
+    def test_quadratic_expr_rejects_overflowing_coeff_range(self) -> None:
+        # With hardcoded value_range=(-100, 100), quadratic overflow needs
+        # very large coefficients: a*x^2 + b*x + c where x up to 100.
         with pytest.raises(ValueError, match="Numeric contract violation"):
             PiecewiseAxes(
                 expr_types=[ExprType.QUADRATIC],
-                value_range=(2_000_000_000, 2_000_000_000),
-                coeff_range=(2_000_000_000, 2_000_000_000),
+                coeff_range=(
+                    10_000_000_000_000_000,
+                    10_000_000_000_000_000,
+                ),
             )
 
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("value_range", (False, 5)),
             ("coeff_range", (True, 5)),
             ("threshold_range", (-5, False)),
             ("divisor_range", (2, True)),

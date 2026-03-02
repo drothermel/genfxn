@@ -141,8 +141,6 @@ def test_temporal_logic_runtime_parity_across_sampled_specs() -> None:
     rng = random.Random(77)
     axes = TemporalLogicAxes(
         formula_depth_range=(1, 5),
-        sequence_length_range=(0, 9),
-        value_range=(-10, 10),
         predicate_constant_range=(-9, 9),
     )
     for _ in range(8):

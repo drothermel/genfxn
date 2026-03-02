@@ -1,9 +1,9 @@
 # Axes Reference
 
-This document describes all configurable axes for task generation and dataset splitting.
+This document describes all configurable axes for task generation.
 
 **Sampling Axes** control what gets generated (configured via `*Axes` classes or CLI flags).
-**Spec Field Paths** identify fields in generated specs for holdout splits.
+**Spec Field Paths** identify fields in generated specs using dotted traversal.
 
 ---
 
@@ -44,7 +44,7 @@ Conditional functions with predicate-guarded branches: `f(x: int) -> int`
 | `MOD_EQ` | `mod_eq` | `x % divisor == remainder` |
 | `IN_SET` | `in_set` | `x in {values}` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -104,7 +104,7 @@ Iteration functions with accumulator state: `f(xs: list[int]) -> int`
 | `NEGATE` | `negate` | `-x` |
 | `SCALE` | `scale` | `x * k` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -156,7 +156,7 @@ Algorithms with subtle edge cases: `f(xs: list[int]) -> int`
 | `ALL_INDICES` | `all_indices` | Count all (i, j) index pairs where i < j |
 | `UNIQUE_VALUES` | `unique_values` | Count unique (a, b) value pairs |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -222,7 +222,7 @@ Ordered pattern matching with first-match-wins: `f(s: str) -> str`
 | `PREPEND` | `prepend` | `prefix + s` |
 | `APPEND` | `append` | `s + suffix` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -248,7 +248,7 @@ Stack-machine programs over integer lists: `f(xs: list[int]) -> int`
 | `jump_target_modes` | list | all | — | Behavior for out-of-range jump targets |
 | `input_modes` | list | all | — | Input indexing mode (`direct` or `cyclic`) |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -290,7 +290,7 @@ Finite-state machines over integer sequences: `f(xs: list[int]) -> int`
 | `GE` | `ge` | `x >= threshold` |
 | `MOD_EQ` | `mod_eq` | `x % divisor == remainder` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -333,7 +333,7 @@ Fixed-width bit-operation pipelines over integer inputs: `f(x: int) -> int`
 | `popcount` | Number of set bits |
 | `parity` | `popcount % 2` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -373,7 +373,7 @@ Sequence dynamic-programming alignment tasks:
 | `abs_diff_le` | Pair matches when `abs(a_i - b_j) <= max_diff` |
 | `mod_eq` | Pair matches when `(a_i - b_j) % divisor == remainder` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -402,14 +402,8 @@ Interval-statistics tasks over integer endpoints:
 | `operation_types` | list | all | — | Allowed operation outputs |
 | `boundary_modes` | list | all | — | Boundary interpretation mode |
 | `merge_touching_choices` | list[bool] | `[False, True]` | — | Whether touching spans can merge |
-| `n_intervals_range` | (lo, hi) | (0, 10) | `--list-length-range` | Range for sampled interval-counts in queries |
-| `endpoint_range` | (lo, hi) | (-20, 20) | `--value-range` | Range for sampled interval endpoints |
-| `max_span_range` | (lo, hi) | (0, 20) | — | Max absolute span used when sampling endpoints |
 | `endpoint_clip_abs_range` | (lo, hi) | (3, 20) | — | Range for per-spec endpoint clipping threshold before interval normalization |
 | `endpoint_quantize_step_range` | (lo, hi) | (1, 4) | — | Range for per-spec endpoint quantization step (toward-zero multiples) |
-| `allow_reversed_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for reversed endpoint sampling |
-| `degenerate_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for zero-length intervals |
-| `nested_interval_prob_range` | (lo, hi) | (0.0, 0.3) | — | Probability range for nested interval structures |
 
 ### Operation Types
 
@@ -429,7 +423,7 @@ Interval-statistics tasks over integer endpoints:
 | `open_closed` | `(lo, hi]` mapped to integer points |
 | `open_open` | `(lo, hi)` mapped to integer points |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -456,9 +450,6 @@ Deterministic graph-query tasks over a fixed spec graph:
 | `n_nodes_range` | (lo, hi) | (2, 8) | `--list-length-range` | Range for sampled node count |
 | `edge_count_range` | (lo, hi) | (1, 16) | — | Range for sampled edge count |
 | `weight_range` | (lo, hi) | (1, 9) | `--value-range` | Edge weight range (effective non-negative interval) |
-| `disconnected_prob_range` | (lo, hi) | (0.1, 0.4) | — | Probability range for disconnected graph sampling |
-| `multi_edge_prob_range` | (lo, hi) | (0.0, 0.25) | — | Probability range for duplicate edge injection |
-| `hub_bias_prob_range` | (lo, hi) | (0.0, 0.4) | — | Probability range for hub-biased edge sampling |
 
 ### Query Types
 
@@ -468,7 +459,7 @@ Deterministic graph-query tasks over a fixed spec graph:
 | `min_hops` | Return BFS hop count, else `-1` |
 | `shortest_path_cost` | Return non-negative shortest-path cost (saturating at `2^63 - 1`), else `-1` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -522,7 +513,7 @@ Finite-trace temporal-logic tasks over integer sequences:
 | `sat_count` | Return number of indices where formula holds |
 | `first_sat_index` | Return first satisfying index, else `-1` |
 
-### Spec Field Paths (for splits)
+### Spec Field Paths
 
 | Path | Values | Notes |
 |------|--------|-------|
@@ -539,26 +530,3 @@ Finite-trace temporal-logic tasks over integer sequences:
 ## Using Spec Field Paths
 
 Spec field paths use dot notation to access nested fields. List indices are supported.
-
-```bash
-# Hold out by template
-genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-    --holdout-axis template --holdout-value longest_run
-
-# Hold out by nested predicate type
-genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-    --holdout-axis predicate.kind --holdout-value mod_eq
-
-# Hold out first rule's predicate type (stringrules)
-genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-    --holdout-axis "rules.0.predicate.kind" --holdout-value starts_with
-
-# Hold out numeric range
-genfxn split tasks.jsonl --train train.jsonl --test test.jsonl \
-    --holdout-axis k --holdout-value "5,10" --holdout-type range
-```
-
-Holdout types:
-- `exact` (default): Field value equals holdout value
-- `range`: Field value in range (e.g., `"3,5"` for values 3-5)
-- `contains`: Field value contains substring

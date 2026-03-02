@@ -8,7 +8,6 @@ from genfxn.core.string_transforms import StringTransform, StringTransformType
 from genfxn.stringrules.utils import _get_charset
 
 _INT_RANGE_FIELDS = (
-    "string_length_range",
     "prefix_suffix_length_range",
     "substring_length_range",
     "length_threshold_range",
@@ -75,7 +74,6 @@ class StringRulesAxes(BaseModel):
         ]
     )
     overlap_level: OverlapLevel = Field(default=OverlapLevel.LOW)
-    string_length_range: tuple[int, int] = Field(default=(1, 20))
     charset: str = Field(default="ascii_letters_digits")
     prefix_suffix_length_range: tuple[int, int] = Field(default=(1, 4))
     substring_length_range: tuple[int, int] = Field(default=(1, 3))
@@ -102,7 +100,6 @@ class StringRulesAxes(BaseModel):
             raise ValueError("charset must be ASCII-only for parity")
 
         for name in (
-            "string_length_range",
             "prefix_suffix_length_range",
             "substring_length_range",
             "length_threshold_range",

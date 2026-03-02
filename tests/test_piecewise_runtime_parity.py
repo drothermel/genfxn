@@ -114,7 +114,6 @@ def test_piecewise_runtime_parity_across_sampled_specs() -> None:
 
     rng = random.Random(77)
     axes = PiecewiseAxes(
-        value_range=(-25, 25),
         threshold_range=(-10, 10),
         coeff_range=(-5, 5),
         divisor_range=(2, 8),

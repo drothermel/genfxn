@@ -53,7 +53,7 @@ def generate_fsm_task(
         family="fsm",
         spec=spec_dict,
         code=code,
-        queries=generate_fsm_queries(spec, axes, rng),
+        queries=generate_fsm_queries(spec, rng),
         trace=GenerationTrace(family="fsm", steps=trace_steps),
         axes=axes.model_dump(),
         description=describe_task("fsm", spec_dict),

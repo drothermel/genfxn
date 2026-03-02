@@ -1,36 +1,16 @@
 import random
-from typing import Any
 
 from genfxn.core.models import Query, QueryTag, dedupe_queries_per_tag_input
 from genfxn.intervals.eval import eval_intervals
-from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.models import IntervalsSpec
 from genfxn.intervals.utils import _clamp
 
-
-def _ordered_pair(value: Any, fallback: tuple[int, int]) -> tuple[int, int]:
-    if (
-        isinstance(value, (tuple, list))
-        and len(value) == 2
-        and isinstance(value[0], int)
-        and isinstance(value[1], int)
-    ):
-        lo = int(value[0])
-        hi = int(value[1])
-        if lo <= hi:
-            return lo, hi
-        return hi, lo
-    return fallback
-
-
-def _get_axis_range(
-    axes: IntervalsAxes,
-    candidates: tuple[str, ...],
-    fallback: tuple[int, int],
-) -> tuple[int, int]:
-    for name in candidates:
-        if hasattr(axes, name):
-            return _ordered_pair(getattr(axes, name), fallback)
-    return fallback
+_DEFAULT_N_INTERVALS_RANGE: tuple[int, int] = (0, 10)
+_DEFAULT_ENDPOINT_RANGE: tuple[int, int] = (-20, 20)
+_DEFAULT_MAX_SPAN_RANGE: tuple[int, int] = (0, 20)
+_DEFAULT_ALLOW_REVERSED_PROB: float = 0.15
+_DEFAULT_DEGENERATE_PROB: float = 0.15
+_DEFAULT_NESTED_PROB: float = 0.15
 
 
 def _sample_non_degenerate_interval(
@@ -111,34 +91,21 @@ def _build_chain(
 
 def generate_intervals_queries(
     spec: IntervalsSpec,
-    axes: IntervalsAxes,
     rng: random.Random | None = None,
 ) -> list[Query]:
     if rng is None:
         rng = random.Random()
 
-    endpoint_range = _get_axis_range(
-        axes,
-        ("endpoint_range", "value_range"),
-        (-8, 8),
-    )
-    max_span_range = _get_axis_range(
-        axes,
-        ("max_span_range",),
-        (0, endpoint_range[1] - endpoint_range[0]),
-    )
-    n_intervals_range = _get_axis_range(
-        axes,
-        ("n_intervals_range", "list_length_range", "input_length_range"),
-        (1, 5),
-    )
+    endpoint_range = _DEFAULT_ENDPOINT_RANGE
+    max_span_range = _DEFAULT_MAX_SPAN_RANGE
+    n_intervals_range = _DEFAULT_N_INTERVALS_RANGE
     n_lo, n_hi = n_intervals_range
     n_typical = max(1, min(4, n_hi if n_hi >= 1 else 1))
     lo, hi = endpoint_range
     mid = (lo + hi) // 2
-    allow_reversed_interval_prob = spec.allow_reversed_interval_prob
-    degenerate_interval_prob = spec.degenerate_interval_prob
-    nested_interval_prob = spec.nested_interval_prob
+    allow_reversed_interval_prob = _DEFAULT_ALLOW_REVERSED_PROB
+    degenerate_interval_prob = _DEFAULT_DEGENERATE_PROB
+    nested_interval_prob = _DEFAULT_NESTED_PROB
 
     queries: list[Query] = []
 

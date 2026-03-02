@@ -1,6 +1,5 @@
 import random
 
-from genfxn.core.sampling import sample_probability
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.intervals.models import (
     IntervalsAxes,
@@ -29,18 +28,6 @@ def sample_intervals_spec(
     endpoint_clip_abs = _sample_int_in_range(axes.endpoint_clip_abs_range, rng)
     endpoint_quantize_step = _sample_int_in_range(
         axes.endpoint_quantize_step_range,
-        rng,
-    )
-    allow_reversed_interval_prob = sample_probability(
-        axes.allow_reversed_interval_prob_range,
-        rng,
-    )
-    degenerate_interval_prob = sample_probability(
-        axes.degenerate_interval_prob_range,
-        rng,
-    )
-    nested_interval_prob = sample_probability(
-        axes.nested_interval_prob_range,
         rng,
     )
 
@@ -74,24 +61,6 @@ def sample_intervals_spec(
         f"Endpoint quantize step: {endpoint_quantize_step}",
         endpoint_quantize_step,
     )
-    trace_step(
-        trace,
-        "sample_reverse_prob",
-        "Reversed interval probability sampled for query generation",
-        allow_reversed_interval_prob,
-    )
-    trace_step(
-        trace,
-        "sample_degenerate_prob",
-        "Degenerate interval probability sampled for query generation",
-        degenerate_interval_prob,
-    )
-    trace_step(
-        trace,
-        "sample_nested_prob",
-        "Nested interval probability sampled for query generation",
-        nested_interval_prob,
-    )
 
     return IntervalsSpec(
         operation=operation,
@@ -99,7 +68,4 @@ def sample_intervals_spec(
         merge_touching=merge_touching,
         endpoint_clip_abs=endpoint_clip_abs,
         endpoint_quantize_step=endpoint_quantize_step,
-        allow_reversed_interval_prob=allow_reversed_interval_prob,
-        degenerate_interval_prob=degenerate_interval_prob,
-        nested_interval_prob=nested_interval_prob,
     )

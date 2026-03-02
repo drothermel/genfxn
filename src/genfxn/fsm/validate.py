@@ -25,6 +25,8 @@ from genfxn.fsm.ast_safety import (
 from genfxn.fsm.eval import eval_fsm
 from genfxn.fsm.models import FsmAxes, FsmSpec
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-20, 20)
+
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
 CODE_CODE_PARSE_ERROR = "CODE_CODE_PARSE_ERROR"
@@ -442,7 +444,6 @@ def _validate_semantics(
     task: Task,
     spec: FsmSpec,
     fn: Callable[[list[int]], int] | None,
-    axes: FsmAxes,
     strict: bool,
     semantic_trials: int,
     max_semantic_issues: int,
@@ -453,7 +454,7 @@ def _validate_semantics(
 
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
-    val_lo, val_hi = axes.value_range
+    val_lo, val_hi = _DEFAULT_VALUE_RANGE
     max_len = max(2, len(spec.states) + 2)
 
     for _ in range(semantic_trials):
@@ -532,9 +533,6 @@ def validate_fsm_task(
             )
         ]
 
-    if axes is None:
-        axes = FsmAxes()
-
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
     issues.extend(_validate_task_id(task))
@@ -577,7 +575,6 @@ def validate_fsm_task(
                 task,
                 spec,
                 fn,
-                axes,
                 strict=strict,
                 semantic_trials=semantic_trials,
                 max_semantic_issues=max_semantic_issues,

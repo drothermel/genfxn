@@ -62,7 +62,7 @@ class TestComposedPredicateBoundaryQueries:
             true_transform=TransformShift(offset=1),
             false_transform=TransformIdentity(),
         )
-        axes = StatefulAxes(value_range=(-10, 10), list_length_range=(3, 8))
+        axes = StatefulAxes()
         rng = random.Random(42)
 
         queries = generate_stateful_queries(spec, axes, rng)
@@ -95,7 +95,6 @@ class TestContainsLongSubstring:
                 StringTransformType.IDENTITY,
                 StringTransformType.UPPERCASE,
             ],
-            string_length_range=(1, 10),
             substring_length_range=(1, 3),
         )
         rng = random.Random(42)
@@ -126,7 +125,6 @@ class TestContainsLongSubstring:
                 StringTransformType.IDENTITY,
                 StringTransformType.LOWERCASE,
             ],
-            string_length_range=(1, 5),
             substring_length_range=(1, 3),
         )
         rng = random.Random(42)
@@ -178,7 +176,6 @@ class TestCoverageQueriesCoverAllRules:
                 StringTransformType.LOWERCASE,
             ],
             overlap_level=OverlapLevel.NONE,
-            string_length_range=(1, 20),
         )
         rng = random.Random(42)
 
@@ -220,7 +217,6 @@ class TestCoverageQueriesCoverAllRules:
                 StringTransformType.LOWERCASE,
             ],
             overlap_level=OverlapLevel.NONE,
-            string_length_range=(1, 20),
         )
         rng = random.Random(42)
 
@@ -266,7 +262,6 @@ class TestCoverageQueriesCoverAllRules:
                 StringTransformType.LOWERCASE,
             ],
             overlap_level=OverlapLevel.NONE,
-            string_length_range=(1, 8),
         )
         rng = random.Random(42)
 
@@ -301,7 +296,6 @@ class TestCharsetAwareStringQueries:
                 StringTransformType.IDENTITY,
                 StringTransformType.UPPERCASE,
             ],
-            string_length_range=(1, 8),
             charset="digits",
         )
 
@@ -326,7 +320,6 @@ class TestCharsetAwareStringQueries:
                 StringTransformType.IDENTITY,
                 StringTransformType.UPPERCASE,
             ],
-            string_length_range=(1, 8),
             charset="ascii_lowercase",
         )
 
@@ -342,8 +335,6 @@ class TestCountPairsNoPairsInvariant:
             counting_mode=CountingMode.ALL_INDICES,
         )
         axes = SimpleAlgorithmsAxes(
-            value_range=(0, 12),
-            list_length_range=(2, 5),
             window_size_range=(1, 5),
         )
         queries = generate_simple_algorithms_queries(
@@ -364,19 +355,17 @@ class TestCountPairsNoPairsInvariant:
                 for j in range(i + 1, len(q.input))
             )
 
-    def test_queries_respect_tight_length_bounds(self) -> None:
+    def test_queries_respect_default_length_bounds(self) -> None:
         spec = CountPairsSumSpec(
             target=7,
             counting_mode=CountingMode.ALL_INDICES,
         )
         axes = SimpleAlgorithmsAxes(
-            value_range=(0, 12),
-            list_length_range=(1, 2),
-            window_size_range=(1, 2),
+            window_size_range=(1, 5),
         )
         queries = generate_simple_algorithms_queries(
             spec, axes, random.Random(42)
         )
         assert queries
         assert all(q.input != [] for q in queries), "Unexpected empty input"
-        assert all(1 <= len(q.input) <= 2 for q in queries)
+        assert all(5 <= len(q.input) <= 20 for q in queries)

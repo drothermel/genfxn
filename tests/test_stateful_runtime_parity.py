@@ -136,8 +136,6 @@ def test_stateful_runtime_parity_across_sampled_specs() -> None:
 
     rng = random.Random(77)
     axes = StatefulAxes(
-        value_range=(-15, 15),
-        list_length_range=(0, 8),
         threshold_range=(-10, 10),
         divisor_range=(2, 8),
         shift_range=(-4, 4),

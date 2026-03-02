@@ -169,7 +169,6 @@ class TestModels:
         ("field_name", "range_value"),
         [
             ("n_ops_range", (False, 3)),
-            ("value_range", (0, True)),
             ("mask_range", (False, 255)),
             ("shift_range", (0, True)),
         ],
@@ -186,8 +185,6 @@ class TestModels:
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("value_range", (-(1 << 63) - 1, 0)),
-            ("value_range", (0, 1 << 63)),
             ("mask_range", (0, 1 << 63)),
             ("shift_range", (-(1 << 63) - 1, 10)),
         ],
@@ -304,7 +301,6 @@ class TestQueries:
         axes = AxesCls(
             width_choices=[8, 16],
             n_ops_range=(3, 4),
-            value_range=(-7, 7),
             mask_range=(0, 255),
             shift_range=(0, 7),
         )
@@ -320,7 +316,6 @@ class TestQueries:
     def test_queries_stay_within_signed_i64_bounds(self) -> None:
         axes = AxesCls(
             width_choices=[63],
-            value_range=(-(1 << 63), (1 << 63) - 1),
         )
         spec = SpecCls.model_validate(
             {

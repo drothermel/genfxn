@@ -65,15 +65,9 @@ class TestModels:
                 max_step_count=(1 << 63),
             )
 
-    def test_axes_validate_ranges(self) -> None:
-        with pytest.raises(ValueError, match="value_range"):
-            StackBytecodeAxes(value_range=(2, -2))
-
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("value_range", (False, 5)),
-            ("list_length_range", (0, True)),
             ("program_length_range", (False, 3)),
             ("const_range", (False, 3)),
             ("max_step_count_range", (1, True)),
@@ -500,16 +494,14 @@ class TestSamplerAndQueries:
 
     def test_queries_cover_all_tags_when_inputs_can_vary(self) -> None:
         axes = StackBytecodeAxes(
-            value_range=(-2, 2),
             list_length_range=(0, 4),
         )
         spec = sample_stack_bytecode_spec(axes, random.Random(31))
         queries = generate_stack_bytecode_queries(spec, axes, random.Random(31))
         assert {q.tag for q in queries} == set(QueryTag)
 
-    def test_queries_respect_value_and_length_ranges(self) -> None:
+    def test_queries_respect_length_ranges(self) -> None:
         axes = StackBytecodeAxes(
-            value_range=(3, 7),
             list_length_range=(2, 4),
         )
         spec = sample_stack_bytecode_spec(axes, random.Random(9))
@@ -519,9 +511,6 @@ class TestSamplerAndQueries:
         for q in queries:
             lo, hi = axes.list_length_range
             assert lo <= len(q.input) <= hi
-            assert all(
-                axes.value_range[0] <= x <= axes.value_range[1] for x in q.input
-            )
 
     def test_sampler_produces_varied_program_shapes(self) -> None:
         axes = StackBytecodeAxes()
@@ -606,7 +595,6 @@ class TestDifferentialProperty:
         rng = random.Random(1000 + seed_offset)
         axes = StackBytecodeAxes(
             list_length_range=(0, 8),
-            value_range=(-20, 20),
         )
 
         for _ in range(12):
@@ -623,8 +611,5 @@ class TestDifferentialProperty:
                     axes.list_length_range[0],
                     axes.list_length_range[1],
                 )
-                xs = [
-                    rng.randint(axes.value_range[0], axes.value_range[1])
-                    for _ in range(length)
-                ]
+                xs = [rng.randint(-20, 20) for _ in range(length)]
                 assert f(xs) == eval_stack_bytecode(spec, xs)

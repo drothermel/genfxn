@@ -25,6 +25,8 @@ from genfxn.stack_bytecode.ast_safety import (
 from genfxn.stack_bytecode.eval import eval_stack_bytecode
 from genfxn.stack_bytecode.models import StackBytecodeAxes, StackBytecodeSpec
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-50, 50)
+
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
 CODE_CODE_PARSE_ERROR = "CODE_CODE_PARSE_ERROR"
@@ -482,7 +484,7 @@ def _validate_semantics(
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
     len_lo, len_hi = axes.list_length_range
-    val_lo, val_hi = axes.value_range
+    val_lo, val_hi = _DEFAULT_VALUE_RANGE
 
     for _ in range(semantic_trials):
         n = rng.randint(len_lo, len_hi)

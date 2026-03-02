@@ -155,7 +155,6 @@ def test_stack_bytecode_runtime_parity_across_sampled_specs() -> None:
 
     rng = random.Random(77)
     axes = StackBytecodeAxes(
-        value_range=(-10, 10),
         list_length_range=(0, 8),
         const_range=(-6, 6),
         max_step_count_range=(20, 60),
