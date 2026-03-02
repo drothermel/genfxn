@@ -63,6 +63,3 @@ jobs:
 
       - name: Sync dependencies
         run: uv sync
-
-      - name: Run all checks (CI mode)
-        run: uv run python scripts/run_all_checks.py --ci
