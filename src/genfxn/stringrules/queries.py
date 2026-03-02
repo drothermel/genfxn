@@ -26,6 +26,8 @@ from genfxn.stringrules.eval import eval_stringrules
 from genfxn.stringrules.models import StringRulesAxes, StringRulesSpec
 from genfxn.stringrules.utils import _get_charset, _random_string
 
+_DEFAULT_STRING_LENGTH_RANGE: tuple[int, int] = (1, 20)
+
 
 class StringRulesQueryGenerationError(RuntimeError):
     """Raised when required replace-aware coverage cannot be generated."""
@@ -101,7 +103,7 @@ def _is_old_proven_unreachable_for_predicate(
     old: str,
     axes: StringRulesAxes,
 ) -> bool:
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     if len(old) > hi:
         return True
@@ -146,7 +148,7 @@ def _choose_length_for_predicate_with_old(
     axes: StringRulesAxes,
     rng: random.Random,
 ) -> int | None:
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     match pred:
         case StringPredicateLengthCmp(op=op, value=v):
@@ -196,7 +198,7 @@ def _generate_matching_string_with_old(
     lower_charset = "".join(ch for ch in charset if ch.islower())
     upper_tail_charset = "".join(ch for ch in charset if not ch.islower())
     lower_tail_charset = "".join(ch for ch in charset if not ch.isupper())
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     def _valid(candidate: str) -> str | None:
         if not (lo <= len(candidate) <= hi):
@@ -398,7 +400,7 @@ def _find_first_match_candidate(
 ) -> str | None:
     rule = spec.rules[rule_index]
     charset = _get_charset(axes.charset)
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     for _ in range(attempts):
         if required_old is None:
@@ -435,7 +437,7 @@ def _generate_matching_string(
     lower_charset = "".join(ch for ch in charset if ch.islower())
     upper_tail_charset = "".join(ch for ch in charset if not ch.islower())
     lower_tail_charset = "".join(ch for ch in charset if not ch.isupper())
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     def _sample_length(
         min_len: int = 0, max_len: int | None = None
@@ -549,7 +551,7 @@ def _generate_non_matching_string(
     digit_charset = "".join(ch for ch in charset if ch.isdigit())
     upper_charset = "".join(ch for ch in charset if ch.isupper())
     lower_charset = "".join(ch for ch in charset if ch.islower())
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     def _sample_length(min_len: int = 0) -> int | None:
         lower = max(lo, min_len)
@@ -815,7 +817,7 @@ def _generate_boundary_queries(
     """Generate inputs that test rule precedence (match multiple rules)."""
     queries: list[Query] = []
 
-    lo, hi = _axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
     charset = _get_charset(_axes.charset)
     charset_set = set(charset)
     boundary_char = charset[0] if charset else ""
@@ -870,7 +872,7 @@ def _generate_typical_queries(
     """Generate random typical strings."""
     queries: list[Query] = []
     charset = _get_charset(axes.charset)
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
 
     for _ in range(4):
         length = rng.randint(lo, hi)
@@ -892,7 +894,7 @@ def _generate_adversarial_queries(
     """Generate edge cases and strings that hit the default."""
     queries: list[Query] = []
 
-    lo, hi = axes.string_length_range
+    lo, hi = _DEFAULT_STRING_LENGTH_RANGE
     charset = _get_charset(axes.charset)
     charset_set = set(charset)
 

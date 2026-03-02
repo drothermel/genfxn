@@ -25,6 +25,10 @@ from genfxn.sequence_dp.ast_safety import (
 from genfxn.sequence_dp.eval import eval_sequence_dp
 from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-20, 20)
+_DEFAULT_LEN_A_RANGE: tuple[int, int] = (2, 10)
+_DEFAULT_LEN_B_RANGE: tuple[int, int] = (2, 10)
+
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
 CODE_CODE_PARSE_ERROR = "CODE_CODE_PARSE_ERROR"
@@ -470,9 +474,9 @@ def _validate_semantics(
 
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
-    len_a_lo, len_a_hi = axes.len_a_range
-    len_b_lo, len_b_hi = axes.len_b_range
-    val_lo, val_hi = axes.value_range
+    len_a_lo, len_a_hi = _DEFAULT_LEN_A_RANGE
+    len_b_lo, len_b_hi = _DEFAULT_LEN_B_RANGE
+    val_lo, val_hi = _DEFAULT_VALUE_RANGE
 
     for _ in range(semantic_trials):
         a_len = rng.randint(len_a_lo, len_a_hi)

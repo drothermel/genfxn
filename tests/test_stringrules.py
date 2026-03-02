@@ -386,13 +386,11 @@ class TestQueryGeneration:
         for q in queries:
             assert q.output == eval_stringrules(spec, q.input)
 
-    def test_queries_respect_string_length_range(self) -> None:
-        axes = StringRulesAxes(n_rules=3, string_length_range=(0, 4))
+    def test_queries_generated_for_sampled_spec(self) -> None:
+        axes = StringRulesAxes(n_rules=3)
         spec = sample_stringrules_spec(axes, random.Random(42))
         queries = generate_stringrules_queries(spec, axes, random.Random(42))
-        lo, hi = axes.string_length_range
         assert queries
-        assert all(lo <= len(q.input) <= hi for q in queries)
 
     def test_coverage_queries_trigger_their_target_rule(self) -> None:
         axes = StringRulesAxes(n_rules=3, overlap_level=OverlapLevel.NONE)
@@ -415,7 +413,6 @@ class TestQueryGeneration:
         axes = StringRulesAxes(
             n_rules=2,
             charset="digits",
-            string_length_range=(1, 8),
         )
         spec = StringRulesSpec(
             rules=[
@@ -438,7 +435,6 @@ class TestQueryGeneration:
     def test_is_upper_non_matching_queries_are_truly_non_matching(self) -> None:
         axes = StringRulesAxes(
             n_rules=1,
-            string_length_range=(1, 6),
             charset="ascii_letters_digits",
         )
         spec = StringRulesSpec(
@@ -463,7 +459,6 @@ class TestQueryGeneration:
     def test_is_lower_non_matching_queries_are_truly_non_matching(self) -> None:
         axes = StringRulesAxes(
             n_rules=1,
-            string_length_range=(1, 6),
             charset="ascii_letters_digits",
         )
         spec = StringRulesSpec(
@@ -488,7 +483,6 @@ class TestQueryGeneration:
     def test_replace_coverage_hits_old_for_atomic_replace(self) -> None:
         axes = StringRulesAxes(
             n_rules=1,
-            string_length_range=(2, 12),
             charset="ascii_letters_digits",
         )
         spec = StringRulesSpec(
@@ -509,7 +503,6 @@ class TestQueryGeneration:
     def test_replace_coverage_hits_old_for_pipeline_replaces(self) -> None:
         axes = StringRulesAxes(
             n_rules=1,
-            string_length_range=(3, 16),
             charset="ascii_letters_digits",
         )
         spec = StringRulesSpec(
@@ -536,7 +529,6 @@ class TestQueryGeneration:
     def test_unreachable_replace_old_is_skipped(self) -> None:
         axes = StringRulesAxes(
             n_rules=1,
-            string_length_range=(1, 8),
             charset="ascii_letters_digits",
         )
         spec = StringRulesSpec(
@@ -558,7 +550,6 @@ class TestQueryGeneration:
     ) -> None:
         axes = StringRulesAxes(
             n_rules=2,
-            string_length_range=(2, 12),
             charset="ascii_letters_digits",
         )
         spec = StringRulesSpec(
@@ -579,14 +570,9 @@ class TestQueryGeneration:
 
 
 class TestAxesValidation:
-    def test_invalid_string_length_range(self) -> None:
-        with pytest.raises(ValueError, match="string_length_range"):
-            StringRulesAxes(string_length_range=(20, 5))
-
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("string_length_range", (False, 5)),
             ("prefix_suffix_length_range", (True, 4)),
             ("substring_length_range", (1, False)),
             ("length_threshold_range", (1, True)),

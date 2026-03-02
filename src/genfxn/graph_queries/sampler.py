@@ -1,6 +1,5 @@
 import random
 
-from genfxn.core.sampling import sample_probability
 from genfxn.core.trace import TraceStep, trace_step
 from genfxn.graph_queries.models import (
     GraphEdge,
@@ -8,6 +7,10 @@ from genfxn.graph_queries.models import (
     GraphQueriesSpec,
     GraphQueryType,
 )
+
+_DEFAULT_DISCONNECTED_PROB: float = 0.25
+_DEFAULT_MULTI_EDGE_PROB: float = 0.125
+_DEFAULT_HUB_BIAS_PROB: float = 0.2
 
 
 def _max_unique_edges(n_nodes: int, directed: bool) -> int:
@@ -82,9 +85,9 @@ def sample_graph_queries_spec(
         weighted = rng.choice(axes.weighted_choices)
     n_nodes = rng.randint(axes.n_nodes_range[0], axes.n_nodes_range[1])
 
-    disconnected_prob = sample_probability(axes.disconnected_prob_range, rng)
-    multi_edge_prob = sample_probability(axes.multi_edge_prob_range, rng)
-    hub_bias_prob = sample_probability(axes.hub_bias_prob_range, rng)
+    disconnected_prob = _DEFAULT_DISCONNECTED_PROB
+    multi_edge_prob = _DEFAULT_MULTI_EDGE_PROB
+    hub_bias_prob = _DEFAULT_HUB_BIAS_PROB
 
     max_edges = _max_unique_edges(n_nodes, directed)
     edge_count_hi = min(axes.edge_count_range[1], max_edges)
@@ -137,25 +140,6 @@ def sample_graph_queries_spec(
         f"Edge count: {len(edges)}",
         len(edges),
     )
-    trace_step(
-        trace,
-        "sample_disconnected_prob",
-        "Disconnected probability sampled for edge construction",
-        disconnected_prob,
-    )
-    trace_step(
-        trace,
-        "sample_multi_edge_prob",
-        "Multi-edge probability sampled for edge construction",
-        multi_edge_prob,
-    )
-    trace_step(
-        trace,
-        "sample_hub_bias_prob",
-        "Hub bias probability sampled for edge construction",
-        hub_bias_prob,
-    )
-
     return GraphQueriesSpec(
         query_type=query_type,
         directed=directed,

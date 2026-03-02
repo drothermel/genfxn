@@ -12,6 +12,9 @@ from genfxn.simple_algorithms.models import (
     SimpleAlgorithmsSpec,
 )
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-100, 100)
+_DEFAULT_LIST_LENGTH_RANGE: tuple[int, int] = (5, 20)
+
 
 def _generate_random_list(
     length: int,
@@ -76,8 +79,8 @@ def _find_no_pairs_input(
     axes: SimpleAlgorithmsAxes,
     rng: random.Random,
 ) -> list[int] | None:
-    lo, hi = axes.value_range
-    len_lo, len_hi = axes.list_length_range
+    lo, hi = _DEFAULT_VALUE_RANGE
+    len_lo, len_hi = _DEFAULT_LIST_LENGTH_RANGE
     if len_hi < len_lo:
         return None
     # "No pairs" requires at least 2 elements; axes must allow that.
@@ -138,8 +141,8 @@ def _generate_most_frequent_queries(
     rng: random.Random,
 ) -> list[Query]:
     queries: list[Query] = []
-    lo, hi = axes.value_range
-    length_bounds = axes.list_length_range
+    lo, hi = _DEFAULT_VALUE_RANGE
+    length_bounds = _DEFAULT_LIST_LENGTH_RANGE
 
     empty = _fit_length_bounds([], length_bounds, min_len=0)
     if empty is not None:
@@ -194,8 +197,8 @@ def _generate_count_pairs_queries(
 ) -> list[Query]:
     queries: list[Query] = []
     target = spec.target
-    lo, hi = axes.value_range
-    length_bounds = axes.list_length_range
+    lo, hi = _DEFAULT_VALUE_RANGE
+    length_bounds = _DEFAULT_LIST_LENGTH_RANGE
 
     empty = _fit_length_bounds([], length_bounds, min_len=0)
     if empty is not None:
@@ -219,7 +222,7 @@ def _generate_count_pairs_queries(
     if no_pairs is not None:
         _append_query(queries, spec, no_pairs, QueryTag.TYPICAL)
 
-    len_lo, len_hi = axes.list_length_range
+    len_lo, len_hi = _DEFAULT_LIST_LENGTH_RANGE
     for _ in range(2):
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
@@ -235,8 +238,8 @@ def _generate_max_window_queries(
 ) -> list[Query]:
     queries: list[Query] = []
     k = spec.k
-    lo, hi = axes.value_range
-    length_bounds = axes.list_length_range
+    lo, hi = _DEFAULT_VALUE_RANGE
+    length_bounds = _DEFAULT_LIST_LENGTH_RANGE
 
     empty = _fit_length_bounds([], length_bounds, min_len=0)
     if empty is not None and len(empty) < k:
@@ -286,7 +289,7 @@ def _generate_max_window_queries(
     if all_same is not None:
         _append_query(queries, spec, all_same, QueryTag.TYPICAL)
 
-    len_lo, len_hi = axes.list_length_range
+    len_lo, len_hi = _DEFAULT_LIST_LENGTH_RANGE
     for _ in range(2):
         length = rng.randint(len_lo, len_hi)
         xs = _generate_random_list(length, (lo, hi), rng)
@@ -319,8 +322,8 @@ def generate_simple_algorithms_queries(
     attempts = 0
     while len(seen_inputs) < 5 and attempts < 200:
         attempts += 1
-        length = rng.randint(*axes.list_length_range)
-        candidate = _generate_random_list(length, axes.value_range, rng)
+        length = rng.randint(*_DEFAULT_LIST_LENGTH_RANGE)
+        candidate = _generate_random_list(length, _DEFAULT_VALUE_RANGE, rng)
         key = tuple(candidate)
         if key in seen_inputs:
             continue

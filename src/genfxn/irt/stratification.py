@@ -1,9 +1,40 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import product
+from dataclasses import field as dc_field
+
+from pydantic import BaseModel, ConfigDict
 
 from genfxn.core.models import Task
+
+
+class AxisGroup(BaseModel):
+    """Valid axis value combinations for one primary-axis value."""
+
+    model_config = ConfigDict(frozen=True)
+
+    primary_value: str
+    secondary_values: tuple[str, ...]
+    tertiary_values: tuple[str, ...]
+
+
+class CellSpace(BaseModel):
+    """Declarative enumeration of valid strata cells for a family."""
+
+    model_config = ConfigDict(frozen=True)
+
+    family: str
+    primary_axis: str
+    groups: tuple[AxisGroup, ...]
+
+    def valid_cells(self) -> list[str]:
+        cells: list[str] = []
+        for group in self.groups:
+            for s in group.secondary_values:
+                for t in group.tertiary_values:
+                    cells.append(f"{group.primary_value}|{s}|{t}")
+        return cells
+
 
 _LOCKED_PER_FAMILY_TOTAL = 300
 
@@ -28,6 +59,94 @@ _BIT_WIDTH_BITS = ("8", "16", "32")
 _N_OPS_BUCKETS = ("short", "medium", "long")
 _BIT_OP_MIX_BUCKETS = ("logic_only", "shift_mix", "advanced")
 
+_STATEFUL_CELL_SPACE = CellSpace(
+    family="stateful",
+    primary_axis="template",
+    groups=(
+        AxisGroup(
+            primary_value="conditional_linear_sum",
+            secondary_values=_PREDICATE_CLASSES,
+            tertiary_values=_TRANSFORM_COMPLEXITIES,
+        ),
+        AxisGroup(
+            primary_value="resetting_best_prefix_sum",
+            secondary_values=_PREDICATE_CLASSES,
+            tertiary_values=_TRANSFORM_COMPLEXITIES,
+        ),
+        AxisGroup(
+            primary_value="longest_run",
+            secondary_values=("comparison", "modular"),
+            tertiary_values=("low",),
+        ),
+    ),
+)
+
+_SIMPLE_ALGORITHMS_CELL_SPACE = CellSpace(
+    family="simple_algorithms",
+    primary_axis="template",
+    groups=(
+        AxisGroup(
+            primary_value="most_frequent",
+            secondary_values=_MOST_FREQUENT_TIE_BREAKS,
+            tertiary_values=_PREPROCESS_BUCKETS,
+        ),
+        AxisGroup(
+            primary_value="count_pairs_sum",
+            secondary_values=_COUNT_PAIRS_MODES,
+            tertiary_values=_PREPROCESS_BUCKETS,
+        ),
+        AxisGroup(
+            primary_value="max_window_sum",
+            secondary_values=_K_BUCKETS,
+            tertiary_values=_PREPROCESS_BUCKETS,
+        ),
+    ),
+)
+
+_FSM_CELL_SPACE = CellSpace(
+    family="fsm",
+    primary_axis="output_mode",
+    groups=(
+        AxisGroup(
+            primary_value="final_state_id",
+            secondary_values=_FSM_UNDEFINED_POLICIES,
+            tertiary_values=_N_STATES_BUCKETS,
+        ),
+        AxisGroup(
+            primary_value="accept_bool",
+            secondary_values=_FSM_UNDEFINED_POLICIES,
+            tertiary_values=_N_STATES_BUCKETS,
+        ),
+        AxisGroup(
+            primary_value="transition_count",
+            secondary_values=_FSM_UNDEFINED_POLICIES,
+            tertiary_values=_N_STATES_BUCKETS,
+        ),
+    ),
+)
+
+_BITOPS_CELL_SPACE = CellSpace(
+    family="bitops",
+    primary_axis="width_bits",
+    groups=(
+        AxisGroup(
+            primary_value="8",
+            secondary_values=_N_OPS_BUCKETS,
+            tertiary_values=_BIT_OP_MIX_BUCKETS,
+        ),
+        AxisGroup(
+            primary_value="16",
+            secondary_values=_N_OPS_BUCKETS,
+            tertiary_values=_BIT_OP_MIX_BUCKETS,
+        ),
+        AxisGroup(
+            primary_value="32",
+            secondary_values=_N_OPS_BUCKETS,
+            tertiary_values=_BIT_OP_MIX_BUCKETS,
+        ),
+    ),
+)
+
 
 @dataclass(frozen=True)
 class StrataPlan:
@@ -37,6 +156,7 @@ class StrataPlan:
     core_target_counts: dict[str, int]
     repair_budget: int
     target_total: int
+    cell_space: CellSpace | None = dc_field(default=None)
 
     def classify(self, task: Task) -> tuple[str, dict[str, str]]:
         if self.family == "stateful":
@@ -155,7 +275,6 @@ def _fsm_fields(task: Task) -> dict[str, str]:
             spec.get("undefined_transition_policy", "sink")
         ),
         "n_states_bucket": n_states_bucket,
-        "machine_type": str(spec.get("machine_type", "moore")),
     }
 
 
@@ -256,29 +375,21 @@ def _stateful_plan(total: int) -> StrataPlan:
             "stateful IRT stratification is locked to 300 items/family"
         )
 
-    cells = [
-        f"{template}|{predicate_class}|{complexity}"
-        for template, predicate_class, complexity in product(
-            _STATEFUL_TEMPLATES,
-            _PREDICATE_CLASSES,
-            _TRANSFORM_COMPLEXITIES,
-        )
-    ]
-    repair_cells = [
-        f"{template}|parity|low" for template in _STATEFUL_TEMPLATES
-    ]
+    cells = _STATEFUL_CELL_SPACE.valid_cells()
+    # 20 cells * 15 = 300 exactly, no repair cells needed.
     core, target = _apply_repairs(
         cells=cells,
-        base_count=11,
-        repair_cells=repair_cells,
+        base_count=15,
+        repair_cells=[],
     )
     return StrataPlan(
         family="stateful",
         primary_axis="template",
         target_counts=target,
         core_target_counts=core,
-        repair_budget=3,
+        repair_budget=0,
         target_total=total,
+        cell_space=_STATEFUL_CELL_SPACE,
     )
 
 
@@ -291,57 +402,51 @@ def _simple_algorithms_plan(total: int) -> StrataPlan:
     target_counts: dict[str, int] = {}
     core_counts: dict[str, int] = {}
 
-    most_frequent_cells = [
-        f"most_frequent|{tie_break}|{preprocess}"
-        for tie_break, preprocess in product(
-            _MOST_FREQUENT_TIE_BREAKS,
-            _PREPROCESS_BUCKETS,
-        )
+    _group_configs: list[tuple[str, int, list[str]]] = [
+        (
+            "most_frequent",
+            16,
+            [
+                "most_frequent|smallest|none",
+                "most_frequent|smallest|both",
+                "most_frequent|first_seen|none",
+                "most_frequent|first_seen|both",
+            ],
+        ),
+        (
+            "count_pairs_sum",
+            16,
+            [
+                "count_pairs_sum|all_indices|none",
+                "count_pairs_sum|all_indices|both",
+                "count_pairs_sum|unique_values|none",
+                "count_pairs_sum|unique_values|both",
+            ],
+        ),
+        (
+            "max_window_sum",
+            11,
+            ["max_window_sum|medium|single"],
+        ),
     ]
-    mf_core, mf_target = _apply_repairs(
-        cells=most_frequent_cells,
-        base_count=16,
-        repair_cells=[
-            "most_frequent|smallest|none",
-            "most_frequent|smallest|both",
-            "most_frequent|first_seen|none",
-            "most_frequent|first_seen|both",
-        ],
-    )
-    target_counts.update(mf_target)
-    core_counts.update(mf_core)
 
-    count_pairs_cells = [
-        f"count_pairs_sum|{mode}|{preprocess}"
-        for mode, preprocess in product(
-            _COUNT_PAIRS_MODES,
-            _PREPROCESS_BUCKETS,
+    for group in _SIMPLE_ALGORITHMS_CELL_SPACE.groups:
+        template = group.primary_value
+        cells = [
+            f"{template}|{s}|{t}"
+            for s in group.secondary_values
+            for t in group.tertiary_values
+        ]
+        base_count, repair_cells = next(
+            (bc, rc) for name, bc, rc in _group_configs if name == template
         )
-    ]
-    cp_core, cp_target = _apply_repairs(
-        cells=count_pairs_cells,
-        base_count=16,
-        repair_cells=[
-            "count_pairs_sum|all_indices|none",
-            "count_pairs_sum|all_indices|both",
-            "count_pairs_sum|unique_values|none",
-            "count_pairs_sum|unique_values|both",
-        ],
-    )
-    target_counts.update(cp_target)
-    core_counts.update(cp_core)
-
-    max_window_cells = [
-        f"max_window_sum|{k_bucket}|{preprocess}"
-        for k_bucket, preprocess in product(_K_BUCKETS, _PREPROCESS_BUCKETS)
-    ]
-    mw_core, mw_target = _apply_repairs(
-        cells=max_window_cells,
-        base_count=11,
-        repair_cells=["max_window_sum|medium|single"],
-    )
-    target_counts.update(mw_target)
-    core_counts.update(mw_core)
+        g_core, g_target = _apply_repairs(
+            cells=cells,
+            base_count=base_count,
+            repair_cells=repair_cells,
+        )
+        target_counts.update(g_target)
+        core_counts.update(g_core)
 
     if sum(target_counts.values()) != total:
         raise ValueError("simple_algorithms target counts do not sum to 300")
@@ -353,6 +458,7 @@ def _simple_algorithms_plan(total: int) -> StrataPlan:
         core_target_counts=core_counts,
         repair_budget=9,
         target_total=total,
+        cell_space=_SIMPLE_ALGORITHMS_CELL_SPACE,
     )
 
 
@@ -360,14 +466,7 @@ def _fsm_plan(total: int) -> StrataPlan:
     if total != _LOCKED_PER_FAMILY_TOTAL:
         raise ValueError("fsm IRT stratification is locked to 300 items/family")
 
-    cells = [
-        f"{output_mode}|{policy}|{n_states_bucket}"
-        for output_mode, policy, n_states_bucket in product(
-            _FSM_OUTPUT_MODES,
-            _FSM_UNDEFINED_POLICIES,
-            _N_STATES_BUCKETS,
-        )
-    ]
+    cells = _FSM_CELL_SPACE.valid_cells()
     repair_cells = [
         f"{output_mode}|sink|small" for output_mode in _FSM_OUTPUT_MODES
     ]
@@ -383,6 +482,7 @@ def _fsm_plan(total: int) -> StrataPlan:
         core_target_counts=core,
         repair_budget=3,
         target_total=total,
+        cell_space=_FSM_CELL_SPACE,
     )
 
 
@@ -392,14 +492,7 @@ def _bitops_plan(total: int) -> StrataPlan:
             "bitops IRT stratification is locked to 300 items/family"
         )
 
-    cells = [
-        f"{width_bits}|{n_ops}|{op_mix}"
-        for width_bits, n_ops, op_mix in product(
-            _BIT_WIDTH_BITS,
-            _N_OPS_BUCKETS,
-            _BIT_OP_MIX_BUCKETS,
-        )
-    ]
+    cells = _BITOPS_CELL_SPACE.valid_cells()
     repair_cells = [
         f"{width_bits}|short|logic_only" for width_bits in _BIT_WIDTH_BITS
     ]
@@ -415,6 +508,7 @@ def _bitops_plan(total: int) -> StrataPlan:
         core_target_counts=core,
         repair_budget=3,
         target_total=total,
+        cell_space=_BITOPS_CELL_SPACE,
     )
 
 

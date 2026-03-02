@@ -51,8 +51,6 @@ _BINARY_OPERATORS = frozenset(
 )
 _INT_RANGE_FIELDS = (
     "formula_depth_range",
-    "sequence_length_range",
-    "value_range",
     "predicate_constant_range",
 )
 INT64_MIN = -(1 << 63)
@@ -139,11 +137,6 @@ class TemporalLogicAxes(BaseModel):
     operator_mix: list[TemporalOperator] = Field(
         default_factory=lambda: list(TemporalOperator)
     )
-    include_since_choices: list[bool] = Field(
-        default_factory=lambda: [False, True]
-    )
-    sequence_length_range: tuple[int, int] = Field(default=(0, 10))
-    value_range: tuple[int, int] = Field(default=(-10, 10))
     predicate_constant_range: tuple[int, int] = Field(default=(-8, 8))
 
     @model_validator(mode="before")
@@ -158,13 +151,9 @@ class TemporalLogicAxes(BaseModel):
             raise ValueError("output_modes must not be empty")
         if not self.operator_mix:
             raise ValueError("operator_mix must not be empty")
-        if not self.include_since_choices:
-            raise ValueError("include_since_choices must not be empty")
 
         for name in (
             "formula_depth_range",
-            "sequence_length_range",
-            "value_range",
             "predicate_constant_range",
         ):
             lo, hi = getattr(self, name)
@@ -175,9 +164,7 @@ class TemporalLogicAxes(BaseModel):
             raise ValueError("formula_depth_range: low must be >= 1")
         if self.formula_depth_range[1] > 12:
             raise ValueError("formula_depth_range: high must be <= 12")
-        if self.sequence_length_range[0] < 0:
-            raise ValueError("sequence_length_range: low must be >= 0")
-        for name in ("value_range", "predicate_constant_range"):
+        for name in ("predicate_constant_range",):
             lo, hi = getattr(self, name)
             if lo < INT64_MIN:
                 raise ValueError(f"{name}: low must be >= {INT64_MIN}")

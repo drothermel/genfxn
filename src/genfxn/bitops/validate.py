@@ -40,6 +40,7 @@ CODE_FUNC_NOT_CALLABLE = "CODE_FUNC_NOT_CALLABLE"
 CODE_UNSAFE_AST = "CODE_UNSAFE_AST"
 CURRENT_FAMILY = "bitops"
 PYTHON_CODE_KEY = "python"
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-1024, 1024)
 
 _spec_adapter = TypeAdapter(BitopsSpec)
 _ALLOWED_BUILTINS = {}
@@ -435,7 +436,7 @@ def _validate_semantics(
 
     issues: list[Issue] = []
     severity = Severity.ERROR if strict else Severity.WARNING
-    lo, hi = axes.value_range
+    lo, hi = _DEFAULT_VALUE_RANGE
 
     for _ in range(semantic_trials):
         x = rng.randint(lo, hi)

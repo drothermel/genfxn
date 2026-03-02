@@ -9,6 +9,8 @@ from genfxn.piecewise.models import Branch, PiecewiseSpec
 # contract - validators should import this constant rather than duplicating.
 SUPPORTED_CONDITION_KINDS: frozenset[str] = frozenset({"lt", "le"})
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-100, 100)
+
 
 def _get_branch_threshold(branch: Branch) -> int:
     """Extract threshold from a branch's predicate.
@@ -26,7 +28,7 @@ def _get_branch_threshold(branch: Branch) -> int:
 
 def generate_piecewise_queries(
     spec: PiecewiseSpec,
-    value_range: tuple[int, int] = (-100, 100),
+    value_range: tuple[int, int] = _DEFAULT_VALUE_RANGE,
     rng: random.Random | None = None,
 ) -> list[Query]:
     if rng is None:

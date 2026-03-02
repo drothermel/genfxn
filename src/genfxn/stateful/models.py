@@ -14,13 +14,14 @@ from genfxn.core.predicates import Predicate, PredicateType
 from genfxn.core.transforms import Transform, TransformType
 
 _INT_RANGE_FIELDS = (
-    "value_range",
-    "list_length_range",
     "threshold_range",
     "divisor_range",
     "shift_range",
     "scale_range",
 )
+
+_OVERFLOW_VALUE_RANGE: tuple[int, int] = (-100, 100)
+_OVERFLOW_LIST_LENGTH_MAX: int = 20
 INT32_MAX = (1 << 31) - 1
 INT64_MIN = -(1 << 63)
 INT64_MAX = (1 << 63) - 1
@@ -240,8 +241,6 @@ class StatefulAxes(BaseModel):
             # CLIP excluded - not useful for accumulator transforms
         ]
     )
-    value_range: tuple[int, int] = Field(default=(-100, 100))
-    list_length_range: tuple[int, int] = Field(default=(5, 20))
     threshold_range: tuple[int, int] = Field(default=(-50, 50))
     divisor_range: tuple[int, int] = Field(default=(2, 10))
     shift_range: tuple[int, int] = Field(default=(-10, 10))
@@ -266,8 +265,6 @@ class StatefulAxes(BaseModel):
             raise ValueError("transform_types must not be empty")
 
         for name in (
-            "value_range",
-            "list_length_range",
             "threshold_range",
             "divisor_range",
             "shift_range",
@@ -280,10 +277,6 @@ class StatefulAxes(BaseModel):
                 raise ValueError(f"{name}: low ({lo}) must be >= {INT64_MIN}")
             if hi > INT64_MAX:
                 raise ValueError(f"{name}: high ({hi}) must be <= {INT64_MAX}")
-
-        lo, hi = self.list_length_range
-        if lo < 0:
-            raise ValueError(f"list_length_range: low ({lo}) must be >= 0")
 
         lo, hi = self.divisor_range
         if lo < 1:
@@ -340,7 +333,7 @@ class StatefulAxes(BaseModel):
                 "are enabled"
             )
 
-        value_range = self.value_range
+        value_range = _OVERFLOW_VALUE_RANGE
         transform_output_ranges: list[tuple[int, int]] = []
         for transform_type in self.transform_types:
             if transform_type == TransformType.IDENTITY:
@@ -411,7 +404,7 @@ class StatefulAxes(BaseModel):
             min(bounds[0] for bounds in transform_output_ranges),
             max(bounds[1] for bounds in transform_output_ranges),
         )
-        step_count = self.list_length_range[1]
+        step_count = _OVERFLOW_LIST_LENGTH_MAX
         acc_range = add_ranges(
             SAMPLED_INIT_RANGE,
             (

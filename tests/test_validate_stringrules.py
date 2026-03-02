@@ -329,7 +329,7 @@ class TestDifferentConfigurations:
             assert errors == [], f"overlap={overlap}: {errors}"
 
     def test_generate_test_inputs_respects_digits_charset(self) -> None:
-        axes = StringRulesAxes(charset="digits", string_length_range=(1, 5))
+        axes = StringRulesAxes(charset="digits")
         inputs = _generate_test_inputs(axes, random.Random(42), num_samples=30)
         assert inputs
         assert all(all(ch.isdigit() for ch in s) for s in inputs)
@@ -337,7 +337,7 @@ class TestDifferentConfigurations:
     def test_generate_test_inputs_space_charset_avoids_invalid_literal(
         self,
     ) -> None:
-        axes = StringRulesAxes(charset=" ", string_length_range=(1, 10))
+        axes = StringRulesAxes(charset=" ")
         inputs = _generate_test_inputs(axes, random.Random(42), num_samples=30)
         assert inputs
         assert all(set(s) <= {" "} for s in inputs)
@@ -423,7 +423,6 @@ class TestDiagnostics:
         spec = StringRulesSpec.model_validate(task.spec)
         axes = StringRulesAxes.model_construct(  # bypass validation
             charset="",
-            string_length_range=(0, 20),
             n_rules=2,
             overlap_level=OverlapLevel.HIGH,
         )

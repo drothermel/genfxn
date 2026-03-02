@@ -49,12 +49,11 @@ def test_layer2_generation_fails_when_budget_cannot_be_filled(
         _ = generate_layer2_cases(task, count=8, seed=0)
 
 
-def test_temporal_logic_layer2_uses_sequence_length_range_axis() -> None:
+def test_temporal_logic_layer2_generates_valid_cases() -> None:
     task = generate_temporal_logic_task(
         rng=random.Random(19),
-        axes=TemporalLogicAxes(sequence_length_range=(2, 2)),
+        axes=TemporalLogicAxes(),
     )
     cases = generate_layer2_cases(task, count=32, seed=5)
     assert len(cases) == 32
     assert all(isinstance(case.input, list) for case in cases)
-    assert all(len(case.input) == 2 for case in cases)

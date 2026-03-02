@@ -32,8 +32,6 @@ _SUPPORTED_PRE_TRANSFORM_TYPES = frozenset(
     }
 )
 _INT_RANGE_FIELDS = (
-    "value_range",
-    "list_length_range",
     "target_range",
     "window_size_range",
     "empty_default_range",
@@ -47,6 +45,9 @@ INT64_MAX = (1 << 63) - 1
 INT32_MAX = (1 << 31) - 1
 PREPROCESS_SHIFT_RANGE = (-10, 10)
 PREPROCESS_SCALE_RANGE = (-5, 5)
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-100, 100)
+_DEFAULT_LIST_LENGTH_RANGE: tuple[int, int] = (5, 20)
+_MAX_LIST_LENGTH: int = _DEFAULT_LIST_LENGTH_RANGE[1]
 
 
 def _validate_no_bool_int_range_bounds(data: Any) -> None:
@@ -231,8 +232,6 @@ class SimpleAlgorithmsAxes(BaseModel):
     counting_modes: list[CountingMode] = Field(
         default_factory=lambda: list(CountingMode)
     )
-    value_range: tuple[int, int] = Field(default=(-100, 100))
-    list_length_range: tuple[int, int] = Field(default=(5, 20))
     target_range: tuple[int, int] = Field(default=(-50, 50))
     window_size_range: tuple[int, int] = Field(default=(1, 10))
     empty_default_range: tuple[int, int] = Field(default=(0, 0))
@@ -259,8 +258,6 @@ class SimpleAlgorithmsAxes(BaseModel):
             raise ValueError("counting_modes must not be empty")
 
         for name in (
-            "value_range",
-            "list_length_range",
             "target_range",
             "window_size_range",
             "empty_default_range",
@@ -273,10 +270,6 @@ class SimpleAlgorithmsAxes(BaseModel):
             if hi > INT64_MAX:
                 raise ValueError(f"{name}: high ({hi}) must be <= {INT64_MAX}")
 
-        lo, hi = self.list_length_range
-        if lo < 0:
-            raise ValueError(f"list_length_range: low ({lo}) must be >= 0")
-
         lo, hi = self.window_size_range
         if lo < 1:
             raise ValueError(f"window_size_range: low ({lo}) must be >= 1")
@@ -284,11 +277,10 @@ class SimpleAlgorithmsAxes(BaseModel):
             raise ValueError(
                 f"window_size_range: high ({hi}) must be <= {INT32_MAX}"
             )
-        list_hi = self.list_length_range[1]
-        if hi > list_hi:
+        if hi > _MAX_LIST_LENGTH:
             raise ValueError(
                 "window_size_range: high "
-                f"({hi}) must be <= list_length_range high ({list_hi})"
+                f"({hi}) must be <= max list length ({_MAX_LIST_LENGTH})"
             )
 
         for name in (
@@ -363,26 +355,26 @@ class SimpleAlgorithmsAxes(BaseModel):
                     f"Supported values: {supported}"
                 )
 
-        processed_range = self.value_range
+        processed_range = _DEFAULT_VALUE_RANGE
         if self.pre_transform_types is not None:
             transformed_ranges: list[tuple[int, int]] = []
             for transform_type in self.pre_transform_types:
                 if transform_type == TransformType.IDENTITY:
                     output_range = _apply_transform_range(
-                        self.value_range,
+                        _DEFAULT_VALUE_RANGE,
                         transform_type,
                         shift_range=PREPROCESS_SHIFT_RANGE,
                         scale_range=PREPROCESS_SCALE_RANGE,
                     )
                     transformed_ranges.append(output_range)
                 elif transform_type == TransformType.ABS:
-                    if self.value_range[0] == INT64_MIN:
+                    if _DEFAULT_VALUE_RANGE[0] == INT64_MIN:
                         raise ValueError(
                             "value_range: low must be > INT64_MIN when "
                             "pre_transform_types includes 'abs'"
                         )
                     output_range = _apply_transform_range(
-                        self.value_range,
+                        _DEFAULT_VALUE_RANGE,
                         transform_type,
                         shift_range=PREPROCESS_SHIFT_RANGE,
                         scale_range=PREPROCESS_SCALE_RANGE,
@@ -390,20 +382,20 @@ class SimpleAlgorithmsAxes(BaseModel):
                     transformed_ranges.append(output_range)
                 elif transform_type == TransformType.SHIFT:
                     output_range = _apply_transform_range(
-                        self.value_range,
+                        _DEFAULT_VALUE_RANGE,
                         transform_type,
                         shift_range=PREPROCESS_SHIFT_RANGE,
                         scale_range=PREPROCESS_SCALE_RANGE,
                     )
                     transformed_ranges.append(output_range)
                 elif transform_type == TransformType.NEGATE:
-                    if self.value_range[0] == INT64_MIN:
+                    if _DEFAULT_VALUE_RANGE[0] == INT64_MIN:
                         raise ValueError(
                             "value_range: low must be > INT64_MIN when "
                             "pre_transform_types includes 'negate'"
                         )
                     output_range = _apply_transform_range(
-                        self.value_range,
+                        _DEFAULT_VALUE_RANGE,
                         transform_type,
                         shift_range=PREPROCESS_SHIFT_RANGE,
                         scale_range=PREPROCESS_SCALE_RANGE,
@@ -411,7 +403,7 @@ class SimpleAlgorithmsAxes(BaseModel):
                     transformed_ranges.append(output_range)
                 elif transform_type == TransformType.SCALE:
                     output_range = _apply_transform_range(
-                        self.value_range,
+                        _DEFAULT_VALUE_RANGE,
                         transform_type,
                         shift_range=PREPROCESS_SHIFT_RANGE,
                         scale_range=PREPROCESS_SCALE_RANGE,
@@ -420,7 +412,7 @@ class SimpleAlgorithmsAxes(BaseModel):
                 elif transform_type == TransformType.PIPELINE:
                     transformed_ranges.extend(
                         _pipeline_output_ranges(
-                            self.value_range,
+                            _DEFAULT_VALUE_RANGE,
                             shift_range=PREPROCESS_SHIFT_RANGE,
                             scale_range=PREPROCESS_SCALE_RANGE,
                         )
@@ -441,7 +433,7 @@ class SimpleAlgorithmsAxes(BaseModel):
                     "Numeric contract violation: pair-sum arithmetic can "
                     "overflow signed 64-bit bounds. Tighten value_range."
                 )
-            list_hi = self.list_length_range[1]
+            list_hi = _DEFAULT_LIST_LENGTH_RANGE[1]
             max_pair_count = list_hi * max(0, list_hi - 1) // 2
             if max_pair_count > I64_MAX:
                 raise ValueError(

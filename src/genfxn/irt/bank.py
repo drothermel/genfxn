@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from genfxn.core.family_registry import generate_task_for_family
 from genfxn.core.models import Task
 from genfxn.core.predicates import PredicateType
+from genfxn.core.spec_space import SpecCapacityError, enforce_spec_capacity
 from genfxn.core.transforms import TransformType
 from genfxn.fsm.models import FsmAxes
 from genfxn.irt.io import write_json, write_jsonl
@@ -32,7 +34,6 @@ _CALIBRATION_FAMILIES = (
     "fsm",
     "bitops",
 )
-_FSM_MACHINE_TYPE_FLOOR = 120
 
 
 class BankBuildSettings(BaseModel):
@@ -141,21 +142,39 @@ def _hash_manifest_payload(payload: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _fsm_machine_floor_feasible(
-    machine_type_counts: dict[str, int],
-    *,
-    picked_machine_type: str,
-    remaining_after_pick: int,
-) -> bool:
-    moore_after = machine_type_counts.get("moore", 0) + (
-        1 if picked_machine_type == "moore" else 0
-    )
-    mealy_after = machine_type_counts.get("mealy", 0) + (
-        1 if picked_machine_type == "mealy" else 0
-    )
-    missing_moore = max(0, _FSM_MACHINE_TYPE_FLOOR - moore_after)
-    missing_mealy = max(0, _FSM_MACHINE_TYPE_FLOOR - mealy_after)
-    return (missing_moore + missing_mealy) <= remaining_after_pick
+def _feature_cell_key(family: str, features: dict[str, str]) -> str:
+    if family == "stateful":
+        return (
+            f"{features['template']}|{features['predicate_class']}|"
+            f"{features['transform_complexity']}"
+        )
+    if family == "simple_algorithms":
+        template = features["template"]
+        if template == "most_frequent":
+            return (
+                f"{template}|{features['tie_break']}|"
+                f"{features['preprocess_bucket']}"
+            )
+        if template == "count_pairs_sum":
+            return (
+                f"{template}|{features['counting_mode']}|"
+                f"{features['preprocess_bucket']}"
+            )
+        return (
+            f"{template}|{features['k_bucket']}|{features['preprocess_bucket']}"
+        )
+    if family == "fsm":
+        return (
+            f"{features['output_mode']}|"
+            f"{features['undefined_transition_policy']}|"
+            f"{features['n_states_bucket']}"
+        )
+    if family == "bitops":
+        return (
+            f"{features['width_bits_bucket']}|{features['n_ops_bucket']}|"
+            f"{features['op_mix_bucket']}"
+        )
+    raise ValueError(f"unsupported family for feature cell key: {family}")
 
 
 def _redistribute_deficits(
@@ -225,9 +244,9 @@ def _sample_family_tasks(
     per_family_count: int,
     max_attempts: int,
     global_seen_task_ids: set[str],
+    log: Callable[[str], None] | None = None,
 ) -> tuple[
     list[Task],
-    dict[str, int],
     dict[str, int],
     int,
     dict[str, dict[str, int]],
@@ -236,23 +255,28 @@ def _sample_family_tasks(
     current_counts = {cell: 0 for cell in target_counts}
     accepted_tasks: list[Task] = []
     attempts = 0
-    machine_type_counts: dict[str, int] = {"moore": 0, "mealy": 0}
 
-    def can_accept(task: Task, cell: str) -> bool:
-        if current_counts.get(cell, 0) >= target_counts[cell]:
-            return False
-        if family != "fsm":
-            return True
-        machine_type = str(task.spec.get("machine_type", "moore"))
-        remaining_after_pick = per_family_count - (len(accepted_tasks) + 1)
-        return _fsm_machine_floor_feasible(
-            machine_type_counts,
-            picked_machine_type=machine_type,
-            remaining_after_pick=remaining_after_pick,
-        )
+    def can_accept(task: Task, cell: str) -> bool:  # noqa: ARG001
+        return current_counts.get(cell, 0) < target_counts[cell]
 
     while len(accepted_tasks) < per_family_count and attempts < max_attempts:
         attempts += 1
+        if log and attempts % 10_000 == 0:
+            active = sum(
+                1
+                for c in target_counts
+                if current_counts.get(c, 0) < target_counts[c]
+            )
+            status = (
+                f"  {family}: {len(accepted_tasks)}/{per_family_count} accepted"
+            )
+            log(
+                status
+                + (
+                    f" ({attempts} attempts, {active}/{len(target_counts)} "
+                    "cells open)"
+                )
+            )
         task = generate_task_for_family(family, rng=rng, axes=axes)
         if task.task_id in global_seen_task_ids or not task.queries:
             continue
@@ -266,14 +290,15 @@ def _sample_family_tasks(
         accepted_tasks.append(task)
         global_seen_task_ids.add(task.task_id)
         current_counts[cell] += 1
-        if family == "fsm":
-            machine_type = str(task.spec.get("machine_type", "moore"))
-            machine_type_counts[machine_type] = (
-                machine_type_counts.get(machine_type, 0) + 1
-            )
 
     redistribution_log: dict[str, dict[str, int]] = {}
     if len(accepted_tasks) < per_family_count:
+        if log:
+            log(
+                f"  {family}: redistribution triggered "
+                f"({len(accepted_tasks)}/{per_family_count} filled "
+                f"after {attempts} attempts)"
+            )
         target_counts, redistribution_log = _redistribute_deficits(
             family=family,
             plan=plan,
@@ -284,6 +309,17 @@ def _sample_family_tasks(
             max_attempts * 2
         ):
             attempts += 1
+            if log and attempts % 10_000 == 0:
+                active = sum(
+                    1
+                    for c in target_counts
+                    if current_counts.get(c, 0) < target_counts[c]
+                )
+                log(
+                    f"  {family}: {len(accepted_tasks)}/{per_family_count} "
+                    f"accepted ({attempts} attempts, "
+                    f"{active}/{len(target_counts)} cells open) [redistrib]"
+                )
             task = generate_task_for_family(family, rng=rng, axes=axes)
             if task.task_id in global_seen_task_ids or not task.queries:
                 continue
@@ -297,22 +333,19 @@ def _sample_family_tasks(
             accepted_tasks.append(task)
             global_seen_task_ids.add(task.task_id)
             current_counts[cell] = current_counts.get(cell, 0) + 1
-            if family == "fsm":
-                machine_type = str(task.spec.get("machine_type", "moore"))
-                machine_type_counts[machine_type] = (
-                    machine_type_counts.get(machine_type, 0) + 1
-                )
 
     return (
         accepted_tasks,
         target_counts,
-        machine_type_counts,
         attempts,
         redistribution_log,
     )
 
 
-def build_stratified_item_bank(settings: BankBuildSettings) -> BankBuildResult:
+def build_stratified_item_bank(
+    settings: BankBuildSettings,
+    log: Callable[[str], None] | None = None,
+) -> BankBuildResult:
     bank_root = settings.out_dir / settings.bank_id
     items_path = bank_root / "items.jsonl"
     eval_cases_inputs_path = bank_root / "eval_cases_inputs.jsonl"
@@ -325,15 +358,45 @@ def build_stratified_item_bank(settings: BankBuildSettings) -> BankBuildResult:
     manifest_families: dict[str, Any] = {}
     global_seen_task_ids: set[str] = set()
 
+    n_families = len(settings.families)
     for family_idx, family in enumerate(settings.families):
         plan = get_strata_plan(family, settings.per_family_count)
         rng = random.Random(settings.seed + (family_idx * 1_000_000))
         axes = _axes_for_family(family)
 
+        def feature_partitioner(features: Mapping[str, str]) -> str:
+            return _feature_cell_key(family, dict(features))
+
+        try:
+            capacity_report = enforce_spec_capacity(
+                family=family,
+                axes=axes,
+                requested_total=settings.per_family_count,
+                requested_partition_counts=plan.target_counts,
+                feature_partitioner=feature_partitioner,
+                require_exact=True,
+            )
+        except SpecCapacityError as exc:
+            raise ValueError(
+                "spec-space preflight failed before sampling: "
+                f"family={family}; {exc}"
+            ) from exc
+
+        if log:
+            log(
+                f"[{family_idx + 1}/{n_families}] {family}: "
+                f"sampling {settings.per_family_count} items "
+                f"(max {settings.max_attempts_per_family} attempts, "
+                f"{len(plan.target_counts)} cells) ..."
+            )
+            log(
+                f"  {family}: exact unique spec capacity "
+                f"{capacity_report.total_unique}"
+            )
+
         (
             accepted_tasks,
             target_counts,
-            machine_type_counts,
             attempts,
             redistribution_log,
         ) = _sample_family_tasks(
@@ -344,7 +407,15 @@ def build_stratified_item_bank(settings: BankBuildSettings) -> BankBuildResult:
             per_family_count=settings.per_family_count,
             max_attempts=settings.max_attempts_per_family,
             global_seen_task_ids=global_seen_task_ids,
+            log=log,
         )
+
+        if log:
+            log(
+                f"  {family}: done — "
+                f"{len(accepted_tasks)}/{settings.per_family_count} "
+                f"accepted in {attempts} attempts"
+            )
 
         if len(accepted_tasks) != settings.per_family_count:
             raise ValueError(
@@ -386,6 +457,15 @@ def build_stratified_item_bank(settings: BankBuildSettings) -> BankBuildResult:
             "target_count": settings.per_family_count,
             "accepted_count": len(family_items),
             "attempts": attempts,
+            "spec_space": {
+                "mode": capacity_report.mode,
+                "total_unique": capacity_report.total_unique,
+                "partition_unique": (
+                    dict(sorted(capacity_report.partition_unique.items()))
+                    if capacity_report.partition_unique is not None
+                    else None
+                ),
+            },
             "quota_policy": {
                 "core_cell_targets": dict(
                     sorted(plan.core_target_counts.items())
@@ -395,15 +475,19 @@ def build_stratified_item_bank(settings: BankBuildSettings) -> BankBuildResult:
             "target_counts_by_cell": dict(sorted(target_counts.items())),
             "actual_counts_by_cell": dict(sorted(actual_counts.items())),
             "deficit_redistribution": redistribution_log,
-            "machine_type_counts": (
-                machine_type_counts if family == "fsm" else None
-            ),
         }
 
+    if log:
+        log(
+            f"Writing {len(all_items)} items, "
+            f"{len(all_case_inputs)} eval cases ..."
+        )
     write_jsonl(items_path, all_items)
     write_jsonl(eval_cases_inputs_path, all_case_inputs)
     write_jsonl(eval_cases_expected_path, all_case_expected)
 
+    if log:
+        log("Writing manifest ...")
     manifest_payload = {
         "schema_version": "irt_bank_v1",
         "bank_id": settings.bank_id,

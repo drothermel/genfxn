@@ -91,7 +91,7 @@ def test_semantic_mismatch_detected(baseline_task: Task) -> None:
     )
     issues = validate_bitops_task(
         corrupted,
-        axes=BitopsAxes(value_range=(1, 1)),
+        axes=BitopsAxes(),
         semantic_trials=4,
         max_semantic_issues=4,
         random_seed=123,

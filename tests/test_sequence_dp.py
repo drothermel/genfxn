@@ -297,9 +297,6 @@ class TestModels:
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("len_a_range", (False, 3)),
-            ("len_b_range", (0, True)),
-            ("value_range", (False, 5)),
             ("match_score_range", (0, True)),
             ("mismatch_score_range", (False, 0)),
             ("gap_score_range", (0, True)),
@@ -376,8 +373,6 @@ class TestModels:
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("value_range", (-(1 << 63) - 1, 0)),
-            ("value_range", (0, 1 << 63)),
             ("match_score_range", (-(1 << 63) - 1, 0)),
             ("mismatch_score_range", (0, 1 << 63)),
             ("gap_score_range", (0, 1 << 63)),
@@ -548,8 +543,6 @@ class TestSampler:
         axes = SequenceDpAxes(
             predicate_types=[PredicateType.MOD_EQ],
             divisor_range=(3, 3),
-            len_a_range=(2, 2),
-            len_b_range=(2, 2),
         )
         spec = _call_sample(sample_sequence_dp_spec, axes, seed=41)
         predicate = spec.match_predicate
@@ -615,26 +608,6 @@ class TestQueries:
             for q in task.queries:
                 a, b = _pair_from_input(q.input)
                 assert q.output == eval_sequence_dp(spec, a, b)
-
-    def test_queries_respect_value_range_for_narrow_axes(self) -> None:
-        axes = SequenceDpAxes(
-            len_a_range=(12, 12),
-            len_b_range=(12, 12),
-            value_range=(17, 19),
-        )
-        spec = _call_sample(sample_sequence_dp_spec, axes, seed=901)
-        queries = _call_queries(
-            generate_sequence_dp_queries,
-            spec,
-            axes,
-            seed=901,
-        )
-
-        lo, hi = axes.value_range
-        for q in queries:
-            a, b = _pair_from_input(q.input)
-            assert all(lo <= v <= hi for v in a)
-            assert all(lo <= v <= hi for v in b)
 
 
 class TestTaskGeneration:

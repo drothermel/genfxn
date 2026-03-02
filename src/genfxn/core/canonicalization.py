@@ -156,7 +156,6 @@ def _normalize_fsm_spec(spec: dict[str, Any]) -> dict[str, Any]:
         return spec
 
     output = dict(spec)
-    output["machine_type"] = "moore"
     output["states"] = sorted(
         states,
         key=lambda state: state.get("id", 0) if isinstance(state, dict) else 0,

@@ -367,7 +367,7 @@ class TestAxesAndParanoidHelpers:
     def test_custom_axes_respected_in_semantic_generation(
         self, baseline_task: Task
     ) -> None:
-        axes = StackBytecodeAxes(value_range=(0, 0), list_length_range=(0, 0))
+        axes = StackBytecodeAxes(list_length_range=(0, 0))
         issues = validate_stack_bytecode_task(
             baseline_task,
             axes=axes,

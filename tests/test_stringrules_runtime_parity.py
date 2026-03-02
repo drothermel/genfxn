@@ -126,7 +126,6 @@ def test_stringrules_runtime_parity_across_sampled_specs() -> None:
     rng = random.Random(77)
     axes = StringRulesAxes(
         n_rules=3,
-        string_length_range=(0, 10),
         charset="ascii_letters_digits",
     )
     sample_inputs = (

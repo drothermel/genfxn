@@ -4,7 +4,6 @@ from genfxn.fsm.eval import eval_fsm
 from genfxn.fsm.models import (
     FsmAxes,
     FsmSpec,
-    MachineType,
     OutputMode,
     PredicateType,
     State,
@@ -20,7 +19,6 @@ from genfxn.fsm.validate import validate_fsm_task
 __all__ = [
     "FsmAxes",
     "FsmSpec",
-    "MachineType",
     "OutputMode",
     "PredicateType",
     "State",

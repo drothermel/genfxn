@@ -26,6 +26,9 @@ from genfxn.temporal_logic.eval import eval_temporal_logic
 from genfxn.temporal_logic.models import TemporalLogicAxes, TemporalLogicSpec
 from genfxn.temporal_logic.utils import sample_sequence
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-10, 10)
+_DEFAULT_SEQUENCE_LENGTH_RANGE: tuple[int, int] = (0, 10)
+
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
 CODE_CODE_PARSE_ERROR = "CODE_CODE_PARSE_ERROR"
@@ -472,8 +475,8 @@ def _validate_semantics(
 
     for _ in range(semantic_trials):
         xs = sample_sequence(
-            length_range=axes.sequence_length_range,
-            value_range=axes.value_range,
+            length_range=_DEFAULT_SEQUENCE_LENGTH_RANGE,
+            value_range=_DEFAULT_VALUE_RANGE,
             rng=rng,
         )
         expected = eval_temporal_logic(spec, xs)

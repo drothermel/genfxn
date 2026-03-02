@@ -23,7 +23,7 @@ from genfxn.intervals.ast_safety import (
     METHOD_ARITIES,
 )
 from genfxn.intervals.eval import eval_intervals
-from genfxn.intervals.models import IntervalsAxes, IntervalsSpec
+from genfxn.intervals.models import IntervalsSpec
 from genfxn.intervals.utils import _clamp
 
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
@@ -497,20 +497,27 @@ def _validate_query_outputs(
     return issues
 
 
-def _sample_intervals_from_axes(
-    axes: IntervalsAxes,
+_DEFAULT_N_INTERVALS_RANGE: tuple[int, int] = (0, 10)
+_DEFAULT_ENDPOINT_RANGE: tuple[int, int] = (-20, 20)
+_DEFAULT_MAX_SPAN_RANGE: tuple[int, int] = (0, 20)
+_DEFAULT_ALLOW_REVERSED_PROB: float = 0.15
+_DEFAULT_DEGENERATE_PROB: float = 0.15
+_DEFAULT_NESTED_PROB: float = 0.15
+
+
+def _sample_intervals_for_validation(
     rng: random.Random,
 ) -> list[tuple[int, int]]:
-    n_lo, n_hi = axes.n_intervals_range
-    endpoint_lo, endpoint_hi = axes.endpoint_range
-    span_lo, span_hi = axes.max_span_range
+    n_lo, n_hi = _DEFAULT_N_INTERVALS_RANGE
+    endpoint_lo, endpoint_hi = _DEFAULT_ENDPOINT_RANGE
+    span_lo, span_hi = _DEFAULT_MAX_SPAN_RANGE
     count = rng.randint(n_lo, n_hi)
 
     span_low = max(0, span_lo)
     span_high = max(span_low, span_hi)
-    reverse_prob = rng.uniform(*axes.allow_reversed_interval_prob_range)
-    degenerate_prob = rng.uniform(*axes.degenerate_interval_prob_range)
-    nested_prob = rng.uniform(*axes.nested_interval_prob_range)
+    reverse_prob = _DEFAULT_ALLOW_REVERSED_PROB
+    degenerate_prob = _DEFAULT_DEGENERATE_PROB
+    nested_prob = _DEFAULT_NESTED_PROB
 
     intervals: list[tuple[int, int]] = []
     for _ in range(count):
@@ -543,7 +550,6 @@ def _validate_semantics(
     task: Task,
     spec: IntervalsSpec,
     fn: Callable[[list[tuple[int, int]]], int] | None,
-    axes: IntervalsAxes,
     strict: bool,
     semantic_trials: int,
     max_semantic_issues: int,
@@ -556,7 +562,7 @@ def _validate_semantics(
     severity = Severity.ERROR if strict else Severity.WARNING
 
     for _ in range(semantic_trials):
-        intervals = _sample_intervals_from_axes(axes, rng)
+        intervals = _sample_intervals_for_validation(rng)
         expected = eval_intervals(spec, intervals)
 
         try:
@@ -608,7 +614,6 @@ def _validate_semantics(
 
 def validate_intervals_task(
     task: Task,
-    axes: IntervalsAxes | None = None,
     strict: bool = True,
     execute_untrusted_code: bool = False,
     max_semantic_issues: int = 10,
@@ -627,9 +632,6 @@ def validate_intervals_task(
                 task_id=task.task_id,
             )
         ]
-
-    if axes is None:
-        axes = IntervalsAxes()
 
     issues: list[Issue] = []
     issues.extend(_validate_query_types(task, strict=strict))
@@ -674,7 +676,6 @@ def validate_intervals_task(
                 task,
                 spec,
                 fn,
-                axes,
                 strict=strict,
                 semantic_trials=semantic_trials,
                 max_semantic_issues=max_semantic_issues,

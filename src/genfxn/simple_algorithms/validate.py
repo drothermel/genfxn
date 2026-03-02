@@ -31,6 +31,9 @@ from genfxn.simple_algorithms.models import (
     SimpleAlgorithmsSpec,
 )
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-100, 100)
+_DEFAULT_LIST_LENGTH_RANGE: tuple[int, int] = (5, 20)
+
 CODE_TASK_ID_MISMATCH = "TASK_ID_MISMATCH"
 CODE_SPEC_DESERIALIZE_ERROR = "SPEC_DESERIALIZE_ERROR"
 CODE_CODE_PARSE_ERROR = "CODE_PARSE_ERROR"
@@ -535,7 +538,7 @@ def _check_edge_case_handling(
 ) -> list[Issue]:
     """Emit CODE_EDGE_CASE_FAILURE when code fails on edge-case inputs."""
     issues: list[Issue] = []
-    val_lo, val_hi = axes.value_range
+    val_lo, val_hi = _DEFAULT_VALUE_RANGE
     edge_inputs: list[list[int]] = [[], [val_lo], [val_hi]]
     for xs in edge_inputs:
         try:
@@ -570,8 +573,8 @@ def _generate_test_inputs(
 ) -> list[list[int]]:
     """Generate test inputs including edge cases and random samples."""
     inputs: list[list[int]] = []
-    val_lo, val_hi = axes.value_range
-    len_lo, len_hi = axes.list_length_range
+    val_lo, val_hi = _DEFAULT_VALUE_RANGE
+    len_lo, len_hi = _DEFAULT_LIST_LENGTH_RANGE
 
     # Edge cases
     inputs.append([])

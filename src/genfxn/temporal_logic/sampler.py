@@ -116,7 +116,7 @@ def sample_temporal_logic_spec(
         rng = random.Random()  # noqa: S311
 
     output_mode = rng.choice(axes.output_modes)
-    include_since = rng.choice(axes.include_since_choices)
+    include_since = TemporalOperator.SINCE in axes.operator_mix
     depth = _sample_int_in_range(axes.formula_depth_range, rng)
 
     formula = _sample_formula(
@@ -138,12 +138,6 @@ def sample_temporal_logic_spec(
         "sample_formula_depth",
         f"Formula depth: {depth}",
         depth,
-    )
-    trace_step(
-        trace,
-        "sample_include_since",
-        f"Include SINCE: {include_since}",
-        include_since,
     )
     trace_step(
         trace,

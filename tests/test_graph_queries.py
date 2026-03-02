@@ -454,9 +454,6 @@ def test_sampler_is_deterministic_for_seed() -> None:
         n_nodes_range=(5, 5),
         edge_count_range=(7, 7),
         weight_range=(2, 2),
-        disconnected_prob_range=(0.0, 0.0),
-        multi_edge_prob_range=(0.0, 0.0),
-        hub_bias_prob_range=(0.0, 0.0),
     )
     spec1 = sample_graph_queries_spec(axes, random.Random(42))
     spec2 = sample_graph_queries_spec(axes, random.Random(42))
@@ -471,9 +468,6 @@ def test_queries_cover_all_tags_and_match_eval_across_multiple_seeds() -> None:
         n_nodes_range=(2, 9),
         edge_count_range=(1, 24),
         weight_range=(1, 9),
-        disconnected_prob_range=(0.0, 0.5),
-        multi_edge_prob_range=(0.0, 0.3),
-        hub_bias_prob_range=(0.0, 0.5),
     )
 
     for seed in range(220, 236):
@@ -508,9 +502,6 @@ def test_query_input_uniqueness_contract_is_per_tag() -> None:
         n_nodes_range=(1, 1),
         edge_count_range=(0, 0),
         weight_range=(1, 1),
-        disconnected_prob_range=(0.0, 0.0),
-        multi_edge_prob_range=(0.0, 0.0),
-        hub_bias_prob_range=(0.0, 0.0),
     )
     queries = generate_graph_queries_queries(spec, axes, random.Random(0))
 
@@ -536,9 +527,6 @@ def test_queries_inputs_stay_within_node_bounds_across_multiple_seeds() -> None:
         n_nodes_range=(1, 10),
         edge_count_range=(0, 30),
         weight_range=(1, 12),
-        disconnected_prob_range=(0.0, 0.8),
-        multi_edge_prob_range=(0.0, 0.6),
-        hub_bias_prob_range=(0.0, 0.8),
     )
 
     for seed in range(320, 352):
@@ -576,9 +564,6 @@ def test_generate_task_deterministic_and_consistent() -> None:
         n_nodes_range=(4, 4),
         edge_count_range=(3, 3),
         weight_range=(1, 1),
-        disconnected_prob_range=(0.0, 0.0),
-        multi_edge_prob_range=(0.0, 0.0),
-        hub_bias_prob_range=(0.0, 0.0),
     )
 
     task1 = generate_graph_queries_task(axes=axes, rng=random.Random(123))

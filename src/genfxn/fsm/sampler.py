@@ -99,17 +99,10 @@ def sample_fsm_spec(
         n_states,
     )
 
-    machine_type = rng.choice(axes.machine_types)
     output_mode = rng.choice(axes.output_modes)
     undefined_policy = rng.choice(axes.undefined_transition_policies)
     start_state_id = rng.choice(state_ids)
 
-    trace_step(
-        trace,
-        "sample_machine_type",
-        f"Machine type: {machine_type.value}",
-        machine_type.value,
-    )
     trace_step(
         trace,
         "sample_output_mode",
@@ -135,7 +128,6 @@ def sample_fsm_spec(
         ]
 
     return FsmSpec(
-        machine_type=machine_type,
         output_mode=output_mode,
         undefined_transition_policy=undefined_policy,
         start_state_id=start_state_id,

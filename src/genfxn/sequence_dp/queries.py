@@ -4,6 +4,10 @@ from genfxn.core.models import Query, QueryTag
 from genfxn.sequence_dp.eval import eval_sequence_dp
 from genfxn.sequence_dp.models import SequenceDpAxes, SequenceDpSpec
 
+_DEFAULT_VALUE_RANGE: tuple[int, int] = (-20, 20)
+_DEFAULT_LEN_A_RANGE: tuple[int, int] = (2, 10)
+_DEFAULT_LEN_B_RANGE: tuple[int, int] = (2, 10)
+
 
 def _rand_list(
     length: int,
@@ -37,9 +41,9 @@ def generate_sequence_dp_queries(
     if rng is None:
         rng = random.Random()
 
-    a_lo, a_hi = axes.len_a_range
-    b_lo, b_hi = axes.len_b_range
-    v_lo, v_hi = axes.value_range
+    a_lo, a_hi = _DEFAULT_LEN_A_RANGE
+    b_lo, b_hi = _DEFAULT_LEN_B_RANGE
+    v_lo, v_hi = _DEFAULT_VALUE_RANGE
     v_mid = (v_lo + v_hi) // 2
 
     queries: list[Query] = []
@@ -84,16 +88,22 @@ def generate_sequence_dp_queries(
     typical_a_len = max(1, a_lo)
     typical_b_len = max(1, b_lo)
     _append_query(
-        [_clamp(v_mid + idx, axes.value_range) for idx in range(typical_a_len)],
-        [_clamp(v_mid - idx, axes.value_range) for idx in range(typical_b_len)],
+        [
+            _clamp(v_mid + idx, _DEFAULT_VALUE_RANGE)
+            for idx in range(typical_a_len)
+        ],
+        [
+            _clamp(v_mid - idx, _DEFAULT_VALUE_RANGE)
+            for idx in range(typical_b_len)
+        ],
         QueryTag.TYPICAL,
     )
 
     for _ in range(4):
         a_len = rng.randint(a_lo, a_hi)
         b_len = rng.randint(b_lo, b_hi)
-        a_vals = _rand_list(a_len, axes.value_range, rng)
-        b_vals = _rand_list(b_len, axes.value_range, rng)
+        a_vals = _rand_list(a_len, _DEFAULT_VALUE_RANGE, rng)
+        b_vals = _rand_list(b_len, _DEFAULT_VALUE_RANGE, rng)
         _append_query(a_vals, b_vals, QueryTag.TYPICAL)
 
     adv_a_len = max(a_lo, min(a_hi, 8))
@@ -103,17 +113,17 @@ def generate_sequence_dp_queries(
             _patterned_list(
                 adv_a_len,
                 [
-                    _clamp(v_lo, axes.value_range),
-                    _clamp(v_hi, axes.value_range),
-                    _clamp(v_mid, axes.value_range),
+                    _clamp(v_lo, _DEFAULT_VALUE_RANGE),
+                    _clamp(v_hi, _DEFAULT_VALUE_RANGE),
+                    _clamp(v_mid, _DEFAULT_VALUE_RANGE),
                 ],
             ),
             _patterned_list(
                 adv_b_len,
                 [
-                    _clamp(v_hi, axes.value_range),
-                    _clamp(v_lo, axes.value_range),
-                    _clamp(v_mid, axes.value_range),
+                    _clamp(v_hi, _DEFAULT_VALUE_RANGE),
+                    _clamp(v_lo, _DEFAULT_VALUE_RANGE),
+                    _clamp(v_mid, _DEFAULT_VALUE_RANGE),
                 ],
             ),
         ),
@@ -121,14 +131,14 @@ def generate_sequence_dp_queries(
             _patterned_list(
                 max(1, max(a_lo, min(a_hi, 12)) - 1),
                 [
-                    _clamp(0, axes.value_range),
-                    _clamp(1, axes.value_range),
-                    _clamp(-1, axes.value_range),
+                    _clamp(0, _DEFAULT_VALUE_RANGE),
+                    _clamp(1, _DEFAULT_VALUE_RANGE),
+                    _clamp(-1, _DEFAULT_VALUE_RANGE),
                 ],
             ),
             _patterned_list(
                 max(1, b_lo),
-                [_clamp(0, axes.value_range)],
+                [_clamp(0, _DEFAULT_VALUE_RANGE)],
             ),
         ),
     ]
@@ -141,11 +151,11 @@ def generate_sequence_dp_queries(
         tag_shift = list(QueryTag).index(tag) + 1
         _append_query(
             [
-                _clamp(v_mid + tag_shift + idx, axes.value_range)
+                _clamp(v_mid + tag_shift + idx, _DEFAULT_VALUE_RANGE)
                 for idx in range(max(1, a_lo))
             ],
             [
-                _clamp(v_mid - tag_shift - idx, axes.value_range)
+                _clamp(v_mid - tag_shift - idx, _DEFAULT_VALUE_RANGE)
                 for idx in range(max(1, b_lo))
             ],
             tag,
@@ -155,8 +165,8 @@ def generate_sequence_dp_queries(
         for _ in range(32):
             a_len = rng.randint(a_lo, a_hi)
             b_len = rng.randint(b_lo, b_hi)
-            a_vals = _rand_list(a_len, axes.value_range, rng)
-            b_vals = _rand_list(b_len, axes.value_range, rng)
+            a_vals = _rand_list(a_len, _DEFAULT_VALUE_RANGE, rng)
+            b_vals = _rand_list(b_len, _DEFAULT_VALUE_RANGE, rng)
             prev_count = len(queries)
             _append_query(a_vals, b_vals, tag)
             if len(queries) > prev_count:
@@ -166,7 +176,7 @@ def generate_sequence_dp_queries(
         raise RuntimeError(
             "Failed to generate a unique query for tag "
             f"{tag.value} after retries with "
-            f"value_range={axes.value_range}, "
+            f"value_range={_DEFAULT_VALUE_RANGE}, "
             f"a_lo={a_lo}, a_hi={a_hi}, "
             f"b_lo={b_lo}, b_hi={b_hi}, "
             f"v_mid={v_mid}."

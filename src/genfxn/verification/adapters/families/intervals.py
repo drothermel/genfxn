@@ -165,35 +165,6 @@ def _layer3_mutants(
                 )
             )
 
-    for field_name in (
-        "allow_reversed_interval_prob",
-        "degenerate_interval_prob",
-        "nested_interval_prob",
-    ):
-        value = spec_dict.get(field_name)
-        if not isinstance(value, (int, float)):
-            continue
-        down = max(0.0, float(value) - 0.1)
-        up = min(1.0, float(value) + 0.1)
-        if down != float(value):
-            candidates.append(
-                candidate(
-                    set_at_path(spec_dict, (field_name,), down),
-                    mutant_kind="intervals_probability_mutation",
-                    rule_id=f"intervals.{field_name}_minus_point_one",
-                    metadata={"path": [field_name], "delta": -0.1},
-                )
-            )
-        if up != float(value):
-            candidates.append(
-                candidate(
-                    set_at_path(spec_dict, (field_name,), up),
-                    mutant_kind="intervals_probability_mutation",
-                    rule_id=f"intervals.{field_name}_plus_point_one",
-                    metadata={"path": [field_name], "delta": 0.1},
-                )
-            )
-
     return finalize_candidates(
         candidates,
         validate_spec=lambda raw: validate_spec_for_family(FAMILY, raw),

@@ -99,9 +99,6 @@ class GraphQueriesAxes(BaseModel):
     n_nodes_range: tuple[int, int] = Field(default=(2, 8))
     edge_count_range: tuple[int, int] = Field(default=(1, 16))
     weight_range: tuple[int, int] = Field(default=(1, 9))
-    disconnected_prob_range: tuple[float, float] = Field(default=(0.1, 0.4))
-    multi_edge_prob_range: tuple[float, float] = Field(default=(0.0, 0.25))
-    hub_bias_prob_range: tuple[float, float] = Field(default=(0.0, 0.4))
 
     @model_validator(mode="before")
     @classmethod
@@ -142,16 +139,5 @@ class GraphQueriesAxes(BaseModel):
             raise ValueError("weight_range: low must be >= 0")
         if self.weight_range[1] > INT64_MAX:
             raise ValueError(f"weight_range: high must be <= {INT64_MAX}")
-
-        for name in (
-            "disconnected_prob_range",
-            "multi_edge_prob_range",
-            "hub_bias_prob_range",
-        ):
-            lo, hi = getattr(self, name)
-            if lo > hi:
-                raise ValueError(f"{name}: low ({lo}) must be <= high ({hi})")
-            if lo < 0.0 or hi > 1.0:
-                raise ValueError(f"{name}: values must be in [0.0, 1.0]")
 
         return self

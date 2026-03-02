@@ -12,16 +12,21 @@ from genfxn.irt.models import (
     ResponseRow,
 )
 from genfxn.irt.score import AnchorScoringSettings, score_with_anchors
-from genfxn.irt.stratification import get_strata_plan
+from genfxn.irt.stratification import (
+    _BITOPS_CELL_SPACE,
+    _FSM_CELL_SPACE,
+    _SIMPLE_ALGORITHMS_CELL_SPACE,
+    _STATEFUL_CELL_SPACE,
+    get_strata_plan,
+)
 
 
 def test_locked_strata_plan_totals() -> None:
     stateful = get_strata_plan("stateful", 300)
     assert sum(stateful.target_counts.values()) == 300
-    assert sum(stateful.core_target_counts.values()) == 297
-    assert (
-        sum(1 for value in stateful.target_counts.values() if value == 12) == 3
-    )
+    assert sum(stateful.core_target_counts.values()) == 300
+    assert len(stateful.target_counts) == 20
+    assert all(v == 15 for v in stateful.target_counts.values())
 
     simple = get_strata_plan("simple_algorithms", 300)
     assert sum(simple.target_counts.values()) == 300
@@ -161,3 +166,42 @@ def test_bank_build_settings_defaults() -> None:
         "fsm",
         "bitops",
     ]
+
+
+def test_cell_spaces_produce_valid_cells() -> None:
+    for family, cell_space in [
+        ("stateful", _STATEFUL_CELL_SPACE),
+        ("simple_algorithms", _SIMPLE_ALGORITHMS_CELL_SPACE),
+        ("fsm", _FSM_CELL_SPACE),
+        ("bitops", _BITOPS_CELL_SPACE),
+    ]:
+        plan = get_strata_plan(family, 300)
+        assert plan.cell_space is not None
+        valid = set(cell_space.valid_cells())
+        plan_cells = set(plan.target_counts.keys())
+        assert valid == plan_cells, (
+            f"{family}: cell space and plan disagree: "
+            f"space-only={valid - plan_cells}, plan-only={plan_cells - valid}"
+        )
+
+
+def test_stateful_cell_space_excludes_impossible() -> None:
+    cells = _STATEFUL_CELL_SPACE.valid_cells()
+    for cell in cells:
+        parts = cell.split("|")
+        if parts[0] == "longest_run":
+            assert parts[2] == "low", (
+                f"longest_run should only have 'low' transform complexity, "
+                f"got {parts[2]!r} in {cell!r}"
+            )
+    impossible = [
+        "longest_run|parity|mixed",
+        "longest_run|parity|high",
+        "longest_run|comparison|mixed",
+        "longest_run|comparison|high",
+        "longest_run|modular|mixed",
+        "longest_run|modular|high",
+    ]
+    cell_set = set(cells)
+    for cell in impossible:
+        assert cell not in cell_set, f"impossible cell {cell!r} found in space"

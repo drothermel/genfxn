@@ -19,7 +19,7 @@ For test/check categories and copy-paste commands, see `TESTING.md`.
 ## Project State
 
 - All listed families are implemented and integrated in generation, validation,
-  language rendering, split tooling, and suite generation.
+  language rendering, and suite generation.
 
 ## Core Modules
 

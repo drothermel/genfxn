@@ -1,5 +1,4 @@
 import random
-from collections import defaultdict
 from typing import Any
 
 import pytest
@@ -42,16 +41,15 @@ def _call_task(generate_task_fn: Any, axes: Any, seed: int) -> Any:
 def _call_queries(
     generate_queries_fn: Any,
     spec: Any,
-    axes: Any,
     seed: int,
 ) -> list[Any]:
     rng = random.Random(seed)
     try:
-        return generate_queries_fn(spec=spec, axes=axes, rng=rng)
+        return generate_queries_fn(spec=spec, rng=rng)
     except TypeError as exc:
         if "unexpected keyword" not in str(exc).lower():
             raise
-        return generate_queries_fn(spec, axes, rng)
+        return generate_queries_fn(spec, rng)
 
 
 def _normalize_axes_for_deterministic_sampling(axes: Any, axes_cls: Any) -> Any:
@@ -276,10 +274,6 @@ class TestModels:
         with pytest.raises(ValidationError):
             IntervalsAxes(operation_types=[])
 
-    def test_axes_reject_invalid_probability_range(self) -> None:
-        with pytest.raises(ValidationError):
-            IntervalsAxes(degenerate_interval_prob_range=(-0.1, 0.2))
-
     def test_axes_reject_invalid_endpoint_clip_range(self) -> None:
         with pytest.raises(ValidationError):
             IntervalsAxes(endpoint_clip_abs_range=(0, 5))
@@ -305,9 +299,6 @@ class TestModels:
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("n_intervals_range", (False, 5)),
-            ("endpoint_range", (-5, True)),
-            ("max_span_range", (True, 5)),
             ("endpoint_clip_abs_range", (False, 5)),
             ("endpoint_quantize_step_range", (1, True)),
         ],
@@ -324,9 +315,6 @@ class TestModels:
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("endpoint_range", (-(1 << 63) - 1, 0)),
-            ("endpoint_range", (0, 1 << 63)),
-            ("max_span_range", (0, 1 << 63)),
             ("endpoint_clip_abs_range", (1, 1 << 63)),
             ("endpoint_quantize_step_range", (1, 1 << 63)),
         ],
@@ -366,32 +354,16 @@ class TestSampler:
         }
         assert len(signatures) >= 8
 
-    def test_sampler_persists_interval_probability_samples(self) -> None:
-        axes = IntervalsAxes(
-            allow_reversed_interval_prob_range=(0.75, 0.75),
-            degenerate_interval_prob_range=(0.5, 0.5),
-            nested_interval_prob_range=(0.25, 0.25),
-        )
-        spec = _call_sample(sample_intervals_spec, axes, seed=404)
-        assert spec.allow_reversed_interval_prob == 0.75
-        assert spec.degenerate_interval_prob == 0.5
-        assert spec.nested_interval_prob == 0.25
-
 
 class TestQueries:
     def test_queries_cover_all_tags_and_match_evaluator_outputs(self) -> None:
-        axes = IntervalsAxes(
-            n_intervals_range=(1, 7),
-            endpoint_range=(-12, 12),
-            max_span_range=(0, 8),
-        )
+        axes = IntervalsAxes()
 
         for seed in range(410, 422):
             spec = _call_sample(sample_intervals_spec, axes, seed=seed)
             queries = _call_queries(
                 generate_intervals_queries,
                 spec,
-                axes,
                 seed=seed,
             )
             assert queries
@@ -400,178 +372,17 @@ class TestQueries:
                 assert query.output == eval_intervals(spec, query.input)
 
     def test_query_input_uniqueness_contract_is_per_tag(self) -> None:
-        axes = IntervalsAxes(
-            n_intervals_range=(1, 1),
-            endpoint_range=(0, 0),
-            max_span_range=(0, 0),
-            allow_reversed_interval_prob_range=(0.0, 0.0),
-            degenerate_interval_prob_range=(1.0, 1.0),
-            nested_interval_prob_range=(0.0, 0.0),
-        )
+        axes = IntervalsAxes()
         spec = _call_sample(sample_intervals_spec, axes, seed=0)
-        queries = _call_queries(generate_intervals_queries, spec, axes, seed=0)
+        queries = _call_queries(generate_intervals_queries, spec, seed=0)
 
         seen_by_tag: dict[QueryTag, set[tuple[tuple[int, int], ...]]] = {
             tag: set() for tag in QueryTag
         }
-        tags_by_input: dict[tuple[tuple[int, int], ...], set[QueryTag]] = (
-            defaultdict(set)
-        )
         for query in queries:
             frozen = tuple((int(a), int(b)) for a, b in query.input)
             assert frozen not in seen_by_tag[query.tag]
             seen_by_tag[query.tag].add(frozen)
-            tags_by_input[frozen].add(query.tag)
-
-        assert any(len(tags) > 1 for tags in tags_by_input.values())
-
-    def test_queries_respect_narrow_endpoint_range(self) -> None:
-        axes = IntervalsAxes(
-            n_intervals_range=(1, 4),
-            endpoint_range=(0, 0),
-            max_span_range=(0, 2),
-        )
-        spec = _call_sample(sample_intervals_spec, axes, seed=501)
-        queries = _call_queries(
-            generate_intervals_queries,
-            spec,
-            axes,
-            seed=501,
-        )
-        for query in queries:
-            for start, end in query.input:
-                assert 0 <= start <= 0
-                assert 0 <= end <= 0
-
-    def test_queries_use_degenerate_probability_for_typical_cases(self) -> None:
-        axes = IntervalsAxes(
-            n_intervals_range=(3, 3),
-            endpoint_range=(-8, 8),
-            max_span_range=(1, 6),
-            allow_reversed_interval_prob_range=(0.0, 0.0),
-            degenerate_interval_prob_range=(1.0, 1.0),
-            nested_interval_prob_range=(0.0, 0.0),
-        )
-        spec = _call_sample(sample_intervals_spec, axes, seed=601)
-        queries = _call_queries(
-            generate_intervals_queries,
-            spec,
-            axes,
-            seed=601,
-        )
-        typical_queries = [q for q in queries if q.tag == QueryTag.TYPICAL]
-        assert typical_queries
-        for query in typical_queries:
-            assert query.input
-            assert all(a == b for a, b in query.input)
-
-    def test_queries_respect_zero_max_span_range_for_typical_cases(
-        self,
-    ) -> None:
-        axes = IntervalsAxes(
-            n_intervals_range=(3, 3),
-            endpoint_range=(-8, 8),
-            max_span_range=(0, 0),
-            allow_reversed_interval_prob_range=(0.0, 0.0),
-            degenerate_interval_prob_range=(0.0, 0.0),
-            nested_interval_prob_range=(0.0, 0.0),
-        )
-        spec = _call_sample(sample_intervals_spec, axes, seed=605)
-        queries = _call_queries(
-            generate_intervals_queries,
-            spec,
-            axes,
-            seed=605,
-        )
-        typical_queries = [q for q in queries if q.tag == QueryTag.TYPICAL]
-        assert typical_queries
-        for query in typical_queries:
-            assert query.input
-            assert all(a == b for a, b in query.input)
-
-    def test_queries_use_reverse_probability_for_typical_cases(self) -> None:
-        common_axes: dict[str, Any] = dict(
-            n_intervals_range=(3, 3),
-            endpoint_range=(-8, 8),
-            max_span_range=(1, 6),
-            degenerate_interval_prob_range=(0.0, 0.0),
-            nested_interval_prob_range=(0.0, 0.0),
-        )
-
-        forward_axes = IntervalsAxes(
-            **common_axes,
-            allow_reversed_interval_prob_range=(0.0, 0.0),
-        )
-        forward_spec = _call_sample(
-            sample_intervals_spec,
-            forward_axes,
-            seed=602,
-        )
-        forward_queries = _call_queries(
-            generate_intervals_queries,
-            forward_spec,
-            forward_axes,
-            seed=602,
-        )
-        forward_typical = [
-            q for q in forward_queries if q.tag == QueryTag.TYPICAL
-        ]
-        assert forward_typical
-        for query in forward_typical:
-            assert all(a <= b for a, b in query.input)
-
-        reversed_axes = IntervalsAxes(
-            **common_axes,
-            allow_reversed_interval_prob_range=(1.0, 1.0),
-        )
-        reversed_spec = _call_sample(
-            sample_intervals_spec,
-            reversed_axes,
-            seed=603,
-        )
-        reversed_queries = _call_queries(
-            generate_intervals_queries,
-            reversed_spec,
-            reversed_axes,
-            seed=603,
-        )
-        reversed_typical = [
-            q for q in reversed_queries if q.tag == QueryTag.TYPICAL
-        ]
-        assert reversed_typical
-        for query in reversed_typical:
-            assert all(a > b for a, b in query.input)
-
-    def test_queries_use_nested_probability_for_typical_cases(self) -> None:
-        axes = IntervalsAxes(
-            n_intervals_range=(4, 4),
-            endpoint_range=(-8, 8),
-            max_span_range=(1, 6),
-            allow_reversed_interval_prob_range=(0.0, 0.0),
-            degenerate_interval_prob_range=(0.0, 0.0),
-            nested_interval_prob_range=(1.0, 1.0),
-        )
-        spec = _call_sample(sample_intervals_spec, axes, seed=604)
-        queries = _call_queries(
-            generate_intervals_queries,
-            spec,
-            axes,
-            seed=604,
-        )
-        typical_queries = [q for q in queries if q.tag == QueryTag.TYPICAL]
-        assert typical_queries
-
-        for query in typical_queries:
-            for idx, (a, b) in enumerate(query.input):
-                if idx == 0:
-                    continue
-                lo = min(a, b)
-                hi = max(a, b)
-                assert any(
-                    min(parent_a, parent_b) <= lo
-                    and hi <= max(parent_a, parent_b)
-                    for parent_a, parent_b in query.input[:idx]
-                )
 
 
 class TestTaskGeneration:
@@ -602,7 +413,6 @@ class TestTaskGeneration:
         queries = _call_queries(
             generate_intervals_queries,
             spec,
-            axes,
             seed=333,
         )
         for query in queries:

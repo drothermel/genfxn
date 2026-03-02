@@ -231,7 +231,7 @@ class TestQueryGeneration:
 
     def test_unsatisfiable_predicate_skips_boundary_queries(self) -> None:
         spec = LongestRunSpec(match_predicate=PredicateLt(value=-100))
-        axes = StatefulAxes(value_range=(0, 10))
+        axes = StatefulAxes()
         queries = generate_stateful_queries(spec, axes, random.Random(42))
         assert not any(q.tag == QueryTag.BOUNDARY for q in queries)
 
@@ -239,9 +239,9 @@ class TestQueryGeneration:
         self,
     ) -> None:
         spec = LongestRunSpec(match_predicate=PredicateEven())
-        axes = StatefulAxes(list_length_range=(1, 3), value_range=(0, 10))
+        axes = StatefulAxes()
         queries = generate_stateful_queries(spec, axes, random.Random(42))
-        lo, hi = axes.list_length_range
+        lo, hi = (5, 20)
         constrained = [
             q
             for q in queries
@@ -355,18 +355,6 @@ class TestSampler:
 
 
 class TestAxesValidation:
-    def test_invalid_value_range(self) -> None:
-        with pytest.raises(ValueError, match="value_range"):
-            StatefulAxes(value_range=(100, -100))
-
-    def test_invalid_list_length_range(self) -> None:
-        with pytest.raises(ValueError, match="list_length_range"):
-            StatefulAxes(list_length_range=(20, 5))
-
-    def test_negative_list_length(self) -> None:
-        with pytest.raises(ValueError, match=r"list_length_range.*>= 0"):
-            StatefulAxes(list_length_range=(-1, 10))
-
     def test_empty_templates(self) -> None:
         with pytest.raises(ValueError, match="templates must not be empty"):
             StatefulAxes(templates=[])
@@ -388,16 +376,6 @@ class TestAxesValidation:
     ) -> None:
         axes = StatefulAxes(transform_types=[TransformType.PIPELINE])
         assert axes.transform_types == [TransformType.PIPELINE]
-
-    def test_pipeline_transform_rejects_overflowing_ranges(self) -> None:
-        with pytest.raises(ValueError, match="Numeric contract violation"):
-            StatefulAxes(
-                transform_types=[TransformType.PIPELINE],
-                value_range=(
-                    2_000_000_000_000_000_000,
-                    2_000_000_000_000_000_000,
-                ),
-            )
 
     def test_zero_divisor(self) -> None:
         with pytest.raises(ValueError, match=r"divisor_range.*>= 1"):
@@ -421,15 +399,6 @@ class TestAxesValidation:
         ):
             StatefulAxes(threshold_range=(0, INT64_MAX + 1))
 
-    def test_abs_transform_rejects_value_range_including_int64_min(
-        self,
-    ) -> None:
-        with pytest.raises(ValueError, match="ABS transforms are enabled"):
-            StatefulAxes(
-                transform_types=[TransformType.ABS],
-                value_range=(-(1 << 63), 0),
-            )
-
     def test_shift_transform_rejects_shift_range_including_int64_min(
         self,
     ) -> None:
@@ -439,19 +408,9 @@ class TestAxesValidation:
                 shift_range=(-(1 << 63), 0),
             )
 
-    def test_rejects_accumulator_ranges_that_can_overflow_i64(self) -> None:
-        with pytest.raises(ValueError, match="Numeric contract violation"):
-            StatefulAxes(
-                transform_types=[TransformType.IDENTITY],
-                value_range=(1_000_000_000_000, 1_000_000_000_000),
-                list_length_range=(1, 10_000_000_000),
-            )
-
     @pytest.mark.parametrize(
         ("field_name", "range_value"),
         [
-            ("value_range", (False, 5)),
-            ("list_length_range", (1, True)),
             ("threshold_range", (True, 5)),
             ("divisor_range", (2, True)),
             ("shift_range", (False, 5)),

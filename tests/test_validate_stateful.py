@@ -517,10 +517,7 @@ class TestAxesDefault:
     def test_custom_axes_respected(self) -> None:
         from genfxn.stateful.models import StatefulAxes
 
-        axes = StatefulAxes(
-            value_range=(-10, 10),
-            list_length_range=(1, 5),
-        )
+        axes = StatefulAxes()
         task = generate_stateful_task(axes=axes, rng=random.Random(42))
         issues = validate_stateful_task(task, axes=axes)
         errors = [i for i in issues if i.severity == Severity.ERROR]
