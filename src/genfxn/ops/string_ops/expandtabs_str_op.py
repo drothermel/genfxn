@@ -20,14 +20,10 @@ class ExpandtabsStrOp(BaseOp):
     input_space: StringSpace = Field(default_factory=StringSpace)
 
     def eval(self, **kwargs: Any) -> str:
-        if "input" not in kwargs or len(kwargs) != 1:
-            raise ValueError(
-                "eval requires exactly one keyword argument: input"
-            )
-        input = kwargs["input"]
-        self.validate_input(input)
+        self.validate_input(**kwargs)
+        input = cast(str, kwargs["input"])
         return eval_guarded_str_expr(
-            cast(str, input),
+            input,
             lambda s: s.expandtabs(DEFAULT_EXPANDTABS_TABSIZE),
         )
 

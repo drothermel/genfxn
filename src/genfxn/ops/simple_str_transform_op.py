@@ -49,7 +49,7 @@ class SimpleStrTransformOp(BaseModel):
         return tuple(self.renderers.keys())
 
     def validate_input(self, value: object) -> None:
-        self.input_space.validate_member(value)
+        self.input_space.validate_member(value=value)
 
     # Handle len=0 case directly.  One source of truth -> render
     def eval(self, input: str) -> str:

@@ -40,8 +40,8 @@ class BaseOp(BaseModel, ABC):
     def supported_languages(self) -> tuple[Lang, ...]:
         return tuple(self.renderers.keys())
 
-    def validate_input(self, value: object) -> None:
-        self.input_space.validate_member(value)
+    def validate_input(self, **kwargs: Any) -> None:
+        self.input_space.validate_member(**kwargs)
 
     @abstractmethod
     def eval(self, **kwargs: Any) -> Any:

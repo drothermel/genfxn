@@ -19,13 +19,9 @@ class CapitalizeStrOp(BaseOp):
     input_space: StringSpace = Field(default_factory=StringSpace)
 
     def eval(self, **kwargs: Any) -> str:
-        if "input" not in kwargs or len(kwargs) != 1:
-            raise ValueError(
-                "eval requires exactly one keyword argument: input"
-            )
-        input = kwargs["input"]
-        self.validate_input(input)
-        return eval_guarded_str_expr(cast(str, input), str.capitalize)
+        self.validate_input(**kwargs)
+        input = cast(str, kwargs["input"])
+        return eval_guarded_str_expr(input, str.capitalize)
 
     def render_python(self) -> str:
         return render_guarded_str_method("capitalize")

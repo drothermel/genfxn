@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
+
+from genfxn.spaces.space import get_single_kwarg_value
 
 ConstantValue = str | int | float | bool | None
 
@@ -24,7 +26,8 @@ class ConstantSpace(BaseModel):
             raise ValueError("value must not be NaN")
         return value
 
-    def validate_member(self, candidate: object) -> None:
+    def validate_member(self, **kwargs: Any) -> None:
+        candidate = get_single_kwarg_value(kwargs)
         if type(candidate) is type(self.value) and candidate == self.value:
             return
         raise ValueError(

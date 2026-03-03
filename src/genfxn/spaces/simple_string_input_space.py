@@ -108,7 +108,7 @@ class SimpleStringInputSpace(StringSpace):
                 )
 
             sampled = f"{left_pads[i]}{''.join(core_chars)}{right_pads[i]}"
-            self.validate_member(sampled)
+            self.validate_member(value=sampled)
             samples.append(sampled)
 
         return samples

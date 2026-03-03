@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import random
-from typing import cast
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from genfxn.spaces.ascii_char_space import AsciiCharSpace
 from genfxn.spaces.categorical_space import CategoricalSpace
-from genfxn.spaces.space import Space
+from genfxn.spaces.space import Space, get_single_kwarg_value
 from genfxn.spaces.uniform_int_space import UniformIntSpace
 
 
@@ -42,14 +42,15 @@ class StringSpace(BaseModel):
         )
         return self
 
-    def validate_member(self, value: object) -> None:
+    def validate_member(self, **kwargs: Any) -> None:
+        value = get_single_kwarg_value(kwargs)
         if not isinstance(value, str):
             raise ValueError("value must be a string")
 
-        self.length_space.validate_member(len(value))
+        self.length_space.validate_member(value=len(value))
 
         for ch in value:
-            self.char_space.validate_member(ch)
+            self.char_space.validate_member(value=ch)
 
     def sample(self, n_samples: int, rng: random.Random) -> list[str]:
         if n_samples < 0:

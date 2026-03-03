@@ -60,7 +60,7 @@ class CharStyleTransformOp(BaseModel):
         return tuple(self.renderers.keys())
 
     def validate_input(self, value: object) -> None:
-        self.input_space.validate_member(value)
+        self.input_space.validate_member(value=value)
 
     def eval(self, input: str) -> str:
         self.validate_input(input)

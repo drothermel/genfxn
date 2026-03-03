@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from genfxn.spaces.space import get_single_kwarg_value
 
 CategoricalValue = str | int | float | bool | None
 
@@ -35,7 +37,8 @@ class CategoricalSpace(BaseModel):
             seen.add(key)
         return values
 
-    def validate_member(self, value: object) -> None:
+    def validate_member(self, **kwargs: Any) -> None:
+        value = get_single_kwarg_value(kwargs)
         for candidate in self.values:
             if type(candidate) is type(value) and candidate == value:
                 return

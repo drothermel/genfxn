@@ -19,13 +19,9 @@ class ReverseStrOp(BaseOp):
     input_space: StringSpace = Field(default_factory=StringSpace)
 
     def eval(self, **kwargs: Any) -> str:
-        if "input" not in kwargs or len(kwargs) != 1:
-            raise ValueError(
-                "eval requires exactly one keyword argument: input"
-            )
-        input = kwargs["input"]
-        self.validate_input(input)
-        return eval_guarded_str_expr(cast(str, input), lambda s: s[::-1])
+        self.validate_input(**kwargs)
+        input = cast(str, kwargs["input"])
+        return eval_guarded_str_expr(input, lambda s: s[::-1])
 
     def render_python(self) -> str:
         return render_guarded_str_suffix("[::-1]")
