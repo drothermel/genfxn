@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from genfxn.ops.base_op import BaseOp
+from genfxn.ops.mixture_op import MixtureOp
 from genfxn.ops.string_ops.registry import STRING_OP_REGISTRY
 
 OpClass = type[BaseOp]
 
 OP_REGISTRY: dict[str, OpClass] = {
     **STRING_OP_REGISTRY,
+    "mixture": MixtureOp,
 }
 
 

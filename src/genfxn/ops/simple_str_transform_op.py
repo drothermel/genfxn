@@ -10,7 +10,7 @@ from genfxn.spaces.simple_str_transform_space import (
 )
 from genfxn.spaces.simple_string_input_space import SimpleStringInputSpace
 from genfxn.spaces.string_space import StringSpace
-from genfxn.types import Lang, RenderFn
+from genfxn.types import DEFAULT_STR_INPUT_VAR, Lang, RenderFn
 
 
 class SimpleStrTransformOp(BaseModel):
@@ -49,7 +49,7 @@ class SimpleStrTransformOp(BaseModel):
         return tuple(self.renderers.keys())
 
     def validate_input(self, value: object) -> None:
-        self.input_space.validate_member(value=value)
+        self.input_space.validate_member(**{DEFAULT_STR_INPUT_VAR: value})
 
     # Handle len=0 case directly.  One source of truth -> render
     def eval(self, input: str) -> str:

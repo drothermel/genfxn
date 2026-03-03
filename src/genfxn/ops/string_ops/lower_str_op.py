@@ -10,6 +10,7 @@ from genfxn.templates.str_templates import (
     eval_guarded_str_expr,
     render_guarded_str_method,
 )
+from genfxn.types import DEFAULT_STR_INPUT_VAR
 
 
 class LowerStrOp(BaseOp):
@@ -20,7 +21,7 @@ class LowerStrOp(BaseOp):
 
     def eval(self, **kwargs: Any) -> str:
         self.validate_input(**kwargs)
-        input = cast(str, kwargs["input"])
+        input = cast(str, kwargs[DEFAULT_STR_INPUT_VAR])
         return eval_guarded_str_expr(input, str.lower)
 
     def render_python(self) -> str:

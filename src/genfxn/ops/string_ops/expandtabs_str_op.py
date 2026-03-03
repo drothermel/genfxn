@@ -10,7 +10,7 @@ from genfxn.templates.str_templates import (
     eval_guarded_str_expr,
     render_guarded_str_method_with_args,
 )
-from genfxn.types import DEFAULT_EXPANDTABS_TABSIZE
+from genfxn.types import DEFAULT_EXPANDTABS_TABSIZE, DEFAULT_STR_INPUT_VAR
 
 
 class ExpandtabsStrOp(BaseOp):
@@ -21,7 +21,7 @@ class ExpandtabsStrOp(BaseOp):
 
     def eval(self, **kwargs: Any) -> str:
         self.validate_input(**kwargs)
-        input = cast(str, kwargs["input"])
+        input = cast(str, kwargs[DEFAULT_STR_INPUT_VAR])
         return eval_guarded_str_expr(
             input,
             lambda s: s.expandtabs(DEFAULT_EXPANDTABS_TABSIZE),

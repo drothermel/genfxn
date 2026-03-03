@@ -7,8 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from genfxn.spaces.ascii_char_space import AsciiCharSpace
 from genfxn.spaces.categorical_space import CategoricalSpace
-from genfxn.spaces.space import Space, get_single_kwarg_value
+from genfxn.spaces.space import Space
 from genfxn.spaces.uniform_int_space import UniformIntSpace
+from genfxn.types import DEFAULT_STR_INPUT_VAR
 
 
 class StringSpace(BaseModel):
@@ -43,7 +44,15 @@ class StringSpace(BaseModel):
         return self
 
     def validate_member(self, **kwargs: Any) -> None:
-        value = get_single_kwarg_value(kwargs)
+        expected_key = DEFAULT_STR_INPUT_VAR
+        actual_keys = set(kwargs.keys())
+        if actual_keys != {expected_key}:
+            missing = [] if expected_key in actual_keys else [expected_key]
+            extra = sorted(k for k in actual_keys if k != expected_key)
+            raise ValueError(
+                f"string input key mismatch; missing={missing}, extra={extra}"
+            )
+        value = kwargs[expected_key]
         if not isinstance(value, str):
             raise ValueError("value must be a string")
 

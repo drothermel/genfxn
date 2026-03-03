@@ -10,6 +10,7 @@ from genfxn.templates.str_templates import (
     eval_guarded_str_expr,
     render_guarded_str_suffix,
 )
+from genfxn.types import DEFAULT_STR_INPUT_VAR
 
 
 class ReverseStrOp(BaseOp):
@@ -20,7 +21,7 @@ class ReverseStrOp(BaseOp):
 
     def eval(self, **kwargs: Any) -> str:
         self.validate_input(**kwargs)
-        input = cast(str, kwargs["input"])
+        input = cast(str, kwargs[DEFAULT_STR_INPUT_VAR])
         return eval_guarded_str_expr(input, lambda s: s[::-1])
 
     def render_python(self) -> str:

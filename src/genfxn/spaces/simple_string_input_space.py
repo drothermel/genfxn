@@ -16,7 +16,11 @@ from genfxn.spaces.char_style_transform_space import (
 from genfxn.spaces.space import Space
 from genfxn.spaces.string_space import StringSpace
 from genfxn.spaces.uniform_int_space import UniformIntSpace
-from genfxn.types import DEFAULT_MAX_STR_LEN, DEFAULT_MIN_STR_LEN
+from genfxn.types import (
+    DEFAULT_MAX_STR_LEN,
+    DEFAULT_MIN_STR_LEN,
+    DEFAULT_STR_INPUT_VAR,
+)
 
 
 def _core_letter_space() -> CategoricalSpace:
@@ -108,7 +112,7 @@ class SimpleStringInputSpace(StringSpace):
                 )
 
             sampled = f"{left_pads[i]}{''.join(core_chars)}{right_pads[i]}"
-            self.validate_member(value=sampled)
+            self.validate_member(**{DEFAULT_STR_INPUT_VAR: sampled})
             samples.append(sampled)
 
         return samples
