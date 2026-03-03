@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from genfxn.lang import Lang
 from genfxn.spaces.simple_str_transform_space import (
     SimpleStrTransformSpace,
     SimpleStrTransformType,
 )
-
-RenderFn = Callable[[str], str]
+from genfxn.spaces.simple_string_input_space import SimpleStringInputSpace
+from genfxn.spaces.string_space import StringSpace
+from genfxn.types import Lang, RenderFn
 
 
 class SimpleStrTransformOp(BaseModel):
@@ -19,6 +18,10 @@ class SimpleStrTransformOp(BaseModel):
 
     op_type: Literal["simple_str_transform"] = "simple_str_transform"
     transform: SimpleStrTransformType
+    transform_space: SimpleStrTransformSpace = Field(
+        default_factory=SimpleStrTransformSpace
+    )
+    input_space: StringSpace = Field(default_factory=SimpleStringInputSpace)
     renderers: dict[Lang, RenderFn] = Field(
         default_factory=dict,
         exclude=True,
@@ -45,11 +48,12 @@ class SimpleStrTransformOp(BaseModel):
     def supported_languages(self) -> tuple[Lang, ...]:
         return tuple(self.renderers.keys())
 
-    @classmethod
-    def transform_space(cls) -> SimpleStrTransformSpace:
-        return SimpleStrTransformSpace()
+    def validate_input(self, value: object) -> None:
+        self.input_space.validate_member(value)
 
+    # Handle len=0 case directly.  One source of truth -> render
     def eval(self, input: str) -> str:
+        self.validate_input(input)
         match self.transform:
             case "lowercase":
                 return input.lower()
@@ -73,7 +77,7 @@ class SimpleStrTransformOp(BaseModel):
                 return input.rstrip()
             case "expandtabs":
                 return input.expandtabs()
-        raise AssertionError("unreachable transform")
+        raise AssertionError("unreachable transform, is validation broken?")
 
     def render_python(self, input_var: str = "s") -> str:
         match self.transform:

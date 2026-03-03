@@ -6,14 +6,13 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    import textwrap
-
     import marimo as mo
+    import random
 
     from genfxn.ops.simple_str_transform_op import SimpleStrTransformOp
     from genfxn.spaces.simple_str_transform_space import SimpleStrTransformSpace
 
-    return SimpleStrTransformOp, SimpleStrTransformSpace, mo
+    return SimpleStrTransformOp, SimpleStrTransformSpace, mo, random
 
 
 @app.cell
@@ -46,7 +45,9 @@ def _(SimpleStrTransformOp, SimpleStrTransformSpace, input_text, mo):
                 "python_expr": _op.render_python("s"),
             }
         )
-    header = "| transform | output (`repr`) | python expression |\n|---|---|---|\n"
+    header = (
+        "| transform | output (`repr`) | python expression |\n|---|---|---|\n"
+    )
     body = "".join(
         f"| `{_row['transform']}` | `{_row['output_repr']}` | "
         f"`{_row['python_expr']}` |\n"
@@ -56,8 +57,14 @@ def _(SimpleStrTransformOp, SimpleStrTransformSpace, input_text, mo):
     return
 
 
-@app.cell
-def _():
+@app.cell(hide_code=True)
+def _(SimpleStrTransformOp, random):
+    sampler_op = SimpleStrTransformOp(transform="lowercase")
+    sampled_inputs = sampler_op.input_space.sample(
+        n_samples=20,
+        rng=random.Random(7),
+    )
+    sampled_inputs
     return
 
 

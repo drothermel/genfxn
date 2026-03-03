@@ -4,7 +4,7 @@ from typing import Literal, get_args
 
 from pydantic import Field
 
-from genfxn.param_space import CategoricalParamSpace
+from genfxn.spaces.categorical_space import CategoricalSpace
 
 SimpleStrTransformType = Literal[
     "lowercase",
@@ -25,7 +25,7 @@ _SIMPLE_STR_TRANSFORM_VALUES: tuple[SimpleStrTransformType, ...] = get_args(
 )
 
 
-class SimpleStrTransformSpace(CategoricalParamSpace):
+class SimpleStrTransformSpace(CategoricalSpace):
     """Hardcoded categorical space for parameter-free string transforms."""
 
     values: tuple[SimpleStrTransformType, ...] = Field(

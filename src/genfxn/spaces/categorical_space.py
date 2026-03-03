@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -8,8 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 CategoricalValue = str | int | float | bool | None
 
 
-class CategoricalParamSpace(BaseModel):
-    """A categorical parameter space with a finite, ordered set of values."""
+class CategoricalSpace(BaseModel):
+    """A finite, ordered categorical value space."""
 
     kind: Literal["categorical"] = "categorical"
     values: tuple[CategoricalValue, ...] = Field(min_length=1)
@@ -33,3 +34,17 @@ class CategoricalParamSpace(BaseModel):
                 raise ValueError("values must be unique")
             seen.add(key)
         return values
+
+    def validate_member(self, value: object) -> None:
+        for candidate in self.values:
+            if type(candidate) is type(value) and candidate == value:
+                return
+        raise ValueError(f"value {value!r} is not a member of this space")
+
+    def sample(
+        self, n_samples: int, rng: random.Random
+    ) -> list[CategoricalValue]:
+        if n_samples < 0:
+            raise ValueError("n_samples must be >= 0")
+
+        return rng.choices(self.values, k=n_samples)
