@@ -12,6 +12,7 @@ from genfxn.ops.string_ops.reverse_str_op import ReverseStrOp
 from genfxn.ops.string_ops.rstrip_str_op import RstripStrOp
 from genfxn.ops.string_ops.strip_str_op import StripStrOp
 from genfxn.ops.string_ops.swapcase_str_op import SwapcaseStrOp
+from genfxn.ops.string_ops.tab_str_op import TabStrOp
 from genfxn.ops.string_ops.title_str_op import TitleStrOp
 from genfxn.ops.string_ops.upper_str_op import UpperStrOp
 
@@ -22,6 +23,7 @@ STRING_OP_REGISTRY: dict[str, StringOpClass] = {
     "upper_str": UpperStrOp,
     "capitalize_str": CapitalizeStrOp,
     "swapcase_str": SwapcaseStrOp,
+    "tab_str": TabStrOp,
     "reverse_str": ReverseStrOp,
     "casefold_str": CasefoldStrOp,
     "title_str": TitleStrOp,

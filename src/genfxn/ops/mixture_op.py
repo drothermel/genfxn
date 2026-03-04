@@ -6,7 +6,6 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from genfxn.ops.base_op import BaseOp
-from genfxn.ops.registry import build_op
 from genfxn.spaces.space import Space
 from genfxn.types import DEFAULT_STR_INPUT_VAR
 
@@ -42,6 +41,8 @@ class MixtureOp(BaseOp):
         return self
 
     def eval(self, **kwargs: Any) -> Any:
+        from genfxn.ops.registry import build_op
+
         self.validate_input(**kwargs)
 
         idx = self.rng.choices(
@@ -55,6 +56,8 @@ class MixtureOp(BaseOp):
         return op.eval(**kwargs)
 
     def render_python(self) -> str:
+        from genfxn.ops.registry import build_op
+
         choice_exprs: list[str] = []
         for op_type in self.choices:
             op = build_op(op_type, input_space=self.input_space)
