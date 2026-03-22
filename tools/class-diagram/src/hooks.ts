@@ -39,7 +39,7 @@ export function useFlowNodes(): Node[] {
       if (groupedIds.has(def.id)) continue;
       if (hiddenKinds.has(def.kind)) continue;
 
-      const pos = positionOverrides[def.id] ?? def.defaultPosition;
+      const pos = positionOverrides[def.id] ?? { x: 0, y: 0 };
       nodes.push({
         id: def.id,
         type: 'classNode',

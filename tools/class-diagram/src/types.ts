@@ -24,7 +24,6 @@ export interface NodeDef {
   badge: string;
   desc: string;
   fields: FieldDef[];
-  defaultPosition: { x: number; y: number };
   width?: number;
 }
 

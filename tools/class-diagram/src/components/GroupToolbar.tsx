@@ -18,8 +18,7 @@ export function GroupToolbar() {
     let minY = Infinity;
 
     for (const id of nodeIds) {
-      const def = NODE_DEFS.find((n) => n.id === id);
-      const pos = positionOverrides[id] ?? def?.defaultPosition ?? { x: 0, y: 0 };
+      const pos = positionOverrides[id] ?? { x: 0, y: 0 };
       positions[id] = pos;
       minX = Math.min(minX, pos.x);
       minY = Math.min(minY, pos.y);

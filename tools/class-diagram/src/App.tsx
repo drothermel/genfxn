@@ -5,15 +5,18 @@ import {
   Background,
   BackgroundVariant,
   SelectionMode,
+  useReactFlow,
   type OnNodesChange,
   type OnSelectionChangeParams,
   type NodeMouseHandler,
   type Viewport,
+  ReactFlowProvider,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { useDiagramStore } from './store';
 import { useFlowNodes, useFlowEdges, getConnectedIds } from './hooks';
+import type { LayoutDirection } from './layout';
 import { ClassNode } from './components/ClassNode';
 import { GroupNode } from './components/GroupNode';
 import { DetailPanel } from './components/DetailPanel';
@@ -25,7 +28,44 @@ const nodeTypes = {
   groupNode: GroupNode,
 };
 
-export default function App() {
+function LayoutControls() {
+  const autoLayout = useDiagramStore((s) => s.autoLayout);
+  const { fitView } = useReactFlow();
+
+  const handleLayout = useCallback(
+    (direction: LayoutDirection) => {
+      autoLayout(direction);
+      // Wait for React to render new positions, then fit view
+      requestAnimationFrame(() => {
+        fitView({ duration: 300 });
+      });
+    },
+    [autoLayout, fitView],
+  );
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex gap-1">
+      <button
+        type="button"
+        className="px-2.5 py-1.5 text-[11px] bg-[#18181f] border border-[#2a2a35] rounded-l-md text-[#8888a0] hover:bg-[#22222b] hover:text-[#e4e4eb] cursor-pointer transition-colors"
+        onClick={() => handleLayout('TB')}
+        title="Auto layout: top to bottom"
+      >
+        ↓ Layout
+      </button>
+      <button
+        type="button"
+        className="px-2.5 py-1.5 text-[11px] bg-[#18181f] border border-[#2a2a35] rounded-r-md text-[#8888a0] hover:bg-[#22222b] hover:text-[#e4e4eb] cursor-pointer transition-colors"
+        onClick={() => handleLayout('LR')}
+        title="Auto layout: left to right"
+      >
+        → Layout
+      </button>
+    </div>
+  );
+}
+
+function AppInner() {
   const nodes = useFlowNodes();
   const edges = useFlowEdges();
 
@@ -140,11 +180,22 @@ export default function App() {
         </ReactFlow>
       </div>
 
+      {/* Layout controls */}
+      <LayoutControls />
+
       {/* Detail panel */}
       <DetailPanel />
 
       {/* Group toolbar */}
       <GroupToolbar />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ReactFlowProvider>
+      <AppInner />
+    </ReactFlowProvider>
   );
 }

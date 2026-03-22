@@ -9,7 +9,7 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'validate_member', type: '(**kwargs) → None' },
       { name: 'sample', type: '(n, rng) → list[Any]' },
     ],
-    defaultPosition: { x: 760, y: 40 }, width: 220,
+    width: 220,
   },
 
   // Abstract base
@@ -24,7 +24,7 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'render_python', type: '() → str  [abstract]' },
       { name: 'render', type: '(Lang) → str' },
     ],
-    defaultPosition: { x: 340, y: 200 }, width: 260,
+    width: 260,
   },
 
   // Concrete ops — BaseOp subclasses
@@ -36,67 +36,67 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'weights', type: 'list[float]' },
       { name: 'rng', type: 'random.Random' },
     ],
-    defaultPosition: { x: 80, y: 420 }, width: 230,
+    width: 230,
   },
   {
     id: 'UpperStrOp', kind: 'op-leaf', file: 'ops/string_ops/upper_str_op.py', badge: 'Op',
     desc: 'Uppercases a string. Uses guarded eval/render templates to handle empty strings.',
-    fields: [], defaultPosition: { x: 340, y: 540 }, width: 160,
+    fields: [], width: 160,
   },
   {
     id: 'LowerStrOp', kind: 'op-leaf', file: 'ops/string_ops/lower_str_op.py', badge: 'Op',
     desc: 'Lowercases a string.',
-    fields: [], defaultPosition: { x: 340, y: 600 }, width: 160,
+    fields: [], width: 160,
   },
   {
     id: 'CapitalizeStrOp', kind: 'op-leaf', file: 'ops/string_ops/capitalize_str_op.py', badge: 'Op',
     desc: 'Capitalizes the first character.',
-    fields: [], defaultPosition: { x: 340, y: 660 }, width: 180,
+    fields: [], width: 180,
   },
   {
     id: 'SwapcaseStrOp', kind: 'op-leaf', file: 'ops/string_ops/swapcase_str_op.py', badge: 'Op',
     desc: 'Swaps case of each character.',
-    fields: [], defaultPosition: { x: 340, y: 720 }, width: 175,
+    fields: [], width: 175,
   },
   {
     id: 'TitleStrOp', kind: 'op-leaf', file: 'ops/string_ops/title_str_op.py', badge: 'Op',
     desc: 'Title-cases each word.',
-    fields: [], defaultPosition: { x: 340, y: 780 }, width: 150,
+    fields: [], width: 150,
   },
   {
     id: 'CasefoldStrOp', kind: 'op-leaf', file: 'ops/string_ops/casefold_str_op.py', badge: 'Op',
     desc: 'Aggressively lowercases for caseless matching.',
-    fields: [], defaultPosition: { x: 540, y: 540 }, width: 175,
+    fields: [], width: 175,
   },
   {
     id: 'ReverseStrOp', kind: 'op-leaf', file: 'ops/string_ops/reverse_str_op.py', badge: 'Op',
     desc: 'Reverses a string.',
-    fields: [], defaultPosition: { x: 540, y: 600 }, width: 170,
+    fields: [], width: 170,
   },
   {
     id: 'StripStrOp', kind: 'op-leaf', file: 'ops/string_ops/strip_str_op.py', badge: 'Op',
     desc: 'Strips whitespace from both sides.',
-    fields: [], defaultPosition: { x: 540, y: 660 }, width: 155,
+    fields: [], width: 155,
   },
   {
     id: 'LstripStrOp', kind: 'op-leaf', file: 'ops/string_ops/lstrip_str_op.py', badge: 'Op',
     desc: 'Left-strips whitespace.',
-    fields: [], defaultPosition: { x: 540, y: 720 }, width: 155,
+    fields: [], width: 155,
   },
   {
     id: 'RstripStrOp', kind: 'op-leaf', file: 'ops/string_ops/rstrip_str_op.py', badge: 'Op',
     desc: 'Right-strips whitespace.',
-    fields: [], defaultPosition: { x: 540, y: 780 }, width: 155,
+    fields: [], width: 155,
   },
   {
     id: 'TabStrOp', kind: 'op-leaf', file: 'ops/string_ops/tab_str_op.py', badge: 'Op',
     desc: 'Maps any non-empty string to a tab character.',
-    fields: [], defaultPosition: { x: 760, y: 540 }, width: 155,
+    fields: [], width: 155,
   },
   {
     id: 'ExpandtabsStrOp', kind: 'op-leaf', file: 'ops/string_ops/expandtabs_str_op.py', badge: 'Op',
     desc: 'Expands tab chars to spaces (tabsize=8).',
-    fields: [], defaultPosition: { x: 760, y: 600 }, width: 195,
+    fields: [], width: 195,
   },
 
   // Standalone ops (not BaseOp subclass)
@@ -108,7 +108,7 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'transform_space', type: 'SimpleStrTransformSpace' },
       { name: 'input_space', type: 'StringSpace' },
     ],
-    defaultPosition: { x: 80, y: 860 }, width: 260,
+    width: 260,
   },
   {
     id: 'CharStyleTransformOp', kind: 'standalone' as const, file: 'ops/char_style_transform_op.py', badge: 'Standalone Op',
@@ -118,7 +118,7 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'transform_space', type: 'CharStyleTransformSpace' },
       { name: 'input_space', type: 'CategoricalSpace' },
     ],
-    defaultPosition: { x: 380, y: 860 }, width: 260,
+    width: 260,
   },
 
   // Spaces — base / generic
@@ -126,7 +126,7 @@ export const NODE_DEFS: NodeDef[] = [
     id: 'CategoricalSpace', kind: 'space', file: 'spaces/categorical_space.py', badge: 'Space',
     desc: 'Finite ordered set of values (str|int|float|bool|None). Type-stable equality prevents bool/int collisions. Rejects NaN and duplicates.',
     fields: [{ name: 'values', type: 'tuple[CategoricalValue, ...]' }],
-    defaultPosition: { x: 960, y: 200 }, width: 220,
+    width: 220,
   },
   {
     id: 'UniformIntSpace', kind: 'space', file: 'spaces/uniform_int_space.py', badge: 'Space',
@@ -135,13 +135,13 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'low', type: 'int' },
       { name: 'high', type: 'int' },
     ],
-    defaultPosition: { x: 1220, y: 200 }, width: 200,
+    width: 200,
   },
   {
     id: 'ConstantSpace', kind: 'space', file: 'spaces/constant_space.py', badge: 'Space',
     desc: 'Singleton space — always validates/samples the same value.',
     fields: [{ name: 'value', type: 'ConstantValue' }],
-    defaultPosition: { x: 1240, y: 320 }, width: 200,
+    width: 200,
   },
 
   // Spaces — CategoricalSpace subclasses
@@ -149,19 +149,19 @@ export const NODE_DEFS: NodeDef[] = [
     id: 'AsciiCharSpace', kind: 'space-leaf', file: 'spaces/ascii_char_space.py', badge: 'Space',
     desc: 'CategoricalSpace restricted to single ASCII characters. Also provides a classmethod validate_space() used by StringSpace and SimpleStringInputSpace to validate char spaces.',
     fields: [{ name: 'values', type: 'tuple[str, ...] (128 ASCII)' }],
-    defaultPosition: { x: 960, y: 420 }, width: 230,
+    width: 230,
   },
   {
     id: 'CharStyleTransformSpace', kind: 'space-leaf', file: 'spaces/char_style_transform_space.py', badge: 'Space',
     desc: 'CategoricalSpace over the three char-style transforms: "upper", "lower", "tab".',
     fields: [{ name: 'values', type: '("upper","lower","tab")' }],
-    defaultPosition: { x: 960, y: 550 }, width: 240,
+    width: 240,
   },
   {
     id: 'SimpleStrTransformSpace', kind: 'space-leaf', file: 'spaces/simple_str_transform_space.py', badge: 'Space',
     desc: 'CategoricalSpace over the 11 parameter-free string transform names (lowercase, uppercase, capitalize, ...).',
     fields: [{ name: 'values', type: 'tuple[SimpleStrTransformType, ...]' }],
-    defaultPosition: { x: 960, y: 650 }, width: 260,
+    width: 260,
   },
 
   // Composite spaces
@@ -172,7 +172,7 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'length_space', type: 'Space (→ UniformIntSpace)' },
       { name: 'char_space', type: 'Space (→ AsciiCharSpace)' },
     ],
-    defaultPosition: { x: 1240, y: 490 }, width: 270,
+    width: 270,
   },
   {
     id: 'SimpleStringInputSpace', kind: 'space', file: 'spaces/simple_string_input_space.py', badge: 'Composite Space',
@@ -183,7 +183,7 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'core_style_mixture', type: 'MixtureOp' },
       { name: 'pad_space', type: 'Space (→ CategoricalSpace)' },
     ],
-    defaultPosition: { x: 1240, y: 690 }, width: 280,
+    width: 280,
   },
 
   // Templates
@@ -195,7 +195,7 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'render_guarded_str_method', type: '' },
       { name: 'render_guarded_str_*', type: '(3 variants)' },
     ],
-    defaultPosition: { x: 690, y: 370 }, width: 230,
+    width: 230,
   },
 
   // Registries
@@ -203,13 +203,13 @@ export const NODE_DEFS: NodeDef[] = [
     id: 'STRING_OP_REGISTRY', kind: 'registry', file: 'ops/string_ops/registry.py', badge: 'Registry',
     desc: 'Maps 12 string op_type names to their BaseOp subclasses. Provides list_string_op_types(), get_string_op_cls(), and build_string_op() helpers.',
     fields: [],
-    defaultPosition: { x: 80, y: 660 }, width: 215,
+    width: 215,
   },
   {
     id: 'OP_REGISTRY', kind: 'registry', file: 'ops/registry.py', badge: 'Registry',
     desc: 'Top-level registry merging STRING_OP_REGISTRY + MixtureOp. Provides list_op_types(), get_op_cls(), and build_op() — the main factory used by MixtureOp at runtime.',
     fields: [],
-    defaultPosition: { x: 80, y: 545 }, width: 215,
+    width: 215,
   },
 
   // Types
@@ -222,6 +222,6 @@ export const NODE_DEFS: NodeDef[] = [
       { name: 'RenderFn', type: 'Callable[[str], str]' },
       { name: 'StrRenderFn', type: 'Callable[[], str]' },
     ],
-    defaultPosition: { x: 470, y: 40 }, width: 230,
+    width: 230,
   },
 ];

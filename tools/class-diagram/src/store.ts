@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { GroupState } from './types';
+import { computeLayout, type LayoutDirection } from './layout';
 
 interface DiagramState {
   // Persisted
@@ -25,14 +26,30 @@ interface DiagramState {
     boundingBox: { x: number; y: number },
   ) => string;
   expandGroup: (groupId: string) => void;
+  autoLayout: (direction?: LayoutDirection) => void;
 }
 
 let groupCounter = 0;
 
+function getInitialPositions(): Record<string, { x: number; y: number }> {
+  // Check if localStorage already has saved state
+  try {
+    const stored = localStorage.getItem('class-diagram-state');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.state?.positionOverrides && Object.keys(parsed.state.positionOverrides).length > 0) {
+        return parsed.state.positionOverrides;
+      }
+    }
+  } catch {}
+  // First load: compute layout
+  return computeLayout('TB');
+}
+
 export const useDiagramStore = create<DiagramState>()(
   persist(
     (set, get) => ({
-      positionOverrides: {},
+      positionOverrides: getInitialPositions(),
       groups: [],
       hiddenFilters: [],
       viewport: null,
@@ -75,6 +92,17 @@ export const useDiagramStore = create<DiagramState>()(
           selectedNodeId: null,
         }));
         return id;
+      },
+
+      autoLayout: (direction = 'TB') => {
+        const positions = computeLayout(direction);
+        set({
+          positionOverrides: positions,
+          groups: [],
+          viewport: null,
+          selectedNodeId: null,
+          multiSelectedIds: [],
+        });
       },
 
       expandGroup: (groupId) => {
