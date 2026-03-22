@@ -27,9 +27,7 @@ function GroupNodeInner({ data }: NodeProps) {
 
   return (
     <div className="group-card">
-      <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-0 !h-0" />
-      <Handle type="target" position={Position.Left} id="left-target" className="!bg-transparent !border-0 !w-0 !h-0" />
-
+      <Handle type="target" position={Position.Top} className="!opacity-0 !w-0 !h-0 !min-w-0 !min-h-0" />
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[#2a2a35]">
         <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-[3px] text-[#6ee7b7] border border-[#6ee7b733] bg-[rgba(255,255,255,0.06)]">
           {badge}
@@ -53,9 +51,7 @@ function GroupNodeInner({ data }: NodeProps) {
       >
         click to expand
       </div>
-
-      <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-0 !h-0" />
-      <Handle type="source" position={Position.Right} id="right-source" className="!bg-transparent !border-0 !w-0 !h-0" />
+      <Handle type="source" position={Position.Bottom} className="!opacity-0 !w-0 !h-0 !min-w-0 !min-h-0" />
     </div>
   );
 }

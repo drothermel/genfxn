@@ -16,9 +16,7 @@ function ClassNodeInner({ data }: NodeProps) {
 
   return (
     <div className="node-card group/node">
-      <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-0 !h-0" />
-      <Handle type="target" position={Position.Left} id="left-target" className="!bg-transparent !border-0 !w-0 !h-0" />
-
+      <Handle type="target" position={Position.Top} className="!opacity-0 !w-0 !h-0 !min-w-0 !min-h-0" />
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[#2a2a35]">
         <span
           className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-[3px]"
@@ -44,9 +42,7 @@ function ClassNodeInner({ data }: NodeProps) {
           )}
         </div>
       )}
-
-      <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-0 !h-0" />
-      <Handle type="source" position={Position.Right} id="right-source" className="!bg-transparent !border-0 !w-0 !h-0" />
+      <Handle type="source" position={Position.Bottom} className="!opacity-0 !w-0 !h-0 !min-w-0 !min-h-0" />
     </div>
   );
 }

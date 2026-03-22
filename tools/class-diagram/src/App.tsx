@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Controls,
@@ -6,6 +6,8 @@ import {
   BackgroundVariant,
   SelectionMode,
   useReactFlow,
+  applyNodeChanges,
+  type Node,
   type OnNodesChange,
   type OnSelectionChangeParams,
   type NodeMouseHandler,
@@ -19,6 +21,7 @@ import { useFlowNodes, useFlowEdges, getConnectedIds } from './hooks';
 import type { LayoutDirection } from './layout';
 import { ClassNode } from './components/ClassNode';
 import { GroupNode } from './components/GroupNode';
+import { FloatingEdge } from './components/FloatingEdge';
 import { DetailPanel } from './components/DetailPanel';
 import { Legend } from './components/Legend';
 import { GroupToolbar } from './components/GroupToolbar';
@@ -26,6 +29,10 @@ import { GroupToolbar } from './components/GroupToolbar';
 const nodeTypes = {
   classNode: ClassNode,
   groupNode: GroupNode,
+};
+
+const edgeTypes = {
+  floating: FloatingEdge,
 };
 
 function LayoutControls() {
@@ -66,8 +73,28 @@ function LayoutControls() {
 }
 
 function AppInner() {
-  const nodes = useFlowNodes();
+  const storeNodes = useFlowNodes();
   const edges = useFlowEdges();
+
+  // Local node state for live dragging
+  const [liveNodes, setLiveNodes] = useState<Node[]>(storeNodes);
+
+  const layoutVersion = useDiagramStore((s) => s.layoutVersion);
+
+  // Track structural identity (node IDs + data + layout version) to avoid syncing on position-only changes
+  const structuralKey = useMemo(
+    () => `v${layoutVersion}|` + storeNodes.map((n) => `${n.id}:${n.type}:${JSON.stringify(n.data)}`).join('|'),
+    [storeNodes, layoutVersion],
+  );
+  const prevStructuralKey = useRef(structuralKey);
+
+  // Sync store → local only on structural changes (filter, group, layout reset)
+  useEffect(() => {
+    if (structuralKey !== prevStructuralKey.current) {
+      prevStructuralKey.current = structuralKey;
+      setLiveNodes(storeNodes);
+    }
+  }, [structuralKey, storeNodes]);
 
   const selectedNodeId = useDiagramStore((s) => s.selectedNodeId);
   const selectNode = useDiagramStore((s) => s.selectNode);
@@ -78,13 +105,13 @@ function AppInner() {
 
   // Apply selection dimming
   const styledNodes = useMemo(() => {
-    if (!selectedNodeId) return nodes;
+    if (!selectedNodeId) return liveNodes;
     const connected = getConnectedIds(selectedNodeId);
-    return nodes.map((n) => ({
+    return liveNodes.map((n) => ({
       ...n,
       className: connected.has(n.id) || n.id === selectedNodeId ? '' : 'opacity-[0.12]',
     }));
-  }, [nodes, selectedNodeId]);
+  }, [liveNodes, selectedNodeId]);
 
   const styledEdges = useMemo(() => {
     if (!selectedNodeId) return edges;
@@ -99,6 +126,10 @@ function AppInner() {
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
+      // Apply all changes to local state for live visual updates
+      setLiveNodes((nds) => applyNodeChanges(changes, nds));
+
+      // Persist to store only on drag end
       for (const change of changes) {
         if (change.type === 'position' && change.position && !change.dragging) {
           setNodePosition(change.id, change.position);
@@ -161,6 +192,7 @@ function AppInner() {
           nodes={styledNodes}
           edges={styledEdges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}

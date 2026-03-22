@@ -13,6 +13,7 @@ interface DiagramState {
   // Transient
   selectedNodeId: string | null;
   multiSelectedIds: string[];
+  layoutVersion: number;
 
   // Actions
   setNodePosition: (id: string, pos: { x: number; y: number }) => void;
@@ -55,6 +56,7 @@ export const useDiagramStore = create<DiagramState>()(
       viewport: null,
       selectedNodeId: null,
       multiSelectedIds: [],
+      layoutVersion: 0,
 
       setNodePosition: (id, pos) =>
         set((s) => ({
@@ -96,13 +98,14 @@ export const useDiagramStore = create<DiagramState>()(
 
       autoLayout: (direction = 'TB') => {
         const positions = computeLayout(direction);
-        set({
+        set((s) => ({
           positionOverrides: positions,
           groups: [],
           viewport: null,
           selectedNodeId: null,
           multiSelectedIds: [],
-        });
+          layoutVersion: s.layoutVersion + 1,
+        }));
       },
 
       expandGroup: (groupId) => {

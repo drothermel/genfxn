@@ -133,7 +133,7 @@ export function useFlowEdges(): Edge[] {
         id: key,
         source: resolvedSource,
         target: resolvedTarget,
-        type: 'default',
+        type: 'floating',
         style: {
           stroke: EDGE_COLORS[def.type],
           strokeWidth: 1.5,
