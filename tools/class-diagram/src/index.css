@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+}
+
+/* Node card styling */
+.node-card {
+  background: #18181f;
+  border: 1px solid #2a2a35;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.node-card:hover {
+  border-color: #8888a0;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.04);
+}
+
+.react-flow__node.selected .node-card {
+  border-color: #6ee7b7;
+  box-shadow: 0 0 24px rgba(110, 231, 183, 0.12);
+}
+
+/* Group node styling */
+.group-card {
+  background: rgba(110, 231, 183, 0.04);
+  border: 1.5px dashed #2a2a35;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  transition: border-color 0.15s;
+}
+
+.group-card:hover {
+  border-color: #6ee7b7;
+}
+
+/* Slide-in animation for detail panel */
+@keyframes slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.25s ease;
+}
+
+/* React Flow overrides */
+.react-flow__node {
+  transition: opacity 0.2s;
+}
+
+.react-flow__edge path {
+  transition: opacity 0.2s;
+}
+
+/* Selection box styling */
+.react-flow__selection {
+  border: 1px dashed #6ee7b7 !important;
+  background: rgba(110, 231, 183, 0.06) !important;
+}
+
+/* Hide default node styling */
+.react-flow__node {
+  padding: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
