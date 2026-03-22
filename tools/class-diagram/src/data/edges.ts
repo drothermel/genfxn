@@ -15,6 +15,8 @@ export const EDGE_DEFS: EdgeDef[] = [
   { source: 'RstripStrOp', target: 'BaseOp', type: 'inherits' },
   { source: 'TabStrOp', target: 'BaseOp', type: 'inherits' },
   { source: 'ExpandtabsStrOp', target: 'BaseOp', type: 'inherits' },
+  { source: 'SimpleStrTransformOp', target: 'BaseOp', type: 'inherits' },
+  { source: 'CharStyleTransformOp', target: 'BaseOp', type: 'inherits' },
   { source: 'AsciiCharSpace', target: 'CategoricalSpace', type: 'inherits' },
   { source: 'CharStyleTransformSpace', target: 'CategoricalSpace', type: 'inherits' },
   { source: 'SimpleStrTransformSpace', target: 'CategoricalSpace', type: 'inherits' },

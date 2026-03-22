@@ -99,24 +99,26 @@ export const NODE_DEFS: NodeDef[] = [
     fields: [], width: 195,
   },
 
-  // Standalone ops (not BaseOp subclass)
+  // Parametric ops — BaseOp subclasses with input_var field
   {
-    id: 'SimpleStrTransformOp', kind: 'standalone' as const, file: 'ops/simple_str_transform_op.py', badge: 'Standalone Op',
-    desc: 'Alternative design: a single BaseModel (not a BaseOp subclass) that parameterizes which transform to apply via a SimpleStrTransformType field. Handles all 11 parameter-free string transforms in one class with match/case.',
+    id: 'SimpleStrTransformOp', kind: 'op', file: 'ops/simple_str_transform_op.py', badge: 'Op',
+    desc: 'BaseOp subclass that parameterizes which transform to apply via a SimpleStrTransformType field. Handles all 11 parameter-free string transforms in one class with match/case.',
     fields: [
       { name: 'transform', type: 'SimpleStrTransformType' },
       { name: 'transform_space', type: 'SimpleStrTransformSpace' },
       { name: 'input_space', type: 'StringSpace' },
+      { name: 'input_var', type: 'str = "s"' },
     ],
     width: 260,
   },
   {
-    id: 'CharStyleTransformOp', kind: 'standalone' as const, file: 'ops/char_style_transform_op.py', badge: 'Standalone Op',
-    desc: 'Single-character transform: upper, lower, or tab. Operates on lowercase ASCII letters. Also a standalone BaseModel, not a BaseOp subclass.',
+    id: 'CharStyleTransformOp', kind: 'op', file: 'ops/char_style_transform_op.py', badge: 'Op',
+    desc: 'BaseOp subclass for transforming a lowercase char to lower/upper/tab. Operates on lowercase ASCII letters.',
     fields: [
       { name: 'transform', type: 'CharStyleTransformType' },
       { name: 'transform_space', type: 'CharStyleTransformSpace' },
       { name: 'input_space', type: 'CategoricalSpace' },
+      { name: 'input_var', type: 'str = "ch"' },
     ],
     width: 260,
   },

@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import Field
 
+from genfxn.ops.base_op import BaseOp
 from genfxn.spaces.simple_str_transform_space import (
     SimpleStrTransformSpace,
     SimpleStrTransformType,
 )
 from genfxn.spaces.simple_string_input_space import SimpleStringInputSpace
 from genfxn.spaces.string_space import StringSpace
-from genfxn.types import DEFAULT_STR_INPUT_VAR, Lang, RenderFn
+from genfxn.types import DEFAULT_STR_INPUT_VAR
 
 
-class SimpleStrTransformOp(BaseModel):
+class SimpleStrTransformOp(BaseOp):
     """Op spec for simple parameter-free string transforms."""
 
     op_type: Literal["simple_str_transform"] = "simple_str_transform"
@@ -22,38 +23,11 @@ class SimpleStrTransformOp(BaseModel):
         default_factory=SimpleStrTransformSpace
     )
     input_space: StringSpace = Field(default_factory=SimpleStringInputSpace)
-    renderers: dict[Lang, RenderFn] = Field(
-        default_factory=dict,
-        exclude=True,
-        repr=False,
-    )
+    input_var: str = "s"
 
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        arbitrary_types_allowed=True,
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        object.__setattr__(
-            self,
-            "renderers",
-            {
-                Lang.PYTHON: self.render_python,
-            },
-        )
-
-    @computed_field(return_type=tuple[Lang, ...])
-    @property
-    def supported_languages(self) -> tuple[Lang, ...]:
-        return tuple(self.renderers.keys())
-
-    def validate_input(self, value: object) -> None:
-        self.input_space.validate_member(**{DEFAULT_STR_INPUT_VAR: value})
-
-    # Handle len=0 case directly.  One source of truth -> render
-    def eval(self, input: str) -> str:
-        self.validate_input(input)
+    def eval(self, **kwargs: Any) -> str:
+        self.validate_input(**kwargs)
+        input = cast(str, kwargs[DEFAULT_STR_INPUT_VAR])
         match self.transform:
             case "lowercase":
                 return input.lower()
@@ -79,41 +53,29 @@ class SimpleStrTransformOp(BaseModel):
                 return input.expandtabs()
         raise AssertionError("unreachable transform, is validation broken?")
 
-    def render_python(self, input_var: str = "s") -> str:
+    def render_python(self) -> str:
+        v = self.input_var
         match self.transform:
             case "lowercase":
-                return f"{input_var}.lower()"
+                return f"{v}.lower()"
             case "uppercase":
-                return f"{input_var}.upper()"
+                return f"{v}.upper()"
             case "capitalize":
-                return f"{input_var}.capitalize()"
+                return f"{v}.capitalize()"
             case "swapcase":
-                return f"{input_var}.swapcase()"
+                return f"{v}.swapcase()"
             case "reverse":
-                return f"{input_var}[::-1]"
+                return f"{v}[::-1]"
             case "casefold":
-                return f"{input_var}.casefold()"
+                return f"{v}.casefold()"
             case "title":
-                return f"{input_var}.title()"
+                return f"{v}.title()"
             case "strip":
-                return f"{input_var}.strip()"
+                return f"{v}.strip()"
             case "lstrip":
-                return f"{input_var}.lstrip()"
+                return f"{v}.lstrip()"
             case "rstrip":
-                return f"{input_var}.rstrip()"
+                return f"{v}.rstrip()"
             case "expandtabs":
-                return f"{input_var}.expandtabs()"
+                return f"{v}.expandtabs()"
         raise AssertionError("unreachable transform")
-
-    def render(self, language: Lang = Lang.PYTHON, input_var: str = "s") -> str:
-        renderer = self.renderers.get(language)
-        if renderer is None:
-            supported = ", ".join(
-                lang.value for lang in self.supported_languages
-            )
-            raise ValueError(
-                "Unsupported language "
-                f"'{language.value}'. Supported: {supported}"
-            )
-        typed_renderer = renderer
-        return typed_renderer(input_var)

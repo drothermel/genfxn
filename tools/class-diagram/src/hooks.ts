@@ -9,7 +9,7 @@ import type { NodeDef, EdgeType, NodeKind } from './types';
 const KIND_FILTER_MAP: Record<string, NodeKind[]> = {
   protocol: ['protocol'],
   abstract: ['abstract'],
-  op: ['op', 'op-leaf', 'standalone'],
+  op: ['op', 'op-leaf'],
   space: ['space', 'space-leaf'],
   template: ['template'],
   registry: ['registry'],

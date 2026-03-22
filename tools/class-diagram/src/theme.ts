@@ -10,7 +10,6 @@ export const KIND_COLORS: Record<NodeKind, string> = {
   template: '#f472b6',
   registry: '#f87171',
   types: '#c084fc',
-  standalone: '#fb923c',
 };
 
 export const EDGE_COLORS: Record<EdgeType, string> = {

@@ -7,8 +7,7 @@ export type NodeKind =
   | 'space-leaf'
   | 'template'
   | 'registry'
-  | 'types'
-  | 'standalone';
+  | 'types';
 
 export type EdgeType = 'inherits' | 'composes' | 'uses' | 'registers';
 
