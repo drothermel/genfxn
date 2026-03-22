@@ -6,7 +6,6 @@ const NODE_FILTERS = [
   { key: 'abstract', label: 'Abstract', color: KIND_COLORS.abstract },
   { key: 'op', label: 'Op', color: KIND_COLORS.op },
   { key: 'space', label: 'Space', color: KIND_COLORS.space },
-  { key: 'template', label: 'Template', color: KIND_COLORS.template },
   { key: 'registry', label: 'Registry', color: KIND_COLORS.registry },
   { key: 'types', label: 'Types', color: KIND_COLORS.types },
 ];

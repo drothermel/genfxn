@@ -11,7 +11,6 @@ const KIND_FILTER_MAP: Record<string, NodeKind[]> = {
   abstract: ['abstract'],
   op: ['op', 'op-leaf'],
   space: ['space', 'space-leaf'],
-  template: ['template'],
   registry: ['registry'],
   types: ['types'],
 };

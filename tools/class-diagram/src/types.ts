@@ -5,7 +5,6 @@ export type NodeKind =
   | 'op-leaf'
   | 'space'
   | 'space-leaf'
-  | 'template'
   | 'registry'
   | 'types';
 
