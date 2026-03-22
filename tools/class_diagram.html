@@ -756,7 +756,6 @@ function getNodeCenter(id) {
   const el = nodeEls[id];
   if (!el) return { x: 0, y: 0 };
   const n = nodes.find(n => n.id === id);
-  const rect = el.getBoundingClientRect();
   const w = el.offsetWidth;
   const h = el.offsetHeight;
   return { x: n.x + w / 2, y: n.y + h / 2, w, h, left: n.x, top: n.y };
@@ -926,6 +925,7 @@ function deselectNode() {
 
 detailClose.addEventListener("click", deselectNode);
 container.addEventListener("click", (e) => {
+  if (didPan) { didPan = false; return; }
   if (e.target === container || e.target === canvas) deselectNode();
 });
 
@@ -962,7 +962,8 @@ function applyFilters() {
   });
 
   nodes.forEach(n => {
-    nodeEls[n.id].style.display = hiddenKinds.has(n.kind) ? "none" : "";
+    const hidden = n._hidden || hiddenKinds.has(n.kind);
+    nodeEls[n.id].style.display = hidden ? "none" : "";
   });
   svgEdges.querySelectorAll("path").forEach(p => {
     const fromNode = nodes.find(n => n.id === p.dataset.from);
@@ -1006,7 +1007,7 @@ window.addEventListener("mousemove", (e) => {
     dragNode.data.y = dragNodeOrigY + dy;
     dragNode.el.style.left = dragNode.data.x + "px";
     dragNode.el.style.top = dragNode.data.y + "px";
-    drawEdges();
+    requestAnimationFrame(drawEdges);
   }
 });
 
@@ -1031,15 +1032,19 @@ function applyTransform() {
 }
 applyTransform();
 
+let didPan = false;
+
 container.addEventListener("mousedown", (e) => {
   if (e.target.closest(".node")) return;
   isPanning = true;
+  didPan = false;
   startX = e.clientX - panX;
   startY = e.clientY - panY;
   container.classList.add("dragging");
 });
 window.addEventListener("mousemove", (e) => {
   if (!isPanning || dragNode) return;
+  didPan = true;
   panX = e.clientX - startX;
   panY = e.clientY - startY;
   applyTransform();
@@ -1208,6 +1213,8 @@ function createGroupNode(memberIds) {
   groups[gid] = {
     memberIds: new Set(memberIds),
     memberData,
+    originX: minX - 8,
+    originY: minY - 8,
   };
 
   // Hide member nodes
@@ -1267,6 +1274,7 @@ function createGroupNode(memberIds) {
 
   // Wire up drag for new node
   el.addEventListener("mousedown", (e) => {
+    if (e.target.closest("[data-expand]")) return;
     e.stopPropagation();
     const n = nodes.find(n => n.id === gid);
     dragNode = { id: gid, el, data: n };
@@ -1291,10 +1299,11 @@ function createGroupNode(memberIds) {
 function expandGroup(gid) {
   const group = groups[gid];
   if (!group) return;
+  if (selectedNode === gid) deselectNode();
 
   const groupNode = nodes.find(n => n.id === gid);
-  const dx = groupNode ? groupNode.x - group.memberData[0]._origX + 8 : 0;
-  const dy = groupNode ? groupNode.y - group.memberData[0]._origY + 8 : 0;
+  const dx = groupNode ? groupNode.x - group.originX : 0;
+  const dy = groupNode ? groupNode.y - group.originY : 0;
 
   // Restore member nodes
   group.memberData.forEach(saved => {
