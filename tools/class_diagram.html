@@ -304,6 +304,75 @@
     justify-content: center;
   }
   .zoom-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  /* Box selection rectangle */
+  .select-rect {
+    position: absolute;
+    border: 1.5px dashed var(--accent-protocol);
+    background: rgba(110,231,183,0.06);
+    pointer-events: none;
+    z-index: 60;
+  }
+
+  /* Multi-selection highlight */
+  .node.multi-selected {
+    border-color: var(--accent-protocol);
+    box-shadow: 0 0 16px rgba(110,231,183,0.15);
+  }
+
+  /* Group action toolbar */
+  .group-toolbar {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    z-index: 95;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .group-toolbar.visible { display: flex; }
+  .group-toolbar button {
+    background: rgba(110,231,183,0.12);
+    border: 1px solid rgba(110,231,183,0.3);
+    color: var(--accent-protocol);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+  }
+  .group-toolbar button:hover {
+    background: rgba(110,231,183,0.22);
+  }
+  .group-toolbar .toolbar-dismiss {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  /* Group node styling */
+  .node.group-node {
+    border: 1.5px dashed var(--accent-protocol);
+    background: rgba(110,231,183,0.04);
+  }
+  .node.group-node .node-header {
+    border-bottom: 1px dashed rgba(110,231,183,0.2);
+  }
+  .group-expand-hint {
+    font-size: 9px;
+    color: var(--text-muted);
+    padding: 4px 12px 6px;
+    cursor: pointer;
+  }
+  .group-expand-hint:hover { color: var(--accent-protocol); }
 </style>
 </head>
 <body>
@@ -362,6 +431,12 @@
   <button class="zoom-btn" id="zoom-in">+</button>
   <button class="zoom-btn" id="zoom-out">&minus;</button>
   <button class="zoom-btn" id="zoom-fit">&#x2922;</button>
+</div>
+
+<div class="group-toolbar" id="group-toolbar">
+  <span id="toolbar-count">0 selected</span>
+  <button id="toolbar-group">Group</button>
+  <button class="toolbar-dismiss" id="toolbar-clear">Clear</button>
 </div>
 
 <script>
@@ -714,7 +789,7 @@ function getEdgePoints(fromId, toId) {
   return { fx, fy, tx, ty };
 }
 
-function drawEdges() {
+let drawEdges = function() {
   svgEdges.innerHTML = "";
   // Arrowhead markers
   const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
@@ -755,7 +830,7 @@ function drawEdges() {
     path.setAttribute("marker-end", `url(#arrow-${type})`);
     svgEdges.appendChild(path);
   });
-}
+};
 
 drawEdges();
 
@@ -993,6 +1068,358 @@ document.getElementById("zoom-out").addEventListener("click", () => { scale = Ma
 document.getElementById("zoom-fit").addEventListener("click", () => {
   scale = 0.85; panX = 40; panY = 20; applyTransform();
 });
+
+// ─── MULTI-SELECT & BOX SELECT ──────────────────────────────────
+const multiSelected = new Set();
+const groupToolbar = document.getElementById("group-toolbar");
+const toolbarCount = document.getElementById("toolbar-count");
+let selectRect = null;
+let boxSelectStart = null;
+
+function updateToolbar() {
+  if (multiSelected.size >= 2) {
+    toolbarCount.textContent = multiSelected.size + " selected";
+    groupToolbar.classList.add("visible");
+  } else {
+    groupToolbar.classList.remove("visible");
+  }
+}
+
+function clearMultiSelect() {
+  multiSelected.forEach(id => {
+    if (nodeEls[id]) nodeEls[id].classList.remove("multi-selected");
+  });
+  multiSelected.clear();
+  updateToolbar();
+}
+
+function addToMultiSelect(id) {
+  multiSelected.add(id);
+  if (nodeEls[id]) nodeEls[id].classList.add("multi-selected");
+  updateToolbar();
+}
+
+// Shift+drag on empty canvas starts box selection
+container.addEventListener("mousedown", (e) => {
+  if (!e.shiftKey) return;
+  if (e.target.closest(".node")) return;
+  e.preventDefault();
+  e.stopPropagation();
+  // Cancel pan
+  isPanning = false;
+  container.classList.remove("dragging");
+
+  const rect = container.getBoundingClientRect();
+  boxSelectStart = {
+    clientX: e.clientX,
+    clientY: e.clientY,
+    // Convert to canvas coordinates
+    canvasX: (e.clientX - rect.left - panX) / scale,
+    canvasY: (e.clientY - rect.top - panY) / scale,
+  };
+  selectRect = document.createElement("div");
+  selectRect.className = "select-rect";
+  canvas.appendChild(selectRect);
+}, true); // capture phase so this fires before pan
+
+window.addEventListener("mousemove", (e) => {
+  if (!boxSelectStart || !selectRect) return;
+  const rect = container.getBoundingClientRect();
+  const curX = (e.clientX - rect.left - panX) / scale;
+  const curY = (e.clientY - rect.top - panY) / scale;
+  const x = Math.min(boxSelectStart.canvasX, curX);
+  const y = Math.min(boxSelectStart.canvasY, curY);
+  const w = Math.abs(curX - boxSelectStart.canvasX);
+  const h = Math.abs(curY - boxSelectStart.canvasY);
+  selectRect.style.left = x + "px";
+  selectRect.style.top = y + "px";
+  selectRect.style.width = w + "px";
+  selectRect.style.height = h + "px";
+
+  // Live highlight nodes inside rect
+  clearMultiSelect();
+  nodes.forEach(n => {
+    if (n._hidden) return;
+    const el = nodeEls[n.id];
+    if (!el || el.style.display === "none") return;
+    const nw = el.offsetWidth;
+    const nh = el.offsetHeight;
+    const ncx = n.x + nw / 2;
+    const ncy = n.y + nh / 2;
+    if (ncx >= x && ncx <= x + w && ncy >= y && ncy <= y + h) {
+      addToMultiSelect(n.id);
+    }
+  });
+});
+
+window.addEventListener("mouseup", (e) => {
+  if (boxSelectStart && selectRect) {
+    selectRect.remove();
+    selectRect = null;
+    boxSelectStart = null;
+  }
+});
+
+// Clear selection on Escape
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    clearMultiSelect();
+    deselectNode();
+  }
+});
+
+document.getElementById("toolbar-clear").addEventListener("click", clearMultiSelect);
+
+// ─── GROUPING ───────────────────────────────────────────────────
+let groupCounter = 0;
+const groups = {}; // groupId -> { memberIds, memberData, savedEdges }
+
+function resolveNodeId(id) {
+  // If the node is inside a collapsed group, return the group node id
+  for (const [gid, g] of Object.entries(groups)) {
+    if (g.memberIds.has(id)) return gid;
+  }
+  return id;
+}
+
+function createGroupNode(memberIds) {
+  groupCounter++;
+  const gid = `__group_${groupCounter}`;
+  const memberNodes = nodes.filter(n => memberIds.has(n.id));
+  if (memberNodes.length === 0) return;
+
+  // Compute bounding box for position
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  memberNodes.forEach(n => {
+    const el = nodeEls[n.id];
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + (el ? el.offsetWidth : 150));
+    maxY = Math.max(maxY, n.y + (el ? el.offsetHeight : 40));
+  });
+
+  // Save member data for later expansion
+  const memberData = memberNodes.map(n => ({
+    ...n,
+    _origX: n.x, _origY: n.y,
+  }));
+
+  // Store group
+  groups[gid] = {
+    memberIds: new Set(memberIds),
+    memberData,
+  };
+
+  // Hide member nodes
+  memberNodes.forEach(n => {
+    n._hidden = true;
+    if (nodeEls[n.id]) nodeEls[n.id].style.display = "none";
+  });
+
+  // Build label from member names
+  const names = memberNodes.map(n => n.id);
+  const label = names.length <= 4
+    ? names.join(", ")
+    : names.slice(0, 3).join(", ") + " +" + (names.length - 3);
+
+  // Create group node data
+  const groupNode = {
+    id: gid,
+    kind: "group",
+    file: "",
+    badge: `Group (${memberNodes.length})`,
+    color: "var(--accent-protocol)",
+    desc: "Grouped nodes: " + names.join(", "),
+    fields: names.map(name => ({ name, type: "" })),
+    x: minX - 8,
+    y: minY - 8,
+    w: Math.max(200, maxX - minX + 16),
+    _isGroup: true,
+  };
+  nodes.push(groupNode);
+
+  // Create DOM element
+  const el = document.createElement("div");
+  el.className = "node group-node";
+  el.dataset.id = gid;
+  el.style.left = groupNode.x + "px";
+  el.style.top = groupNode.y + "px";
+  el.style.width = groupNode.w + "px";
+
+  const memberListHtml = names.map(name => {
+    const mn = memberNodes.find(n => n.id === name);
+    return `<div class="node-field"><span class="field-name" style="color:${mn?.color || 'var(--text)'}">${name}</span></div>`;
+  });
+  const truncatedList = memberListHtml.length > 5
+    ? memberListHtml.slice(0, 5).join("") + `<div class="node-field"><span class="field-name">+${memberListHtml.length - 5} more</span></div>`
+    : memberListHtml.join("");
+
+  el.innerHTML = `
+    <div class="node-header">
+      <span class="node-badge" style="color:var(--accent-protocol);border:1px solid rgba(110,231,183,0.3)">${groupNode.badge}</span>
+    </div>
+    <div class="node-body">${truncatedList}</div>
+    <div class="group-expand-hint" data-expand="${gid}">click to expand</div>
+  `;
+
+  canvas.appendChild(el);
+  nodeEls[gid] = el;
+
+  // Wire up drag for new node
+  el.addEventListener("mousedown", (e) => {
+    e.stopPropagation();
+    const n = nodes.find(n => n.id === gid);
+    dragNode = { id: gid, el, data: n };
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragNodeOrigX = n.x;
+    dragNodeOrigY = n.y;
+    didDrag = false;
+    el.classList.add("dragging");
+  });
+
+  // Wire up expand on hint click
+  el.querySelector(`[data-expand="${gid}"]`).addEventListener("click", (e) => {
+    e.stopPropagation();
+    expandGroup(gid);
+  });
+
+  clearMultiSelect();
+  drawEdges();
+}
+
+function expandGroup(gid) {
+  const group = groups[gid];
+  if (!group) return;
+
+  const groupNode = nodes.find(n => n.id === gid);
+  const dx = groupNode ? groupNode.x - group.memberData[0]._origX + 8 : 0;
+  const dy = groupNode ? groupNode.y - group.memberData[0]._origY + 8 : 0;
+
+  // Restore member nodes
+  group.memberData.forEach(saved => {
+    const n = nodes.find(n => n.id === saved.id);
+    if (n) {
+      n._hidden = false;
+      n.x = saved._origX + dx;
+      n.y = saved._origY + dy;
+      if (nodeEls[n.id]) {
+        nodeEls[n.id].style.display = "";
+        nodeEls[n.id].style.left = n.x + "px";
+        nodeEls[n.id].style.top = n.y + "px";
+      }
+    }
+  });
+
+  // Remove group node
+  if (nodeEls[gid]) {
+    nodeEls[gid].remove();
+    delete nodeEls[gid];
+  }
+  const idx = nodes.findIndex(n => n.id === gid);
+  if (idx >= 0) nodes.splice(idx, 1);
+  delete groups[gid];
+
+  drawEdges();
+}
+
+// Override edge drawing to handle groups
+const _origGetNodeCenter = getNodeCenter;
+const _origDrawEdges = drawEdges;
+
+// Patch getNodeCenter to resolve grouped nodes
+function getNodeCenterResolved(id) {
+  const resolved = resolveNodeId(id);
+  const el = nodeEls[resolved];
+  if (!el) return { x: 0, y: 0, w: 0, h: 0, left: 0, top: 0 };
+  const n = nodes.find(n => n.id === resolved);
+  if (!n) return { x: 0, y: 0, w: 0, h: 0, left: 0, top: 0 };
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  return { x: n.x + w / 2, y: n.y + h / 2, w, h, left: n.x, top: n.y };
+}
+
+// Redraw edges with group awareness
+function drawEdgesGrouped() {
+  svgEdges.innerHTML = "";
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  ["inherits", "composes", "uses", "registers"].forEach(type => {
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id", `arrow-${type}`);
+    marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refX", "9");
+    marker.setAttribute("refY", "5");
+    marker.setAttribute("markerWidth", "6");
+    marker.setAttribute("markerHeight", "6");
+    marker.setAttribute("orient", "auto");
+    const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    poly.setAttribute("points", "0,1 10,5 0,9");
+    const colors = { inherits: "#a78bfa", composes: "#60a5fa", uses: "#555570", registers: "#f87171" };
+    poly.setAttribute("fill", colors[type]);
+    marker.appendChild(poly);
+    defs.appendChild(marker);
+  });
+  svgEdges.appendChild(defs);
+
+  // Deduplicate edges after resolving groups
+  const seen = new Set();
+  edges.forEach(([fromId, toId, type]) => {
+    const rf = resolveNodeId(fromId);
+    const rt = resolveNodeId(toId);
+    // Skip edges entirely within a group
+    if (rf === rt) return;
+    // Skip if either endpoint is hidden and not grouped
+    const fn = nodes.find(n => n.id === rf);
+    const tn = nodes.find(n => n.id === rt);
+    if (!fn || !tn) return;
+    if (fn._hidden || tn._hidden) return;
+
+    const key = `${rf}-${rt}-${type}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    const f = getNodeCenterResolved(rf);
+    const t = getNodeCenterResolved(rt);
+    const dx = t.x - f.x;
+    const dy = t.y - f.y;
+
+    let fx, fy, tx, ty;
+    if (Math.abs(dx) * f.h > Math.abs(dy) * f.w) {
+      fx = dx > 0 ? f.left + f.w : f.left; fy = f.y;
+    } else {
+      fx = f.x; fy = dy > 0 ? f.top + f.h : f.top;
+    }
+    if (Math.abs(dx) * t.h > Math.abs(dy) * t.w) {
+      tx = dx > 0 ? t.left : t.left + t.w; ty = t.y;
+    } else {
+      tx = t.x; ty = dy > 0 ? t.top : t.top + t.h;
+    }
+
+    const mx = (fx + tx) / 2;
+    const my = (fy + ty) / 2;
+    const cx = mx - (ty - fy) * 0.08;
+    const cy = my + (tx - fx) * 0.08;
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", `M${fx},${fy} Q${cx},${cy} ${tx},${ty}`);
+    path.classList.add(`edge-${type}`);
+    path.dataset.from = rf;
+    path.dataset.to = rt;
+    path.dataset.type = type;
+    path.setAttribute("marker-end", `url(#arrow-${type})`);
+    svgEdges.appendChild(path);
+  });
+}
+
+// Replace drawEdges globally
+drawEdges = drawEdgesGrouped;
+drawEdges();
+
+document.getElementById("toolbar-group").addEventListener("click", () => {
+  if (multiSelected.size < 2) return;
+  createGroupNode(new Set(multiSelected));
+});
+
 </script>
 </body>
 </html>
