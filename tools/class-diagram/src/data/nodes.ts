@@ -99,10 +99,22 @@ export const NODE_DEFS: NodeDef[] = [
     fields: [], width: 195,
   },
 
-  // Parametric ops — BaseOp subclasses with input_var field
+  // CompoundOp base
   {
-    id: 'SimpleStrTransformOp', kind: 'op', file: 'ops/simple_str_transform_op.py', badge: 'Op',
-    desc: 'BaseOp subclass that parameterizes which transform to apply via a SimpleStrTransformType field. Handles all 11 parameter-free string transforms in one class with match/case.',
+    id: 'CompoundOp', kind: 'abstract', file: 'ops/compound_op.py', badge: 'ABC',
+    desc: 'Base class for ops that parameterize over a family of related transforms. Adds transform, transform_space, and input_var fields to BaseOp.',
+    fields: [
+      { name: 'transform', type: 'Any' },
+      { name: 'transform_space', type: 'CategoricalSpace' },
+      { name: 'input_var', type: 'str = "x"' },
+    ],
+    width: 240,
+  },
+
+  // Compound ops
+  {
+    id: 'SimpleStrCompoundOp', kind: 'op', file: 'ops/simple_str_compound_op.py', badge: 'CompoundOp',
+    desc: 'Compound op for 11 parameter-free string transforms. Selects transform at construction via SimpleStrTransformType.',
     fields: [
       { name: 'transform', type: 'SimpleStrTransformType' },
       { name: 'transform_space', type: 'SimpleStrTransformSpace' },
@@ -112,8 +124,8 @@ export const NODE_DEFS: NodeDef[] = [
     width: 260,
   },
   {
-    id: 'CharStyleTransformOp', kind: 'op', file: 'ops/char_style_transform_op.py', badge: 'Op',
-    desc: 'BaseOp subclass for transforming a lowercase char to lower/upper/tab. Operates on lowercase ASCII letters.',
+    id: 'CharStyleCompoundOp', kind: 'op', file: 'ops/char_style_compound_op.py', badge: 'CompoundOp',
+    desc: 'Compound op for char-style transforms (upper/lower/tab). Operates on lowercase ASCII letters.',
     fields: [
       { name: 'transform', type: 'CharStyleTransformType' },
       { name: 'transform_space', type: 'CharStyleTransformSpace' },

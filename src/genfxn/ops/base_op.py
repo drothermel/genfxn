@@ -12,18 +12,18 @@ from genfxn.types import Lang, StrRenderFn
 class BaseOp(BaseModel, ABC):
     """Shared base model for operation specs."""
 
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        arbitrary_types_allowed=True,
+    )
+
     op_type: Any
     input_space: Space
     renderers: dict[Lang, StrRenderFn] = Field(
         default_factory=dict,
         exclude=True,
         repr=False,
-    )
-
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        arbitrary_types_allowed=True,
     )
 
     def model_post_init(self, __context: Any) -> None:

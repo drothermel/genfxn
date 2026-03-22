@@ -17,7 +17,9 @@ class CapitalizeStrOp(BaseOp):
     """Op spec for capitalizing a string."""
 
     op_type: Literal["capitalize_str"] = "capitalize_str"
-    input_space: StringSpace = Field(default_factory=StringSpace)
+    input_space: StringSpace = Field(  # type: ignore[assignment]
+        default_factory=StringSpace,
+    )
 
     def eval(self, **kwargs: Any) -> str:
         self.validate_input(**kwargs)

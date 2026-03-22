@@ -5,7 +5,7 @@ from typing import Any, Literal, cast
 
 from pydantic import Field
 
-from genfxn.ops.base_op import BaseOp
+from genfxn.ops.compound_op import CompoundOp
 from genfxn.spaces.categorical_space import CategoricalSpace
 from genfxn.spaces.char_style_transform_space import (
     CharStyleTransformSpace,
@@ -18,15 +18,15 @@ def _lower_alpha_input_space() -> CategoricalSpace:
     return CategoricalSpace(values=tuple(string.ascii_lowercase))
 
 
-class CharStyleTransformOp(BaseOp):
-    """Op spec for transforming a lowercase char to lower/upper/tab."""
+class CharStyleCompoundOp(CompoundOp):
+    """Compound op for transforming a lowercase char to lower/upper/tab."""
 
     op_type: Literal["char_style_transform"] = "char_style_transform"
     transform: CharStyleTransformType
     transform_space: CharStyleTransformSpace = Field(
         default_factory=CharStyleTransformSpace
     )
-    input_space: CategoricalSpace = Field(
+    input_space: CategoricalSpace = Field(  # type: ignore[assignment]
         default_factory=_lower_alpha_input_space
     )
     input_var: str = "ch"

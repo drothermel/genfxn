@@ -4,7 +4,7 @@ from typing import Any, Literal, cast
 
 from pydantic import Field
 
-from genfxn.ops.base_op import BaseOp
+from genfxn.ops.compound_op import CompoundOp
 from genfxn.spaces.simple_str_transform_space import (
     SimpleStrTransformSpace,
     SimpleStrTransformType,
@@ -14,15 +14,17 @@ from genfxn.spaces.string_space import StringSpace
 from genfxn.types import DEFAULT_STR_INPUT_VAR
 
 
-class SimpleStrTransformOp(BaseOp):
-    """Op spec for simple parameter-free string transforms."""
+class SimpleStrCompoundOp(CompoundOp):
+    """Compound op for simple parameter-free string transforms."""
 
     op_type: Literal["simple_str_transform"] = "simple_str_transform"
     transform: SimpleStrTransformType
     transform_space: SimpleStrTransformSpace = Field(
         default_factory=SimpleStrTransformSpace
     )
-    input_space: StringSpace = Field(default_factory=SimpleStringInputSpace)
+    input_space: StringSpace = Field(  # type: ignore[assignment]
+        default_factory=SimpleStringInputSpace,
+    )
     input_var: str = "s"
 
     def eval(self, **kwargs: Any) -> str:

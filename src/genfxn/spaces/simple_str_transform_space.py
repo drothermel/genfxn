@@ -28,6 +28,6 @@ _SIMPLE_STR_TRANSFORM_VALUES: tuple[SimpleStrTransformType, ...] = get_args(
 class SimpleStrTransformSpace(CategoricalSpace):
     """Hardcoded categorical space for parameter-free string transforms."""
 
-    values: tuple[SimpleStrTransformType, ...] = Field(
+    values: tuple[SimpleStrTransformType, ...] = Field(  # type: ignore[assignment]
         default=_SIMPLE_STR_TRANSFORM_VALUES
     )
