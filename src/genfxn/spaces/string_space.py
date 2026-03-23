@@ -15,7 +15,7 @@ from genfxn.types import DEFAULT_STR_INPUT_VAR
 class StringSpace(BaseModel):
     """String space composed from length and character spaces."""
 
-    length_space: Space = Field(default_factory=OrdinalIntSpace)
+    length_space: OrdinalIntSpace = Field(default_factory=OrdinalIntSpace)
     char_space: CharSpace = Field(default_factory=AsciiCharSpace)
 
     model_config = ConfigDict(
@@ -23,14 +23,6 @@ class StringSpace(BaseModel):
         frozen=True,
         arbitrary_types_allowed=True,
     )
-
-    @model_validator(mode="after")
-    def validate_spaces(self) -> StringSpace:
-        if not isinstance(self.length_space, Space):
-            raise ValueError(
-                "length_space must implement Space(validate_member, sample)"
-            )
-        return self
 
     def validate_member(self, **kwargs: Any) -> None:
         expected_key = DEFAULT_STR_INPUT_VAR

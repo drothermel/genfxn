@@ -496,11 +496,11 @@
       "fields": [
         {
           "name": "core_length_space",
-          "type": "Space"
+          "type": "OrdinalIntSpace"
         },
         {
           "name": "core_letter_space",
-          "type": "Space"
+          "type": "CharSpace"
         },
         {
           "name": "core_style_mixture",
@@ -511,7 +511,7 @@
           "type": "Space"
         }
       ],
-      "width": 272
+      "width": 300
     },
     {
       "id": "Space",
@@ -531,14 +531,14 @@
       "fields": [
         {
           "name": "length_space",
-          "type": "Space"
+          "type": "OrdinalIntSpace"
         },
         {
           "name": "char_space",
           "type": "CharSpace"
         }
       ],
-      "width": 208
+      "width": 272
     },
     {
       "id": "types",
@@ -818,12 +818,22 @@
     },
     {
       "source": "SimpleStringInputSpace",
-      "target": "Space",
+      "target": "OrdinalIntSpace",
+      "type": "composes"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "CharSpace",
       "type": "composes"
     },
     {
       "source": "SimpleStringInputSpace",
       "target": "MixtureOp",
+      "type": "composes"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "Space",
       "type": "composes"
     },
     {
@@ -837,18 +847,8 @@
       "type": "uses"
     },
     {
-      "source": "SimpleStringInputSpace",
-      "target": "CharSpace",
-      "type": "uses"
-    },
-    {
-      "source": "SimpleStringInputSpace",
-      "target": "OrdinalIntSpace",
-      "type": "uses"
-    },
-    {
       "source": "StringSpace",
-      "target": "Space",
+      "target": "OrdinalIntSpace",
       "type": "composes"
     },
     {
@@ -863,7 +863,7 @@
     },
     {
       "source": "StringSpace",
-      "target": "OrdinalIntSpace",
+      "target": "Space",
       "type": "uses"
     },
     {

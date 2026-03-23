@@ -46,37 +46,18 @@ def _pad_space() -> CategoricalSpace:
 class SimpleStringInputSpace(StringSpace):
     """Focused string sampler for simple string transforms."""
 
-    core_length_space: Space = Field(
+    core_length_space: OrdinalIntSpace = Field(
         default_factory=lambda: OrdinalIntSpace(
             low=DEFAULT_MIN_STR_LEN,
             high=DEFAULT_MAX_STR_LEN - 4,
         )
     )
-    core_letter_space: Space = Field(default_factory=_core_letter_space)
+    core_letter_space: CharSpace = Field(default_factory=_core_letter_space)
     core_style_mixture: MixtureOp = Field(default_factory=_core_style_mixture)
     pad_space: Space = Field(default_factory=_pad_space)
 
     @model_validator(mode="after")
     def validate_sampler_spaces(self) -> SimpleStringInputSpace:
-        if not isinstance(self.core_length_space, Space):
-            raise ValueError(
-                "core_length_space must implement "
-                "Space(validate_member, sample)"
-            )
-        if not isinstance(self.core_letter_space, Space):
-            raise ValueError(
-                "core_letter_space must implement "
-                "Space(validate_member, sample)"
-            )
-        if not isinstance(self.pad_space, Space):
-            raise ValueError(
-                "pad_space must implement Space(validate_member, sample)"
-            )
-        if not isinstance(self.core_letter_space, CategoricalSpace):
-            raise ValueError("core_letter_space must be a CategoricalSpace")
-        if not isinstance(self.pad_space, CategoricalSpace):
-            raise ValueError("pad_space must be a CategoricalSpace")
-
         AsciiCharSpace.validate_space(
             self.core_letter_space,
             field_name="core_letter_space",
