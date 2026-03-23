@@ -3,11 +3,10 @@ from __future__ import annotations
 import random
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from genfxn.spaces.ascii_char_space import AsciiCharSpace
 from genfxn.spaces.char_space import CharSpace
-from genfxn.spaces.space import Space
 from genfxn.spaces.ordinal_int_space import OrdinalIntSpace
 from genfxn.types import DEFAULT_STR_INPUT_VAR
 

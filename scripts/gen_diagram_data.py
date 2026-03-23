@@ -120,12 +120,19 @@ def _public_functions(tree: ast.Module) -> list[str]:
 # ── Kind classification ──────────────────────────────────────────────
 
 
+FOUNDATIONAL_SPACES = {"CategoricalSpace", "ConstantSpace", "OrdinalSpace"}
+
+
 def _classify(name: str, bases: list[str], is_proto: bool) -> str | None:
     if is_proto:
         return "protocol"
     if "ABC" in bases:
+        if name in FOUNDATIONAL_SPACES:
+            return "space-foundational"
         return "abstract"
     if "Space" in name:
+        if name in FOUNDATIONAL_SPACES:
+            return "space-foundational"
         if any(b in ("CategoricalSpace", "StringSpace") for b in bases):
             return "space-leaf"
         return "space"
@@ -145,6 +152,8 @@ def _badge(kind: str, bases: list[str]) -> str:
         if "CompoundOp" in bases:
             return "CompoundOp"
         return "Op"
+    if kind == "space-foundational":
+        return "Core"
     if kind in ("space", "space-leaf"):
         return "Space"
     return kind

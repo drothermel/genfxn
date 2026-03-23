@@ -10,7 +10,7 @@ const KIND_FILTER_MAP: Record<string, NodeKind[]> = {
   protocol: ['protocol'],
   abstract: ['abstract'],
   op: ['op', 'op-leaf'],
-  space: ['space', 'space-leaf'],
+  space: ['space', 'space-leaf', 'space-foundational'],
   registry: ['registry'],
   types: ['types'],
 };

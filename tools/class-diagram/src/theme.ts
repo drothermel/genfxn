@@ -7,6 +7,7 @@ export const KIND_COLORS: Record<NodeKind, string> = {
   'op-leaf': '#93c5fd',
   space: '#fbbf24',
   'space-leaf': '#fcd34d',
+  'space-foundational': '#e89020',
   registry: '#f87171',
   types: '#c084fc',
 };

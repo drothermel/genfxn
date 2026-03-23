@@ -362,9 +362,9 @@
     },
     {
       "id": "CategoricalSpace",
-      "kind": "space",
+      "kind": "space-foundational",
       "file": "spaces/categorical_space.py",
-      "badge": "Space",
+      "badge": "Core",
       "desc": "A finite, ordered categorical value space.",
       "fields": [
         {
@@ -408,9 +408,9 @@
     },
     {
       "id": "ConstantSpace",
-      "kind": "space",
+      "kind": "space-foundational",
       "file": "spaces/constant_space.py",
-      "badge": "Space",
+      "badge": "Core",
       "desc": "A singleton value space.",
       "fields": [
         {
@@ -448,9 +448,9 @@
     },
     {
       "id": "OrdinalSpace",
-      "kind": "abstract",
+      "kind": "space-foundational",
       "file": "spaces/ordinal_space.py",
-      "badge": "ABC",
+      "badge": "Core",
       "desc": "Space with values that have a meaningful ordering.\n\nSubclasses define what values exist and their order. Unlike\nCategoricalSpace, ordinal values have a concept of \"between\"\nand \"neighbors\" \u2014 position in the sequence matters.",
       "fields": [],
       "width": 168
@@ -859,11 +859,6 @@
     {
       "source": "StringSpace",
       "target": "AsciiCharSpace",
-      "type": "uses"
-    },
-    {
-      "source": "StringSpace",
-      "target": "Space",
       "type": "uses"
     },
     {
