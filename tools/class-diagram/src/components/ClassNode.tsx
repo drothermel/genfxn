@@ -1,5 +1,6 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { useDiagramStore } from '../store';
 
 const MAX_FIELDS = 3;
 
@@ -10,6 +11,16 @@ function ClassNodeInner({ data }: NodeProps) {
     color: string;
     fields: { name: string; type: string }[];
   };
+
+  const hideNode = useDiagramStore((s) => s.hideNode);
+
+  const handleHide = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      hideNode(id);
+    },
+    [id, hideNode],
+  );
 
   const visibleFields = fields.slice(0, MAX_FIELDS);
   const extraCount = fields.length - MAX_FIELDS;
@@ -27,6 +38,14 @@ function ClassNodeInner({ data }: NodeProps) {
         <span className="font-mono text-xs font-semibold" style={{ color }}>
           {id}
         </span>
+        <button
+          type="button"
+          className="ml-auto opacity-0 group-hover/node:opacity-100 transition-opacity text-[#8888a0] hover:text-[#e4e4eb] text-[10px] cursor-pointer leading-none"
+          onClick={handleHide}
+          title="Hide node"
+        >
+          ✕
+        </button>
       </div>
 
       {visibleFields.length > 0 && (

@@ -5,10 +5,11 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from genfxn.spaces.categorical_space import CategoricalSpace
+from genfxn.spaces.char_space import CharSpace
 
 
-class AsciiCharSpace(CategoricalSpace):
-    """Categorical space over ASCII characters."""
+class AsciiCharSpace(CharSpace):
+    """Char space restricted to ASCII characters (ordinal < 128)."""
 
     kind: Literal["ascii_char"] = "ascii_char"
     values: tuple[str, ...] = Field(
@@ -16,8 +17,10 @@ class AsciiCharSpace(CategoricalSpace):
     )
 
     @model_validator(mode="after")
-    def validate_default_values(self) -> AsciiCharSpace:
-        self.validate_space(self)
+    def validate_ascii(self) -> AsciiCharSpace:
+        for value in self.values:
+            if any(ord(ch) >= 128 for ch in value):
+                raise ValueError(f"AsciiCharSpace values must be ASCII, got {value!r}")
         return self
 
     @classmethod
@@ -29,6 +32,7 @@ class AsciiCharSpace(CategoricalSpace):
         allow_multi_char: bool = False,
         require_alpha: bool = False,
     ) -> None:
+        """Validate that a CategoricalSpace contains valid ASCII chars."""
         for value in space.values:
             if not isinstance(value, str):
                 raise ValueError(f"{field_name} values must be strings")

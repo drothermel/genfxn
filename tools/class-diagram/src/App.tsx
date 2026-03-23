@@ -24,6 +24,7 @@ import { GroupNode } from './components/GroupNode';
 import { FloatingEdge } from './components/FloatingEdge';
 import { DetailPanel } from './components/DetailPanel';
 import { Legend } from './components/Legend';
+import { HiddenNodesDropdown } from './components/HiddenNodesDropdown';
 import { GroupToolbar } from './components/GroupToolbar';
 
 const nodeTypes = {
@@ -183,6 +184,7 @@ function AppInner() {
         <h1 className="text-sm font-semibold tracking-wide">
           genfxn <span className="text-[#8888a0] font-normal">src/ class map</span>
         </h1>
+        <HiddenNodesDropdown />
         <Legend />
       </div>
 

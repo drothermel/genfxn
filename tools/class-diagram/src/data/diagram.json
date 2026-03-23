@@ -43,7 +43,7 @@
         },
         {
           "name": "input_space",
-          "type": "CategoricalSpace"
+          "type": "CharSpace"
         }
       ],
       "width": 300
@@ -344,10 +344,10 @@
     },
     {
       "id": "AsciiCharSpace",
-      "kind": "space-leaf",
+      "kind": "space",
       "file": "spaces/ascii_char_space.py",
       "badge": "Space",
-      "desc": "Categorical space over ASCII characters.",
+      "desc": "Char space restricted to ASCII characters (ordinal < 128).",
       "fields": [
         {
           "name": "kind",
@@ -377,6 +377,20 @@
         }
       ],
       "width": 300
+    },
+    {
+      "id": "CharSpace",
+      "kind": "space-leaf",
+      "file": "spaces/char_space.py",
+      "badge": "Space",
+      "desc": "Categorical space restricted to single characters.\n\nAll values must be strings of length 1. Subclasses can further\nrestrict the allowed character set (e.g., ASCII only).",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['char']"
+        }
+      ],
+      "width": 208
     },
     {
       "id": "CharStyleCompoundSpace",
@@ -562,7 +576,7 @@
     },
     {
       "source": "CharStyleCompoundOp",
-      "target": "CategoricalSpace",
+      "target": "CharSpace",
       "type": "composes"
     },
     {
@@ -727,6 +741,16 @@
     },
     {
       "source": "AsciiCharSpace",
+      "target": "CharSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "AsciiCharSpace",
+      "target": "CategoricalSpace",
+      "type": "uses"
+    },
+    {
+      "source": "CharSpace",
       "target": "CategoricalSpace",
       "type": "inherits"
     },

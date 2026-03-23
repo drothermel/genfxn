@@ -6,12 +6,12 @@ from typing import Literal
 from pydantic import Field
 
 from genfxn.ops.compound_op import CompoundOp
-from genfxn.spaces.categorical_space import CategoricalSpace
+from genfxn.spaces.char_space import CharSpace
 from genfxn.spaces.char_style_compound_space import CharStyleCompoundSpace
 
 
-def _lower_alpha_input_space() -> CategoricalSpace:
-    return CategoricalSpace(values=tuple(string.ascii_lowercase))
+def _lower_alpha_char_space() -> CharSpace:
+    return CharSpace(values=tuple(string.ascii_lowercase))
 
 
 class CharStyleCompoundOp(CompoundOp):
@@ -22,6 +22,6 @@ class CharStyleCompoundOp(CompoundOp):
     transform_space: CharStyleCompoundSpace = Field(  # type: ignore[assignment]
         default_factory=CharStyleCompoundSpace
     )
-    input_space: CategoricalSpace = Field(  # type: ignore[assignment]
-        default_factory=_lower_alpha_input_space
+    input_space: CharSpace = Field(  # type: ignore[assignment]
+        default_factory=_lower_alpha_char_space
     )

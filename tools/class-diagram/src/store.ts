@@ -8,6 +8,7 @@ interface DiagramState {
   positionOverrides: Record<string, { x: number; y: number }>;
   groups: GroupState[];
   hiddenFilters: string[];
+  hiddenNodeIds: string[];
   viewport: { x: number; y: number; zoom: number } | null;
 
   // Transient
@@ -28,6 +29,9 @@ interface DiagramState {
   ) => string;
   expandGroup: (groupId: string) => void;
   autoLayout: (direction?: LayoutDirection) => void;
+  hideNode: (id: string) => void;
+  showNode: (id: string) => void;
+  showAllNodes: () => void;
 }
 
 let groupCounter = 0;
@@ -53,6 +57,7 @@ export const useDiagramStore = create<DiagramState>()(
       positionOverrides: getInitialPositions(),
       groups: [],
       hiddenFilters: [],
+      hiddenNodeIds: [],
       viewport: null,
       selectedNodeId: null,
       multiSelectedIds: [],
@@ -108,6 +113,19 @@ export const useDiagramStore = create<DiagramState>()(
         }));
       },
 
+      hideNode: (id) =>
+        set((s) => ({
+          hiddenNodeIds: s.hiddenNodeIds.includes(id) ? s.hiddenNodeIds : [...s.hiddenNodeIds, id],
+          selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
+        })),
+
+      showNode: (id) =>
+        set((s) => ({
+          hiddenNodeIds: s.hiddenNodeIds.filter((nid) => nid !== id),
+        })),
+
+      showAllNodes: () => set({ hiddenNodeIds: [] }),
+
       expandGroup: (groupId) => {
         const state = get();
         const group = state.groups.find((g) => g.id === groupId);
@@ -139,6 +157,7 @@ export const useDiagramStore = create<DiagramState>()(
         positionOverrides: state.positionOverrides,
         groups: state.groups,
         hiddenFilters: state.hiddenFilters,
+        hiddenNodeIds: state.hiddenNodeIds,
         viewport: state.viewport,
       }),
     },

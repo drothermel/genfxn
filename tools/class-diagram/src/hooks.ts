@@ -19,6 +19,7 @@ export function useFlowNodes(): Node[] {
   const positionOverrides = useDiagramStore((s) => s.positionOverrides);
   const groups = useDiagramStore((s) => s.groups);
   const hiddenFilters = useDiagramStore((s) => s.hiddenFilters);
+  const hiddenNodeIds = useDiagramStore((s) => s.hiddenNodeIds);
   const selectedNodeId = useDiagramStore((s) => s.selectedNodeId);
 
   return useMemo(() => {
@@ -31,12 +32,15 @@ export function useFlowNodes(): Node[] {
     const groupedIds = new Set<string>();
     groups.forEach((g) => g.memberIds.forEach((id) => groupedIds.add(id)));
 
+    const hiddenIds = new Set(hiddenNodeIds);
+
     const nodes: Node[] = [];
 
     // Regular nodes
     for (const def of NODE_DEFS) {
       if (groupedIds.has(def.id)) continue;
       if (hiddenKinds.has(def.kind)) continue;
+      if (hiddenIds.has(def.id)) continue;
 
       const pos = positionOverrides[def.id] ?? { x: 0, y: 0 };
       nodes.push({
@@ -81,7 +85,7 @@ export function useFlowNodes(): Node[] {
     }
 
     return nodes;
-  }, [positionOverrides, groups, hiddenFilters, selectedNodeId]);
+  }, [positionOverrides, groups, hiddenFilters, hiddenNodeIds, selectedNodeId]);
 }
 
 export function useFlowEdges(): Edge[] {
