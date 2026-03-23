@@ -35,7 +35,7 @@
         },
         {
           "name": "transform",
-          "type": "CharStyleCompoundType"
+          "type": "str"
         },
         {
           "name": "transform_space",
@@ -113,7 +113,7 @@
         },
         {
           "name": "transform",
-          "type": "SimpleStrCompoundType"
+          "type": "str"
         },
         {
           "name": "transform_space",
@@ -383,14 +383,14 @@
       "kind": "space-leaf",
       "file": "spaces/char_style_compound_space.py",
       "badge": "Space",
-      "desc": "Categorical space over char-style leaf op_type values.",
+      "desc": "Categorical space over char-style leaf op_type values.\n\nDefaults to upper_str, lower_str, tab_str. Validates that every\nvalue is a registered string op_type.",
       "fields": [
         {
           "name": "values",
-          "type": "tuple[CharStyleCompoundType, ...]"
+          "type": "tuple[str, ...]"
         }
       ],
-      "width": 300
+      "width": 248
     },
     {
       "id": "ConstantSpace",
@@ -415,14 +415,14 @@
       "kind": "space-leaf",
       "file": "spaces/simple_str_compound_space.py",
       "badge": "Space",
-      "desc": "Categorical space over leaf string op_type values.",
+      "desc": "Categorical space over leaf string op_type values.\n\nDefaults to all op_types in STRING_OP_REGISTRY. Validates that\nevery value is a registered string op_type.",
       "fields": [
         {
           "name": "values",
-          "type": "tuple[SimpleStrCompoundType, ...]"
+          "type": "tuple[str, ...]"
         }
       ],
-      "width": 300
+      "width": 248
     },
     {
       "id": "SimpleStringInputSpace",
@@ -736,9 +736,19 @@
       "type": "inherits"
     },
     {
+      "source": "CharStyleCompoundSpace",
+      "target": "STRING_OP_REGISTRY",
+      "type": "uses"
+    },
+    {
       "source": "SimpleStrCompoundSpace",
       "target": "CategoricalSpace",
       "type": "inherits"
+    },
+    {
+      "source": "SimpleStrCompoundSpace",
+      "target": "STRING_OP_REGISTRY",
+      "type": "uses"
     },
     {
       "source": "SimpleStringInputSpace",

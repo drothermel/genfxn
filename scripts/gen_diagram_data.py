@@ -242,7 +242,7 @@ def collect_data() -> dict[str, Any]:
             for _, imp_name in file_imports.get(rel, []):
                 if imp_name in bases or imp_name in field_refs or imp_name == node.name:
                     continue
-                if imp_name in seen or imp_name in class_files:
+                if imp_name in seen or imp_name in class_files or imp_name in registries:
                     edges.append({"source": node.name, "target": imp_name, "type": "uses"})
 
     # ── Pass 3: helper/template modules (no classes, has functions) ──

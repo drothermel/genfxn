@@ -7,10 +7,7 @@ from pydantic import Field
 
 from genfxn.ops.compound_op import CompoundOp
 from genfxn.spaces.categorical_space import CategoricalSpace
-from genfxn.spaces.char_style_compound_space import (
-    CharStyleCompoundSpace,
-    CharStyleCompoundType,
-)
+from genfxn.spaces.char_style_compound_space import CharStyleCompoundSpace
 
 
 def _lower_alpha_input_space() -> CategoricalSpace:
@@ -21,7 +18,7 @@ class CharStyleCompoundOp(CompoundOp):
     """Compound op for char-style transforms (upper/lower/tab)."""
 
     op_type: Literal["char_style_compound"] = "char_style_compound"
-    transform: CharStyleCompoundType
+    transform: str
     transform_space: CharStyleCompoundSpace = Field(  # type: ignore[assignment]
         default_factory=CharStyleCompoundSpace
     )
