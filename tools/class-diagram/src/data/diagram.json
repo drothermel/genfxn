@@ -27,37 +27,33 @@
       "kind": "op",
       "file": "ops/char_style_compound_op.py",
       "badge": "CompoundOp",
-      "desc": "Compound op for transforming a lowercase char to lower/upper/tab.",
+      "desc": "Compound op for char-style transforms (upper/lower/tab).",
       "fields": [
         {
           "name": "op_type",
-          "type": "Literal['char_style_transform']"
+          "type": "Literal['char_style_compound']"
         },
         {
           "name": "transform",
-          "type": "CharStyleTransformType"
+          "type": "CharStyleCompoundType"
         },
         {
           "name": "transform_space",
-          "type": "CharStyleTransformSpace"
+          "type": "CharStyleCompoundSpace"
         },
         {
           "name": "input_space",
           "type": "CategoricalSpace"
-        },
-        {
-          "name": "input_var",
-          "type": "str"
         }
       ],
       "width": 300
     },
     {
       "id": "CompoundOp",
-      "kind": "abstract",
+      "kind": "op-leaf",
       "file": "ops/compound_op.py",
-      "badge": "ABC",
-      "desc": "Base class for ops that parameterize over a family of related transforms.\n\nSubclasses select a specific transform at construction time via the\n``transform`` field, whose valid values are enumerated by the\n``transform_space`` (a CategoricalSpace subclass). The ``input_var``\nfield controls the variable name used in rendered code.",
+      "badge": "Op",
+      "desc": "Base class for ops that parameterize over a family of related leaf ops.\n\nSubclasses select a specific leaf op at construction time via the\n``transform`` field (an op_type string), whose valid values are\nenumerated by the ``transform_space`` (a CategoricalSpace subclass).\n\nEval and render are delegated to the resolved leaf op instance.",
       "fields": [
         {
           "name": "transform",
@@ -68,8 +64,8 @@
           "type": "CategoricalSpace"
         },
         {
-          "name": "input_var",
-          "type": "str"
+          "name": "resolved_op",
+          "type": "Any"
         }
       ],
       "width": 300
@@ -113,23 +109,19 @@
       "fields": [
         {
           "name": "op_type",
-          "type": "Literal['simple_str_transform']"
+          "type": "Literal['simple_str_compound']"
         },
         {
           "name": "transform",
-          "type": "SimpleStrTransformType"
+          "type": "SimpleStrCompoundType"
         },
         {
           "name": "transform_space",
-          "type": "SimpleStrTransformSpace"
+          "type": "SimpleStrCompoundSpace"
         },
         {
           "name": "input_space",
           "type": "StringSpace"
-        },
-        {
-          "name": "input_var",
-          "type": "str"
         }
       ],
       "width": 300
@@ -387,15 +379,15 @@
       "width": 300
     },
     {
-      "id": "CharStyleTransformSpace",
+      "id": "CharStyleCompoundSpace",
       "kind": "space-leaf",
-      "file": "spaces/char_style_transform_space.py",
+      "file": "spaces/char_style_compound_space.py",
       "badge": "Space",
-      "desc": "Categorical space for char-style transform operations.",
+      "desc": "Categorical space over char-style leaf op_type values.",
       "fields": [
         {
           "name": "values",
-          "type": "tuple[CharStyleTransformType, ...]"
+          "type": "tuple[CharStyleCompoundType, ...]"
         }
       ],
       "width": 300
@@ -419,15 +411,15 @@
       "width": 240
     },
     {
-      "id": "SimpleStrTransformSpace",
+      "id": "SimpleStrCompoundSpace",
       "kind": "space-leaf",
-      "file": "spaces/simple_str_transform_space.py",
+      "file": "spaces/simple_str_compound_space.py",
       "badge": "Space",
-      "desc": "Hardcoded categorical space for parameter-free string transforms.",
+      "desc": "Categorical space over leaf string op_type values.",
       "fields": [
         {
           "name": "values",
-          "type": "tuple[SimpleStrTransformType, ...]"
+          "type": "tuple[SimpleStrCompoundType, ...]"
         }
       ],
       "width": 300
@@ -565,7 +557,7 @@
     },
     {
       "source": "CharStyleCompoundOp",
-      "target": "CharStyleTransformSpace",
+      "target": "CharStyleCompoundSpace",
       "type": "composes"
     },
     {
@@ -600,7 +592,7 @@
     },
     {
       "source": "SimpleStrCompoundOp",
-      "target": "SimpleStrTransformSpace",
+      "target": "SimpleStrCompoundSpace",
       "type": "composes"
     },
     {
@@ -739,12 +731,12 @@
       "type": "inherits"
     },
     {
-      "source": "CharStyleTransformSpace",
+      "source": "CharStyleCompoundSpace",
       "target": "CategoricalSpace",
       "type": "inherits"
     },
     {
-      "source": "SimpleStrTransformSpace",
+      "source": "SimpleStrCompoundSpace",
       "target": "CategoricalSpace",
       "type": "inherits"
     },

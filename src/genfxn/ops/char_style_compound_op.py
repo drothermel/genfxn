@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import string
-from typing import Any, Literal, cast
+from typing import Literal
 
 from pydantic import Field
 
 from genfxn.ops.compound_op import CompoundOp
 from genfxn.spaces.categorical_space import CategoricalSpace
-from genfxn.spaces.char_style_transform_space import (
-    CharStyleTransformSpace,
-    CharStyleTransformType,
+from genfxn.spaces.char_style_compound_space import (
+    CharStyleCompoundSpace,
+    CharStyleCompoundType,
 )
-from genfxn.types import DEFAULT_STR_INPUT_VAR
 
 
 def _lower_alpha_input_space() -> CategoricalSpace:
@@ -19,37 +18,13 @@ def _lower_alpha_input_space() -> CategoricalSpace:
 
 
 class CharStyleCompoundOp(CompoundOp):
-    """Compound op for transforming a lowercase char to lower/upper/tab."""
+    """Compound op for char-style transforms (upper/lower/tab)."""
 
-    op_type: Literal["char_style_transform"] = "char_style_transform"
-    transform: CharStyleTransformType
-    transform_space: CharStyleTransformSpace = Field(
-        default_factory=CharStyleTransformSpace
+    op_type: Literal["char_style_compound"] = "char_style_compound"
+    transform: CharStyleCompoundType
+    transform_space: CharStyleCompoundSpace = Field(  # type: ignore[assignment]
+        default_factory=CharStyleCompoundSpace
     )
     input_space: CategoricalSpace = Field(  # type: ignore[assignment]
         default_factory=_lower_alpha_input_space
     )
-    input_var: str = "ch"
-
-    def eval(self, **kwargs: Any) -> str:
-        self.validate_input(**kwargs)
-        input = cast(str, kwargs[DEFAULT_STR_INPUT_VAR])
-        match self.transform:
-            case "upper":
-                return input.upper()
-            case "lower":
-                return input.lower()
-            case "tab":
-                return "\t"
-        raise AssertionError("unreachable transform")
-
-    def render_python(self) -> str:
-        v = self.input_var
-        match self.transform:
-            case "upper":
-                return f"{v}.upper()"
-            case "lower":
-                return f"{v}.lower()"
-            case "tab":
-                return r"'\t'"
-        raise AssertionError("unreachable transform")
