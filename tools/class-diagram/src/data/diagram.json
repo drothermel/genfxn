@@ -1,0 +1,930 @@
+{
+  "nodes": [
+    {
+      "id": "BaseOp",
+      "kind": "abstract",
+      "file": "ops/base_op.py",
+      "badge": "ABC",
+      "desc": "Shared base model for operation specs.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Any"
+        },
+        {
+          "name": "input_space",
+          "type": "Space"
+        },
+        {
+          "name": "renderers",
+          "type": "dict[Lang, StrRenderFn]"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "CharStyleCompoundOp",
+      "kind": "op",
+      "file": "ops/char_style_compound_op.py",
+      "badge": "CompoundOp",
+      "desc": "Compound op for char-style transforms (upper/lower/tab).",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['char_style_compound']"
+        },
+        {
+          "name": "transform",
+          "type": "str"
+        },
+        {
+          "name": "transform_space",
+          "type": "CharStyleCompoundSpace"
+        },
+        {
+          "name": "input_space",
+          "type": "CharSpace"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "CompoundOp",
+      "kind": "op-leaf",
+      "file": "ops/compound_op.py",
+      "badge": "Op",
+      "desc": "Base class for ops that parameterize over a family of related leaf ops.\n\nSubclasses select a specific leaf op at construction time via the\n``transform`` field (an op_type string), whose valid values are\nenumerated by the ``transform_space`` (a CategoricalSpace subclass).\n\nEval and render are delegated to the resolved leaf op instance.",
+      "fields": [
+        {
+          "name": "transform",
+          "type": "Any"
+        },
+        {
+          "name": "transform_space",
+          "type": "CategoricalSpace"
+        },
+        {
+          "name": "resolved_op",
+          "type": "Any"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "MixtureOp",
+      "kind": "op-leaf",
+      "file": "ops/mixture_op.py",
+      "badge": "Op",
+      "desc": "Weighted random choice over registered operations.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['mixture']"
+        },
+        {
+          "name": "choices",
+          "type": "tuple[str, ...]"
+        },
+        {
+          "name": "weights",
+          "type": "list[float]"
+        },
+        {
+          "name": "input_space",
+          "type": "Space"
+        },
+        {
+          "name": "rng",
+          "type": "random.Random"
+        }
+      ],
+      "width": 256
+    },
+    {
+      "id": "SimpleStrCompoundOp",
+      "kind": "op",
+      "file": "ops/simple_str_compound_op.py",
+      "badge": "CompoundOp",
+      "desc": "Compound op for simple parameter-free string transforms.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['simple_str_compound']"
+        },
+        {
+          "name": "transform",
+          "type": "str"
+        },
+        {
+          "name": "transform_space",
+          "type": "SimpleStrCompoundSpace"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "CapitalizeStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/capitalize_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for capitalizing a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['capitalize_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "CasefoldStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/casefold_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for casefolding a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['casefold_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 296
+    },
+    {
+      "id": "ExpandtabsStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/expandtabs_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for expanding tabs in a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['expandtabs_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "LowerStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/lower_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for lowercasing a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['lower_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 272
+    },
+    {
+      "id": "LstripStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/lstrip_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for left-stripping a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['lstrip_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 280
+    },
+    {
+      "id": "ReverseStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/reverse_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for reversing a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['reverse_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 288
+    },
+    {
+      "id": "RstripStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/rstrip_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for right-stripping a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['rstrip_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 280
+    },
+    {
+      "id": "StripStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/strip_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for stripping a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['strip_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 272
+    },
+    {
+      "id": "SwapcaseStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/swapcase_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for swapcasing a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['swapcase_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 296
+    },
+    {
+      "id": "TabStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/tab_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for mapping any non-empty string to a tab character.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['tab_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 256
+    },
+    {
+      "id": "TitleStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/title_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for titling a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['title_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 272
+    },
+    {
+      "id": "UpperStrOp",
+      "kind": "op-leaf",
+      "file": "ops/string_ops/upper_str_op.py",
+      "badge": "Op",
+      "desc": "Op spec for uppercasing a string.",
+      "fields": [
+        {
+          "name": "op_type",
+          "type": "Literal['upper_str']"
+        },
+        {
+          "name": "input_space",
+          "type": "StringSpace"
+        }
+      ],
+      "width": 272
+    },
+    {
+      "id": "AsciiCharSpace",
+      "kind": "space",
+      "file": "spaces/ascii_char_space.py",
+      "badge": "Space",
+      "desc": "Char space restricted to ASCII characters (ordinal < 128).",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['ascii_char']"
+        },
+        {
+          "name": "values",
+          "type": "tuple[str, ...]"
+        }
+      ],
+      "width": 256
+    },
+    {
+      "id": "CategoricalSpace",
+      "kind": "space-foundational",
+      "file": "spaces/categorical_space.py",
+      "badge": "Core",
+      "desc": "A finite, ordered categorical value space.",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['categorical']"
+        },
+        {
+          "name": "values",
+          "type": "tuple[CategoricalValue, ...]"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "CharSpace",
+      "kind": "space-leaf",
+      "file": "spaces/char_space.py",
+      "badge": "Space",
+      "desc": "Categorical space restricted to single characters.\n\nAll values must be strings of length 1. Subclasses can further\nrestrict the allowed character set (e.g., ASCII only).",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['char']"
+        }
+      ],
+      "width": 208
+    },
+    {
+      "id": "CharStyleCompoundSpace",
+      "kind": "space-leaf",
+      "file": "spaces/char_style_compound_space.py",
+      "badge": "Space",
+      "desc": "Categorical space over char-style leaf op_type values.\n\nDefaults to upper_str, lower_str, tab_str. Validates that every\nvalue is a registered string op_type.",
+      "fields": [
+        {
+          "name": "values",
+          "type": "tuple[str, ...]"
+        }
+      ],
+      "width": 248
+    },
+    {
+      "id": "ConstantSpace",
+      "kind": "space-foundational",
+      "file": "spaces/constant_space.py",
+      "badge": "Core",
+      "desc": "A singleton value space.",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['constant']"
+        },
+        {
+          "name": "value",
+          "type": "ConstantValue"
+        }
+      ],
+      "width": 240
+    },
+    {
+      "id": "OrdinalIntSpace",
+      "kind": "space",
+      "file": "spaces/ordinal_int_space.py",
+      "badge": "Space",
+      "desc": "Ordinal space over a contiguous integer range [low, high].",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['ordinal_int']"
+        },
+        {
+          "name": "low",
+          "type": "int"
+        },
+        {
+          "name": "high",
+          "type": "int"
+        }
+      ],
+      "width": 264
+    },
+    {
+      "id": "OrdinalSpace",
+      "kind": "space-foundational",
+      "file": "spaces/ordinal_space.py",
+      "badge": "Core",
+      "desc": "Space with values that have a meaningful ordering.\n\nSubclasses define what values exist and their order. Unlike\nCategoricalSpace, ordinal values have a concept of \"between\"\nand \"neighbors\" \u2014 position in the sequence matters.",
+      "fields": [],
+      "width": 168
+    },
+    {
+      "id": "OrdinalStringSpace",
+      "kind": "space",
+      "file": "spaces/ordinal_string_space.py",
+      "badge": "Space",
+      "desc": "Ordinal space over strings with a meaningful order.\n\nValues are provided as a pre-ordered tuple. The first element is\nthe lowest, the last is the highest. Useful for ordered labels\nlike model sizes (\"10M\", \"40M\", \"1B\") or severity levels.",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['ordinal_string']"
+        },
+        {
+          "name": "values",
+          "type": "tuple[str, ...]"
+        }
+      ],
+      "width": 288
+    },
+    {
+      "id": "SimpleStrCompoundSpace",
+      "kind": "space-leaf",
+      "file": "spaces/simple_str_compound_space.py",
+      "badge": "Space",
+      "desc": "Categorical space over leaf string op_type values.\n\nDefaults to all op_types in STRING_OP_REGISTRY. Validates that\nevery value is a registered string op_type.",
+      "fields": [
+        {
+          "name": "values",
+          "type": "tuple[str, ...]"
+        }
+      ],
+      "width": 248
+    },
+    {
+      "id": "SimpleStringInputSpace",
+      "kind": "space-leaf",
+      "file": "spaces/simple_string_input_space.py",
+      "badge": "Space",
+      "desc": "Focused string sampler for simple string transforms.",
+      "fields": [
+        {
+          "name": "core_length_space",
+          "type": "OrdinalIntSpace"
+        },
+        {
+          "name": "core_letter_space",
+          "type": "CharSpace"
+        },
+        {
+          "name": "core_style_mixture",
+          "type": "MixtureOp"
+        },
+        {
+          "name": "pad_space",
+          "type": "Space"
+        }
+      ],
+      "width": 300
+    },
+    {
+      "id": "Space",
+      "kind": "protocol",
+      "file": "spaces/space.py",
+      "badge": "Protocol",
+      "desc": "Common interface for all value spaces.",
+      "fields": [],
+      "width": 150
+    },
+    {
+      "id": "StringSpace",
+      "kind": "space",
+      "file": "spaces/string_space.py",
+      "badge": "Space",
+      "desc": "String space composed from length and character spaces.",
+      "fields": [
+        {
+          "name": "length_space",
+          "type": "OrdinalIntSpace"
+        },
+        {
+          "name": "char_space",
+          "type": "CharSpace"
+        }
+      ],
+      "width": 272
+    },
+    {
+      "id": "types",
+      "kind": "types",
+      "file": "types.py",
+      "badge": "Module",
+      "desc": "Module with 8 exports.",
+      "fields": [
+        {
+          "name": "DEFAULT_MIN_STR_LEN",
+          "type": ""
+        },
+        {
+          "name": "DEFAULT_MAX_STR_LEN",
+          "type": ""
+        },
+        {
+          "name": "DEFAULT_EXPANDTABS_TABSIZE",
+          "type": ""
+        },
+        {
+          "name": "+5 more",
+          "type": ""
+        }
+      ],
+      "width": 230
+    },
+    {
+      "id": "OP_REGISTRY",
+      "kind": "registry",
+      "file": "ops/registry.py",
+      "badge": "Registry",
+      "desc": "Registry mapping op_type names to classes.",
+      "fields": [],
+      "width": 215
+    },
+    {
+      "id": "STRING_OP_REGISTRY",
+      "kind": "registry",
+      "file": "ops/string_ops/registry.py",
+      "badge": "Registry",
+      "desc": "Registry mapping op_type names to classes.",
+      "fields": [],
+      "width": 215
+    }
+  ],
+  "edges": [
+    {
+      "source": "BaseOp",
+      "target": "Space",
+      "type": "input_space"
+    },
+    {
+      "source": "CharStyleCompoundOp",
+      "target": "CompoundOp",
+      "type": "inherits"
+    },
+    {
+      "source": "CharStyleCompoundOp",
+      "target": "CharStyleCompoundSpace",
+      "type": "transform_space"
+    },
+    {
+      "source": "CharStyleCompoundOp",
+      "target": "CharSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "CompoundOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "CompoundOp",
+      "target": "CategoricalSpace",
+      "type": "transform_space"
+    },
+    {
+      "source": "MixtureOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "MixtureOp",
+      "target": "Space",
+      "type": "input_space"
+    },
+    {
+      "source": "SimpleStrCompoundOp",
+      "target": "CompoundOp",
+      "type": "inherits"
+    },
+    {
+      "source": "SimpleStrCompoundOp",
+      "target": "SimpleStrCompoundSpace",
+      "type": "transform_space"
+    },
+    {
+      "source": "SimpleStrCompoundOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "SimpleStrCompoundOp",
+      "target": "SimpleStringInputSpace",
+      "type": "uses"
+    },
+    {
+      "source": "CapitalizeStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "CapitalizeStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "CasefoldStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "CasefoldStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "ExpandtabsStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "ExpandtabsStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "LowerStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "LowerStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "LstripStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "LstripStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "ReverseStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "ReverseStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "RstripStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "RstripStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "StripStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "StripStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "SwapcaseStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "SwapcaseStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "TabStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "TabStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "TitleStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "TitleStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "UpperStrOp",
+      "target": "BaseOp",
+      "type": "inherits"
+    },
+    {
+      "source": "UpperStrOp",
+      "target": "StringSpace",
+      "type": "input_space"
+    },
+    {
+      "source": "AsciiCharSpace",
+      "target": "CharSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "AsciiCharSpace",
+      "target": "CategoricalSpace",
+      "type": "uses"
+    },
+    {
+      "source": "CharSpace",
+      "target": "CategoricalSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "CharStyleCompoundSpace",
+      "target": "CategoricalSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "CharStyleCompoundSpace",
+      "target": "STRING_OP_REGISTRY",
+      "type": "uses_registry"
+    },
+    {
+      "source": "OrdinalIntSpace",
+      "target": "OrdinalSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "OrdinalStringSpace",
+      "target": "OrdinalSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "SimpleStrCompoundSpace",
+      "target": "CategoricalSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "SimpleStrCompoundSpace",
+      "target": "STRING_OP_REGISTRY",
+      "type": "uses_registry"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "StringSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "OrdinalIntSpace",
+      "type": "composes"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "CharSpace",
+      "type": "composes"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "MixtureOp",
+      "type": "composes"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "Space",
+      "type": "composes"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "AsciiCharSpace",
+      "type": "uses"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "CategoricalSpace",
+      "type": "uses"
+    },
+    {
+      "source": "StringSpace",
+      "target": "OrdinalIntSpace",
+      "type": "composes"
+    },
+    {
+      "source": "StringSpace",
+      "target": "CharSpace",
+      "type": "composes"
+    },
+    {
+      "source": "StringSpace",
+      "target": "AsciiCharSpace",
+      "type": "uses"
+    },
+    {
+      "source": "OP_REGISTRY",
+      "target": "MixtureOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "LowerStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "UpperStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "CapitalizeStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "SwapcaseStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "TabStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "ReverseStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "CasefoldStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "TitleStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "StripStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "LstripStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "RstripStrOp",
+      "type": "registers"
+    },
+    {
+      "source": "STRING_OP_REGISTRY",
+      "target": "ExpandtabsStrOp",
+      "type": "registers"
+    }
+  ]
+}

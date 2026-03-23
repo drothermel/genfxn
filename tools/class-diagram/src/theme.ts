@@ -1,0 +1,33 @@
+import type { NodeKind, EdgeType } from './types';
+
+export const KIND_COLORS: Record<NodeKind, string> = {
+  protocol: '#6ee7b7',
+  abstract: '#a78bfa',
+  op: '#60a5fa',
+  'op-leaf': '#93c5fd',
+  space: '#fbbf24',
+  'space-leaf': '#fcd34d',
+  'space-foundational': '#e89020',
+  registry: '#f87171',
+  types: '#c084fc',
+};
+
+export const EDGE_COLORS: Record<EdgeType, string> = {
+  inherits: '#a78bfa',
+  composes: '#60a5fa',
+  input_space: '#fbbf24',
+  transform_space: '#f472b6',
+  uses: '#555570',
+  uses_registry: '#fb923c',
+  registers: '#f87171',
+};
+
+export const EDGE_DASH: Record<EdgeType, string | undefined> = {
+  inherits: undefined,
+  composes: undefined,
+  input_space: undefined,
+  transform_space: undefined,
+  uses: '4 3',
+  uses_registry: '4 3',
+  registers: '6 3',
+};
