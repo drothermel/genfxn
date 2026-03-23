@@ -425,6 +425,55 @@
       "width": 240
     },
     {
+      "id": "OrdinalIntSpace",
+      "kind": "space",
+      "file": "spaces/ordinal_int_space.py",
+      "badge": "Space",
+      "desc": "Ordinal space over a contiguous integer range [low, high].",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['ordinal_int']"
+        },
+        {
+          "name": "low",
+          "type": "int"
+        },
+        {
+          "name": "high",
+          "type": "int"
+        }
+      ],
+      "width": 264
+    },
+    {
+      "id": "OrdinalSpace",
+      "kind": "abstract",
+      "file": "spaces/ordinal_space.py",
+      "badge": "ABC",
+      "desc": "Space with values that have a meaningful ordering.\n\nSubclasses define what values exist and their order. Unlike\nCategoricalSpace, ordinal values have a concept of \"between\"\nand \"neighbors\" \u2014 position in the sequence matters.",
+      "fields": [],
+      "width": 168
+    },
+    {
+      "id": "OrdinalStringSpace",
+      "kind": "space",
+      "file": "spaces/ordinal_string_space.py",
+      "badge": "Space",
+      "desc": "Ordinal space over strings with a meaningful order.\n\nValues are provided as a pre-ordered tuple. The first element is\nthe lowest, the last is the highest. Useful for ordered labels\nlike model sizes (\"10M\", \"40M\", \"1B\") or severity levels.",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "Literal['ordinal_string']"
+        },
+        {
+          "name": "values",
+          "type": "tuple[str, ...]"
+        }
+      ],
+      "width": 288
+    },
+    {
       "id": "SimpleStrCompoundSpace",
       "kind": "space-leaf",
       "file": "spaces/simple_str_compound_space.py",
@@ -486,32 +535,10 @@
         },
         {
           "name": "char_space",
-          "type": "Space"
+          "type": "CharSpace"
         }
       ],
-      "width": 192
-    },
-    {
-      "id": "UniformIntSpace",
-      "kind": "space",
-      "file": "spaces/uniform_int_space.py",
-      "badge": "Space",
-      "desc": "Uniform integer space over an inclusive range.",
-      "fields": [
-        {
-          "name": "kind",
-          "type": "Literal['uniform_int']"
-        },
-        {
-          "name": "low",
-          "type": "int"
-        },
-        {
-          "name": "high",
-          "type": "int"
-        }
-      ],
-      "width": 264
+      "width": 208
     },
     {
       "id": "types",
@@ -562,7 +589,7 @@
     {
       "source": "BaseOp",
       "target": "Space",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "CharStyleCompoundOp",
@@ -572,12 +599,12 @@
     {
       "source": "CharStyleCompoundOp",
       "target": "CharStyleCompoundSpace",
-      "type": "composes"
+      "type": "transform_space"
     },
     {
       "source": "CharStyleCompoundOp",
       "target": "CharSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "CompoundOp",
@@ -587,7 +614,7 @@
     {
       "source": "CompoundOp",
       "target": "CategoricalSpace",
-      "type": "composes"
+      "type": "transform_space"
     },
     {
       "source": "MixtureOp",
@@ -597,7 +624,7 @@
     {
       "source": "MixtureOp",
       "target": "Space",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "SimpleStrCompoundOp",
@@ -607,12 +634,12 @@
     {
       "source": "SimpleStrCompoundOp",
       "target": "SimpleStrCompoundSpace",
-      "type": "composes"
+      "type": "transform_space"
     },
     {
       "source": "SimpleStrCompoundOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "SimpleStrCompoundOp",
@@ -627,7 +654,7 @@
     {
       "source": "CapitalizeStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "CasefoldStrOp",
@@ -637,7 +664,7 @@
     {
       "source": "CasefoldStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "ExpandtabsStrOp",
@@ -647,7 +674,7 @@
     {
       "source": "ExpandtabsStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "LowerStrOp",
@@ -657,7 +684,7 @@
     {
       "source": "LowerStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "LstripStrOp",
@@ -667,7 +694,7 @@
     {
       "source": "LstripStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "ReverseStrOp",
@@ -677,7 +704,7 @@
     {
       "source": "ReverseStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "RstripStrOp",
@@ -687,7 +714,7 @@
     {
       "source": "RstripStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "StripStrOp",
@@ -697,7 +724,7 @@
     {
       "source": "StripStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "SwapcaseStrOp",
@@ -707,7 +734,7 @@
     {
       "source": "SwapcaseStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "TabStrOp",
@@ -717,7 +744,7 @@
     {
       "source": "TabStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "TitleStrOp",
@@ -727,7 +754,7 @@
     {
       "source": "TitleStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "UpperStrOp",
@@ -737,7 +764,7 @@
     {
       "source": "UpperStrOp",
       "target": "StringSpace",
-      "type": "composes"
+      "type": "input_space"
     },
     {
       "source": "AsciiCharSpace",
@@ -762,7 +789,17 @@
     {
       "source": "CharStyleCompoundSpace",
       "target": "STRING_OP_REGISTRY",
-      "type": "uses"
+      "type": "uses_registry"
+    },
+    {
+      "source": "OrdinalIntSpace",
+      "target": "OrdinalSpace",
+      "type": "inherits"
+    },
+    {
+      "source": "OrdinalStringSpace",
+      "target": "OrdinalSpace",
+      "type": "inherits"
     },
     {
       "source": "SimpleStrCompoundSpace",
@@ -772,7 +809,7 @@
     {
       "source": "SimpleStrCompoundSpace",
       "target": "STRING_OP_REGISTRY",
-      "type": "uses"
+      "type": "uses_registry"
     },
     {
       "source": "SimpleStringInputSpace",
@@ -801,7 +838,12 @@
     },
     {
       "source": "SimpleStringInputSpace",
-      "target": "UniformIntSpace",
+      "target": "CharSpace",
+      "type": "uses"
+    },
+    {
+      "source": "SimpleStringInputSpace",
+      "target": "OrdinalIntSpace",
       "type": "uses"
     },
     {
@@ -811,17 +853,17 @@
     },
     {
       "source": "StringSpace",
+      "target": "CharSpace",
+      "type": "composes"
+    },
+    {
+      "source": "StringSpace",
       "target": "AsciiCharSpace",
       "type": "uses"
     },
     {
       "source": "StringSpace",
-      "target": "CategoricalSpace",
-      "type": "uses"
-    },
-    {
-      "source": "StringSpace",
-      "target": "UniformIntSpace",
+      "target": "OrdinalIntSpace",
       "type": "uses"
     },
     {

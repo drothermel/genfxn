@@ -9,9 +9,10 @@ from pydantic import Field, model_validator
 from genfxn.ops.mixture_op import MixtureOp
 from genfxn.spaces.ascii_char_space import AsciiCharSpace
 from genfxn.spaces.categorical_space import CategoricalSpace
+from genfxn.spaces.char_space import CharSpace
+from genfxn.spaces.ordinal_int_space import OrdinalIntSpace
 from genfxn.spaces.space import Space
 from genfxn.spaces.string_space import StringSpace
-from genfxn.spaces.uniform_int_space import UniformIntSpace
 from genfxn.types import (
     DEFAULT_MAX_STR_LEN,
     DEFAULT_MIN_STR_LEN,
@@ -19,13 +20,13 @@ from genfxn.types import (
 )
 
 
-def _core_letter_space() -> CategoricalSpace:
-    return CategoricalSpace(values=tuple(string.ascii_lowercase))
+def _core_letter_space() -> CharSpace:
+    return CharSpace(values=tuple(string.ascii_lowercase))
 
 
 def _single_char_lower_str_space() -> StringSpace:
     return StringSpace(
-        length_space=UniformIntSpace(low=1, high=1),
+        length_space=OrdinalIntSpace(low=1, high=1),
         char_space=_core_letter_space(),
     )
 
@@ -46,7 +47,7 @@ class SimpleStringInputSpace(StringSpace):
     """Focused string sampler for simple string transforms."""
 
     core_length_space: Space = Field(
-        default_factory=lambda: UniformIntSpace(
+        default_factory=lambda: OrdinalIntSpace(
             low=DEFAULT_MIN_STR_LEN,
             high=DEFAULT_MAX_STR_LEN - 4,
         )

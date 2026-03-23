@@ -236,14 +236,22 @@ def collect_data() -> dict[str, Any]:
                 for ref in _type_refs(f["type"]):
                     if ref in class_files and ref != node.name and ref not in bases:
                         field_refs.add(ref)
-                        edges.append({"source": node.name, "target": ref, "type": "composes"})
+                        # Use specific edge types for op input_space and transform_space
+                        if f["name"] == "input_space":
+                            edge_type = "input_space"
+                        elif f["name"] == "transform_space":
+                            edge_type = "transform_space"
+                        else:
+                            edge_type = "composes"
+                        edges.append({"source": node.name, "target": ref, "type": edge_type})
 
             # Uses (imports not already covered by inherits/composes)
             for _, imp_name in file_imports.get(rel, []):
                 if imp_name in bases or imp_name in field_refs or imp_name == node.name:
                     continue
                 if imp_name in seen or imp_name in class_files or imp_name in registries:
-                    edges.append({"source": node.name, "target": imp_name, "type": "uses"})
+                    edge_type = "uses_registry" if imp_name in registries else "uses"
+                    edges.append({"source": node.name, "target": imp_name, "type": edge_type})
 
     # ── Pass 3: helper/template modules (no classes, has functions) ──
     for pf in py_files:

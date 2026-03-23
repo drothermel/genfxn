@@ -13,7 +13,10 @@ const NODE_FILTERS = [
 const EDGE_FILTERS = [
   { key: 'edge-inherits', label: 'inherits', color: EDGE_COLORS.inherits, dashed: false },
   { key: 'edge-composes', label: 'composes', color: EDGE_COLORS.composes, dashed: false },
+  { key: 'edge-input_space', label: 'input_space', color: EDGE_COLORS.input_space, dashed: false },
+  { key: 'edge-transform_space', label: 'transform_space', color: EDGE_COLORS.transform_space, dashed: false },
   { key: 'edge-uses', label: 'uses', color: EDGE_COLORS.uses, dashed: true },
+  { key: 'edge-uses_registry', label: 'uses registry', color: EDGE_COLORS.uses_registry, dashed: true },
   { key: 'edge-registers', label: 'registers', color: EDGE_COLORS.registers, dashed: true },
 ];
 

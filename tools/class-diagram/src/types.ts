@@ -8,7 +8,7 @@ export type NodeKind =
   | 'registry'
   | 'types';
 
-export type EdgeType = 'inherits' | 'composes' | 'uses' | 'registers';
+export type EdgeType = 'inherits' | 'composes' | 'input_space' | 'transform_space' | 'uses' | 'uses_registry' | 'registers';
 
 export interface FieldDef {
   name: string;

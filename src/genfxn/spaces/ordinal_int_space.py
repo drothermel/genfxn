@@ -3,26 +3,28 @@ from __future__ import annotations
 import random
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from genfxn.spaces.ordinal_space import OrdinalSpace
 from genfxn.spaces.space import get_single_kwarg_value
 from genfxn.types import DEFAULT_MAX_STR_LEN, DEFAULT_MIN_STR_LEN
 
 
-class UniformIntSpace(BaseModel):
-    """Uniform integer space over an inclusive range."""
+class OrdinalIntSpace(OrdinalSpace):
+    """Ordinal space over a contiguous integer range [low, high]."""
 
-    kind: Literal["uniform_int"] = "uniform_int"
+    kind: Literal["ordinal_int"] = "ordinal_int"
     low: int = Field(default=DEFAULT_MIN_STR_LEN)
     high: int = Field(default=DEFAULT_MAX_STR_LEN)
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
     @model_validator(mode="after")
-    def validate_bounds(self) -> UniformIntSpace:
+    def validate_bounds(self) -> OrdinalIntSpace:
         if self.high < self.low:
             raise ValueError(f"high ({self.high}) must be >= low ({self.low})")
         return self
+
+    def ordered_values(self) -> tuple[int, ...]:
+        return tuple(range(self.low, self.high + 1))
 
     def validate_member(self, **kwargs: Any) -> None:
         value = get_single_kwarg_value(kwargs)
